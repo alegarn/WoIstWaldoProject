@@ -1,23 +1,21 @@
 import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-/* Platform.OS = "ios";
- */
 export default function Button({ children, onPress, mode, thin, cancel }) {
 
 
   return (
     <View style={[styles.button,
       thin && { paddingVertical: 0, paddingHorizontal: 2, padding: 0 },
-      Platform.OS === "ios" && { backgroundColor: "transparent"},
+      mode === "flat" && { backgroundColor: "transparent" },
       cancel && mode !== "flat" && { backgroundColor: "red" }]}>
       <Pressable onPress={onPress} style={({pressed}) => pressed && styles.pressed} >
-        <View style={[styles.button, Platform.OS === "ios" && styles.flat]}>
+        <View style={[mode === "flat" && styles.flat]}>
           <Text style={[
             styles.buttonText,
-            Platform.OS === "ios" && styles.flatText,
+            mode === "flat" && styles.flatText,
             cancel && mode !== "flat" && styles.cancelButtonText,
-            cancel && Platform.OS === "ios" && styles.flatCancelText]}>{children}</Text>
+            cancel && mode === "flat" && styles.flatCancelText]}>{children}</Text>
         </View>
       </Pressable>
     </View>
@@ -38,6 +36,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: "center",
+    padding: 10
   },
   cancelButtonText: {
     color: "white",
@@ -53,7 +52,6 @@ const styles = StyleSheet.create({
   },
   pressed: {
     opacity: 0.75,
-    backgroundColor: Platform.OS === 'ios' ? "transparent" : GlobalStyle.color.primaryColor100,
     borderRadius: 4,
   }
 });

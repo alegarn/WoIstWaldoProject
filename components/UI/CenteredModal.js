@@ -1,10 +1,10 @@
-import { Modal, View, Text, Pressable, StyleSheet } from 'react-native';
+import { Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import Button from './Button';
 import { GlobalStyle } from '../../constants/theme';
-import { Platform } from 'react-native';
+
+
 
 export default function CenteredModal({ children, onCancel, onPress , isModalVisible}) {
-
   return (
     <Modal
       visible={isModalVisible}
@@ -16,10 +16,17 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
           <Text style={styles.modalText}>{children}l</Text>
           <View style={styles.buttonContainer}>
             <View style={styles.space}>
-              <Button onPress={onPress} mode="flat" thin={true}>Confirm</Button>
+              <Button
+                onPress={onPress}
+                mode={Platform.OS === "ios" ? "flat" : null}
+                thin={true}>Confirm</Button>
             </View>
             <View style={styles.space}>
-              <Button onPress={onCancel} mode="flat" thin={true} cancel={true}>Close</Button>
+              <Button
+                onPress={onCancel}
+                mode={Platform.OS === "ios" ? "flat" : null}
+                thin={true}
+                cancel={true}>Close</Button>
             </View>
           </View>
         </View>

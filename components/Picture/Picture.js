@@ -8,7 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CenteredModal from '../UI/CenteredModal';
 
 export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
-  console.log("screenWidth: ", screenWidth);
+
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
 
   const [showModal, setShowModal] = useState(false);
