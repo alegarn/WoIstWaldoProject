@@ -40,7 +40,7 @@ export default function App() {
             component={HideScreen}
             options={{
               presentation: "modal",
-              headerShown: false
+              headerShown: false,
             }} />
         </Stack.Navigator>
       </NavigationContainer>
