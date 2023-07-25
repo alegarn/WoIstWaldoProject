@@ -14,7 +14,7 @@ export default function HomeScreen({ navigation }) {
     <View style={styles.homeContainer}>
       <HomeButton
         text="Hide Waldo"
-        onPress={() => navigationHandler({ screenName: 'HideScreen' })}
+        onPress={() => navigationHandler({ screenName: 'HidingPathScreen' })}
         buttonStyle="big" />
       <HomeButton
         text="Find Waldo"

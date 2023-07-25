@@ -1,13 +1,16 @@
-import { Pressable, StyleSheet, Text, View, Dimensions } from 'react-native';
+import Picture from '../components/Picture/Picture';
 
-export default function HideScreen() {
+export default function HideScreen({ navigation, route }) {
+
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <Text>Hide Waldo</Text>
-    </View>
+    <>
+      <Picture
+        uri={route.params?.uri}
+        imageWidth={route.params?.imageWidth}
+        imageHeight={route.params?.imageHeight}
+        screenHeight={route.params?.screenHeight}
+        screenWidth={route.params?.screenWidth}
+        isPortrait={route.params?.isPortrait} />
+    </>
   );
-};
-
-const styles = StyleSheet.create({
-
-})
+}
