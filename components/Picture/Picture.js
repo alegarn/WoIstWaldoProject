@@ -3,13 +3,15 @@ import { View, Text, Pressable, StyleSheet, ImageBackground, Dimensions, Modal, 
 import { handleImageOrientation } from "../../utils/orientation";
 import { handleImageSize } from "../../utils/imageSize";
 
-import IconButton from '../UI/IconButton';
+import { handlePicturePress } from '../../utils/targetLocation';
+
 import { Ionicons } from '@expo/vector-icons';
 import CenteredModal from '../UI/CenteredModal';
 
 export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
+  const [circle, setCircle] = useState(0);
 
   const [showModal, setShowModal] = useState(false);
 
@@ -18,41 +20,12 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
 
   useLayoutEffect(() => {
     handleImageOrientation({ imageIsPortrait, isPortrait });
-    handleImageSize({ screenWidth, screenHeight, imageWidth, imageHeight });
-
   }, []);
 
   const handlePress = (event) => {
-    const { locationX, locationY } = event.nativeEvent;
-    const newImageWidth = screenWidth;
-    const newImageHeight = screenHeight;
-    // Check if the touch event is within the image boundaries
-    if (
-      locationX >= 0 &&
-      locationX <= newImageWidth &&
-      locationY >= 0 &&
-      locationY <= newImageHeight
-    ) {
-      console.log("locationX: ", locationX);
-      console.log("locationY: ", locationY);
-
-      const touchX = (locationX / newImageWidth).toFixed(2);
-      const touchY = (locationY / newImageHeight).toFixed(2);
-      setTouchLocation({ x: touchX, y: touchY });
-
-      const circleSize = Math.min(screenWidth, screenHeight) * 0.1;
-      const circleStyle = {
-        position: 'absolute',
-        width: circleSize,
-        height: circleSize,
-        borderRadius: circleSize / 2,
-        left: locationX - circleSize / 2,
-        top: locationY - circleSize / 2,
-      };
-
-      // Render the white circle
-      setTouchLocation({ x: touchX, y: touchY, circleSize: circleSize, circleStyle: circleStyle });
-    }
+    let { location, circle } = handlePicturePress({event, screenWidth, screenHeight});
+    setTouchLocation(location);
+    setCircle(circle);
   };
 
   const handleIconPress = () => {
@@ -74,7 +47,7 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
           )}
           {touchLocation && (
             <Pressable onPress={handleIconPress}>
-              <Ionicons name={"close-circle-outline"} color={"white"} size={touchLocation.circleSize} style={touchLocation.circleStyle}/>
+              <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
             </Pressable>
           )}
         </ImageBackground>
