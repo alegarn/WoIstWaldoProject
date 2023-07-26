@@ -1,6 +1,6 @@
 import Picture from '../components/Picture/Picture';
 
-export default function HideScreen({ navigation, route }) {
+export default function HideScreen({ route }) {
 
   return (
     <>
@@ -14,3 +14,15 @@ export default function HideScreen({ navigation, route }) {
     </>
   );
 }
+
+
+
+/*   const [isTakingPicture, setIsTakingPicture] = useState(true);
+
+  function changeStep() {
+    setIsTakingPicture(false)
+  }
+ */
+/*   if (isTakingPicture) {
+    return <ImagePicker nextStep={changeStep} />
+  }; */
