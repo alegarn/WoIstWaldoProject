@@ -2,6 +2,7 @@ import ShowPicture from './ShowPicture';
 import  { useState, useLayoutEffect, useEffect } from 'react';
 import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress } from '../../utils/targetLocation';
+import { imageUploader } from '../../utils/fileUploader';
 
 export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
@@ -46,24 +47,7 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
   };
 
   const handleConfirm = () => {
-
-    const imageFile = uri;
-    const image = {
-      imageFile: imageFile,
-      imageWidth: imageWidth,
-      imageHeight: imageHeight,
-      screenHeight: screenHeight,
-      screenWidth: screenWidth,
-      isPortrait: isPortrait,
-      touchLocation: touchLocation,
-    };
-
-    const exportImage = () => {
-      console.log(image)
-    };
-
-    exportImage(image);
-
+    imageUploader({ uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
   };
 
   const onCancel = () => {
