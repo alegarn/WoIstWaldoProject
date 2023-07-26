@@ -1,13 +1,7 @@
+import ShowPicture from './ShowPicture';
 import  { useState, useLayoutEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, ImageBackground, Dimensions, Modal, Button } from 'react-native';
 import { handleImageOrientation } from "../../utils/orientation";
-import { handleImageSize } from "../../utils/imageSize";
-
 import { handlePicturePress } from '../../utils/targetLocation';
-
-import { Ionicons } from '@expo/vector-icons';
-import CenteredModal from '../UI/CenteredModal';
-
 export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
@@ -37,66 +31,18 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
   };
 
   return (
-    <View style={styles.container}>
-      <Pressable onPress={handlePress} style={styles.pressable}>
-        <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
-          {touchLocation && (
-            <Text style={styles.locationText}>
-              Touch Location: {touchLocation.x}, {touchLocation.y}
-            </Text>
-          )}
-          {touchLocation && (
-            <Pressable onPress={handleIconPress}>
-              <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
-            </Pressable>
-          )}
-        </ImageBackground>
-      </Pressable>
-
-      {showModal ?
-        <CenteredModal onPress={handleIconPress} onCancel={onCancel} isModalVisible={showModal}>
-          Is it hiding there ?
-        </CenteredModal> : null}
-
-    </View>
+    <ShowPicture
+      uri={uri}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight}
+      touchLocation={touchLocation}
+      handlePress={handlePress}
+      circle={circle}
+      handleIconPress={handleIconPress}
+      showModal={showModal}
+      onCancel={onCancel} />
   );
-}
-
-const styles = StyleSheet.create({
-  container: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    flex: 1,
-  },
-  pressable: {
-    flex: 1,
-    position: 'absolute',
-    top: 0,
-    left: 10,
-    marginBottom: 20,
-  },
-  image: {
-    resizeMode: 'contain',
-    maxWidth: '100%',
-    maxHeight: '100%',
-  },
-  locationText: {
-    position: 'absolute',
-    bottom: 90,
-    left: 50,
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 5,
-    fontSize: 16,
-  },
-  circle: {
-    borderWidth: 1,
-    borderColor: 'white',
-  },
-});
-
-
+};
 /*   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
  */
 
