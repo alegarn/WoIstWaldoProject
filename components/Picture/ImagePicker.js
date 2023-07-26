@@ -1,7 +1,8 @@
-import { useState} from 'react';
-import { View, Text, Button, Alert,  StyleSheet, Dimensions } from 'react-native';
+import { Alert, Dimensions } from 'react-native';
 import { launchCameraAsync, useCameraPermissions, PermissionStatus } from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
+
+import ShowImagePicker from './ShowImagePicker';
 
 export default function ImagePicker() {
   // Request camera permissions
@@ -13,19 +14,42 @@ export default function ImagePicker() {
   const screenHeight = Dimensions.get('window').height;
   const isPortrait = screenHeight > screenWidth;
 
+  async function grantPermission(requestPermission) {
+    const permissionResponse = await requestPermission();
+    return permissionResponse.granted;
+  }
 
   // Function to verify camera permission
   async function verifyPermission() {
     if (hasPermission.status === PermissionStatus.UNDETERMINED) {
-      const permissionResponse = await requestPermission();
-      return permissionResponse.granted;
-    };
+      grantPermission(requestPermission);
+    }
     if (hasPermission.status === PermissionStatus.DENIED) {
-      Alert.alert("Insufficient Permissions", 'Access to camera is denied');
-      return false;
-    };
+      return new Promise((resolve, reject) => {
+        Alert.alert(
+          "Insufficient Permissions",
+          "Access to camera is denied",
+          [
+            {
+              text: "Cancel",
+              onPress: () => resolve(false),
+              style: "cancel"
+            },
+            {
+              text: "Grant Permission",
+              onPress: () => {
+                grantPermission(requestPermission);
+                resolve(true);
+              }
+            }
+          ],
+          { cancelable: false }
+        );
+      });
+    }
     return true;
-  }
+  };
+
 
   // Function to handle taking a picture
   const takePictureHandler = async () => {
@@ -56,25 +80,8 @@ export default function ImagePicker() {
 
 
   return (
-    <View style={styles.container}>
-      <Text>ImagePicker</Text>
-      <View style={styles.imageContainer}>
-        <Text>No image captured yet</Text>
-      </View>
-      <Button title="Pick an image from camera roll" onPress={takePictureHandler}/>
-    </View>
+    <ShowImagePicker takePictureHandler={takePictureHandler} />
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  imageContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});
+
