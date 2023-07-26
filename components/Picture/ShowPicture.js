@@ -3,8 +3,7 @@ import { View, Text, Pressable, StyleSheet, ImageBackground } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import CenteredModal from '../UI/CenteredModal';
 
-export default function showPicture({  uri, screenHeight, screenWidth, touchLocation, handlePress, handleIconPress, circle, showModal, onCancel }) {
-
+export default function showPicture({ uri, screenHeight, screenWidth, touchLocation, handlePress, handleIconPress, handleConfirm, circle, showModal, onCancel }) {
   return (
     <View style={styles.container}>
       <Pressable onPress={handlePress} style={styles.pressable}>
@@ -23,7 +22,7 @@ export default function showPicture({  uri, screenHeight, screenWidth, touchLoca
       </Pressable>
 
       {showModal ?
-        <CenteredModal onPress={handleIconPress} onCancel={onCancel} isModalVisible={showModal}>
+        <CenteredModal onPress={handleConfirm} onCancel={onCancel} isModalVisible={showModal}>
           Is it hiding there ?
         </CenteredModal> : null}
 
