@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import {  View } from 'react-native';
-import ImagePicker from '../components/Picture/ImagePicker';
+import LogicalImagePicker from '../components/Picture/LogicalImagePicker';
 
 export default function HidingPathScreen() {
 
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-      <ImagePicker />
+      <LogicalImagePicker />
     </View>
   );
 };

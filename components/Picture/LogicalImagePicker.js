@@ -1,18 +1,29 @@
+import { useState, useEffect } from 'react';
+
 import { Alert, Dimensions } from 'react-native';
 import { launchCameraAsync, useCameraPermissions, PermissionStatus } from 'expo-image-picker';
 import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
 
-export default function ImagePicker() {
+export default function LogicalImagePicker() {
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
+  // State for the image url
+  const [image, setImage] = useState(null);
 
   const navigation = useNavigation();
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
   const isPortrait = screenHeight > screenWidth;
+
+
+  useEffect(() => {
+    showImage();
+  }, [image])
+
 
   async function grantPermission(requestPermission) {
     const permissionResponse = await requestPermission();
@@ -78,10 +89,33 @@ export default function ImagePicker() {
     return null
   };
 
+  const pickImage = async () => {
+    // No permissions request is necessary for launching the image library
+    let result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.All,
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.5,
+    });
 
-  return (
-    <ShowImagePicker takePictureHandler={takePictureHandler} />
-  );
+    if (!result.canceled) {
+      setImage(result.assets[0].uri);
+    }
+  };
+
+
+  const showImage = () => {
+    return(
+      <ShowImagePicker
+      takePictureHandler={takePictureHandler}
+      pickImage={pickImage}
+      image={image}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight} />
+    )
+  };
+
+  return (showImage());
 }
 
 

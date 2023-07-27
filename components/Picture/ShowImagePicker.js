@@ -1,23 +1,31 @@
-import { View, Text, Button, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 import BigButton from '../UI/BigButton';
 
-export default function ShowImagePicker({ takePictureHandler }) {
+export default function ShowImagePicker({ takePictureHandler, pickImage, screenWidth, screenHeight }) {
+
+  const image = true;
+  const imageWidth = (8 / 10) * screenWidth;
+  const imageHeight = (6 / 10) * screenHeight;
 
   return (
-    <View style={styles.container}>
-      <View style={styles.buttonsContainer}>
-        <BigButton text="Take a Picture" onPress={takePictureHandler}/>
-        <BigButton text="Select an Image" onPress={() => {}}/>
+    <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>
+      <View style={[styles.buttonsContainer, {marginTop: image ? 10 : 0,}]}>
+        <BigButton text="Take a Picture" onPress={takePictureHandler} />
+        <BigButton text="Select an Image" onPress={pickImage} />
       </View>
+      {image && (
+        <View style={styles.imageContainer}>
+          <Image source={{uri: image}} style={[styles.image, { width: imageWidth, height: imageHeight }]} />
+        </View>
+      )}
     </View>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
   buttonsContainer: {
     flexDirection: 'column',
@@ -28,5 +36,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  image: {
   },
 });
