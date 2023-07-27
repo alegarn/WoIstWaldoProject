@@ -1,6 +1,6 @@
 import{ View, StyleSheet} from 'react-native';
 
-import HomeButton from '../components/UI/HomeButton';
+import BigButton from '../components/UI/BigButton';
 import { GlobalStyle } from '../constants/theme';
 
 
@@ -12,15 +12,15 @@ export default function HomeScreen({ navigation }) {
 
   return (
     <View style={styles.homeContainer}>
-      <HomeButton
+      <BigButton
         text="Hide Waldo"
         onPress={() => navigationHandler({ screenName: 'HidingPathScreen' })}
         buttonStyle="big" />
-      <HomeButton
+      <BigButton
         text="Find Waldo"
         onPress={() => navigationHandler({ screenName: 'FindScreen' })}
         buttonStyle="big" />
-      <HomeButton
+      <BigButton
         text="Ranking"
         onPress={() => navigationHandler({ screenName: 'RankingScreen' })} />
     </View>
