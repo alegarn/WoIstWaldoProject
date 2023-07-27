@@ -3,7 +3,6 @@ import BigButton from '../UI/BigButton';
 
 export default function ShowImagePicker({ takePictureHandler, pickImage, screenWidth, screenHeight }) {
 
-  const image = true;
   const imageWidth = (8 / 10) * screenWidth;
   const imageHeight = (6 / 10) * screenHeight;
 
