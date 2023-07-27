@@ -1,14 +1,18 @@
-import ShowPicture from './ShowPicture';
 import  { useState, useLayoutEffect, useEffect } from 'react';
+
 import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress } from '../../utils/targetLocation';
 import { imageUploader } from '../../utils/fileUploader';
 
+import ShowPicture from './ShowPicture';
+import HideGameIntructions from '../Instructions/HideGameInstructions';
 export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
+  const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
   const [circle, setCircle] = useState(0);
   const [showModal, setShowModal] = useState(false);
+
 
   const imageIsPortrait = imageWidth < imageHeight;
 
@@ -19,6 +23,10 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
   useEffect(() => {
     showUpdatedLocation();
   }, [circle]);
+
+  const handleFilterClick = () => {
+    setShowFilter(false);
+  };
 
   const handlePress = (event) => {
     let { location, circle } = handlePicturePress({event, screenWidth, screenHeight});
@@ -54,19 +62,28 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
     setShowModal(false);
   };
 
-  return (
-    <ShowPicture
-      uri={uri}
-      screenWidth={screenWidth}
-      screenHeight={screenHeight}
-      touchLocation={touchLocation}
-      handlePress={handlePress}
-      circle={circle}
-      handleIconPress={handleIconPress}
-      handleConfirm={handleConfirm}
-      showModal={showModal}
-      onCancel={onCancel} />
-  );
+  if (showFilter) {
+    return(
+      <HideGameIntructions
+            uri={uri}
+            screenWidth={screenWidth}
+            screenHeight={screenHeight}
+            handleFilterClick={handleFilterClick} />
+    );
+  };
+
+  if (!showFilter) {
+    return(
+      <ShowPicture
+          uri={uri}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          touchLocation={touchLocation}
+          circle={circle}
+          handlePress={handlePress}
+          handleIconPress={handleIconPress} />
+    );
+  };
 };
 /*   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
  */
