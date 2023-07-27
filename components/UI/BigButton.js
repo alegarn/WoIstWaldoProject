@@ -8,7 +8,7 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-export default function HomeScreen({ text, onPress, buttonStyle }) {
+export default function HomeButton({ text, onPress, buttonStyle }) {
   return (
     <>
       <Pressable
