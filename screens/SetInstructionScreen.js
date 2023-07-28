@@ -26,7 +26,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const onCancelGoBack = () => {
-    navigation.pop(1);
+    navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait });
   };
 
   const handleConfirmModal = () => {
