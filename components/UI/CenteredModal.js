@@ -1,4 +1,4 @@
-import { Modal, View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { Modal, View, Text,  StyleSheet, Platform } from 'react-native';
 import Button from './Button';
 import { GlobalStyle } from '../../constants/theme';
 
@@ -13,7 +13,7 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
     >
       <View style={styles.modalContainer}>
         <View style={styles.modalContent}>
-          <Text style={styles.modalText}>{children}l</Text>
+          <Text style={styles.modalText}>{children}</Text>
           <View style={styles.buttonContainer}>
             <View style={styles.space}>
               <Button

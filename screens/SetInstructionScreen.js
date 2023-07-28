@@ -1,10 +1,14 @@
-import { View, ImageBackground, StyleSheet, TextInput } from 'react-native';
+import { useState } from 'react';
+import { View, Text, ImageBackground, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Description from '../components/Picture/Descriptions/Description';
 import CenteredModal from "../components/UI/CenteredModal";
-import { imageUploader } from '../../utils/fileUploader';
+import { imageUploader } from "../utils/fileUploader";
 
 export default function SetInstructionsScreen({ navigation, route }) {
+
+  const [showModal, setShowModal] = useState(false);
+  const [description, setDescription] = useState("");
 
   const uri = route.params?.uri;
   const imageWidth = route.params?.imageWidth;
@@ -15,36 +19,48 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const touchLocation = route.params?.touchLocation;
   const circle = route.params?.circle;
 
-   /*  const [showModal, setShowModal] = useState(false);
 
-
-  const handleIconPress = () => {
+  const handlePressDescription = (enteredText) => {
+    setDescription(enteredText);
     setShowModal(true);
   };
 
-  const handleConfirm = () => {
-    imageUploader({ uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
-  };
-*/
-  const onCancel = () => {
-    navigation.goBack();
+  const onCancetGoBack = () => {
+    navigation.pop(1);
   };
 
+  const handleConfirmModal = () => {
+    imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
+  };
+
+  const onCancelModal = () => {
+    setShowModal(false);
+  };
+
+  const modalContent =
+  (
+      <View style={styles.descriptionContainer}>
+        <Text style={styles.modalTitle}>Do you want send your image with this description ?</Text>
+        <Text style={styles.modalText}>{description}</Text>
+      </View>
+  );
 
   return (
     <View style={styles.container}>
       <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
-        <Description label="Describe the location"
+        <Description
+          onSubmit={handlePressDescription}
+          label="Describe the location"
           invalid={false}
-          onCancel={onCancel}
+          onCancel={onCancetGoBack}
           style={styles.input}
           textInputConfig={{ multiline: true }}/>
         <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
       </ImageBackground>
-      {/* {showModal ?
-      <CenteredModal onPress={handleConfirm} onCancel={onCancel} isModalVisible={showModal}>
-        Is it hiding there ?
-      </CenteredModal> : null} */}
+      {showModal ?
+      <CenteredModal onPress={handleConfirmModal} onCancel={onCancelModal} isModalVisible={showModal}>
+        {modalContent}
+      </CenteredModal> : null}
     </View>
   )
 };
@@ -61,6 +77,20 @@ const styles = StyleSheet.create({
   },
   circleStyle: {
     zIndex: -1,
+  },
+  descriptionContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "bold",
+  },
+  modalText: {
+    fontSize: 16,
+    marginVertical: 10,
   },
   input: {
 

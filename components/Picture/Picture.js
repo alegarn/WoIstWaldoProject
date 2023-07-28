@@ -2,10 +2,10 @@ import  { useState, useLayoutEffect, useEffect } from 'react';
 
 import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress } from '../../utils/targetLocation';
-import { imageUploader } from '../../utils/fileUploader';
 
 import ShowPicture from './ShowPicture';
 import HideGameIntructions from '../Instructions/HideGameInstructions';
+
 export default function Picture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
   const [showFilter, setShowFilter] = useState(true);
@@ -55,7 +55,7 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
   };
 
   const handleConfirm = () => {
-    navigation.replace( 'SetInstructions', {
+    navigation.navigate( 'SetInstructions', {
       uri: uri,
       imageWidth: imageWidth,
       imageHeight: imageHeight,
