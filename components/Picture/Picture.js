@@ -6,7 +6,7 @@ import { imageUploader } from '../../utils/fileUploader';
 
 import ShowPicture from './ShowPicture';
 import HideGameIntructions from '../Instructions/HideGameInstructions';
-export default function Picture({  uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
+export default function Picture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
   const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
@@ -55,7 +55,15 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
   };
 
   const handleConfirm = () => {
-    imageUploader({ uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
+    navigation.replace( 'SetInstructions', {
+      uri: uri,
+      imageWidth: imageWidth,
+      imageHeight: imageHeight,
+      screenHeight: screenHeight,
+      screenWidth: screenWidth,
+      isPortrait: isPortrait,
+      touchLocation: touchLocation,
+      circle: circle });
   };
 
   const onCancel = () => {
@@ -74,14 +82,7 @@ export default function Picture({  uri, isPortrait, imageWidth, imageHeight, scr
 
   if (!showFilter) {
     return(
-      <ShowPicture
-          uri={uri}
-          screenWidth={screenWidth}
-          screenHeight={screenHeight}
-          touchLocation={touchLocation}
-          circle={circle}
-          handlePress={handlePress}
-          handleIconPress={handleIconPress} />
+      showUpdatedLocation()
     );
   };
 };
