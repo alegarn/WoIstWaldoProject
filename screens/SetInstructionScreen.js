@@ -25,7 +25,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
     setShowModal(true);
   };
 
-  const onCancetGoBack = () => {
+  const onCancelGoBack = () => {
     navigation.pop(1);
   };
 
@@ -52,7 +52,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
           onSubmit={handlePressDescription}
           label="Describe the location"
           invalid={false}
-          onCancel={onCancetGoBack}
+          onCancel={onCancelGoBack}
           style={styles.input}
           textInputConfig={{ multiline: true }}/>
         <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
