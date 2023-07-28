@@ -55,7 +55,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
           onCancel={onCancelGoBack}
           style={styles.input}
           textInputConfig={{ multiline: true }}/>
-        <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
+        <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={[circle.circleStyle, { opacity: 0.5 }]}/>
       </ImageBackground>
       {showModal ?
       <CenteredModal onPress={handleConfirmModal} onCancel={onCancelModal} isModalVisible={showModal}>
