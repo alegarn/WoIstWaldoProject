@@ -8,20 +8,20 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-export default function HomeButton({ text, onPress, buttonStyle }) {
+export default function BigButton({ text, onPress, buttonStyle }) {
   return (
     <>
       <Pressable
         style={({ pressed }) =>
           [
-            styles.HomeButton,
+            styles.homeButton,
             pressed && styles.pressed,
             buttonStyle === 'big' ? styles.bigButton : styles.rankingButton,
             Platform.OS === 'ios' && styles.iOSButton
           ]
         }
         onPress={onPress}>
-        <Text style={styles.HomeButtonText}>{text}</Text>
+        <Text style={styles.homeButtonText}>{text}</Text>
       </Pressable>
     </>
   );
@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
     opacity: 0.75,
     backgroundColor: GlobalStyle.color.primaryColor700,
   },
-  HomeButton: {
+  homeButton: {
     backgroundColor: GlobalStyle.color.secondaryColor,
     padding: 10,
     borderRadius: 5,
@@ -47,7 +47,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  HomeButtonText: {
+  homeButtonText: {
     color: 'white',
     fontSize: 30,
     fontWeight: 'bold',
