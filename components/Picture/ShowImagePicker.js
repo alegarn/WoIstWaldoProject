@@ -1,10 +1,8 @@
 import { View, Image, StyleSheet } from 'react-native';
+
 import BigButton from '../UI/BigButton';
 
-export default function ShowImagePicker({ takePictureHandler, image, pickImage, screenWidth, screenHeight }) {
-
-  const imageWidth = (8 / 10) * screenWidth;
-  const imageHeight = (6 / 10) * screenHeight;
+export default function ShowImagePicker({ takePictureHandler, image, imageWidth, imageHeight, pickImage }) {
 
   return (
     <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>

@@ -2,22 +2,21 @@ import { useState, useEffect } from 'react';
 
 import { Alert, Dimensions } from 'react-native';
 import { launchCameraAsync, useCameraPermissions, PermissionStatus } from 'expo-image-picker';
-import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
 
-export default function LogicalImagePicker() {
+export default function LogicalImagePicker({ navigation }) {
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
   // State for the image url
   const [image, setImage] = useState(null);
 
-  const navigation = useNavigation();
-
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
   const isPortrait = screenHeight > screenWidth;
+  const imageWidth = (8 / 10) * screenWidth;
+  const imageHeight = (6 / 10) * screenHeight;
 
 
   useEffect(() => {
@@ -110,8 +109,8 @@ export default function LogicalImagePicker() {
       takePictureHandler={takePictureHandler}
       pickImage={pickImage}
       image={image}
-      screenWidth={screenWidth}
-      screenHeight={screenHeight} />
+      imageWidth={imageWidth}
+      imageHeight={imageHeight} />
     )
   };
 
