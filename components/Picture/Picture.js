@@ -17,6 +17,7 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
   const imageIsPortrait = imageWidth < imageHeight;
 
   useLayoutEffect(() => {
+    /* from "../../utils/orientation" */
     handleImageOrientation({ imageIsPortrait, isPortrait });
   }, []);
 
@@ -29,6 +30,7 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
   };
 
   const handlePress = (event) => {
+    /* from '../../utils/targetLocation' */
     let { location, circle } = handlePicturePress({event, screenWidth, screenHeight});
     setTouchLocation(location);
     setCircle(circle);

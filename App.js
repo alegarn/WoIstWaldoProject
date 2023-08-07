@@ -24,7 +24,6 @@ export default function App() {
             }}>
           <Stack.Screen
             name="HomeScreen"
-
             component={HomeScreen}
             options={{
               presentation: "modal",
