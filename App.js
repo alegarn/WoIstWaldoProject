@@ -24,17 +24,18 @@ export default function App() {
             }}>
           <Stack.Screen
             name="HomeScreen"
-            title="Home"
+
             component={HomeScreen}
             options={{
               presentation: "modal",
+              title:"Home"
             }} />
           <Stack.Screen
             name="HidingPathScreen"
-            title="Hide Waldo"
             component={HidingPathScreen}
             options={{
               presentation: "modal",
+              title:"Hide Waldo"
             }} />
           <Stack.Screen
             name="HideScreen"
