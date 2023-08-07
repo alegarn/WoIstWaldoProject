@@ -1,11 +1,12 @@
 import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function Button({ children, onPress, mode, thin, cancel }) {
+export default function Button({ children, style, onPress, mode, thin, cancel }) {
 
 
   return (
     <View style={[styles.button,
+      style ?? style,
       thin && { paddingVertical: 0, paddingHorizontal: 2, padding: 0 },
       mode === "flat" && { backgroundColor: "transparent" },
       cancel && mode !== "flat" && { backgroundColor: "red" }]}>

@@ -1,10 +1,13 @@
 import Picture from '../components/Picture/Picture';
 
-export default function HideScreen({ route }) {
+export default function HideScreen({ navigation, route }) {
+
+
 
   return (
     <>
       <Picture
+        navigation={navigation}
         uri={route.params?.uri}
         imageWidth={route.params?.imageWidth}
         imageHeight={route.params?.imageHeight}

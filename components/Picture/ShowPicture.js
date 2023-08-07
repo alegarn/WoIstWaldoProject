@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import CenteredModal from '../UI/CenteredModal';
 
 export default function showPicture({ uri, screenHeight, screenWidth, touchLocation, handlePress, handleIconPress, handleConfirm, circle, showModal, onCancel }) {
+
   return (
     <View style={styles.container}>
       <Pressable onPress={handlePress} style={styles.pressable}>
@@ -41,7 +42,6 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'absolute',
     top: 0,
-    left: 10,
     marginBottom: 20,
   },
   image: {
@@ -59,7 +59,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   circle: {
-    borderWidth: 1,
     borderColor: 'white',
   },
 });

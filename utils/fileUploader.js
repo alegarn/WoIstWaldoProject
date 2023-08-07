@@ -14,7 +14,7 @@ const exportPictureData = (pictureData) => {
 };
 
 
-export function imageUploader({ uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation }) {
+export function imageUploader({ uri, description, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation }) {
 
   // user id (context)
   const accountId = "1";
@@ -35,6 +35,7 @@ export function imageUploader({ uri, imageWidth, imageHeight, screenHeight, scre
   const pictureData = {
     accountId: accountId,
     pictureId: pictureId,
+    description: description,
     imageWidth: imageWidth,
     imageHeight: imageHeight,
     screenHeight: screenHeight,
