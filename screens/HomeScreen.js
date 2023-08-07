@@ -18,7 +18,7 @@ export default function HomeScreen({ navigation }) {
         buttonStyle="big" />
       <BigButton
         text="Find Waldo"
-        onPress={() => navigationHandler({ screenName: 'FindScreen' })}
+        onPress={() => navigationHandler({ screenName: 'GuessPathScreen' })}
         buttonStyle="big" />
       <BigButton
         text="Ranking"
