@@ -1,9 +1,12 @@
 import { useState } from 'react';
 import { View, Text, ImageBackground, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as MediaLibrary from 'expo-media-library';
+
 import Description from '../components/Picture/Descriptions/Description';
 import CenteredModal from "../components/UI/CenteredModal";
 import { imageUploader } from "../utils/fileUploader";
+import { backHomeScreen } from '../utils/orientation';
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
@@ -29,8 +32,29 @@ export default function SetInstructionsScreen({ navigation, route }) {
     navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait });
   };
 
-  const handleConfirmModal = () => {
+  const handleConfirmModal = async () => {
     imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
+    /*  */
+    const saveImage = async (uri) => {
+      try {
+        // Request device storage access permission
+        const { status } = await MediaLibrary.requestPermissionsAsync();
+        if (status === "granted") {
+        // Save image to media library
+          await MediaLibrary.saveToLibraryAsync(uri);
+
+          console.log("Image successfully saved");
+        }
+      } catch (error) {
+        console.log(error);
+      }
+    };
+    await saveImage(uri);
+    /*  */
+
+    backHomeScreen();
+
+    navigation.replace("HomeScreen");
   };
 
   const onCancelModal = () => {
