@@ -90,16 +90,26 @@ export default function LogicalImagePicker({ navigation }) {
 
   const pickImage = async () => {
     // No permissions request is necessary for launching the image library
-    let result = await ImagePicker.launchImageLibraryAsync({
+    let pickedImage = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
       aspect: [16, 9],
       quality: 0.5,
     });
 
-    if (!result.canceled) {
-      setImage(result.assets[0].uri);
-    }
+    if (!pickedImage.canceled) {
+      setImage(pickedImage.assets[0].uri);
+    };
+
+    navigation.navigate('HideScreen', {
+      uri: pickedImage.assets[0].uri,
+      imageWidth: pickedImage.assets[0].width,
+      imageHeight: pickedImage.assets[0].height,
+      screenHeight:isPortrait ? screenWidth : screenHeight,
+      screenWidth:isPortrait ? screenHeight : screenWidth,
+      isPortrait:isPortrait,
+    });
+
   };
 
 
