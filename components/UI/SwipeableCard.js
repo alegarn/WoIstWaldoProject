@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { ImageBackground, Text, StyleSheet, PanResponder, Animated, View, Pressable } from 'react-native';
+import { ImageBackground, Text, StyleSheet, PanResponder, Animated, View } from 'react-native';
 
 import IconButton from './IconButton';
-export default function SwipeableCard({ onPress, item, removeCard, swipedDirection, screenWidth }) {
+
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth }) {
     // let xPosition = new Animated.Value(0);
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
     let swipeDirection = '';
@@ -91,13 +92,12 @@ export default function SwipeableCard({ onPress, item, removeCard, swipedDirecti
           },
         ]}>
 
-        <Pressable onPress={onPress} style={styles.expended}>
           <ImageBackground source={item.imageFile} style={[styles.imageStyle, styles.expended]}>
             <View style={styles.descriptionArea}>
               {item.description.length > 3 && (
                   <IconButton
                     icon= {showFullDescription ? "chevron-down" : "chevron-up"}
-                    color="grey"
+                    color="white"
                     size={30}
                     onPress={toggleDescription} />
                 )}
@@ -108,7 +108,6 @@ export default function SwipeableCard({ onPress, item, removeCard, swipedDirecti
               </Text>
             </View>
           </ImageBackground>
-        </Pressable>
 
       </Animated.View>
     );
@@ -140,7 +139,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardDescriptionStyle: {
-    color: 'grey',
+    color: 'white',
     fontSize: 16,
     textAlign: 'center',
     padding: 10,
