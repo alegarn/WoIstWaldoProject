@@ -1,0 +1,97 @@
+import {  SafeAreaView,
+  StyleSheet,
+  Text,} from 'react-native';
+import { useState } from 'react';
+import SwipeableCard from './SwipeableCard';
+import { IMAGES } from "../../data/dummy-data";
+import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
+
+function getImagesList() {
+  IMAGES.forEach((image, index) => {
+    image.id = index + 1;
+  });
+  return IMAGES;
+};
+
+/* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
+
+export default function SwipeImage({ screenWidth }) {
+
+  const imageList = getImagesList();
+
+  const [noMoreCard, setNoMoreCard] = useState(false);
+  const [sampleCardArray, setSampleCardArray] = useState(imageList);
+  const [swipeDirection, setSwipeDirection] = useState('--');
+
+  const removeCard = (id) => {
+    // alert(id);
+    sampleCardArray.splice(
+      sampleCardArray.findIndex((item) => item.id == id),
+      1
+    );
+    setSampleCardArray(sampleCardArray);
+    if (sampleCardArray.length == 0) {
+      setNoMoreCard(true);
+    }
+  };
+
+  const lastSwipedDirection = (swipeDirection) => {
+    // nop left / later right ?
+    setSwipeDirection(swipeDirection);
+  };
+
+  const startGuessing = () => {
+    console.log("start guessing");
+  };
+
+
+
+  const gesture = Gesture.Pan()
+  .onEnd(() => {
+    startGuessing();
+  });
+
+
+  return (
+    <SafeAreaView style={{ flex: 1 }}>
+      <Text style={styles.titleText}>
+        Tap to Play or Swipe
+      </Text>
+      <GestureHandlerRootView style={styles.container}>
+
+          {sampleCardArray.map((item, key) => {
+            return(
+              <GestureDetector gesture={gesture} key={key}>
+                <SwipeableCard
+                  item={item}
+                  removeCard={() => removeCard(item.id)}
+                  swipedDirection={lastSwipedDirection}
+                  screenWidth={screenWidth}
+                  onPress={startGuessing}
+                />
+              </GestureDetector>)
+          }
+          )}
+
+        {noMoreCard ? (
+          <Text style={{ fontSize: 22, color: '#000' }}>No Cards Found.</Text>
+        ) : null}
+
+      </GestureHandlerRootView>
+    </SafeAreaView>
+  );
+};
+
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  titleText: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+});

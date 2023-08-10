@@ -15,3 +15,11 @@ export const GlobalStyle = {
     quaternaryColor: '#FFE79B',
   },
 }
+
+/* https://colorhunt.co/palette/6528f7a076f9d7bbf5ede4ff */
+/* #6528F7
+#A076F9 */
+
+/* https://colorhunt.co/palette/4a55a27895cba0bfe0c5dff8 */
+/* #4A55A2
+#7895CB */
