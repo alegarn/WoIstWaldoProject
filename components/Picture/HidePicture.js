@@ -6,11 +6,11 @@ import { handlePicturePress } from '../../utils/targetLocation';
 import ShowPicture from './ShowPicture';
 import HideGameIntructions from '../Instructions/HideGameInstructions';
 
-export default function Picture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
+export default function HidePicture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
   const [showFilter, setShowFilter] = useState(true);
-  const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, circleSize: 0 });
-  const [circle, setCircle] = useState(0);
+  const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
+  const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
 
 
@@ -18,12 +18,12 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
-    handleImageOrientation({ imageIsPortrait, isPortrait });
+    handleImageOrientation({ imageIsPortrait });
   }, []);
 
   useEffect(() => {
     showUpdatedLocation();
-  }, [circle]);
+  }, [target]);
 
   const handleFilterClick = () => {
     setShowFilter(false);
@@ -31,9 +31,9 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
 
   const handlePress = (event) => {
     /* from '../../utils/targetLocation' */
-    let { location, circle } = handlePicturePress({event, screenWidth, screenHeight});
+    let { location, target } = handlePicturePress({event, screenWidth, screenHeight});
     setTouchLocation(location);
-    setCircle(circle);
+    setTarget(target);
   };
 
   const showUpdatedLocation = () => {
@@ -44,7 +44,7 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
         screenHeight={screenHeight}
         touchLocation={touchLocation}
         handlePress={handlePress}
-        circle={circle}
+        target={target}
         handleIconPress={handleIconPress}
         handleConfirm={handleConfirm}
         showModal={showModal}
@@ -65,7 +65,7 @@ export default function Picture({ navigation, uri, isPortrait, imageWidth, image
       screenWidth: screenWidth,
       isPortrait: isPortrait,
       touchLocation: touchLocation,
-      circle: circle });
+      target: target });
   };
 
   const onCancel = () => {

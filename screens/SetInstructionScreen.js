@@ -20,7 +20,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const screenWidth = route.params?.screenWidth;
   const isPortrait = route.params?.isPortrait;
   const touchLocation = route.params?.touchLocation;
-  const circle = route.params?.circle;
+  const target = route.params?.target;
 
 
   const handlePressDescription = (enteredText) => {
@@ -34,6 +34,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const handleConfirmModal = async () => {
     imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
+
     /*  */
     const saveImage = async (uri) => {
       try {
@@ -79,7 +80,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
           onCancel={onCancelGoBack}
           style={styles.input}
           textInputConfig={{ multiline: true }}/>
-        <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={[circle.circleStyle, { opacity: 0.5 }]}/>
+        <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
       </ImageBackground>
       {showModal ?
       <CenteredModal onPress={handleConfirmModal} onCancel={onCancelModal} isModalVisible={showModal}>
@@ -99,7 +100,7 @@ const styles = StyleSheet.create({
     maxWidth: '100%',
     maxHeight: '100%',
   },
-  circleStyle: {
+  targetStyle: {
     zIndex: -1,
   },
   descriptionContainer: {
