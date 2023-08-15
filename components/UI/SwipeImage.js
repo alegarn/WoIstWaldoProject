@@ -15,7 +15,7 @@ function getImagesList() {
 
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth }) {
+export default function SwipeImage({ screenWidth, startGuessing }) {
 
   const imageList = getImagesList();
 
@@ -40,15 +40,11 @@ export default function SwipeImage({ screenWidth }) {
     setSwipeDirection(swipeDirection);
   };
 
-  const startGuessing = () => {
-    console.log("start guessing");
-  };
-
-
 
   const gesture = Gesture.Pan()
-  .onEnd(() => {
-    startGuessing();
+    .onEnd(() => {
+    const item = sampleCardArray.slice(-1)[0];
+    startGuessing({item});
   });
 
 

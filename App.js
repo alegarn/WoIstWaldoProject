@@ -6,10 +6,13 @@ import HidingPathScreen from './screens/HidingPathScreen';
 import HideScreen from './screens/HideScreen';
 import SetInstructionsScreen from './screens/SetInstructionScreen';
 import GuessPathScreen from './screens/GuessPathScreen';
+import GuessScreen from './screens/GuessScreen';
+import AdScreen from './screens/AdScreen';
 
 
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import ResultScreen from './screens/ResultScreen';
 
 
 const Stack = createNativeStackNavigator();
@@ -58,6 +61,27 @@ export default function App() {
             options={{
               presentation: "modal",
               title:"Guess Path Screen"
+            }} />
+          <Stack.Screen
+            name="GuessScreen"
+            component={GuessScreen}
+            options={{
+              presentation: "modal",
+              headerShown: false,
+            }} />
+          <Stack.Screen
+            name="AdScreen"
+            component={AdScreen}
+            options={{
+              presentation: "modal",
+              headerShown: false,
+            }} />
+          <Stack.Screen
+            name='ResultScreen'
+            component={ResultScreen}
+            options={{
+              presentation: "modal",
+              headerShown: false,
             }} />
         </Stack.Navigator>
       </NavigationContainer>
