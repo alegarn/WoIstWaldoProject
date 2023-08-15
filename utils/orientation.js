@@ -15,11 +15,8 @@ export default function handleOrientation({ imageIsPortrait, isPortrait }) {
       setOrientation(5);
     }
   } */
-/*   const checkOrientation = async () => {
-    const orientation = await ScreenOrientation.getOrientationAsync();
-    setOrientation(orientation);
-  };
- */
+
+
 
 
 /*   const handleOrientationChange = (o) => {
@@ -32,28 +29,37 @@ export default function handleOrientation({ imageIsPortrait, isPortrait }) {
 
 };
 
+const checkOrientation = async () => {
+  const orientation = await ScreenOrientation.getOrientationAsync();
+  console.log(orientation);
+  return orientation;
+};
+
 const changeOrientation = async (newOrientation) => {
 /*   console.log("newOrientation: ", newOrientation);
  */  await ScreenOrientation.lockAsync(newOrientation);
 };
 
-export const handleImageOrientation = async ({imageIsPortrait, isPortrait}) => {
+export const handleImageOrientation = async ({imageIsPortrait}) => {
   /* const orientation = await ScreenOrientation.getOrientationAsync();
   setOrientation(orientation); */
 /*
   console.log("imageIsPortrait: ", imageIsPortrait);
   console.log("isPortrait: ", isPortrait);
  */
-  if (!imageIsPortrait && isPortrait) {
-    changeOrientation(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
+
+  const orientation = await checkOrientation();
+
+  if ( (orientation === 3 || orientation === 4) && imageIsPortrait) {
+    changeOrientation(ScreenOrientation.OrientationLock.PORTRAIT_RIGHT);
   }
 
-  if (imageIsPortrait && !isPortrait) {
-    changeOrientation(ScreenOrientation.OrientationLock.PORTRAIT_RIGHT);
+  if ((orientation === 1 || orientation === 2) && !imageIsPortrait) {
+    changeOrientation(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
   };
 
 };
 
 export const backHomeScreen =  async () => {
   await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.PORTRAIT);
-}
+};

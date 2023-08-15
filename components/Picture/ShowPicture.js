@@ -1,24 +1,61 @@
 import { View, Text, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
+import IconButton from '../UI/IconButton';
 import { Ionicons } from '@expo/vector-icons';
 import CenteredModal from '../UI/CenteredModal';
 
-export default function showPicture({ uri, screenHeight, screenWidth, touchLocation, handlePress, handleIconPress, handleConfirm, circle, showModal, onCancel }) {
+// pictureUri only in dev with local images
+export default function ShowPicture({ hiddenLocation, uri, pictureUri, guess, screenHeight, screenWidth, touchLocation, handlePress, handleIconPress, showModal, handleConfirm, target, onCancel }) {
 
+  // only in dev with local images
+  const uriPict = uri ? { uri: uri } : pictureUri;
+
+
+
+  /*  */
+
+  function handletargetSize(screenWidth, screenHeight) {
+    const targetSize = Math.min(screenWidth, screenHeight) * 0.1;
+    return targetSize;
+  };
+
+  const targetSize = handletargetSize(screenWidth, screenHeight);
+
+  const hiddenTargetStyle = {
+    position: 'absolute',
+    width: targetSize,
+    height: targetSize,
+    /*  */
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "white",
+    borderRadius: 0,
+    /*  */
+
+    left: hiddenLocation ? (hiddenLocation.x * screenWidth - targetSize / 2) : null,
+    top: hiddenLocation ? (hiddenLocation.y * screenHeight - targetSize / 2): null,
+  };
+
+  /*  */
   return (
     <View style={styles.container}>
       <Pressable onPress={handlePress} style={styles.pressable}>
-        <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
+        <ImageBackground source={uriPict} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
           {touchLocation && (
             <Text style={styles.locationText}>
               Touch Location: {touchLocation.x}, {touchLocation.y}
             </Text>
           )}
           {touchLocation && (
-            <Pressable onPress={handleIconPress}>
-              <Ionicons name={"close-circle-outline"} color={"white"} size={circle.circleSize} style={circle.circleStyle}/>
-            </Pressable>
+            <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle}/>
           )}
+
+
+          {hiddenLocation && (
+            <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} style={hiddenTargetStyle}/>
+          )}
+
+
         </ImageBackground>
       </Pressable>
 
@@ -59,7 +96,7 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     fontSize: 16,
   },
-  circle: {
+  target: {
     borderColor: 'white',
   },
 });

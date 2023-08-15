@@ -15,7 +15,7 @@ export const IMAGES = [
   ),
   new Image(
     1,
-    require("../assets/images/cam.jpeg"),
+    require("../assets/images/2_cam.jpg"),
     "1/image/hashednu8m36ed6z",
     "click",
     607,
@@ -27,7 +27,7 @@ export const IMAGES = [
   ),
   new Image(
     1,
-    require("../assets/images/lens.jpeg"),
+    require("../assets/images/3_lense.jpeg"),
     "1/image/hashedz2ss02tai1m",
     "lens center",
     2680,
