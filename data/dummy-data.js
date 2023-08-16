@@ -32,7 +32,7 @@ export const IMAGES = [
     "lens center",
     2680,
     4764,
-    true,
+    false,
     { x: "0.51", y: "0.50" },
     411.42857142857144,
     707.4285714285714

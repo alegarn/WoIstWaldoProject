@@ -1,11 +1,18 @@
 import{ View, StyleSheet} from 'react-native';
+import { useLayoutEffect } from 'react';
+
 
 import BigButton from '../components/UI/BigButton';
 import { GlobalStyle } from '../constants/theme';
-
+import { handleOrientation } from '../utils/orientation';
 
 
 export default function HomeScreen({ navigation }) {
+
+  useLayoutEffect(() => {
+    handleOrientation("portrait");
+  }, []);
+
   function navigationHandler({ screenName }) {
     navigation.navigate(screenName);
   };

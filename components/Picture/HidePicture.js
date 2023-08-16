@@ -19,7 +19,7 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({ imageIsPortrait });
-  }, []);
+  }, [navigation]);
 
   useEffect(() => {
     showUpdatedLocation();

@@ -30,7 +30,7 @@ https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent
 
 export default function AdScreen({navigation, route}){
 
-  const { onTarget, accountId, pictureId } = route.params;
+  const { onTarget, accountId, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
 
   /*
   the options object includes the requestNonPersonalizedAdsOnly property, which tells the AdMob network to only show non-personalized ads
@@ -45,12 +45,23 @@ export default function AdScreen({navigation, route}){
   };
 
   const toResultScreen = () => {
-    navigation.navigate("ResultScreen", { onTarget: onTarget, accountId: accountId, pictureId: pictureId });
+    navigation.navigate("ResultScreen", {
+      onTarget: onTarget,
+      accountId: accountId,
+      imageFile: imageFile,
+      pictureId: pictureId,
+      description: description,
+      imageHeight: imageHeight,
+      imageWidth:imageWidth,
+      isPortrait: isPortrait,
+      hiddenLocation: hiddenLocation,
+      screenHeight: screenHeight,
+      screenWidth: screenWidth });
   };
 
   useLayoutEffect(() => {
     waitSomeTime(toResultScreen);
-  });
+  }, [route]);
 
 
   /*
