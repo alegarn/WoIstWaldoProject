@@ -1,10 +1,10 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress, isOnTarget } from "../../utils/targetLocation";
+import { handlePicturePress } from "../../utils/targetLocation";
 
 import ShowPicture from './ShowPicture';
-export default function GuessPicture({ navigation, accountId, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth }) {
+export default function GuessPicture({ imageFile, imageHeight, imageWidth, hiddenLocation, screenHeight, screenWidth, toAdScreen }) {
 
   const uri = imageFile;
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
@@ -16,7 +16,8 @@ export default function GuessPicture({ navigation, accountId, imageFile, picture
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({imageIsPortrait});
-  }, []);
+    console.log("imageIsPortrait ??? ", imageIsPortrait);
+  }, [imageIsPortrait]);
 
   useEffect(() => {
     showUpdatedLocation();
@@ -33,9 +34,8 @@ export default function GuessPicture({ navigation, accountId, imageFile, picture
     setShowModal(true);
   };
 
-  function handleConfirm(){
-    let onTarget = isOnTarget({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target });
-    navigation.navigate('AdScreen', { onTarget: onTarget, accountId: accountId, pictureId: pictureId });
+  const handleConfirm = () => {
+    toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target });
   };
 
   const onCancel = () => {

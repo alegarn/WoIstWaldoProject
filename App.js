@@ -1,5 +1,10 @@
 import { StatusBar, StyleSheet } from 'react-native';
+
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 import { GlobalStyle } from './constants/theme';
+import IconButton from './components/UI/IconButton';
 
 import HomeScreen from './screens/HomeScreen';
 import HidingPathScreen from './screens/HidingPathScreen';
@@ -8,10 +13,6 @@ import SetInstructionsScreen from './screens/SetInstructionScreen';
 import GuessPathScreen from './screens/GuessPathScreen';
 import GuessScreen from './screens/GuessScreen';
 import AdScreen from './screens/AdScreen';
-
-
-import { NavigationContainer } from '@react-navigation/native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import ResultScreen from './screens/ResultScreen';
 
 
@@ -58,10 +59,17 @@ export default function App() {
           <Stack.Screen
             name="GuessPathScreen"
             component={GuessPathScreen}
-            options={{
+            options={({ navigation }) => ({
               presentation: "modal",
-              title:"Guess Path Screen"
-            }} />
+              title:"Guess Path Screen",
+              headerLeft: () => (
+                <IconButton
+                  icon="ios-arrow-back"
+                  color={"white"}
+                  size={24}
+                  style={{ marginRight: 20 }}
+                  onPress={() => navigation.replace("HomeScreen")} />)
+            })} />
           <Stack.Screen
             name="GuessScreen"
             component={GuessScreen}

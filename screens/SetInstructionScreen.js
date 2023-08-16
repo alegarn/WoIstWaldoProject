@@ -6,7 +6,7 @@ import * as MediaLibrary from 'expo-media-library';
 import Description from '../components/Picture/Descriptions/Description';
 import CenteredModal from "../components/UI/CenteredModal";
 import { imageUploader } from "../utils/fileUploader";
-import { backHomeScreen } from '../utils/orientation';
+import { handleOrientation } from '../utils/orientation';
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
@@ -53,7 +53,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
     await saveImage(uri);
     /*  */
 
-    backHomeScreen();
+    handleOrientation("portrait");
 
     navigation.replace("HomeScreen");
   };
