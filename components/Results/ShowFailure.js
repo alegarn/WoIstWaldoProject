@@ -2,13 +2,13 @@ import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
-import ImageFilter from './ImageFilter';
+import ImageAnimated from './ImageAnimated';
 
 
 
 export default function ShowFailure({ navigation, route }) {
 
-  const [showSadImageFilter, setShowSadImageFilter] = useState(true);
+  const [showSadImageAnimated, setShowSadImageAnimated] = useState(true);
 
   const { accountId, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
 
@@ -16,7 +16,7 @@ export default function ShowFailure({ navigation, route }) {
 
   useEffect(() => {
     const timeout = setTimeout(() => {
-      setShowSadImageFilter(false);
+      setShowSadImageAnimated(false);
     }, 2000);
 
     return () => clearTimeout(timeout);
@@ -42,8 +42,8 @@ export default function ShowFailure({ navigation, route }) {
     <>
 
         <View style={styles.container}>
-          {showSadImageFilter ?
-            <ImageFilter success={false} />
+          {showSadImageAnimated ?
+            <ImageAnimated success={false} />
           :
           <>
             <Text style={styles.title}>You didn't find it :(</Text>

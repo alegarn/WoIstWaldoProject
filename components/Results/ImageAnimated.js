@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { StyleSheet, Animated } from 'react-native';
 
-export default function ImageFilter({ success }) {
+export default function ImageAnimated({ success }) {
 
   const imagePosition = useRef(new Animated.Value(0)).current;
 
