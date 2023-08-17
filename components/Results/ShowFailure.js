@@ -8,7 +8,7 @@ import ImageAnimated from './ImageAnimated';
 
 export default function ShowFailure({ navigation, route }) {
 
-  const [showSadImageAnimated, setShowSadImageAnimated] = useState(true);
+  const [showFailureImageAnimated, setShowSadImageAnimated] = useState(true);
 
   const { accountId, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
 
@@ -17,7 +17,7 @@ export default function ShowFailure({ navigation, route }) {
   useEffect(() => {
     const timeout = setTimeout(() => {
       setShowSadImageAnimated(false);
-    }, 2000);
+    }, 1000);
 
     return () => clearTimeout(timeout);
   }, []);
@@ -42,7 +42,7 @@ export default function ShowFailure({ navigation, route }) {
     <>
 
         <View style={styles.container}>
-          {showSadImageAnimated ?
+          {showFailureImageAnimated ?
             <ImageAnimated success={false} />
           :
           <>

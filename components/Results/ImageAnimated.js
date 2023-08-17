@@ -1,39 +1,49 @@
-import { useEffect, useRef } from 'react';
-import { StyleSheet, Animated } from 'react-native';
+import { useRef } from 'react';
+import { StyleSheet, Animated, Easing } from 'react-native';
 
 export default function ImageAnimated({ success }) {
 
-  const imagePosition = useRef(new Animated.Value(0)).current;
+  const imageAnimationValue = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    startAnimation();
-  }, []);
-
-
-  const startAnimation = () => {
-    Animated.timing(imagePosition, {
-      toValue: 100,
-      duration: 2000,
-      useNativeDriver: true,
+  const startSuccessAnimation = () => {
+    Animated.timing(imageAnimationValue, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true
     }).start();
   };
+
+  const startFailureAnimation = () => {
+      Animated.timing(imageAnimationValue, {
+        toValue: 100,
+        duration: 1000,
+        easing: Easing.quad,
+        useNativeDriver: true,
+      }).start();
+  };
+
+  success ? startSuccessAnimation() : startFailureAnimation();
+
+  const animationStyle =  success ?
+    ({ opacity: imageAnimationValue, width: 300, height: 300 })  :
+    ({ transform: [{ translateY: imageAnimationValue }] });
 
   return (
     <>
       <Animated.Image
-        source={success ? null : require("../../assets/images/tears.png")}
-        style={[styles.image, success ? {} : { transform: [{ translateY: imagePosition }] }]}
+        source={success ? require("../../assets/icons/stars.png") : require("../../assets/icons/tears.png")}
+        style={[styles.image, animationStyle ]}
       />
     </>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   image: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: '90%',
-    height: '90%',
+    width: '100%',
+    height: '100%',
   },
 
 });
