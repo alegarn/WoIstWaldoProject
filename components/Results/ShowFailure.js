@@ -1,13 +1,28 @@
+import { useEffect, useState } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
+import ImageAnimated from './ImageAnimated';
+
 
 
 export default function ShowFailure({ navigation, route }) {
 
+  const [showFailureImageAnimated, setShowSadImageAnimated] = useState(true);
+
   const { accountId, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
 
-  console.log("isPortrait", isPortrait);
+
+
+  useEffect(() => {
+    const timeout = setTimeout(() => {
+      setShowSadImageAnimated(false);
+    }, 1000);
+
+    return () => clearTimeout(timeout);
+  }, []);
+
+
 
   function retryGuess() {
     navigation.replace('GuessScreen', {
@@ -24,10 +39,21 @@ export default function ShowFailure({ navigation, route }) {
   };
 
   return (
-      <View style={styles.container}>
-        <Text style={styles.title}>You didn't found it :O</Text>
-        <ResultChoices navigation={navigation} retryGuess={retryGuess} success={false} />
-      </View>
+    <>
+
+        <View style={styles.container}>
+          {showFailureImageAnimated ?
+            <ImageAnimated success={false} />
+          :
+          <>
+            <Text style={styles.title}>You didn't find it :(</Text>
+            <ResultChoices navigation={navigation} retryGuess={retryGuess} success={false} />
+          </>
+          }
+        </View>
+    </>
+
+
   );
 };
 
@@ -41,4 +67,5 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: 'bold',
   },
-})
+
+});
