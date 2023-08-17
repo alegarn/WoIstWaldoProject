@@ -4,7 +4,7 @@ import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
-import HideGameIntructions from '../Instructions/HideGameInstructions';
+import GameInstructions from '../Instructions/GameInstructions';
 
 export default function HidePicture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenHeight, screenWidth }) {
 
@@ -74,7 +74,8 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
 
   if (showFilter) {
     return(
-      <HideGameIntructions
+      <GameInstructions
+            game="hide"
             uri={uri}
             screenWidth={screenWidth}
             screenHeight={screenHeight}

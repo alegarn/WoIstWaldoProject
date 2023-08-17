@@ -4,9 +4,16 @@ import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress } from "../../utils/targetLocation";
 
 import ShowPicture from './ShowPicture';
+import GameInstructions from '../Instructions/GameInstructions';
+
 export default function GuessPicture({ imageFile, imageHeight, imageWidth, hiddenLocation, screenHeight, screenWidth, toAdScreen }) {
 
+
   const uri = imageFile;
+
+  const [showFilter, setShowFilter] = useState(true);
+
+
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
@@ -22,6 +29,11 @@ export default function GuessPicture({ imageFile, imageHeight, imageWidth, hidde
   useEffect(() => {
     showUpdatedLocation();
   }, [target]);
+
+
+  const handleFilterClick = () => {
+    setShowFilter(false);
+  };
 
   const handlePress = (event) => {
     /* from '../../utils/targetLocation' */
@@ -61,7 +73,22 @@ export default function GuessPicture({ imageFile, imageHeight, imageWidth, hidde
     );
   }
 
-  return (
-    showUpdatedLocation()
-  );
+  if (showFilter) {
+    return(
+      <GameInstructions
+            // pictureUri only in dev with local images
+            pictureUri={uri}
+
+            game="guess"
+            screenWidth={screenWidth}
+            screenHeight={screenHeight}
+            handleFilterClick={handleFilterClick} />
+    );
+  };
+
+  if (!showFilter) {
+    return(
+      showUpdatedLocation()
+    );
+  };
 }
