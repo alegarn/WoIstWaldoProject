@@ -4,12 +4,21 @@ import { Ionicons } from '@expo/vector-icons';
 
 import BigButton from '../UI/BigButton';
 
-export default function HideGameIntructions({ uri, screenHeight, screenWidth, handleFilterClick}) {
+export default function GameInstructions({ pictureUri, uri, screenHeight, screenWidth, handleFilterClick, game}) {
+
+  // only in dev with local images
+  const uriPict = uri ? { uri: uri } : pictureUri;
+  /*  */
+
+
+  let instructions = "Touch the screen to hide your Waldo!";
+  game === "guess" ? instructions = "Guess where the Waldo is, touch the screen!" : null;
+
   return(
     <>
-      <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
+      <ImageBackground source={uriPict} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
         <View style={styles.filter}>
-          <Text style={styles.filterText}>Touch the screen to hide your Waldo!</Text>
+          <Text style={styles.filterText}>{instructions}</Text>
           <BigButton text="Play!" onPress={handleFilterClick} buttonStyle="ranking" />
           <View style={styles.filterIconContainer}>
             <Text style={styles.filterText}>Touch the</Text>
