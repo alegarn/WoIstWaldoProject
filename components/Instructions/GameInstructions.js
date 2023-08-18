@@ -11,19 +11,22 @@ export default function GameInstructions({ pictureUri, uri, screenHeight, screen
   /*  */
 
 
-  let instructions = "Touch the screen to hide your Waldo!";
-  game === "guess" ? instructions = "Guess where the Waldo is, touch the screen!" : null;
+  let instructionsUp = "Touch the screen to hide your Waldo!";
+  let instructionsSupplement = "";
+  game === "guess" ? instructionsUp = "Guess where the Waldo is, touch the screen!" : null;
+  game === "guess" ? instructionsSupplement = ("or show the description"): null;
+
 
   return(
     <>
       <ImageBackground source={uriPict} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
         <View style={styles.filter}>
-          <Text style={styles.filterText}>{instructions}</Text>
+          <Text style={styles.filterText}>{instructionsUp}</Text>
           <BigButton text="Play!" onPress={handleFilterClick} buttonStyle="ranking" />
           <View style={styles.filterIconContainer}>
             <Text style={styles.filterText}>Touch the</Text>
             <Ionicons name={"close-circle-outline"} color={"white"} size={screenWidth/20}/>
-            <Text style={styles.filterText}>again to confirm!</Text>
+            <Text style={styles.filterText}>again to confirm {instructionsSupplement}!</Text>
           </View>
         </View>
       </ImageBackground>
