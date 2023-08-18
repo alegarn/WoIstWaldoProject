@@ -3,7 +3,7 @@ import { View, Text, ImageBackground, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 
-import Description from '../components/Picture/Descriptions/Description';
+import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
 import { imageUploader } from "../utils/fileUploader";
 import { handleOrientation } from '../utils/orientation';
@@ -73,7 +73,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   return (
     <View style={styles.container}>
       <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
-        <Description
+        <HideDescription
           onSubmit={handlePressDescription}
           label="Describe the location"
           invalid={false}

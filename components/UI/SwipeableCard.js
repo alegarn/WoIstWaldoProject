@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { ImageBackground, Text, StyleSheet, PanResponder, Animated, View } from 'react-native';
 
-import IconButton from './IconButton';
+import GuessDescription from '../Picture/Descriptions/GuessDescription';
 
 export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth }) {
-    // let xPosition = new Animated.Value(0);
+
+    const [showFullDescription, setShowFullDescription] = useState(false);
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
+
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
     let rotateCard = xPosition.interpolate({
@@ -74,7 +76,6 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       },
     });
 
-    const [showFullDescription, setShowFullDescription] = useState(false);
 
     const toggleDescription = () => {
       setShowFullDescription(!showFullDescription);
@@ -93,20 +94,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         ]}>
 
           <ImageBackground source={item.imageFile} style={[styles.imageStyle, styles.expended]}>
-            <View style={styles.descriptionArea}>
-              {item.description.length > 3 && (
-                  <IconButton
-                    icon= {showFullDescription ? "chevron-down" : "chevron-up"}
-                    color="white"
-                    size={30}
-                    onPress={toggleDescription} />
-                )}
-              <Text
-                style={styles.cardDescriptionStyle}
-                numberOfLines={showFullDescription ? undefined : 3}>
-                {item.description}
-              </Text>
-            </View>
+            <GuessDescription
+              item={item}
+              showFullDescription={showFullDescription}
+              toggleDescription={toggleDescription} />
           </ImageBackground>
 
       </Animated.View>
@@ -134,21 +125,5 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     justifyContent: 'flex-end'
-  },
-  descriptionArea: {
-    alignItems: 'center',
-  },
-  cardDescriptionStyle: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-    padding: 10,
-    overflow: 'hidden',
-  },
-  showMoreButtonStyle: {
-    color: '#fff',
-    fontSize: 16,
-    textAlign: 'center',
-    paddingTop: 10,
   },
 });

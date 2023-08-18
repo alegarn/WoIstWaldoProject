@@ -6,19 +6,18 @@ import { handlePicturePress } from "../../utils/targetLocation";
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 
-export default function GuessPicture({ imageFile, imageHeight, imageWidth, hiddenLocation, screenHeight, screenWidth, toAdScreen }) {
+
+
+export default function GuessPicture({ imageFile, description, imageIsPortrait, hiddenLocation, screenHeight, screenWidth, toAdScreen }) {
 
 
   const uri = imageFile;
 
   const [showFilter, setShowFilter] = useState(true);
-
-
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
 
-  const imageIsPortrait = imageWidth < imageHeight;
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
@@ -54,12 +53,17 @@ export default function GuessPicture({ imageFile, imageHeight, imageWidth, hidde
     setShowModal(false);
   };
 
+  const toggleDescription = () => {
+    setShowFullDescription(!showFullDescription);
+  };
+
   const showUpdatedLocation = () => {
     return (
       <ShowPicture
         // pictureUri only in dev with local images
         pictureUri={uri}
-        guess={false}
+        guess={true}
+        description={description}
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         touchLocation={touchLocation}

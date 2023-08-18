@@ -1,7 +1,7 @@
 import { useState } from "react";
-import ShowDescription from "./ShowDescription";
+import ShowHideDescription from "./ShowHideDescription";
 
-export default function Description({onSubmit, onCancel}) {
+export default function HideDescription({onSubmit, onCancel}) {
 
   const [descriptionText, setDescriptionText] = useState({});
 
@@ -19,7 +19,7 @@ export default function Description({onSubmit, onCancel}) {
   };
 
   return (
-    <ShowDescription
+    <ShowHideDescription
       inputChangeHandler={inputChangeHandler}
       submitHandler={submitHandler}
       onCancel={onCancel} />

@@ -18,6 +18,7 @@ export default function GuessScreen({ navigation, route }) {
   // only in dev with local images
   const uri = IMAGES.filter((item) => item.pictureId === pictureId)[0].imageFile;
 
+  const imageIsPortrait = imageWidth < imageHeight;
 
   function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
@@ -32,8 +33,7 @@ export default function GuessScreen({ navigation, route }) {
       imageFile={uri}
       pictureId={pictureId}
       description={description}
-      imageHeight={imageHeight}
-      imageWidth={imageWidth}
+      imageIsPortrait={imageIsPortrait}
       hiddenLocation={hiddenLocation}
       screenHeight={screenHeight}
       screenWidth={screenWidth}
