@@ -1,10 +1,10 @@
-import {  SafeAreaView,
-  StyleSheet,
-  Text,} from 'react-native';
 import { useState } from 'react';
-import SwipeableCard from './SwipeableCard';
-import { IMAGES } from "../../data/dummy-data";
+import {  SafeAreaView, StyleSheet, Text,} from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
+
+import SwipeableCard from './SwipeableCard';
+import Spinner from './Spinner';
+import { IMAGES } from "../../data/dummy-data";
 
 function getImagesList() {
   IMAGES.forEach((image, index) => {
@@ -48,6 +48,11 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   });
 
 
+  const showIsLoading = () => (
+    <Spinner size="large" color="#0000ff" />
+  )
+
+
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Text style={styles.titleText}>
@@ -70,7 +75,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
           )}
 
         {noMoreCard ? (
-          <Text style={{ fontSize: 22, color: '#000' }}>No Cards Found.</Text>
+          showIsLoading()
         ) : null}
 
       </GestureHandlerRootView>
