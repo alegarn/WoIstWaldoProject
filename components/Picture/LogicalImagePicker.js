@@ -72,9 +72,15 @@ export default function LogicalImagePicker({ navigation }) {
     // Launch the camera and capture an image
     const image = await launchCameraAsync({
       allowsEditing: true,
-      aspect: [16, 9],
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      /* aspect: [16, 9], */
       quality: 0.5,
     });
+
+    //
+    console.log(image);
+    //
+
 
     navigation.navigate('HideScreen', {
       uri: image.assets[0].uri,
@@ -91,14 +97,15 @@ export default function LogicalImagePicker({ navigation }) {
   const pickImage = async () => {
     // No permissions request is necessary for launching the image library
     let pickedImage = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.All,
       allowsEditing: true,
-      aspect: [16, 9],
-      quality: 0.5,
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+/*       aspect: [16, 9],
+ */      quality: 0.5,
     });
 
     if (!pickedImage.canceled) {
       setImage(pickedImage.assets[0].uri);
+      console.log(pickedImage);
     };
 
     navigation.navigate('HideScreen', {

@@ -21,8 +21,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const isPortrait = route.params?.isPortrait;
   const touchLocation = route.params?.touchLocation;
   const target = route.params?.target;
+  const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
+  /*  */
+console.log("description", description);
 
+/*  */
   const handlePressDescription = (enteredText) => {
     setDescription(enteredText);
     setShowModal(true);
@@ -62,23 +66,26 @@ export default function SetInstructionsScreen({ navigation, route }) {
     setShowModal(false);
   };
 
-  const modalContent =
-  (
-      <View style={styles.descriptionContainer}>
-        <Text style={styles.modalTitle}>Do you want send your image with this description ?</Text>
+  let modalContent = (
+      <>
+        <Text style={styles.modalTitle}>Do you want to send your image with this description ?</Text>
         <Text style={styles.modalText}>{description}</Text>
-      </View>
-  );
+      </>
+    );
+
 
   return (
     <View style={styles.container}>
-      <ImageBackground source={{ uri: uri }} style={[styles.image, { width: screenWidth, height: screenHeight }]}>
+      <ImageBackground
+        source={{ uri: uri }}
+        resizeMode='stretch'
+        style={[styles.image, imageDimensionStyle]}
+      >
         <HideDescription
           onSubmit={handlePressDescription}
-          label="Describe the location"
+          label="Describe the hidden point"
           invalid={false}
           onCancel={onCancelGoBack}
-          style={styles.input}
           textInputConfig={{ multiline: true }}/>
         <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
       </ImageBackground>
@@ -93,21 +100,18 @@ export default function SetInstructionsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  pressable: {
+    flex: 1,
   },
   image: {
-    resizeMode: 'contain',
     maxWidth: '100%',
     maxHeight: '100%',
   },
   targetStyle: {
     zIndex: -1,
-  },
-  descriptionContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-
   },
   modalTitle: {
     fontSize: 18,
@@ -115,9 +119,5 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: 16,
-    marginVertical: 10,
   },
-  input: {
-
-  }
-})
+});

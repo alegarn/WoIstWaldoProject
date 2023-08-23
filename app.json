@@ -24,6 +24,9 @@
         "backgroundColor": "#ffffff"
       }
     },
+    "androidNavigationBar": {
+      "visible": "immersive"
+    },
     "web": {
       "favicon": "./assets/favicon.png"
     },

@@ -36,7 +36,55 @@ export const IMAGES = [
     { x: "0.51", y: "0.50" },
     411.42857142857144,
     707.4285714285714
-  )
+  ),
+  new Image(
+    1,
+    require("../assets/images/door.jpg"),
+    "1/image/hasheddk357idbem8",
+    "top right",
+    540,
+    960,
+    false,
+    {"x": "0.54", "y": "0.44"},
+    411.42857142857144,
+    707.4285714285714
+  ),
+  new Image(
+    1,
+    require("../assets/images/kitchen.jpg"),
+    "1/image/hashed062fzgihjz5g",
+    "the lock",
+    1024,
+    768,
+    true,
+    {"x": "0.73", "y": "0.64"},
+    411.42857142857144,
+    707.4285714285714
+  ),
+  new Image(
+    1,
+    require("../assets/images/cat_tail.jpg"),
+    "1/image/hashed6iongyss7ll",
+    "top cat tail",
+    768,
+    1024,
+    false,
+    {"x": "0.87", "y": "0.56"},
+    387.42857142857144,
+    731.4285714285714
+  ),
+  new Image(
+    1,
+    require("../assets/images/green_1280.jpg"),
+    "1/image/hashed5bmof5ev5mn",
+    "top left green square",
+    768,
+    1024,
+    false,
+    {"x": "0.94", "y": "0.42"},
+    360,
+    640
+  ),
 ];
 
 
