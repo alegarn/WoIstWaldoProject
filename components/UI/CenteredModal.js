@@ -1,7 +1,5 @@
 import { Modal, View, Text,  StyleSheet, Platform } from 'react-native';
 import Button from './Button';
-import { GlobalStyle } from '../../constants/theme';
-
 
 
 export default function CenteredModal({ children, onCancel, onPress , isModalVisible}) {
@@ -46,15 +44,14 @@ const styles = StyleSheet.create({
     maxWidth: '80%',
   },
   modalContent: {
-    backgroundColor: GlobalStyle.color.primaryColor900,
+    backgroundColor: "white",
     padding: 20,
     borderRadius: 10,
     alignItems: 'center',
   },
   modalText: {
     fontSize: 18,
-/*     fontWeight: 'bold',
- */    marginBottom: 10,
+    marginBottom: 10,
   },
   buttonContainer: {
     flexDirection: 'row',

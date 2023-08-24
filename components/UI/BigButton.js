@@ -28,18 +28,12 @@ export default function BigButton({ text, onPress, buttonStyle }) {
 }
 
 const styles = StyleSheet.create({
-  homeContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: GlobalStyle.color.primaryColor100,
-  },
   pressed: {
     opacity: 0.75,
     backgroundColor: GlobalStyle.color.primaryColor700,
   },
   homeButton: {
-    backgroundColor: GlobalStyle.color.secondaryColor,
+    backgroundColor: GlobalStyle.color.primaryColor,
     padding: 10,
     borderRadius: 5,
     borderWidth: 1,
