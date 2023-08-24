@@ -25,7 +25,7 @@ export default function ShowSuccess({ navigation }) {
           <>
             <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
             <Text style={[styles.subtitle, styles.marginBottom]}>
-              <Text style={styles.title}>X</Text> points earned!
+              <Text style={styles.title}>1</Text> point earned!
             </Text>
             <ResultChoices navigation={navigation} success={true} />
           </>

@@ -22,7 +22,7 @@ export default function ResultScreen({ route, navigation }) {
   };
 
   function userEarnPoints(accountId) {
-    console.log(`User ${accountId} earned X points!`);
+    console.log(`User ${accountId} earned 1 point!`);
   };
 
   if (onTarget) {

@@ -56,7 +56,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Text style={styles.titleText}>
-        Tap to Play or Swipe
+        Zoom to Play or Swipe
       </Text>
       <GestureHandlerRootView style={styles.container}>
 

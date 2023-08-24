@@ -8,7 +8,7 @@ function determineLocation({locationX, locationY, newImageWidth, newImageHeight}
 
 function handleTargetSize(screenWidth, screenHeight) {
   // size = mode (0.1, 0.05, 0.01)
-  const targetSize = Math.min(screenWidth, screenHeight) * 0.1;
+  const targetSize = Math.min(screenWidth, screenHeight) * 0.05;
   return targetSize;
 };
 function setTarget({ locationX, locationY, targetSize }) {
@@ -17,10 +17,10 @@ function setTarget({ locationX, locationY, targetSize }) {
     width: targetSize,
     height: targetSize,
     /*  */
-    borderWidth: 1,
+/*     borderWidth: 1,
     borderStyle: "solid",
     borderColor: "white",
-
+ */
     /*  */
     left: locationX - targetSize / 2, // Adjusted to center the icon horizontally
     top: locationY - targetSize / 2, // Adjusted to center the icon vertically
@@ -34,6 +34,12 @@ export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
   const { locationX, locationY } = event.nativeEvent;
   const newImageWidth = screenWidth;
   const newImageHeight = screenHeight;
+
+
+  console.log("newImageWidth", newImageWidth);
+  console.log("newImageHeight", newImageHeight);
+
+
   // Check if the touch event is within the image boundaries
   if (
     locationX >= 0 &&
@@ -43,9 +49,10 @@ export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
   ) {
 
     const location = determineLocation({ locationX, locationY, newImageWidth, newImageHeight });
-    const targetSize = handleTargetSize(screenWidth, screenHeight);
+    const targetSize = handleTargetSize(newImageWidth, newImageHeight);
     const target = setTarget({ locationX, locationY, targetSize });
 
+    console.log("location", location);
     return ({ location, target });
 
     };
