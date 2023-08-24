@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { View, ImageBackground, StyleSheet } from 'react-native';
+import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
+import * as Linking from 'expo-linking';
 
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
@@ -13,6 +14,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const [showModal, setShowModal] = useState(false);
   const [description, setDescription] = useState("");
+  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
 
   const uri = route.params?.uri;
   const imageWidth = route.params?.imageWidth;
@@ -38,25 +40,64 @@ console.log("description", description);
   };
 
   const handleConfirmModal = async () => {
-    imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
 
     /*  */
-    const saveImage = async (uri) => {
-      try {
-        // Request device storage access permission
-        const { status } = await MediaLibrary.requestPermissionsAsync();
-        if (status === "granted") {
-        // Save image to media library
-          await MediaLibrary.saveToLibraryAsync(uri);
 
-          console.log("Image successfully saved");
+    const getPermissions = async () => {
+      console.log("getPermissions");
+      console.log(permissionResponse);
+/*
+      if (permissionResponse.granted) {
+        console.log("Permission granted");
+        return true;
+      };
+      if (!permissionResponse.granted) {
+        console.log("Permission denied");
+        Alert.alert("Failed to save image, please accept permission to save image and audio.");
+        return false;
+      }; */
+
+      // Detect if you can request this permission again
+      if (permissionResponse.status === "undetermined") {
+        const permissionResponse = await requestPermission();
+      };
+      if (!permissionResponse.canAskAgain || permissionResponse.status === "denied") {
+        /**
+         *   Code to open device setting then the user can manually grant the app
+         *  that permission
+         */
+        Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
+        Linking.openSettings();
+      } else {
+        if (permissionResponse.status === "granted") {
+          return true;
         }
+      };
+    };
+
+
+    let permissionStatus = await getPermissions();
+    if (!permissionStatus) {
+      return;
+    };
+
+
+    const saveImage = async () => {
+      try {
+        await MediaLibrary.saveToLibraryAsync(uri);
+        imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
+        // Save image to media library
+        console.log("Image successfully saved");
       } catch (error) {
         console.log(error);
-      }
+      };
     };
-    await saveImage(uri);
+
+
+    const imageIsSaved = await saveImage();
+
     /*  */
+
     setShowModal(false);
     handleOrientation("portrait");
 
