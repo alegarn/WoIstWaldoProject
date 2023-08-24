@@ -33,7 +33,7 @@ export default function App() {
             component={HomeScreen}
             options={{
               presentation: "modal",
-              title:"Home"
+              headerShown: false
             }} />
           <Stack.Screen
             name="HidingPathScreen"
