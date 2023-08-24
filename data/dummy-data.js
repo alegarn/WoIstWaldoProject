@@ -58,8 +58,8 @@ export const IMAGES = [
     768,
     true,
     {"x": "0.73", "y": "0.64"},
+    707.4285714285714,
     411.42857142857144,
-    707.4285714285714
   ),
   new Image(
     1,
@@ -84,6 +84,18 @@ export const IMAGES = [
     {"x": "0.94", "y": "0.42"},
     360,
     640
+  ),
+  new Image(
+    1,
+    require("../assets/images/cat_portrait_1280.jpg"),
+    "1/image/hashedw1aa1x3fjej",
+    "cat's head",
+    1024,
+    768,
+    true,
+    {"x": "0.87", "y": "0.65"},
+    640,
+    360,
   ),
 ];
 
