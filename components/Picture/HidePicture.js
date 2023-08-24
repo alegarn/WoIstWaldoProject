@@ -60,6 +60,7 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
   };
 
   const handleConfirm = () => {
+    setShowModal(false);
     navigation.navigate( 'SetInstructions', {
       uri: uri,
       imageWidth: imageWidth,
