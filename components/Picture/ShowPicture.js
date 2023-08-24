@@ -2,6 +2,7 @@ import { View, Text, Pressable, StyleSheet, ImageBackground } from 'react-native
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
+import ModalContent from '../UI/ModalContent';
 
 // pictureUri only in dev with local images
 export default function ShowPicture({ /* hiddenLocation, */ uri, pictureUri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel }) {
@@ -38,11 +39,12 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, pictureUri, gue
   /*  */
 
   const modalContent = guess ? (
-    <View style={[styles.descriptionViewStyle, { maxHeight: screenHeight*0.8, maxWidth: screenWidth*0.8 }]}>
-      <Text style={styles.descriptionTitleStyle}>Description: </Text>
-      <Text style={[styles.descriptionTextStyle, { width: screenWidth*0.8 }]}>{description}</Text>
-      <Text style={styles.descriptionTitleStyle}>Is it hiding there ?</Text>
-    </View>
+    <ModalContent
+      description={description}
+      screenWidth={screenWidth}
+      screenHeight={screenHeight}
+      guessPath={true}
+    />
     )
     :
     "Is it hiding there ?";

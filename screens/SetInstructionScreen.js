@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { View, Text, ImageBackground, StyleSheet } from 'react-native';
+import { View, ImageBackground, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
+import ModalContent from '../components/UI/ModalContent';
 import { imageUploader } from "../utils/fileUploader";
 import { handleOrientation } from '../utils/orientation';
 
@@ -56,7 +57,7 @@ console.log("description", description);
     };
     await saveImage(uri);
     /*  */
-
+    setShowModal(false);
     handleOrientation("portrait");
 
     navigation.replace("HomeScreen");
@@ -66,12 +67,6 @@ console.log("description", description);
     setShowModal(false);
   };
 
-  let modalContent = (
-      <>
-        <Text style={styles.modalTitle}>Do you want to send your image with this description ?</Text>
-        <Text style={styles.modalText}>{description}</Text>
-      </>
-    );
 
 
   return (
@@ -91,7 +86,11 @@ console.log("description", description);
       </ImageBackground>
       {showModal ?
       <CenteredModal onPress={handleConfirmModal} onCancel={onCancelModal} isModalVisible={showModal}>
-        {modalContent}
+        <ModalContent
+          description={description}
+          screenHeight={screenHeight}
+          screenWidth={screenWidth}
+          guessPath={false} />
       </CenteredModal> : null}
     </View>
   )
@@ -112,12 +111,5 @@ const styles = StyleSheet.create({
   },
   targetStyle: {
     zIndex: -1,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-  },
-  modalText: {
-    fontSize: 16,
   },
 });
