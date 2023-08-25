@@ -100,3 +100,29 @@ export const IMAGES = [
 ];
 
 
+export const RANKING = {
+  tableHeaders: ["Rank", "Name", "Score", "Guess Score", "Guess Count", "Hide Score", "Hide Count"],
+  scoresDatum: [
+    {id: 0, rank: 1, name: 'John', totalScore: 100, guessScore: 70, guessTotalCount: 70, hideScore: 30, hideWaldoCreatedCount: 2},
+    {id: 4, rank: 2, name: 'Sarah', totalScore: 95, guessScore: 60, guessTotalCount: 60, hideScore: 35, hideWaldoCreatedCount: 2},
+    {id: 1, rank: 3, name: 'Bob', totalScore: 89, guessScore: 40, guessTotalCount: 40, hideScore: 49, hideWaldoCreatedCount: 2},
+    {id: 2, rank: 4, name: 'Mei', totalScore: 80, guessScore: 30, guessTotalCount: 30, hideScore: 50, hideWaldoCreatedCount: 2},
+    {id: 5, rank: 5, name: 'Alex', totalScore: 75, guessScore: 45, guessTotalCount: 45, hideScore: 30, hideWaldoCreatedCount: 2},
+    {id: 6, rank: 6, name: 'Emily', totalScore: 70, guessScore: 25, guessTotalCount: 25, hideScore: 45, hideWaldoCreatedCount: 2},
+    {id: 7, rank: 7, name: 'Mike', totalScore: 60, guessScore: 35, guessTotalCount: 35, hideScore: 25, hideWaldoCreatedCount: 2},
+    {id: 8, rank: 8, name: 'Lily', totalScore: 55, guessScore: 20, guessTotalCount: 20, hideScore: 35, hideWaldoCreatedCount: 2},
+    {id: 3, rank: 9, name: 'Steve', totalScore: 50, guessScore: 30, guessTotalCount: 31, hideScore: 20, hideWaldoCreatedCount: 2},
+    {id: 9, rank: 10, name: 'Tom', totalScore: 45, guessScore: 25, guessTotalCount: 26, hideScore: 20, hideWaldoCreatedCount: 2},
+    {id: 10, rank: 11, name: 'Emma', totalScore: 40, guessScore: 15, guessTotalCount: 15, hideScore: 25, hideWaldoCreatedCount: 2},
+    {id: 11, rank: 12, name: 'Jake', totalScore: 35, guessScore: 10, guessTotalCount: 10, hideScore: 25, hideWaldoCreatedCount: 2},
+    {id: 12, rank: 13, name: 'Olivia', totalScore: 30, guessScore: 5, guessTotalCount: 5, hideScore: 25, hideWaldoCreatedCount: 2},
+    {id: 13, rank: 14, name: 'Max', totalScore: 25, guessScore: 0, guessTotalCount: 0, hideScore: 25, hideWaldoCreatedCount: 2},
+    {id: 14, rank: 15, name: 'Sophia', totalScore: 20, guessScore: 0, guessTotalCount: 0, hideScore: 20, hideWaldoCreatedCount: 2},
+    {id: 15, rank: 16, name: 'Daniel', totalScore: 15, guessScore: 0, guessTotalCount: 0, hideScore: 15, hideWaldoCreatedCount: 2},
+    {id: 16, rank: 17, name: 'Ava', totalScore: 10, guessScore: 0, guessTotalCount: 0, hideScore: 10, hideWaldoCreatedCount: 2},
+    {id: 17, rank: 18, name: 'William', totalScore: 5, guessScore: 0, guessTotalCount: 0, hideScore: 5, hideWaldoCreatedCount: 2},
+    {id: 18, rank: 19, name: 'Mia', totalScore: 0, guessScore: 0, guessTotalCount: 0, hideScore: 0, hideWaldoCreatedCount: 0},
+    {id: 19, rank: 20, name: 'James', totalScore: 0, guessScore: 0, guessTotalCount: 0, hideScore: 0, hideWaldoCreatedCount: 0},
+  ],
+};
+/* per image: guessed, failed, served, chosen */
