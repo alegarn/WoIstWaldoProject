@@ -1,20 +1,13 @@
-import { StyleSheet, View, Text, Pressable, Dimensions, ScrollView } from 'react-native';
+import { StyleSheet, View, Dimensions, ScrollView } from 'react-native';
 import { Table, TableWrapper, Row, Cell } from 'react-native-reanimated-table';
 
+import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
 
 const windowWidth = Dimensions.get('window').width;
 const windowHeight = Dimensions.get('window').height;
 
 export default function TableComponent({ data, onPress }) {
-
-  const element = (cellData, rowData) => (
-    <Pressable onPress={() => onPress(cellData, rowData)}>
-      <View style={styles.btn}>
-        <Text style={styles.btnText}>More</Text>
-      </View>
-    </Pressable>
-  );
 
   return (
     <View style={styles.container}>
@@ -31,7 +24,7 @@ export default function TableComponent({ data, onPress }) {
                     key={cellIndex}
                     data={
                       cellIndex === 3
-                        ? element(cellData, rowData)
+                        ? <TableButton cellData={cellData} rowData={rowData} onPress={onPress} windowHeight={windowHeight} windowWidth={windowWidth}/>
                         : cellData
                     }
                     textStyle={styles.text}
@@ -78,15 +71,4 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: GlobalStyle.color.secondaryColor100,
   },
-  btn: {
-    width: windowWidth * 0.18,
-    height: windowHeight * 0.03,
-    backgroundColor: '#fff',
-    borderRadius: 5,
-    alignSelf: "center",
-  },
-  btnText: {
-    textAlign: 'center',
-    color: GlobalStyle.color.tertiaryColor700,
-  }
 });
