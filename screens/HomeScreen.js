@@ -17,19 +17,32 @@ export default function HomeScreen({ navigation }) {
     navigation.navigate(screenName);
   };
 
+
+  const toHidingPathScreen = () => {
+    navigation.navigate('HidingPathScreen');
+  };
+
+  const toGuessPathScreen = () => {
+    navigation.navigate('GuessPathScreen');
+  };
+
+  const toRankingScreen = () => {
+    navigation.navigate('RankingScreen');
+  };
+
   return (
     <View style={styles.homeContainer}>
       <BigButton
         text="Hide Waldo"
-        onPress={() => navigationHandler({ screenName: 'HidingPathScreen' })}
+        onPress={toHidingPathScreen}
         buttonStyle="big" />
       <BigButton
         text="Find Waldo"
-        onPress={() => navigationHandler({ screenName: 'GuessPathScreen' })}
+        onPress={toGuessPathScreen}
         buttonStyle="big" />
       <BigButton
         text="Ranking"
-        onPress={() => navigationHandler({ screenName: 'RankingScreen' })} />
+        onPress={toRankingScreen} />
     </View>
   );
 }

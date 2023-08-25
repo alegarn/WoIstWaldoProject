@@ -14,7 +14,7 @@ import GuessPathScreen from './screens/GuessPathScreen';
 import GuessScreen from './screens/GuessScreen';
 import AdScreen from './screens/AdScreen';
 import ResultScreen from './screens/ResultScreen';
-
+import RankingScreen from './screens/RankingScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -90,6 +90,14 @@ export default function App() {
             options={{
               presentation: "modal",
               headerShown: false,
+            }} />
+          <Stack.Screen
+            name="RankingScreen"
+            component={RankingScreen}
+            options={{
+              title: "Ranking",
+              presentation: "modal",
+              headerShown: true
             }} />
         </Stack.Navigator>
       </NavigationContainer>
