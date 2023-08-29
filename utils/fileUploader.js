@@ -42,8 +42,8 @@ export function imageUploader({ uri, description, imageWidth, imageHeight, scree
     screenWidth: screenWidth,
     isPortrait: isPortrait,
     touchLocation: touchLocation,
-  }
+  };
 
   exportImage(image);
   exportPictureData(pictureData);
-}
+};

@@ -5,25 +5,41 @@ function determineLocation({locationX, locationY, newImageWidth, newImageHeight}
   return location;
 };
 
-function setCircle({ locationX, locationY, screenWidth, screenHeight }) {
-  const circleSize = Math.min(screenWidth, screenHeight) * 0.1;
-  const circleStyle = {
+
+function handleTargetSize(screenWidth, screenHeight) {
+  // size = mode (0.1, 0.05, 0.01)
+  const targetSize = Math.min(screenWidth, screenHeight) * 0.05;
+  return targetSize;
+};
+function setTarget({ locationX, locationY, targetSize }) {
+  const targetStyle = {
     position: 'absolute',
-    width: circleSize,
-    height: circleSize,
-    borderRadius: circleSize / 2,
-    left: locationX - circleSize / 2,
-    top: locationY - circleSize / 2,
+    width: targetSize,
+    height: targetSize,
+    /*  */
+/*     borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "white",
+ */
+    /*  */
+    left: locationX - targetSize / 2, // Adjusted to center the icon horizontally
+    top: locationY - targetSize / 2, // Adjusted to center the icon vertically
   };
 
-  const circle = { circleSize: circleSize, circleStyle: circleStyle };
-  return circle;
-}
+  const target = { targetSize: targetSize , targetStyle: targetStyle };
+  return target;
+};
 
 export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
   const { locationX, locationY } = event.nativeEvent;
   const newImageWidth = screenWidth;
   const newImageHeight = screenHeight;
+
+
+  console.log("newImageWidth", newImageWidth);
+  console.log("newImageHeight", newImageHeight);
+
+
   // Check if the touch event is within the image boundaries
   if (
     locationX >= 0 &&
@@ -33,10 +49,60 @@ export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
   ) {
 
     const location = determineLocation({ locationX, locationY, newImageWidth, newImageHeight });
-    const circle = setCircle({ locationX, locationY, screenWidth, screenHeight });
+    const targetSize = handleTargetSize(newImageWidth, newImageHeight);
+    const target = setTarget({ locationX, locationY, targetSize });
 
-    return ({ location, circle });
+    console.log("location", location);
+    return ({ location, target });
 
-    }
-  return null
+    };
+  return null;
+};
+
+function determineCircleRadius(targetSize){
+  const radius = targetSize / 2;
+  return radius
+};
+
+function targetAbsoluteLocation(hiddenRelativeLocation, screenWidth, screenHeight) {
+  // Convert relative coordinates to absolute coordinates
+  const x = hiddenRelativeLocation.x * screenWidth;
+  const y = hiddenRelativeLocation.y * screenHeight;
+
+  // Return the absolute location as an object
+  return { x, y };
+};
+
+function determineIsOnTarget({hiddenTrgtAbsLoc, guessTrgtAbsLoc, circleRadius}) {
+  // Calculate the absolute distance between the hidden target and the guess target
+  const distance = Math.sqrt(
+    Math.pow(hiddenTrgtAbsLoc.x - guessTrgtAbsLoc.x, 2) +
+    Math.pow(hiddenTrgtAbsLoc.y - guessTrgtAbsLoc.y, 2)
+  );
+
+  // Define a threshold for determining if the guess is on target
+  const threshold = circleRadius*2; // Adjust this value as needed
+
+  console.log("circleRadius", circleRadius);
+  console.log("max", circleRadius*2);
+  console.log("distance", distance);
+  // Check if the distance is within the threshold
+  if (distance <= threshold) {
+    return true; // Guess is on target
+  } else {
+    return false; // Guess is not on target
+  };
+}
+
+export const isOnTarget = ({ location, hiddenLocation, screenWidth, screenHeight }) => {
+
+  const targetSize = handleTargetSize(screenWidth, screenHeight);
+  const circleRadius = determineCircleRadius(targetSize);
+
+  const hiddenTrgtAbsLoc = targetAbsoluteLocation(hiddenLocation, screenWidth, screenHeight);
+  const guessTrgtAbsLoc = targetAbsoluteLocation(location, screenWidth, screenHeight);
+
+  const isOnTarget = determineIsOnTarget({hiddenTrgtAbsLoc, guessTrgtAbsLoc, circleRadius})
+  console.log("isOnTarget", isOnTarget);
+  return isOnTarget;
 };
