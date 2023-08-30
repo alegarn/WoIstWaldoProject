@@ -40,6 +40,8 @@ export const GlobalStyle = {
     quaternaryColor700: "#2D4E8B",
     quaternaryColor800: "#224482",
     quaternaryColor900: "#173A79",
+    error100: '#fcdcbf',
+    error500: '#f37c13',
   },
 }
 

@@ -49,7 +49,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
 
   const showIsLoading = () => (
-    <Spinner size="large" color="#0000ff" />
+    <Spinner message={'Loading new images...'} />
   )
 
 

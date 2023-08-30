@@ -1,10 +1,11 @@
-import {ActivityIndicator, StyleSheet, View} from 'react-native';
+import {ActivityIndicator, StyleSheet, View, Text } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function Spinner() {
+export default function Spinner({ message }) {
   return(
     <View style={[styles.container, styles.horizontal]}>
-      <ActivityIndicator size="large" color={GlobalStyle.color.primaryColor} />
+      <Text style={styles.message}>{message}</Text>
+      <ActivityIndicator size="large" color={GlobalStyle.color.secondaryColor} />
     </View>
   );
 };
@@ -18,5 +19,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-around',
     padding: 10,
+  },
+  message: {
+    color: GlobalStyle.color.primaryColor,
   },
 });
