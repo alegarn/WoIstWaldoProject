@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
-import Spinner from './components/UI/Spinner';
+import LoadingOverlay from './components/UI/LoadingOverlay';
 
 
 import LoginScreen from './screens/AuthScreens/LoginScreen';
@@ -166,8 +166,9 @@ function Root() {
   })
 
   if (isTryingLogging) {
-    return <Spinner message={'Logging in...'} />
-  }
+    const message = 'Logging in...';
+    return <LoadingOverlay message={message} />
+  };
 
   return <Navigation />
 

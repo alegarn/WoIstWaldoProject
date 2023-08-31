@@ -1,7 +1,7 @@
 import { useState, useContext } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert } from 'react-native';
 
-import Spinner from '../../components/UI/Spinner';
+import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import AuthContent from '../../components/Auth/AuthContent';
 
 import { login } from '../../utils/auth';
@@ -39,9 +39,7 @@ function LoginScreen() {
   if (isAuthenticating) {
     const message = 'Authenticating...';
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', alignSelf: 'center' }}>
-        <Spinner message={message} />
-      </View>
+      <LoadingOverlay message={message} />
     );
   };
 

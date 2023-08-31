@@ -1,11 +1,11 @@
 import { useContext, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert } from 'react-native';
 
 import AuthContent from '../../components/Auth/AuthContent';
 import { createUser, login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 
-import Spinner from '../../components/UI/Spinner';
+import LoadingOverlay from '../../components/UI/LoadingOverlay';
 
 function SignupScreen({navigation}) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -53,8 +53,9 @@ function SignupScreen({navigation}) {
   };
 
   if (isAuthenticating) {
+    const message = 'Creating user...';
     return (
-        <Spinner message={'Creating user...'} />
+      <LoadingOverlay message={message} />
     );
   }
 

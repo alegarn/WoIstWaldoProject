@@ -7,7 +7,7 @@ const BEARER_TOKEN = "eyJhY2Nlc3MtdG9rZW4iOiI5VURBR05BRWhoaFF2Z2gwZzBQT3FRIiwidG
 const TOKEN_TYPE = "Bearer"; */
 // Expiry : 1690770709
 // Uid : email
-const URL = " https://48cf-103-182-81-19.ngrok-free.app/"
+const URL = "https://d5a3-103-182-81-23.ngrok-free.app/"
 
 async function authenticate({email, password}) {
   const url = `${URL}auth/sign_in`;
