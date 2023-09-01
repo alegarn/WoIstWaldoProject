@@ -18,12 +18,14 @@ function LoginScreen() {
       const response = await login({email, password});
       console.log("response login screen", response);
       if (response.status === 200) {
-        console.log("token", response.headers.authorization, "expiry", response.headers.expiry, "access_token", response.headers['access-token'], "uid", response.headers.uid, "client", response.headers.client, "id", response.data.data.id);
-        authContext.authenticate({ token: response.headers.authorization, expiry: response.headers.expiry, access_token: response.headers['access-token'], uid: response.headers.uid, client: response.headers.client, userId: response.data.data.id});
-/*         console.log("authentification login screen", authContext.IsAuthenticated);
-        console.log("header", response.headers.authorization);
-        console.log('User login successful'); */
-
+        authContext.authenticate({
+          token: response.headers.authorization,
+          expiry: response.headers.expiry,
+          access_token: response.headers['access-token'],
+          uid: response.headers.uid,
+          client: response.headers.client,
+          userId: response.data.data.id
+        });
       } else {
           console.log(response);
           Alert.alert('Invalid input', `${response}`);

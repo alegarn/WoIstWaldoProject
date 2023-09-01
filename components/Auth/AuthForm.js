@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { StyleSheet, View, Platform } from 'react-native';
+import { View, Platform } from 'react-native';
 
 import Button from '../UI/Button';
 import Input from './Input';
 
-function AuthForm({ isLogin, onSubmit, credentialsInvalid }) {
+const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
   const [enteredEmail, setEnteredEmail] = useState('');
   const [enteredConfirmEmail, setEnteredConfirmEmail] = useState('');
   const [enteredPassword, setEnteredPassword] = useState('');
@@ -49,7 +49,7 @@ function AuthForm({ isLogin, onSubmit, credentialsInvalid }) {
   }
 
   return (
-    <View style={styles.form}>
+    <View>
       <View>
         <Input
           label="Email Address"
@@ -96,7 +96,7 @@ function AuthForm({ isLogin, onSubmit, credentialsInvalid }) {
             />
           </>
         )}
-        <View style={styles.buttons}>
+        <View style={{ marginTop: height * 0.02 }}>
           <Button
             onPress={submitHandler}
             mode={Platform.OS === "ios" ? "flat" : null}
@@ -111,9 +111,3 @@ function AuthForm({ isLogin, onSubmit, credentialsInvalid }) {
 }
 
 export default AuthForm;
-
-const styles = StyleSheet.create({
-  buttons: {
-    marginTop: 12,
-  },
-});

@@ -1,12 +1,17 @@
 import { useState } from 'react';
-import { SafeAreaView, ScrollView, Alert, StyleSheet, View, Platform } from 'react-native';
+import { SafeAreaView, ScrollView, Alert, StyleSheet, View, Platform, Dimensions } from 'react-native';
+
 import { useNavigation } from '@react-navigation/native';
 
 import Button from '../UI/Button';
 import AuthForm from './AuthForm';
 import { GlobalStyle } from '../../constants/theme';
 
-function AuthContent({ isLogin, onAuthenticate }) {
+
+const { width, height } = Dimensions.get('window');
+
+
+const AuthContent = ({ isLogin, onAuthenticate }) => {
 
   const navigation = useNavigation();
 
@@ -19,15 +24,14 @@ function AuthContent({ isLogin, onAuthenticate }) {
   });
 
   function switchAuthModeHandler() {
-    // Todo
     if (isLogin) {
       navigation.replace('Signup');
-    }
+    };
 
     if (!isLogin) {
       navigation.replace('Login');
-    }
-  }
+    };
+  };
 
   function submitHandler(credentials) {
     let { email, confirmEmail, password, confirmPassword, username } = credentials;
@@ -65,12 +69,16 @@ function AuthContent({ isLogin, onAuthenticate }) {
   }
 
   return (
-    <SafeAreaView style={styles.authContent}>
+    <SafeAreaView
+      style={[
+        styles.authContent,
+        isLogin ? { marginTop: height * 0.2 } : { marginTop: height * 0.03 }]}>
       <ScrollView>
         <AuthForm
           isLogin={isLogin}
           onSubmit={submitHandler}
           credentialsInvalid={credentialsInvalid}
+          height={height}
         />
         <View style={styles.buttons}>
           <Button
@@ -84,24 +92,23 @@ function AuthContent({ isLogin, onAuthenticate }) {
       </ScrollView>
     </SafeAreaView>
   );
-}
+};
 
 export default AuthContent;
 
 const styles = StyleSheet.create({
   authContent: {
-    marginTop: 64,
-    marginHorizontal: 32,
-    padding: 16,
-    borderRadius: 8,
+    marginHorizontal: width * 0.1,
+    padding: width * 0.04,
+    borderRadius: width * 0.02,
     backgroundColor: GlobalStyle.color.primary800,
     elevation: 2,
     shadowColor: 'black',
     shadowOffset: { width: 1, height: 1 },
     shadowOpacity: 0.35,
-    shadowRadius: 4,
+    shadowRadius: width * 0.01,
   },
   buttons: {
-    marginTop: 8,
+    marginTop: height * 0.01,
   },
 });
