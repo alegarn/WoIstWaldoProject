@@ -1,6 +1,7 @@
 /* https://snack.expo.dev/@rudiahmad/react-native-expo-how-to-upload-file-or-image-using-form-data-php */
 /* https://docs.expo.dev/versions/latest/sdk/imagepicker/ */
 /* https://github.com/expo/examples/tree/master/with-aws-storage-upload */
+import saveImages from "./requests";
 
 
 const exportImage = (image) => {
@@ -8,42 +9,43 @@ const exportImage = (image) => {
   console.log(image)
 };
 
-const exportPictureData = (pictureData) => {
-  // to the server
-  console.log(pictureData)
+const exportPictureData = (pictureData, context) => {
+
+  const saveImageResponse = saveImages({
+    token: context.token,
+    uid: context.uid,
+    userId: context.userId,
+    expiry: context.expiry,
+    access_token: context.access_token,
+    client: context.client,
+    imagesInfos: pictureData
+  });
+
+  console.log("saveImageResponse", saveImageResponse)
 };
 
 
-export function imageUploader({ uri, description, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation }) {
+export function imageUploader({ imageInfos, context }) {
 
-  // user id (context)
-  const accountId = "1";
-  // picture id = user account Id / unique image data hashed
-  const pictureId = accountId + "/image/hashed" + Math.random().toString( 36 ).substring( 2 );
-
-
-  const imageFile = uri;
-
-
+  const imageFile = imageInfos.uri;
 
   const image = {
-    accountId: accountId,
-    pictureId: pictureId,
+    userId: context.userId,
     imageFile: imageFile,
   };
 
   const pictureData = {
-    accountId: accountId,
-    pictureId: pictureId,
-    description: description,
-    imageWidth: imageWidth,
-    imageHeight: imageHeight,
-    screenHeight: screenHeight,
-    screenWidth: screenWidth,
-    isPortrait: isPortrait,
-    touchLocation: touchLocation,
+    user_id: context.userId,
+    description: imageInfos.description,
+    image_height: imageInfos.imageHeight,
+    image_width: imageInfos.imageWidth,
+    screen_height: imageInfos.screenHeight,
+    screen_width: imageInfos.screenWidth,
+    is_portrait: imageInfos.isPortrait,
+    x_location: imageInfos.touchLocation.x,
+    y_location: imageInfos.touchLocation.y
   };
 
   exportImage(image);
-  exportPictureData(pictureData);
+  exportPictureData(pictureData, context);
 };

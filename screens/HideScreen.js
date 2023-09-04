@@ -1,5 +1,4 @@
 import { Dimensions } from 'react-native';
-
 import HidePicture from '../components/Picture/HidePicture';
 
 export default function HideScreen({ navigation, route }) {
@@ -21,16 +20,4 @@ export default function HideScreen({ navigation, route }) {
         isPortrait={route.params?.isPortrait} />
     </>
   );
-}
-
-
-
-/*   const [isTakingPicture, setIsTakingPicture] = useState(true);
-
-  function changeStep() {
-    setIsTakingPicture(false)
-  }
- */
-/*   if (isTakingPicture) {
-    return <ImagePicker nextStep={changeStep} />
-  }; */
+};

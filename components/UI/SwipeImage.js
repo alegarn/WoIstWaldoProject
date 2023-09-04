@@ -3,8 +3,8 @@ import {  SafeAreaView, StyleSheet, Text,} from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 import SwipeableCard from './SwipeableCard';
-import Spinner from './Spinner';
 import { IMAGES } from "../../data/dummy-data";
+import LoadingOverlay from './LoadingOverlay';
 
 function getImagesList() {
   IMAGES.forEach((image, index) => {
@@ -48,9 +48,10 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   });
 
 
-  const showIsLoading = () => (
-    <Spinner size="large" color="#0000ff" />
-  )
+  const showIsLoading = () => {
+    const message='Loading new images...';
+    return <LoadingOverlay message={message} />
+  };
 
 
   return (
