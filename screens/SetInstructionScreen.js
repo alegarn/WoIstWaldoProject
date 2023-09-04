@@ -1,4 +1,8 @@
 import { useState } from 'react';
+
+import { useContext } from "react";
+import { AuthContext } from "../store/auth-context";
+
 import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
@@ -26,6 +30,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const target = route.params?.target;
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
+  const context = useContext(AuthContext);
+/*   console.log("requestAuthHeaders", context);
+ */
+
   /*  */
 console.log("description", description);
 
@@ -45,33 +53,19 @@ console.log("description", description);
 
     const getPermissions = async () => {
       console.log("getPermissions");
-      console.log(permissionResponse);
-/*
-      if (permissionResponse.granted) {
-        console.log("Permission granted");
-        return true;
-      };
-      if (!permissionResponse.granted) {
-        console.log("Permission denied");
-        Alert.alert("Failed to save image, please accept permission to save image and audio.");
-        return false;
-      }; */
+      console.log("permissionResponse", permissionResponse);
 
       // Detect if you can request this permission again
       if (permissionResponse.status === "undetermined") {
-        const permissionResponse = await requestPermission();
+        await requestPermission();
       };
       if (!permissionResponse.canAskAgain || permissionResponse.status === "denied") {
-        /**
-         *   Code to open device setting then the user can manually grant the app
-         *  that permission
-         */
         Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
         Linking.openSettings();
       } else {
         if (permissionResponse.status === "granted") {
           return true;
-        }
+        };
       };
     };
 
@@ -83,17 +77,31 @@ console.log("description", description);
 
 
     const saveImage = async () => {
+
+
       try {
-        await MediaLibrary.saveToLibraryAsync(uri);
-        imageUploader({ description, uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, touchLocation });
-        // Save image to media library
+
+        /* const file = await MediaLibrary.saveToLibraryAsync(uri); */
+        const imageInfos = {
+          uri,
+          description,
+          imageWidth,
+          imageHeight,
+          screenHeight,
+          screenWidth,
+          isPortrait,
+          touchLocation
+        };
+
+        console.log("imageInfos", imageInfos);
+        imageUploader({ imageInfos, context });
         console.log("Image successfully saved");
       } catch (error) {
-        console.log(error);
+        console.log("error saveImage", error);
       };
     };
 
-
+    console.log("saveImage");
     const imageIsSaved = await saveImage();
 
     /*  */
