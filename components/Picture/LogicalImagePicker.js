@@ -73,12 +73,12 @@ export default function LogicalImagePicker({ navigation }) {
     const image = await launchCameraAsync({
       allowsEditing: true,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      /* aspect: [16, 9], */
       quality: 0.5,
     });
 
     //
-    console.log(image);
+    //const fileInfo = await FileSystem.getInfoAsync(image.assets[0].uri);
+    //const imageLength = fileInfo.size;
     //
 
 
@@ -128,10 +128,10 @@ export default function LogicalImagePicker({ navigation }) {
       image={image}
       imageWidth={imageWidth}
       imageHeight={imageHeight} />
-    )
+    );
   };
 
   return (showImage());
-}
+};
 
 
