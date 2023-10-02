@@ -94,7 +94,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         ]}>
 
           <ImageBackground
-            source={item.imageFile}
+            source={{ uri: item.imageFile}}
             resizeMode='stretch'
             style={[styles.imageStyle, styles.expended]}>
             <GuessDescription

@@ -4,12 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 
 import BigButton from '../UI/BigButton';
 
-export default function GameInstructions({ pictureUri, uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick}) {
-
-
-  // only in dev with local images
-  const uriPict = uri ? { uri: uri } : pictureUri;
-  /*  */
+export default function GameInstructions({ uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick}) {
 
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
   console.log("imageDimensionStyle", imageDimensionStyle);
@@ -50,7 +45,7 @@ export default function GameInstructions({ pictureUri, uri, game, screenHeight, 
   return(
     <View style={styles.container}>
       <ImageBackground
-        source={uriPict}
+        source={{uri : uri}}
         resizeMode="stretch"
         style={[styles.image, imageDimensionStyle]}>
         <View style={styles.filter}>

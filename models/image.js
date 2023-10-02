@@ -1,6 +1,6 @@
 class Image {
   constructor(
-    accountId,
+    //accountId,
     imageFile,
     pictureId,
     description,
@@ -9,9 +9,10 @@ class Image {
     isPortrait,
     touchLocation,
     screenHeight,
-    screenWidth
+    screenWidth,
+    listId,
   ) {
-    this.accountId = accountId;
+    //this.accountId = accountId;
     this.imageFile = imageFile;
     this.pictureId = pictureId;
     this.description = description;
@@ -21,7 +22,8 @@ class Image {
     this.touchLocation = touchLocation;
     this.screenHeight = screenHeight;
     this.screenWidth = screenWidth;
-  }
-}
+    this.listId = listId;
+  };
+};
 
 export default Image;
