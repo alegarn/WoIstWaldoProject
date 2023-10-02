@@ -5,13 +5,13 @@ import CenteredModal from '../UI/CenteredModal';
 import ModalContent from '../UI/ModalContent';
 
 // pictureUri only in dev with local images
-export default function ShowPicture({ /* hiddenLocation, */ uri, pictureUri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel }) {
+export default function ShowPicture({ /* hiddenLocation, */ uri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel }) {
 
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
   // only in dev with local images
-  const uriPict = uri ? { uri: uri } : pictureUri;
-  //
+/*   const uriPict = uri ? { uri: uri } : pictureUri;
+ */  //
 
 
   /*  */
@@ -53,7 +53,7 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, pictureUri, gue
     <View style={styles.container}>
       <Pressable onPress={handlePress} style={styles.pressable}>
         <ImageBackground
-          source={uriPict}
+          source={{uri : uri}}
           resizeMode='stretch'
           style={[styles.image, imageDimensionStyle ]}>
 {/*

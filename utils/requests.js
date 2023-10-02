@@ -1,7 +1,7 @@
 import axios from "axios";
 import * as FileSystem from 'expo-file-system';
-
-const URL = "https://2889-103-182-81-19.ngrok-free.app/";
+import Image from "../models/image";
+import { getBackendHeaders } from "./auth";
 
 function setHeaders({ token, uid, expiry, access_token, client }) {
   const headers = {
@@ -18,10 +18,10 @@ function setHeaders({ token, uid, expiry, access_token, client }) {
   return headers;
 };
 
-function setAWSHeaders(fileType, contentLength) {
+function setAWSHeaders(fileExtension, contentLength) {
 
   const headers = {
-    "Content-Type": "image/" + fileType,
+    "Content-Type": "image/" + fileExtension,
     "Content-Length": contentLength
   };
   return headers;
@@ -39,8 +39,9 @@ function errorType(status) {
 };
 
 
-export async function getUploadUrl({ token, uid, expiry, access_token, client }) {
-  const url = `${URL}api/v1/aws_requests/get_secure_upload_url`;
+export async function getUploadUrl() {
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/aws_requests/get_secure_upload_url`;
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders();
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
@@ -60,108 +61,161 @@ export async function getUploadUrl({ token, uid, expiry, access_token, client })
   return { status: response.status, title: title, message: response.message, data: response.data};
 };
 
-export async function getImages({
-                          token,
-                          uid,
-                          userId,
-                          expiry,
-                          access_token,
-                          client,
-                        }) {
-  const url = `${URL}api/v1/aws_requests/get_secure_download_url`;
 
 
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+async function getImagesInfos({ config, userId }) {
+  console.log("getImagesInfos");
+  console.log("userId", userId);
+  console.log("config", config);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
+  const response = await axios.get(url, config).then((response) => {
+    console.log("response getImagesInfos", response);
+    return response;
+  }).catch((error) => {
+    console.log("error getImagesInfos", error.request);
+    return error;
+  });
+  return response;
+};
 
-  const config = {
-    headers: headers,
-  };
-
-  //console.log("getImages", headers);
-
-  const response = await axios
-    .get(url, config)
-    .then((response) => {
-/*       console.log("get", response);
- */
-      return response;
-    })
-    .catch((error) => {
-      console.log("error", error);
-      return error;
-    });
-
-  const filename = response.data.filename;
-
-
-  const imageData = await axios.get(response.data.url, {})
+async function getImageFromStorage({ storageUrl }) {
+  console.log("getImageFromStorage");
+  const imageData = await axios.get(storageUrl, {})
   .then((response) => {
-    console.log("imageData response");
+    console.log("imageData response, getImageFromStorage");
     return response.data;
-  }).catch((error) => console.log("error", error));
+  }).catch((error) => console.log("error getImageFromStorage", error.request));
 
-  // extract base64
+  return imageData;
+};
 
-  console.log(imageData.substring(0, 100));
+function verifyItsBase64(imageData) {
   const base64Regex = /^data:image\/(png|jpeg|jpg|gif);base64,/;
-  let base64Data = "";
+
   if (base64Regex.test(imageData)) {
     // Extract the base64 data
-    base64Data = imageData.replace(base64Regex, '');
-    console.log(base64Data.substring(0, 100));
+    const base64Data = imageData.replace(base64Regex, '');
+    console.log("base64Data.substring(0, 100)", base64Data.substring(0, 100));
+    return base64Data;
   } else {
     console.log('The string is not a base64 image.');
-    return;
+    return false;
+  };
+};
+
+async function ensureDirExists() {
+  console.log("ensureDirExists");
+  const dirPath = FileSystem.cacheDirectory //+ "/images-v1";
+  const dirInfo = await FileSystem.getInfoAsync(dirPath);
+  if (!dirInfo.exists) {
+    console.log("Image directory doesn't exist, creating...");
+    await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
+  };
+  console.log("ensureDirExists end");
+};
+
+async function extractBase64(imageData, filename) {
+  console.log("extract base64");
+
+  const base64Data = verifyItsBase64(imageData);
+  if (!base64Data) {
+    return false;
   };
 
+  const extension_matche = imageData.match(/^data:image\/(\w+);base64,/);
+  const fileExtension = extension_matche[1];
+  console.log("fileExtension", fileExtension);
 
+  // Create a new file path
+  const filePath = FileSystem.cacheDirectory + `${filename}.${fileExtension}`; // images-v1/ .${fetchedType} ?
 
-
-   // Create a new file path
-  const filePath = FileSystem.cacheDirectory + `/fetched-images/${filename}`; // .${fetchedType} ?
   console.log("filePath", filePath);
 
+  //await MediaLibrary.createAssetAsync(`${filePath}`);
 
-  const dirPath = FileSystem.cacheDirectory + "/fetched-images" ;
-  FileSystem.getInfoAsync(dirPath);
-
-  FileSystem.makeDirectoryAsync(dirPath, true);
-
-
-
-
-
-
+  await ensureDirExists();
 
   // Write the base64 data to the file
   await FileSystem.writeAsStringAsync(filePath, base64Data, {
     encoding: FileSystem.EncodingType.Base64,
   });
 
-  // Now you can use the file path to display the image
-  console.log('File saved to', filePath);
   return filePath;
+
+};
+
+async function handleImagesDownload(image) {
+  console.log("handleImagesDownload");
+  console.log("image location", image.storage_url);
+  const imageData = await getImageFromStorage({ storageUrl: image.storage_url });
+  const filePath = await extractBase64(imageData, image.name);
+  return filePath;
+};
+
+
+export async function getImages() {
+  console.log("getImages");
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+
+  const config = {
+    headers: headers,
+  };
+
+  const imagesInfos = await getImagesInfos({ config, userId });
+  console.log("imagesInfos", imagesInfos.data.images);
+
+  const images = [];
+  //Promise.all()
+  await Promise.allSettled(imagesInfos.data.images.map( async image => {
+    const filePath = await handleImagesDownload(image);
+    console.log("image loop filePath", filePath);
+
+    const imageObject = new Image(
+      //image.user_id,
+      filePath,
+      image.name,
+      image.description,
+      image.image_height,
+      image.image_width,
+      image.is_portrait,
+      {x: image.x_location, y: image.y_location},
+      image.screen_height,
+      image.screen_width
+    );
+
+    images.push(imageObject)
+
+  })).then(() => {
+    console.log("Files downloaded successfully");
+  }).catch((error) => {
+    console.log("error", error.request);
+  });
+
+
+
+  // Now you can use the file path to display the image
+  console.log('File saved to', images[0].imageFile);
+  return images;
 
   /*  */
 
   /* file system */
-  async function downloadImage(uri, filename) {
+  /* async function downloadImage(uri, filename) {
     let fileUri = FileSystem.cacheDirectory + filename;
     let options = {};
     await FileSystem.downloadAsync(uri, fileUri, options)
       .then(({ uri }) => {
         console.log('Finished downloading to ', uri);
-
-
       })
       .catch(error => {
         console.error(error);
       });
       return fileUri;
-  };
+  }; */
 
   // Usage
-  let fileUri = await downloadImage(response.data.url, response.data.filename)
+  let fileUri = await downloadImage(response.data.url, `images-v1/${filename}`);
   console.log("fileUri", fileUri);
   /*  */
 
@@ -187,7 +241,7 @@ export async function getImages({
 
 
   /* https://fourtheorem.com/the-illustrated-guide-to-s3-pre-signed-urls/
-  CORS and using pre-signed URLs in the browser
+  CORS and using pre-signed process.env.EXPO_PUBLIC_APP_BACKEND_URLs in the browser
 */
 
 /* binary, with content-length multipart/form-data */
@@ -199,9 +253,9 @@ export async function getImages({
 https://www.youtube.com/watch?v=eM1-YTBUFj4 */
 
 
-export async function saveImageToAws({ url, filename, fileUrl, fileType, contentLength}) {
+export async function saveImageToAws({ url, filename, fileUrl, fileExtension, contentLength}) {
 
-  const headers = setAWSHeaders(fileType, contentLength);
+  const headers = setAWSHeaders(fileExtension, contentLength);
   console.log("saveImageToAws", filename);
 
 
@@ -217,7 +271,7 @@ export async function saveImageToAws({ url, filename, fileUrl, fileType, content
     const base64 = await FileSystem.readAsStringAsync(fileUrl, { encoding: 'base64' });
     /* error */
     const response = await axios
-      .put(url, `data:image/${fileType};base64,` + base64 , config )
+      .put(url, `data:image/${fileExtension};base64,` + base64 , config )
       .then((response) => {
         if (response.status === 200) {
           console.log("post img base64 ok", response);
@@ -247,7 +301,7 @@ export async function saveImageToAws({ url, filename, fileUrl, fileType, content
 
 
 export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, access_token, client }) {
-  const url = `${URL}api/v1/users/${userId}/images`;
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/images`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,

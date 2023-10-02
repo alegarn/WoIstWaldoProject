@@ -5,7 +5,6 @@ const SCREEN_WIDTH = Dimensions.get('window').width
 
 export default function GuessPathScreen({ navigation, route }) {
 
-
   const startGuessing = ({item}) => {
     navigation.replace('GuessScreen', {
       accountId: item.accountId,
@@ -18,13 +17,16 @@ export default function GuessPathScreen({ navigation, route }) {
       hiddenLocation: item.touchLocation,
       screenHeight: item.screenHeight,
       screenWidth: item.screenWidth});
-  };
-
+    };
 
   return (
     <SwipeImage
       screenWidth={SCREEN_WIDTH}
       startGuessing={startGuessing}
     />
-  )
+  );
 };
+
+
+
+

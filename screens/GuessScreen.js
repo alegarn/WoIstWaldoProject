@@ -2,7 +2,6 @@ import { Dimensions } from 'react-native';
 
 import GuessPicture from "../components/Picture/GuessPicture";
 
-import { IMAGES } from "../data/dummy-data";
 import { isOnTarget } from "../utils/targetLocation";
 
 export default function GuessScreen({ navigation, route }) {
@@ -14,12 +13,10 @@ export default function GuessScreen({ navigation, route }) {
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
+  const uri = imageFile;
 
   let screenDimensions = { width: screenWidth, height: screenHeight };
   isPortrait ? null : screenDimensions = { width: screenHeight, height: screenWidth };
-
-  // only in dev with local images
-  const uri = IMAGES.filter((item) => item.pictureId === pictureId)[0].imageFile;
 
   const imageIsPortrait = imageWidth < imageHeight;
 

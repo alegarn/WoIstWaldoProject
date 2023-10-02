@@ -60,7 +60,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     return (
       <ShowPicture
         // pictureUri only in dev with local images
-        pictureUri={uri}
+        uri={uri}
         guess={true}
         description={description}
         screenWidth={screenWidth}
@@ -80,7 +80,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     return(
       <GameInstructions
             // pictureUri only in dev with local images
-            pictureUri={uri}
+            uri={uri}
             game="guess"
             screenWidth={screenWidth}
             screenHeight={screenHeight}

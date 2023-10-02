@@ -15,11 +15,15 @@ import { imageUploader } from "../utils/fileUploader";
 import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
 
+import LoadingOverlay from '../components/UI/LoadingOverlay';
+
 export default function SetInstructionsScreen({ navigation, route }) {
 
   const [showModal, setShowModal] = useState(false);
   const [description, setDescription] = useState("");
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
+  const [isLoading, setIsLoading] = useState(false);
+
 
   const uri = route.params?.uri;
   const imageWidth = route.params?.imageWidth;
@@ -65,8 +69,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
-    const fileType = handleImageType(uri);
-    const validType = isTypeValid(fileType);
+    const fileExtension = handleImageType(uri);
+    const validType = isTypeValid(fileExtension);
 
     if (!validType) {
       Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
@@ -76,6 +80,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
     const imageInfos = {
       uri: uri,
       userId: context.userId,
+      fileExtension: fileExtension,
       imageHeight: imageHeight,
       imageWidth: imageWidth,
       screenHeight: screenHeight,
@@ -86,7 +91,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
       yLocation: touchLocation.y,
     };
 
-    const uploadState = await imageUploader({ imageInfos, context, fileType });
+    setIsLoading(true);
+
+    const uploadState = await imageUploader({ imageInfos, context });
 
     if (uploadState.status !== 200) {
       Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
@@ -94,7 +101,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
     };
 
     setShowModal(false);
+
     handleOrientation("portrait");
+    setIsLoading(false);
 
     navigation.replace("HomeScreen");
   };
@@ -104,10 +113,15 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
 
+  if (isLoading) {
+    return <LoadingOverlay message={"Image is being uploaded"} />;
+  };
+
+
   return (
     <View style={styles.container}>
       <ImageBackground
-        source={{ uri: uri }}
+        source={{uri : uri}}
         resizeMode='stretch'
         style={[styles.image, imageDimensionStyle]}
       >
