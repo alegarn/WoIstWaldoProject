@@ -1,9 +1,8 @@
 import axios from 'axios';
-
-const URL = "https://9992-103-182-81-19.ngrok-free.app/"
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 async function authenticate({email, password}) {
-  const url = `${URL}auth/sign_in`;
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_in`;
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -28,7 +27,7 @@ async function authenticate({email, password}) {
 
 export async function createUser({ email, password, confirmPassword, username }) {
 
-  const url = `${URL}auth`
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth`
   const headers = {
     'Content-Type': 'application/json',
     Accept: 'application/json',
@@ -74,4 +73,14 @@ export async function createUser({ email, password, confirmPassword, username })
 
 export async function login({email, password}) {
   return await authenticate({email, password});
+};
+
+export async function getBackendHeaders() {
+  const token = await AsyncStorage.getItem("token");
+  const uid = await AsyncStorage.getItem("uid");
+  const expiry = await AsyncStorage.getItem("expiry");
+  const access_token = await AsyncStorage.getItem("access_token");
+  const client = await AsyncStorage.getItem("client");
+  const userId = await AsyncStorage.getItem("userId");
+  return { token, uid, expiry, access_token, client, userId };
 };

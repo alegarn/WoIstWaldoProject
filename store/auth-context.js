@@ -31,6 +31,11 @@ export default function AuthContextProvider({ children }) {
   function authenticate({token, client, expiry, access_token, userId, uid}) {
     setAuthToken(token);
     AsyncStorage.setItem('token', token);
+    AsyncStorage.setItem('client', client);
+    AsyncStorage.setItem('expiry', expiry);
+    AsyncStorage.setItem('access_token', access_token);
+    AsyncStorage.setItem('userId', userId);
+    AsyncStorage.setItem('uid', uid);
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
@@ -42,13 +47,18 @@ export default function AuthContextProvider({ children }) {
 
   function logout() {
     setIsAuthenticated(false);
-    AsyncStorage.removeItem('token');
     setAuthToken(null);
     setClient('');
     setUid('');
     setExpiry('');
     setAccess_token('');
     setUserId('');
+    AsyncStorage.removeItem('token');
+    AsyncStorage.removeItem('client');
+    AsyncStorage.removeItem('expiry');
+    AsyncStorage.removeItem('access_token');
+    AsyncStorage.removeItem('uid');
+    AsyncStorage.removeItem('userId');
   };
 
   const value = {

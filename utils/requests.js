@@ -1,6 +1,7 @@
 import axios from "axios";
 import * as FileSystem from 'expo-file-system';
 import Image from "../models/image";
+import { getBackendHeaders } from "./auth";
 
 function setHeaders({ token, uid, expiry, access_token, client }) {
   const headers = {
@@ -38,8 +39,9 @@ function errorType(status) {
 };
 
 
-export async function getUploadUrl({ token, uid, expiry, access_token, client }) {
+export async function getUploadUrl() {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/aws_requests/get_secure_upload_url`;
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders();
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
@@ -63,12 +65,14 @@ export async function getUploadUrl({ token, uid, expiry, access_token, client })
 
 async function getImagesInfos({ config, userId }) {
   console.log("getImagesInfos");
+  console.log("userId", userId);
+  console.log("config", config);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
   const response = await axios.get(url, config).then((response) => {
     console.log("response getImagesInfos", response);
     return response;
   }).catch((error) => {
-    console.log("error", error);
+    console.log("error getImagesInfos", error.request);
     return error;
   });
   return response;
@@ -149,15 +153,9 @@ async function handleImagesDownload(image) {
 };
 
 
-export async function getImages({
-                          token,
-                          uid,
-                          userId,
-                          expiry,
-                          access_token,
-                          client,
-                        }) {
+export async function getImages() {
   console.log("getImages");
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
   const headers = setHeaders({ token, uid, expiry, access_token, client });
 
   const config = {
@@ -190,6 +188,8 @@ export async function getImages({
 
   })).then(() => {
     console.log("Files downloaded successfully");
+  }).catch((error) => {
+    console.log("error", error.request);
   });
 
 

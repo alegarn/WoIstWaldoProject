@@ -1,36 +1,55 @@
-import { useState } from 'react';
-import {  SafeAreaView, StyleSheet, Text,} from 'react-native';
+import { useEffect, useState, useContext } from 'react';
+import {  SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 import SwipeableCard from './SwipeableCard';
-import { IMAGES } from "../../data/dummy-data";
 import LoadingOverlay from './LoadingOverlay';
 
-function getImagesList() {
-  IMAGES.forEach((image, index) => {
-    image.id = index + 1;
-  });
-  return IMAGES;
-};
+import { AuthContext } from '../../store/auth-context';
+import { getImages } from '../../utils/requests';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, startGuessing }) {
+  const context = useContext(AuthContext);
 
-  const imageList = getImagesList();
-
+  const [imageList, setImageList] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [noMoreCard, setNoMoreCard] = useState(false);
-  const [sampleCardArray, setSampleCardArray] = useState(imageList);
   const [swipeDirection, setSwipeDirection] = useState('--');
+
+
+  const handleData = async (data) => {
+    const updatedImageList = data.map((image, index) => ({
+      ...image,
+      listId: index + 1,
+    }));
+
+    setImageList(updatedImageList);
+    setIsLoading(false);
+  };
+
+  const handleGetImagesList = async () => {
+    const userId = await AsyncStorage.getItem("userId");
+    console.log("handleGetImagesList");
+    const response = await getImages();
+    console.log("response handleGetImagesList", response);
+    await handleData(response);
+  };
+
+
+
 
   const removeCard = (id) => {
     // alert(id);
-    sampleCardArray.splice(
-      sampleCardArray.findIndex((item) => item.id == id),
-      1
-    );
-    setSampleCardArray(sampleCardArray);
-    if (sampleCardArray.length == 0) {
+    const updatedImageList = imageList.filter((item) => item.listId !== id);
+
+    setImageList(updatedImageList);
+
+    // delete image
+
+    if (imageList.length == 0) {
       setNoMoreCard(true);
     }
   };
@@ -43,10 +62,14 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
   const gesture = Gesture.Pan()
     .onEnd(() => {
-    const item = sampleCardArray.slice(-1)[0];
+    const item = imageList.slice(-1)[0];
     startGuessing({item});
   });
 
+
+  useEffect(() => {
+    handleGetImagesList();
+  }, []);
 
   const showIsLoading = () => {
     const message='Loading new images...';
@@ -54,32 +77,39 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 
+  const GestureCard = ({item, gesture }) => {
+    return(
+      <GestureDetector gesture={gesture}>
+        <SwipeableCard
+          item={item}
+          removeCard={() => removeCard(item.listId)}
+          swipedDirection={lastSwipedDirection}
+          screenWidth={screenWidth}
+          onPress={startGuessing}
+        />
+      </GestureDetector>
+    );
+  };
+
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      <Text style={styles.titleText}>
-        Zoom to Play or Swipe
-      </Text>
-      <GestureHandlerRootView style={styles.container}>
-
-          {sampleCardArray.map((item, key) => {
-            return(
-              <GestureDetector gesture={gesture} key={key}>
-                <SwipeableCard
-                  item={item}
-                  removeCard={() => removeCard(item.id)}
-                  swipedDirection={lastSwipedDirection}
-                  screenWidth={screenWidth}
-                  onPress={startGuessing}
-                />
-              </GestureDetector>)
-          }
-          )}
-
-        {noMoreCard ? (
-          showIsLoading()
-        ) : null}
-
-      </GestureHandlerRootView>
+      {isLoading ? (
+        showIsLoading()
+      ) : imageList !== null ? (
+        <>
+          <Text style={styles.titleText}>Zoom to Play or Swipe</Text>
+          <GestureHandlerRootView style={styles.container}>
+            {Array.isArray(imageList) && imageList.map((item, id) => (
+              <GestureCard item={item} gesture={gesture} key={id}/>
+            ))}
+            {noMoreCard ? showIsLoading() : null}
+          </GestureHandlerRootView>
+        </>
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text>The list is not there</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -97,3 +127,9 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 });
+
+
+
+
+
+
