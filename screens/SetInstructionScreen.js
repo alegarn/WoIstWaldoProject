@@ -13,6 +13,7 @@ import CenteredModal from "../components/UI/CenteredModal";
 import ModalContent from '../components/UI/ModalContent';
 import { imageUploader } from "../utils/fileUploader";
 import { handleOrientation } from '../utils/orientation';
+import { handleImageType, isTypeValid } from '../utils/imageInfos';
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
@@ -31,14 +32,24 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
   const context = useContext(AuthContext);
-/*   console.log("requestAuthHeaders", context);
- */
 
-  /*  */
-console.log("description", description);
+  const getPermissions = async () => {
 
-/*  */
-  const handlePressDescription = (enteredText) => {
+    // Detect if you can request this permission again
+    if (permissionResponse.status === "undetermined") {
+      await requestPermission();
+    };
+    if (!permissionResponse.canAskAgain || permissionResponse.status === "denied") {
+      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
+      Linking.openSettings();
+    } else {
+      if (permissionResponse.status === "granted") {
+        return true;
+      };
+    };
+  };
+
+  const handlePressDescription = async (enteredText) => {
     setDescription(enteredText);
     setShowModal(true);
   };
@@ -49,62 +60,38 @@ console.log("description", description);
 
   const handleConfirmModal = async () => {
 
-    /*  */
-
-    const getPermissions = async () => {
-      console.log("getPermissions");
-      console.log("permissionResponse", permissionResponse);
-
-      // Detect if you can request this permission again
-      if (permissionResponse.status === "undetermined") {
-        await requestPermission();
-      };
-      if (!permissionResponse.canAskAgain || permissionResponse.status === "denied") {
-        Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
-        Linking.openSettings();
-      } else {
-        if (permissionResponse.status === "granted") {
-          return true;
-        };
-      };
-    };
-
-
     let permissionStatus = await getPermissions();
     if (!permissionStatus) {
       return;
     };
 
+    const fileType = handleImageType(uri);
+    const validType = isTypeValid(fileType);
 
-    const saveImage = async () => {
-
-
-      try {
-
-        /* const file = await MediaLibrary.saveToLibraryAsync(uri); */
-        const imageInfos = {
-          uri,
-          description,
-          imageWidth,
-          imageHeight,
-          screenHeight,
-          screenWidth,
-          isPortrait,
-          touchLocation
-        };
-
-        console.log("imageInfos", imageInfos);
-        imageUploader({ imageInfos, context });
-        console.log("Image successfully saved");
-      } catch (error) {
-        console.log("error saveImage", error);
-      };
+    if (!validType) {
+      Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
+      return;
     };
 
-    console.log("saveImage");
-    const imageIsSaved = await saveImage();
+    const imageInfos = {
+      uri: uri,
+      userId: context.userId,
+      imageHeight: imageHeight,
+      imageWidth: imageWidth,
+      screenHeight: screenHeight,
+      screenWidth: screenWidth,
+      description: description,
+      isPortrait: isPortrait,
+      xLocation: touchLocation.x,
+      yLocation: touchLocation.y,
+    };
 
-    /*  */
+    const uploadState = await imageUploader({ imageInfos, context, fileType });
+
+    if (uploadState.status !== 200) {
+      Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
+      return;
+    };
 
     setShowModal(false);
     handleOrientation("portrait");
@@ -115,7 +102,6 @@ console.log("description", description);
   const onCancelModal = () => {
     setShowModal(false);
   };
-
 
 
   return (
