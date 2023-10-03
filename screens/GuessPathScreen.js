@@ -3,7 +3,7 @@ import { Dimensions } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width
 
-export default function GuessPathScreen({ navigation, route }) {
+export default function GuessPathScreen({ navigation }) {
 
   const startGuessing = ({item}) => {
     navigation.replace('GuessScreen', {
@@ -16,8 +16,9 @@ export default function GuessPathScreen({ navigation, route }) {
       isPortrait: item.isPortrait,
       hiddenLocation: item.touchLocation,
       screenHeight: item.screenHeight,
-      screenWidth: item.screenWidth});
-    };
+      screenWidth: item.screenWidth
+    });
+  };
 
   return (
     <SwipeImage

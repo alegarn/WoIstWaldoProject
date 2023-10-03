@@ -16,7 +16,6 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
   const imageIsPortrait = imageWidth < imageHeight;
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
-  console.log(screenDimensions);
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */

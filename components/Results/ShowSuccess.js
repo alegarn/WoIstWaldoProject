@@ -1,15 +1,26 @@
-import { useEffect, useState } from 'react';
+import { useState, useLayoutEffect } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
+import { updateImageList } from '../../utils/storageDatum';
 
-export default function ShowSuccess({ navigation }) {
+export default function ShowSuccess({ navigation, route }) {
 
   const [showSuccessImageAnimated, setshowSuccessImageAnimated] = useState(true);
+  const pictureId = route.params?.pictureId;
 
+  async function removeImageFromList(id) {
+    await updateImageList(id);
+  };
 
-  useEffect(() => {
+  useLayoutEffect(() => {
+
+    removeImageFromList(pictureId);
+    // score: pictureId, userId
+  });
+
+  useLayoutEffect(() => {
     const timeout = setTimeout(() => {
       setshowSuccessImageAnimated(false);
     }, 1000);
@@ -17,18 +28,24 @@ export default function ShowSuccess({ navigation }) {
     return () => clearTimeout(timeout);
   }, []);
 
+  const ShowResult = ({ navigation }) => {
+    return (
+      <>
+        <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
+        <Text style={[styles.subtitle, styles.marginBottom]}>
+          <Text style={styles.title}>1</Text> point earned!
+        </Text>
+        <ResultChoices navigation={navigation} success={true} />
+      </>
+    );
+  };
+
   return (
     <View style={styles.container}>
       {showSuccessImageAnimated ?
           <ImageAnimated success={true} />
         :
-          <>
-            <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
-            <Text style={[styles.subtitle, styles.marginBottom]}>
-              <Text style={styles.title}>1</Text> point earned!
-            </Text>
-            <ResultChoices navigation={navigation} success={true} />
-          </>
+          <ShowResult navigation={navigation} />
       }
     </View>
   );
