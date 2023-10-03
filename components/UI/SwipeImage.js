@@ -1,18 +1,17 @@
-import { useEffect, useState, useContext } from 'react';
+import { useEffect, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
-import { AuthContext } from '../../store/auth-context';
 import { getImages } from '../../utils/requests';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getLocalImages, storeImageList, getLastImageId } from '../../utils/storageDatum';
 
+import * as FileSystem from 'expo-file-system';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, startGuessing }) {
-  const context = useContext(AuthContext);
 
   const [imageList, setImageList] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -21,33 +20,47 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
 
   const handleData = async (data) => {
+    console.log("handleData");
+    const last_id = getLastImageId();
     const updatedImageList = data.map((image, index) => ({
       ...image,
-      listId: index + 1,
+      listId: last_id + index + 1,
     }));
-
+    await storeImageList(updatedImageList);
     setImageList(updatedImageList);
-    setIsLoading(false);
   };
 
   const handleGetImagesList = async () => {
-    const userId = await AsyncStorage.getItem("userId");
     console.log("handleGetImagesList");
-    const response = await getImages();
-    console.log("response handleGetImagesList", response);
-    await handleData(response);
+    const localImageList = await getLocalImages();
+    setImageList(localImageList);
+
+    if (localImageList === null) {
+      const response = await getImages();
+      await handleData(response);
+      setIsLoading(false);
+      return null;
+    };
+
+    if ((localImageList.length < 3) && (localImageList !== null)) {
+      const id = imageList.slice(-1).pictureId;
+      const response = await getImages(id)
+      await handleData(response);
+    };
+    setIsLoading(false);
+
   };
 
 
 
 
-  const removeCard = (id) => {
+  const removeCard = async (id) => {
     // alert(id);
     const updatedImageList = imageList.filter((item) => item.listId !== id);
-
-    setImageList(updatedImageList);
-
+    const image = imageList.filter((item) => item.listId === id)[0];
     // delete image
+    await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
+    setImageList(updatedImageList);
 
     if (imageList.length == 0) {
       setNoMoreCard(true);
@@ -99,7 +112,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         <>
           <Text style={styles.titleText}>Zoom to Play or Swipe</Text>
           <GestureHandlerRootView style={styles.container}>
-            {Array.isArray(imageList) && imageList.map((item, id) => (
+            {imageList.map((item, id) => (
               <GestureCard item={item} gesture={gesture} key={id}/>
             ))}
             {noMoreCard ? showIsLoading() : null}
@@ -107,7 +120,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         </>
       ) : (
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text>The list is not there</Text>
+          <Text>The list is not there, there is a problem... No new images? :O</Text>
         </View>
       )}
     </SafeAreaView>

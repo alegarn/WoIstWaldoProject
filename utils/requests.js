@@ -65,8 +65,6 @@ export async function getUploadUrl() {
 
 async function getImagesInfos({ config, userId }) {
   console.log("getImagesInfos");
-  console.log("userId", userId);
-  console.log("config", config);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
   const response = await axios.get(url, config).then((response) => {
     console.log("response getImagesInfos", response);
@@ -75,6 +73,24 @@ async function getImagesInfos({ config, userId }) {
     console.log("error getImagesInfos", error.request);
     return error;
   });
+  return response;
+};
+
+async function getNextImagesInfos({ config, userId, pictureId }){
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/serve_next_image_batch`;
+  const imageData = {
+    image: {
+      name: pictureId
+    }
+  };
+  const response = await axios.post(url, imageData, config )
+    .then((response) => {
+      console.log("response getNextImagesInfos", response);
+      return response;
+    }).catch((error) => {
+      console.log("error getNextImagesInfos", error.request);
+      return error;
+    });
   return response;
 };
 
@@ -153,7 +169,7 @@ async function handleImagesDownload(image) {
 };
 
 
-export async function getImages() {
+export async function getImages(pictureId = null) {
   console.log("getImages");
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
   const headers = setHeaders({ token, uid, expiry, access_token, client });
@@ -162,31 +178,38 @@ export async function getImages() {
     headers: headers,
   };
 
-  const imagesInfos = await getImagesInfos({ config, userId });
-  console.log("imagesInfos", imagesInfos.data.images);
+  let imagesInfos = {};
+
+  if (pictureId === null) {
+    imagesInfos = await getImagesInfos({ config, userId });
+  };
+
+  if (pictureId !== null) {
+    imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
+  };
+
 
   const images = [];
   //Promise.all()
-  await Promise.allSettled(imagesInfos.data.images.map( async image => {
-    const filePath = await handleImagesDownload(image);
-    console.log("image loop filePath", filePath);
+  await Promise.allSettled(
+    imagesInfos.data.images.map( async image => {
+      const filePath = await handleImagesDownload(image);
+      const imageObject = new Image(
+        filePath,
+        image.name,
+        image.description,
+        image.image_height,
+        image.image_width,
+        image.is_portrait,
+        {x: image.x_location, y: image.y_location},
+        image.screen_height,
+        image.screen_width
+      );
 
-    const imageObject = new Image(
-      //image.user_id,
-      filePath,
-      image.name,
-      image.description,
-      image.image_height,
-      image.image_width,
-      image.is_portrait,
-      {x: image.x_location, y: image.y_location},
-      image.screen_height,
-      image.screen_width
-    );
+      images.push(imageObject)
 
-    images.push(imageObject)
-
-  })).then(() => {
+    }
+  )).then(() => {
     console.log("Files downloaded successfully");
   }).catch((error) => {
     console.log("error", error.request);
