@@ -7,6 +7,7 @@ import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
@@ -79,7 +80,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     const imageInfos = {
       uri: uri,
-      userId: context.userId,
+      userId: await AsyncStorage.getItem("userId"),
       fileExtension: fileExtension,
       imageHeight: imageHeight,
       imageWidth: imageWidth,
