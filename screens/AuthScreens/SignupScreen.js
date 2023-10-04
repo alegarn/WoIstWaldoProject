@@ -25,7 +25,7 @@ function SignupScreen({navigation}) {
       switch (status) {
         case 200:
           console.log('authentification signup screen', authentification);
-          authContext.authenticate(token, expiry, access_token);
+          authContext.authenticate({token, expiry, access_token });
           const authentification = await login({email, password});
           console.log("authentication", authentification);
 

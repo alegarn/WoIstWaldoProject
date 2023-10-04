@@ -47,7 +47,6 @@ export default function AdScreen({navigation, route}){
   const toResultScreen = () => {
     navigation.navigate("ResultScreen", {
       onTarget: onTarget,
-      accountId: accountId,
       imageFile: imageFile,
       pictureId: pictureId,
       description: description,
@@ -75,7 +74,7 @@ export default function AdScreen({navigation, route}){
 
   return(
     <View>
-      <Text>AdScreen</Text>
+      <Text>AdScreen, do you want want to test every 5 sec with real ads ... ?</Text>
     </View>
   )
 };
