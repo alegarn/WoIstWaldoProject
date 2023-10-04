@@ -9,10 +9,6 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
 
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
-  // only in dev with local images
-/*   const uriPict = uri ? { uri: uri } : pictureUri;
- */  //
-
 
   /*  */
 /*

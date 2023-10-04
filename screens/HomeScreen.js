@@ -1,5 +1,5 @@
 import{ View, StyleSheet} from 'react-native';
-import { useLayoutEffect } from 'react';
+import { useEffect } from 'react';
 
 
 import BigButton from '../components/UI/BigButton';
@@ -9,7 +9,7 @@ import { handleOrientation } from '../utils/orientation';
 
 export default function HomeScreen({ navigation }) {
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     handleOrientation("portrait");
   }, []);
 
