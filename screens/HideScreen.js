@@ -3,17 +3,20 @@ import HidePicture from '../components/Picture/HidePicture';
 
 export default function HideScreen({ navigation, route }) {
 
+  console.log("HideScreen route.params", route.params);
+  const uri = route.params?.uri;
   const screenHeight = Dimensions.get('window').height;
   const screenWidth = Dimensions.get('window').width;
 
-  let screenDimensions = { width: screenWidth, height: screenHeight };
-  screenWidth > screenHeight ? screenDimensions = { width: screenHeight, height: screenWidth } : null;
+  const isPortrait = route.params?.isPortrait;
+  let screenDimensions = {};
+  isPortrait ? (screenDimensions = { width: screenWidth, height: screenHeight }) : (screenDimensions = { width: screenHeight, height: screenWidth }) ;
 
   return (
     <>
       <HidePicture
         navigation={navigation}
-        uri={route.params?.uri}
+        uri={uri}
         imageWidth={route.params?.imageWidth}
         imageHeight={route.params?.imageHeight}
         screenDimensions={screenDimensions}
