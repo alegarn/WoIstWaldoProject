@@ -5,17 +5,12 @@
 import * as FileSystem from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
 import { getUploadUrl, saveImageInfos, saveImageToAws } from "./requests";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
 async function handleGetUploadUrl({context}) {
 
-  const response = await getUploadUrl({
-    token: context.token,
-    uid: context.uid,
-    expiry: context.expiry,
-    access_token: context.access_token,
-    client: context.client,
-  });
+  const response = await getUploadUrl();
 
   return { status: response.status, title: response.title, message: response.message, data: response.data };
 };
@@ -23,24 +18,26 @@ async function handleGetUploadUrl({context}) {
 
 
 
-export const exportImage = async ({url, filename, uri, fileType, contentLength, userId}) => {
+const exportImage = async ({url, filename, uri, fileExtension, contentLength, userId}) => {
   console.log("exportImage");
   const isSaved = await saveImageToAws({
     url: url,
     filename: filename,
     userId: userId,
     fileUrl: uri,
-    fileType: fileType,
+    fileExtension: fileExtension,
     contentLength: contentLength
   });
   return isSaved;
 };
 
-export const exportPictureData = async ({ imagesInfos, context }) => {
+const exportPictureData = async ({ imagesInfos, context }) => {
   const saveImageResponse = saveImageInfos({
-    userId: context.userId,
+    userId: await AsyncStorage.getItem("userId"),
     imagesInfos: {
       user_id: imagesInfos.userId,
+      name: imagesInfos.name,
+      file_extension: imagesInfos.fileExtension,
       image_height: imagesInfos.imageHeight,
       image_width: imagesInfos.imageWidth,
       screen_height: imagesInfos.screenHeight,
@@ -50,6 +47,7 @@ export const exportPictureData = async ({ imagesInfos, context }) => {
       x_location: imagesInfos.xLocation,
       y_location: imagesInfos.yLocation,
       storage_url: imagesInfos.storageUrl,
+
       /* file_type, file_size */
     },
     token: context.token,
@@ -63,7 +61,7 @@ export const exportPictureData = async ({ imagesInfos, context }) => {
 };
 
 
-export async function imageUploader({ imageInfos, context, fileType }) {
+export async function imageUploader({ imageInfos, context }) {
   const imageLocalUri = imageInfos.uri;
   const contentLength = await handleContentLength(imageLocalUri);
   const uploadUrlData = await handleGetUploadUrl({ context });
@@ -72,13 +70,15 @@ export async function imageUploader({ imageInfos, context, fileType }) {
     return uploadUrlData;
   };
 
+  const userId = await AsyncStorage.getItem("userId");
+
   const exportImageData = await exportImage({
     url: uploadUrlData.data.url,
     filename: uploadUrlData.data.filename,
     uri: imageInfos.uri,
-    fileType,
+    fileExtension: imageInfos.fileExtension,
     contentLength,
-    userId: context.userId
+    userId: userId,
   });
 
   if (exportImageData.status !== 200) {
@@ -87,7 +87,9 @@ export async function imageUploader({ imageInfos, context, fileType }) {
 
   const imageInfosSaved = await exportPictureData({
     imagesInfos: {
-      userId: context.userId,
+      userId: userId,
+      name: uploadUrlData.data.filename,
+      fileExtension: imageInfos.fileExtension,
       imageHeight: imageInfos.imageHeight,
       imageWidth: imageInfos.imageWidth,
       screenHeight: imageInfos.screenHeight,
@@ -96,7 +98,7 @@ export async function imageUploader({ imageInfos, context, fileType }) {
       isPortrait: imageInfos.isPortrait,
       xLocation: imageInfos.xLocation,
       yLocation: imageInfos.yLocation,
-      storageUrl: uploadUrlData.data.url,
+      storageUrl: "",
     },
     context: context
   });

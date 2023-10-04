@@ -1,12 +1,12 @@
 import * as FileSystem from 'expo-file-system';
 
 export function handleImageType(uri) {
-  const fileType = uri.substring(uri.lastIndexOf(".") + 1)
-  return fileType
+  const fileExtension = uri.substring(uri.lastIndexOf(".") + 1)
+  return fileExtension
 };
 
-export function isTypeValid(fileType) {
-  return ["jpg", "jpeg", "png"].includes(fileType);
+export function isTypeValid(fileExtension) {
+  return ["jpg", "jpeg", "png"].includes(fileExtension);
 };
 
 export const handleContentLength = async (uri) => {
