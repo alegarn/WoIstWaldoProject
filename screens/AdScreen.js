@@ -45,7 +45,7 @@ export default function AdScreen({navigation, route}){
   };
 
   const toResultScreen = () => {
-    navigation.navigate("ResultScreen", {
+    navigation.replace("ResultScreen", {
       onTarget: onTarget,
       imageFile: imageFile,
       pictureId: pictureId,
