@@ -9,14 +9,14 @@ export default function ShowSuccess({ navigation, route }) {
 
   const [showSuccessImageAnimated, setshowSuccessImageAnimated] = useState(true);
   const pictureId = route.params?.pictureId;
+  const listId = route.params?.listId;
 
   async function removeImageFromList(id) {
-    await updateImageList(id);
+    return await updateImageList(id);
   };
 
   useLayoutEffect(() => {
-
-    removeImageFromList(pictureId);
+    removeImageFromList(listId);
     // score: pictureId, userId
   });
 

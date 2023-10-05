@@ -7,7 +7,6 @@ export default function GuessPathScreen({ navigation }) {
 
   const startGuessing = ({item}) => {
     navigation.replace('GuessScreen', {
-      accountId: item.accountId,
       imageFile: item.imageFile,
       pictureId: item.pictureId,
       description: item.description,
@@ -16,7 +15,8 @@ export default function GuessPathScreen({ navigation }) {
       isPortrait: item.isPortrait,
       hiddenLocation: item.touchLocation,
       screenHeight: item.screenHeight,
-      screenWidth: item.screenWidth
+      screenWidth: item.screenWidth,
+      listId: item.listId
     });
   };
 
