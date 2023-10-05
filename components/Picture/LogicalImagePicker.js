@@ -14,7 +14,6 @@ export default function LogicalImagePicker({ navigation }) {
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
-  const isPortrait = screenHeight > screenWidth;
   const imageWidth = (8 / 10) * screenWidth;
   const imageHeight = (6 / 10) * screenHeight;
 
@@ -81,6 +80,7 @@ export default function LogicalImagePicker({ navigation }) {
     //const imageLength = fileInfo.size;
     //
 
+    const isPortrait = image.assets[0].height > image.assets[0].width;
 
     navigation.navigate('HideScreen', {
       uri: image.assets[0].uri,
@@ -99,14 +99,16 @@ export default function LogicalImagePicker({ navigation }) {
     let pickedImage = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-/*       aspect: [16, 9],
- */      quality: 0.5,
+      quality: 0.5,
     });
 
     if (!pickedImage.canceled) {
       setImage(pickedImage.assets[0].uri);
       console.log(pickedImage);
     };
+
+
+    const isPortrait = pickedImage.assets[0].height > pickedImage.assets[0].width;
 
     navigation.navigate('HideScreen', {
       uri: pickedImage.assets[0].uri,

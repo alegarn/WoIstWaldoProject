@@ -6,14 +6,13 @@ import { handlePicturePress } from '../../utils/targetLocation';
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 
-export default function HidePicture({ navigation, uri, isPortrait, imageWidth, imageHeight, screenDimensions}) {
+export default function HidePicture({ navigation, uri, imageIsPortrait, imageWidth, imageHeight, screenDimensions}) {
 
   const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
 
-  const imageIsPortrait = imageWidth < imageHeight;
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
 
@@ -66,7 +65,7 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
       imageHeight: imageHeight,
       screenHeight: screenHeight,
       screenWidth: screenWidth,
-      isPortrait: isPortrait,
+      isPortrait: imageIsPortrait,
       touchLocation: touchLocation,
       target: target });
   };
@@ -82,7 +81,7 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
         uri={uri}
         screenWidth={screenWidth}
         screenHeight={screenHeight}
-        isPortrait={isPortrait}
+        imageIsPortrait={imageIsPortrait}
         handleFilterClick={handleFilterClick} />
     );
   };
@@ -93,17 +92,3 @@ export default function HidePicture({ navigation, uri, isPortrait, imageWidth, i
     );
   };
 };
-/*   const [screenDimensions, setScreenDimensions] = useState(Dimensions.get('window'));
- */
-
-/*   useEffect(() => {
-    const updateScreenDimensions = () => {
-      setScreenDimensions(Dimensions.get('window'));
-    };
-
-    Dimensions.addEventListener('change', updateScreenDimensions);
-
-    return () => {
-      Dimensions.removeEventListener('change', updateScreenDimensions);
-    };
-  }, []); */
