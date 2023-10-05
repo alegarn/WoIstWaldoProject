@@ -1,5 +1,5 @@
 import{ View, StyleSheet} from 'react-native';
-import { useEffect } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 
 
 import BigButton from '../components/UI/BigButton';
@@ -9,9 +9,10 @@ import { handleOrientation } from '../utils/orientation';
 
 export default function HomeScreen({ navigation }) {
 
-  useEffect(() => {
+
+  useFocusEffect(() => {
     handleOrientation("portrait");
-  }, []);
+  });
 
   function navigationHandler({ screenName }) {
     navigation.navigate(screenName);
@@ -23,7 +24,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const toGuessPathScreen = () => {
-    navigation.navigate('GuessPathScreen');
+    navigation.replace('GuessPathScreen');
   };
 
   const toRankingScreen = () => {
