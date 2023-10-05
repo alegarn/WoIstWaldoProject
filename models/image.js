@@ -1,6 +1,5 @@
 class Image {
   constructor(
-    //accountId,
     imageFile,
     pictureId,
     description,
@@ -12,7 +11,6 @@ class Image {
     screenWidth,
     listId,
   ) {
-    //this.accountId = accountId;
     this.imageFile = imageFile;
     this.pictureId = pictureId;
     this.description = description;

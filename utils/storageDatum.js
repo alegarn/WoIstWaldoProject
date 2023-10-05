@@ -45,4 +45,5 @@ export async function updateImageList(listId) {
   const jsonImageList = JSON.parse(imageList);
   const updatedImageList = removeObjectById(jsonImageList, listId);
   await AsyncStorage.setItem("imageList", JSON.stringify(updatedImageList));
+  return null;
 };
