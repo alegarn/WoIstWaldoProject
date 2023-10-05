@@ -1,6 +1,6 @@
 import Image from '../models/image';
 
-export const IMAGES = [
+/* export const IMAGES = [
   new Image(
     1,
     require("../assets/images/tree.jpeg"),
@@ -97,7 +97,7 @@ export const IMAGES = [
     640,
     360,
   ),
-];
+]; */
 
 
 export const RANKING = {
