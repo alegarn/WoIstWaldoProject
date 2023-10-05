@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useLayoutEffect, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
@@ -6,7 +6,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/requests';
-import { getLocalImages, storeImageList, getLastImageId } from '../../utils/storageDatum';
+import { getLocalImages, storeImageList, getLastImageId, emptyImageList, updateImageList } from '../../utils/storageDatum';
 
 import * as FileSystem from 'expo-file-system';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
@@ -19,9 +19,25 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   const [swipeDirection, setSwipeDirection] = useState('--');
 
 
+  async function setImageListAsync(localImageList) {
+    return new Promise((resolve, reject) => {
+      setTimeout(() => {
+        setImageList(localImageList);
+        resolve();
+      }, 1000);
+    });
+  };
+
+  async function loadImages(imageList) {
+    const id = imageList.slice(-1).pictureId;
+    const response = await getImages(id)
+    await handleData(response);
+  };
+
   const handleData = async (data) => {
+
     console.log("handleData");
-    const last_id = getLastImageId();
+    const last_id = await getLastImageId();
     const updatedImageList = data.map((image, index) => ({
       ...image,
       listId: last_id + index + 1,
@@ -32,23 +48,30 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
   const handleGetImagesList = async () => {
     console.log("handleGetImagesList");
-    const localImageList = await getLocalImages();
-    setImageList(localImageList);
 
-    if (localImageList === null) {
-      const response = await getImages();
-      await handleData(response);
-      setIsLoading(false);
-      return null;
+    const localImageList = await getLocalImages();
+
+    if (imageList === null) {
+      if (localImageList === null) {
+        console.log("localImageList === null");
+        const response = await getImages();
+        await handleData(response);
+        setIsLoading(false);
+        return null;
+      };
+
+      if ((localImageList.length !== null)) {
+        console.log("(localImageList.length !== null)");
+        await setImageListAsync(localImageList);
+      };
     };
 
-    if ((localImageList.length < 3) && (localImageList !== null)) {
-      const id = imageList.slice(-1).pictureId;
-      const response = await getImages(id)
-      await handleData(response);
+
+    if ((localImageList !== null) && (localImageList.length <= 3) && (imageList !== null)) {
+      console.log("(localImageList.length < 3)");
+      await loadImages(imageList);
     };
     setIsLoading(false);
-
   };
 
 
@@ -59,12 +82,20 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
     // delete image
+    await updateImageList(id);
     await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
     setImageList(updatedImageList);
+    console.log("updatedImageList", updatedImageList);
 
-    if (imageList.length == 0) {
+    if ((imageList.length <= 3) && (!isLoading)) {
+      setIsLoading(true);
+      await loadImages(imageList);
+      setIsLoading(false);
+    };
+
+    if (imageList.length === 0) {
       setNoMoreCard(true);
-    }
+    };
   };
 
   const lastSwipedDirection = (swipeDirection) => {
@@ -80,7 +111,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   });
 
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     handleGetImagesList();
   }, []);
 
@@ -106,9 +137,9 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      {isLoading ? (
+      {(isLoading && imageList === null) || (imageList.length === 0) ? (
         showIsLoading()
-      ) : imageList !== null ? (
+      ) : (imageList !== null) ? (
         <>
           <Text style={styles.titleText}>Zoom to Play or Swipe</Text>
           <GestureHandlerRootView style={styles.container}>

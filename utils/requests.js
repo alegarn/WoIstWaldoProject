@@ -203,7 +203,8 @@ export async function getImages(pictureId = null) {
         image.is_portrait,
         {x: image.x_location, y: image.y_location},
         image.screen_height,
-        image.screen_width
+        image.screen_width,
+        null
       );
 
       images.push(imageObject)
