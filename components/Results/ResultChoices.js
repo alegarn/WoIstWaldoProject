@@ -5,7 +5,7 @@ import BigButton from '../UI/BigButton';
 export default function ResultChoices({navigation, success, retryGuess}) {
 
   function returnHome() {
-    navigation.navigate('HomeScreen');
+    navigation.replace('HomeScreen');
   };
 
 

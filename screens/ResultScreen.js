@@ -19,7 +19,7 @@ export default function ResultScreen({ route, navigation }) {
   };
 
   if (onTarget) {
-    userEarnPoints(accountId)
+    userEarnPoints(pictureId)
     return <ShowSuccess navigation={navigation} route={route} />;
   };
 

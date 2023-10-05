@@ -18,11 +18,9 @@ export default function GuessScreen({ navigation, route }) {
   let screenDimensions = { width: screenWidth, height: screenHeight };
   isPortrait ? null : screenDimensions = { width: screenHeight, height: screenWidth };
 
-  const imageIsPortrait = imageWidth < imageHeight;
-
   function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
-    navigation.navigate('AdScreen', { onTarget: onTarget, accountId: accountId, imageFile: uri, pictureId: pictureId, description: description, imageHeight: imageHeight, imageWidth:imageWidth, isPortrait: isPortrait, hiddenLocation: hiddenLocation, screenHeight: screenHeight, screenWidth: screenWidth });
+    navigation.replace('AdScreen', { onTarget: onTarget, accountId: accountId, imageFile: uri, pictureId: pictureId, description: description, imageHeight: imageHeight, imageWidth:imageWidth, isPortrait: isPortrait, hiddenLocation: hiddenLocation, screenHeight: screenHeight, screenWidth: screenWidth });
   };
 
 
@@ -33,7 +31,7 @@ export default function GuessScreen({ navigation, route }) {
       imageFile={uri}
       pictureId={pictureId}
       description={description}
-      imageIsPortrait={imageIsPortrait}
+      imageIsPortrait={isPortrait}
       hiddenLocation={hiddenLocation}
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
