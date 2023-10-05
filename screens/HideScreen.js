@@ -20,7 +20,7 @@ export default function HideScreen({ navigation, route }) {
         imageWidth={route.params?.imageWidth}
         imageHeight={route.params?.imageHeight}
         screenDimensions={screenDimensions}
-        isPortrait={route.params?.isPortrait} />
+        imageIsPortrait={isPortrait} />
     </>
   );
 };
