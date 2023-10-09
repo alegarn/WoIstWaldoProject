@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useState } from 'react';
-import {  SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
 import SwipeableCard from './SwipeableCard';
@@ -30,8 +30,16 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
   async function loadImages(imageList) {
     const id = imageList.slice(-1).pictureId;
-    const response = await getImages(id)
-    await handleData(response);
+    const response = await getImages(id);
+    if (response.isError === true) {
+      Alert.alert(response.title, response.message);
+    };
+    if (response.images.length === 0) {
+      setNoMoreCard(true);
+    };
+    if (response.isError === false) {
+      await handleData(response.images);
+    };
   };
 
   const handleData = async (data) => {
@@ -55,8 +63,13 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
       if (localImageList === null) {
         console.log("localImageList === null");
         const response = await getImages();
-        await handleData(response);
-        setIsLoading(false);
+        if (response.isError === true) {
+          Alert.alert(response.title, response.message);
+        };
+        if (response.isError === false) {
+          await handleData(response);
+          setIsLoading(false);
+        };
         return null;
       };
 

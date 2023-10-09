@@ -71,7 +71,7 @@ async function getImagesInfos({ config, userId }) {
     return response;
   }).catch((error) => {
     console.log("error getImagesInfos", error.request);
-    return error;
+    return null;
   });
   return response;
 };
@@ -135,6 +135,7 @@ async function extractBase64(imageData, filename) {
 
   const base64Data = verifyItsBase64(imageData);
   if (!base64Data) {
+    console.log(`${filename}: imageData is not base64`);
     return false;
   };
 
@@ -146,8 +147,6 @@ async function extractBase64(imageData, filename) {
   const filePath = FileSystem.cacheDirectory + `${filename}.${fileExtension}`; // images-v1/ .${fetchedType} ?
 
   console.log("filePath", filePath);
-
-  //await MediaLibrary.createAssetAsync(`${filePath}`);
 
   await ensureDirExists();
 
@@ -188,39 +187,46 @@ export async function getImages(pictureId = null) {
     imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
   };
 
-
   const images = [];
-  //Promise.all()
-  await Promise.allSettled(
+
+  const isError = await Promise.allSettled(
     imagesInfos.data.images.map( async image => {
       const filePath = await handleImagesDownload(image);
-      const imageObject = new Image(
-        filePath,
-        image.name,
-        image.description,
-        image.image_height,
-        image.image_width,
-        image.is_portrait,
-        {x: image.x_location, y: image.y_location},
-        image.screen_height,
-        image.screen_width,
-        null
-      );
-
-      images.push(imageObject)
-
+      if (filePath !== false) {
+        const imageObject = new Image(
+          filePath,
+          image.name,
+          image.description,
+          image.image_height,
+          image.image_width,
+          image.is_portrait,
+          {x: image.x_location, y: image.y_location},
+          image.screen_height,
+          image.screen_width,
+          null
+        );
+        images.push(imageObject);
+      };
+      if (filePath === false) {
+        throw new Error({request: "Their is an error downloading user's images."});
+      };
     }
   )).then(() => {
     console.log("Files downloaded successfully");
+    return { isError: false };
   }).catch((error) => {
     console.log("error", error.request);
+    return { isError: true, error: error.request};
   });
 
+  if (isError.isError === true ) {
+    return { isError: true, title: "There is an error, please retry later", message: isError?.error };
+  };
 
 
   // Now you can use the file path to display the image
   console.log('File saved to', images[0].imageFile);
-  return images;
+  return { isErorr: false, images: images };
 
   /*  */
 
