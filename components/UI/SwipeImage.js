@@ -6,7 +6,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/requests';
-import { getLocalImages, storeImageList, getLastImageId, emptyImageList, updateImageList } from '../../utils/storageDatum';
+import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid } from '../../utils/storageDatum';
 
 import * as FileSystem from 'expo-file-system';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
@@ -14,9 +14,11 @@ import * as FileSystem from 'expo-file-system';
 export default function SwipeImage({ screenWidth, startGuessing }) {
 
   const [imageList, setImageList] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [noMoreCard, setNoMoreCard] = useState(false);
+  const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
+  const [noMoreCard, setNoMoreCard] = useState(true);
   const [swipeDirection, setSwipeDirection] = useState('--');
+
+
 
 
   async function setImageListAsync(localImageList) {
@@ -28,86 +30,113 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     });
   };
 
-  async function loadImages(imageList) {
-    const id = imageList.slice(-1).pictureId;
-    const response = await getImages(id);
+
+  const handleData = async (data) => {
+    console.log("handleData");
+
+    const lastId = await getLastImageId();
+    const updatedImageList = data.map((image, index) => ({
+      ...image,
+      listId: lastId + index + 1,
+    }));
+
+    if (imageList === null) {
+      console.log("updatedImageList handleData imageList null");
+      await storeImageList(updatedImageList);
+      setImageList(updatedImageList);
+    };
+
+    if (imageList !== null) {
+      console.log("updatedImageList handleData imageList !== null");
+      const newImageList = await updateImageList(updatedImageList);
+      setImageList(newImageList);
+    };
+  };
+
+  async function loadNewImages() {
+    console.log("loadNewImages");
+    const lastImageUuid = await getLastImageUuid();
+    const response = await getImages(lastImageUuid);
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
     };
-    if (response.images.length === 0) {
-      setNoMoreCard(true);
-    };
     if (response.isError === false) {
+      console.log("response.images", response.isError);
       await handleData(response.images);
+      setNoMoreCard(false);
     };
   };
 
-  const handleData = async (data) => {
 
-    console.log("handleData");
-    const last_id = await getLastImageId();
-    const updatedImageList = data.map((image, index) => ({
-      ...image,
-      listId: last_id + index + 1,
-    }));
-    await storeImageList(updatedImageList);
-    setImageList(updatedImageList);
-  };
 
   const handleGetImagesList = async () => {
     console.log("handleGetImagesList");
 
+    //emptyImageList();
     const localImageList = await getLocalImages();
 
-    if (imageList === null) {
-      if (localImageList === null) {
-        console.log("localImageList === null");
-        const response = await getImages();
-        if (response.isError === true) {
-          Alert.alert(response.title, response.message);
-        };
-        if (response.isError === false) {
-          await handleData(response);
-          setIsLoading(false);
-        };
-        return null;
+    console.log("localImageList", localImageList?.length);
+    // if localImageList [] or null, get Images() / show loadingOverlay
+
+
+
+    if ((localImageList !== null) && (localImageList?.length < 4) && (!asyncImagesAreLoading)) {
+      handleNewImagesLoading();
+    };
+
+    if ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading)) {
+      handleNewImagesLoading();
+    };
+
+    if ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList?.length === 0)) {
+      return showNoMoreCard();
+    };
+
+    if ((localImageList === null) && (!asyncImagesAreLoading)) {
+      console.log("localImageList === null");
+      const response = await getImages(null);
+
+      if (response.isError === true) {
+        Alert.alert(response.title, response.message);
       };
 
-      if ((localImageList.length !== null)) {
-        console.log("(localImageList.length !== null)");
-        await setImageListAsync(localImageList);
+      if (response.isError === false) {
+        console.log("response.isError", response.isError);
+        await handleData(response.images);
+        await saveLastImageUuid();
+        setNoMoreCard(false);
       };
+
+
+    };
+
+    if (((localImageList !== null) || (localImageList?.length >= 4) && (!asyncImagesAreLoading))) {
+      setImageList(localImageList);
+      setNoMoreCard(false);
     };
 
 
-    if ((localImageList !== null) && (localImageList.length <= 3) && (imageList !== null)) {
-      console.log("(localImageList.length < 3)");
-      await loadImages(imageList);
-    };
-    setIsLoading(false);
+
   };
 
 
 
 
   const removeCard = async (id) => {
-    // alert(id);
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
     // delete image
-    await updateImageList(id);
+    await removeImageFromList(id);
     await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
     setImageList(updatedImageList);
-    console.log("updatedImageList", updatedImageList);
 
-    if ((imageList.length <= 3) && (!isLoading)) {
-      setIsLoading(true);
-      await loadImages(imageList);
-      setIsLoading(false);
-    };
+    console.log("updatedImageList removeCard", updatedImageList);
 
-    if (imageList.length === 0) {
-      setNoMoreCard(true);
+    if ((updatedImageList.length < 4) && (!asyncImagesAreLoading)) {
+      handleNewImagesLoading();
+      if (updateImageList.length === 0) {
+        setNoMoreCard(true);
+      };
     };
   };
 
@@ -123,14 +152,42 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     startGuessing({item});
   });
 
+  const handleNewImagesLoading = async() => {
+    if ((!asyncImagesAreLoading) && (imageList !== null) && (imageList?.length < 4)) {
+      const localImageList = await getLocalImages();
+      await loadNewImages(localImageList);
+      await saveLastImageUuid();
+      setAsyncImagesAreLoading(false);
+      setNoMoreCard(false);
+
+    };
+    return null;
+  };
 
   useLayoutEffect(() => {
     handleGetImagesList();
   }, []);
 
+  useEffect(() => {
+    handleNewImagesLoading();
+  }, [asyncImagesAreLoading])
+
   const showIsLoading = () => {
     const message='Loading new images...';
     return <LoadingOverlay message={message} />
+  };
+
+  const showNoMoreCard = () => {
+    return(
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Text>The list is not there, there is a problem... No new images? :O</Text>
+        <View style={{ paddingTop: 10 }}>
+          <Text>To play you can:</Text>
+          <Text> - Upload new images</Text>
+          <Text> - Wait until someone else upload new images</Text>
+        </View>
+      </View>
+    );
   };
 
 
@@ -150,23 +207,26 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
   return (
     <SafeAreaView style={{ flex: 1 }}>
-      {(isLoading && imageList === null) || (imageList.length === 0) ? (
+      {(imageList === null) ? (
         showIsLoading()
-      ) : (imageList !== null) ? (
+      ) : ((imageList !== null) && (imageList?.length === 0)) ? (
+        showNoMoreCard()
+      ) : (
         <>
           <Text style={styles.titleText}>Zoom to Play or Swipe</Text>
           <GestureHandlerRootView style={styles.container}>
-            {imageList.map((item, id) => (
-              <GestureCard item={item} gesture={gesture} key={id}/>
-            ))}
-            {noMoreCard ? showIsLoading() : null}
+            {noMoreCard ?
+              showIsLoading() :
+              (<>
+                {imageList?.map((item, id) => (
+                  <GestureCard item={item} gesture={gesture} key={id}/>
+                ))}
+              </>)
+            }
           </GestureHandlerRootView>
         </>
-      ) : (
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <Text>The list is not there, there is a problem... No new images? :O</Text>
-        </View>
-      )}
+        )
+      }
     </SafeAreaView>
   );
 };
