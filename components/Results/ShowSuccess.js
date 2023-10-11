@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
-import { updateImageList } from '../../utils/storageDatum';
+import { removeImageFromList } from '../../utils/storageDatum';
 
 export default function ShowSuccess({ navigation, route }) {
 
@@ -11,14 +11,10 @@ export default function ShowSuccess({ navigation, route }) {
   const pictureId = route.params?.pictureId;
   const listId = route.params?.listId;
 
-  async function removeImageFromList(id) {
-    return await updateImageList(id);
-  };
-
   useLayoutEffect(() => {
     removeImageFromList(listId);
     // score: pictureId, userId
-  });
+  }, []);
 
   useLayoutEffect(() => {
     const timeout = setTimeout(() => {

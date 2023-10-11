@@ -67,7 +67,7 @@ async function getImagesInfos({ config, userId }) {
   console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
   const response = await axios.get(url, config).then((response) => {
-    console.log("response getImagesInfos", response);
+    //console.log("response getImagesInfos", response);
     return response;
   }).catch((error) => {
     console.log("error getImagesInfos", error.request);
@@ -77,7 +77,7 @@ async function getImagesInfos({ config, userId }) {
 };
 
 async function getNextImagesInfos({ config, userId, pictureId }){
-  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/serve_next_image_batch`;
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
   const imageData = {
     image: {
       name: pictureId
@@ -85,7 +85,7 @@ async function getNextImagesInfos({ config, userId, pictureId }){
   };
   const response = await axios.post(url, imageData, config )
     .then((response) => {
-      console.log("response getNextImagesInfos", response);
+      //console.log("response getNextImagesInfos", response);
       return response;
     }).catch((error) => {
       console.log("error getNextImagesInfos", error.request);
@@ -98,7 +98,7 @@ async function getImageFromStorage({ storageUrl }) {
   console.log("getImageFromStorage");
   const imageData = await axios.get(storageUrl, {})
   .then((response) => {
-    console.log("imageData response, getImageFromStorage");
+    //console.log("imageData response, getImageFromStorage");
     return response.data;
   }).catch((error) => console.log("error getImageFromStorage", error.request));
 
@@ -111,7 +111,7 @@ function verifyItsBase64(imageData) {
   if (base64Regex.test(imageData)) {
     // Extract the base64 data
     const base64Data = imageData.replace(base64Regex, '');
-    console.log("base64Data.substring(0, 100)", base64Data.substring(0, 100));
+    //console.log("base64Data.substring(0, 100)", base64Data.substring(0, 100));
     return base64Data;
   } else {
     console.log('The string is not a base64 image.');
@@ -168,8 +168,10 @@ async function handleImagesDownload(image) {
 };
 
 
-export async function getImages(pictureId = null) {
+export async function getImages(pictureId) {
   console.log("getImages");
+  console.log("getImages pictureId", pictureId);
+
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
   const headers = setHeaders({ token, uid, expiry, access_token, client });
 
@@ -186,11 +188,20 @@ export async function getImages(pictureId = null) {
   if (pictureId !== null) {
     imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
   };
+  //console.log("getImages imagesInfos.data", imagesInfos.data);
+
+  if (imagesInfos.data === undefined) {
+    return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
+  };
+
+  if (imagesInfos.data.images.length === 0) {
+    return { isError: false, images: [] };
+  };
 
   const images = [];
 
   const isError = await Promise.allSettled(
-    imagesInfos.data.images.map( async image => {
+    imagesInfos?.data?.images?.map( async image => {
       const filePath = await handleImagesDownload(image);
       if (filePath !== false) {
         const imageObject = new Image(
@@ -212,21 +223,22 @@ export async function getImages(pictureId = null) {
       };
     }
   )).then(() => {
-    console.log("Files downloaded successfully");
+    //console.log("Files downloaded successfully");
     return { isError: false };
   }).catch((error) => {
-    console.log("error", error.request);
-    return { isError: true, error: error.request};
+    console.log("isError catch error", error.request);
+    return { isError: true, error: error.request };
   });
 
   if (isError.isError === true ) {
+    console.log("isError.isError", isError);
     return { isError: true, title: "There is an error, please retry later", message: isError?.error };
   };
 
 
   // Now you can use the file path to display the image
-  console.log('File saved to', images[0].imageFile);
-  return { isErorr: false, images: images };
+  //console.log('File saved to', images[0].imageFile);
+  return { isError: false, images: images };
 
   /*  */
 
