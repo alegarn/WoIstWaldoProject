@@ -188,20 +188,19 @@ export async function getImages(pictureId) {
   if (pictureId !== null) {
     imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
   };
-  //console.log("getImages imagesInfos.data", imagesInfos.data);
 
   if (imagesInfos.data === undefined) {
     return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
   };
 
-  if (imagesInfos.data.images.length === 0) {
+  if (imagesInfos.data.data.length === 0) {
     return { isError: false, images: [] };
   };
 
   const images = [];
 
   const isError = await Promise.allSettled(
-    imagesInfos?.data?.images?.map( async image => {
+    imagesInfos?.data?.data?.map( async image => {
       const filePath = await handleImagesDownload(image);
       if (filePath !== false) {
         const imageObject = new Image(
