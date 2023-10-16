@@ -1,49 +1,14 @@
-import { View, Text, Pressable, StyleSheet, ImageBackground } from 'react-native';
+import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
-import ModalContent from '../UI/ModalContent';
 
+
+import MoveableTextBox from '../UI/MovableTextBox';
 // pictureUri only in dev with local images
 export default function ShowPicture({ /* hiddenLocation, */ uri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel }) {
 
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
-
-
-  /*  */
-/*
-  function handletargetSize(screenWidth, screenHeight) {
-    const targetSize = Math.min(screenWidth, screenHeight) * 0.1;
-    return targetSize;
-  };
-
-  const targetSize = handletargetSize(screenWidth, screenHeight);
-
-  const hiddenTargetStyle = {
-    position: 'absolute',
-    width: targetSize,
-    height: targetSize,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: "white",
-    borderRadius: 0,
-
-    left: hiddenLocation ? (hiddenLocation.x * screenWidth - targetSize / 2) : null,
-    top: hiddenLocation ? (hiddenLocation.y * screenHeight - targetSize / 2): null,
-  }; */
-
-  /*  */
-
-  const modalContent = guess ? (
-    <ModalContent
-      description={description}
-      screenWidth={screenWidth}
-      screenHeight={screenHeight}
-      guessPath={true}
-    />
-    )
-    :
-    "Is it hiding there ?";
 
   return (
     <View style={styles.container}>
@@ -62,20 +27,26 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
             <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle}/>
           )}
 
+          { guess ? (
+            <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
+          ) : null }
+
 {/*           {hiddenLocation && (
             <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} style={hiddenTargetStyle}/>
           )} */}
         </ImageBackground>
       </Pressable>
 
+
+
       {showModal ?
         <CenteredModal onPress={handleConfirm} onCancel={onCancel} isModalVisible={showModal}>
-          {modalContent}
+          {"Do you want to validate this ?"}
         </CenteredModal> : null}
 
     </View>
   );
-}
+};
 
 const styles = StyleSheet.create({
   container: {
@@ -126,3 +97,28 @@ const styles = StyleSheet.create({
     padding: 10
   }
 });
+
+
+  /*  */
+/*
+  function handletargetSize(screenWidth, screenHeight) {
+    const targetSize = Math.min(screenWidth, screenHeight) * 0.1;
+    return targetSize;
+  };
+
+  const targetSize = handletargetSize(screenWidth, screenHeight);
+
+  const hiddenTargetStyle = {
+    position: 'absolute',
+    width: targetSize,
+    height: targetSize,
+    borderWidth: 1,
+    borderStyle: "solid",
+    borderColor: "white",
+    borderRadius: 0,
+
+    left: hiddenLocation ? (hiddenLocation.x * screenWidth - targetSize / 2) : null,
+    top: hiddenLocation ? (hiddenLocation.y * screenHeight - targetSize / 2): null,
+  }; */
+
+  /*  */

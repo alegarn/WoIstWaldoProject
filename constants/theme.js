@@ -30,7 +30,7 @@ export const GlobalStyle = {
     tertiaryColor700: "#193277",
     tertiaryColor800: "#122D71",
     tertiaryColor900: "#0B286B",
-    quaternaryColor:"#7895CB ",
+    quaternaryColor:"#7895CB",
     quaternaryColor100: "#6F8AC2",
     quaternaryColor200: "#6480B9",
     quaternaryColor300: "#5976B0",
