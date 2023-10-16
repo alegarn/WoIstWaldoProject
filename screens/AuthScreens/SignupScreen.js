@@ -24,15 +24,19 @@ function SignupScreen({navigation}) {
 
       switch (status) {
         case 200:
-          console.log('authentification signup screen', authentification);
-          authContext.authenticate({token, expiry, access_token });
           const authentification = await login({email, password});
           console.log("authentication", authentification);
 
           if (authentification.status === 200) {
             console.log("Authentication successful");
-            Alert.alert('User creation successful', `Please login on the login screen.`);
-            navigation.replace('Login');
+            authContext.authenticate({
+              token: authentification.headers.authorization,
+              expiry: authentification.headers.expiry,
+              access_token: authentification.headers['access-token'],
+              uid: authentification.headers.uid,
+              client: authentification.headers.client,
+              userId: authentification.data.data.id
+            });
           };
           break;
         case 422:

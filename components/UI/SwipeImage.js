@@ -102,7 +102,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
       if (response.isError === false) {
         console.log("response.isError", response.isError);
-        await handleData(response.images);
+        await handleData(response.data);
         await saveLastImageUuid();
         setNoMoreCard(false);
       };
@@ -153,6 +153,9 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   });
 
   const handleNewImagesLoading = async() => {
+    console.log("handleNewImagesLoading");
+    console.log("asyncImagesAreLoading", asyncImagesAreLoading);
+    console.log("imageList", imageList);
     if ((!asyncImagesAreLoading) && (imageList !== null) && (imageList?.length < 4)) {
       const localImageList = await getLocalImages();
       await loadNewImages(localImageList);
