@@ -6,8 +6,6 @@ import { handlePicturePress } from "../../utils/targetLocation";
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 
-
-
 export default function GuessPicture({ imageFile, description, imageIsPortrait, hiddenLocation, screenDimensions, toAdScreen }) {
 
   const uri = imageFile;
@@ -19,18 +17,14 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
 
-
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({imageIsPortrait});
-
-    console.log("imageIsPortrait ??? ", imageIsPortrait);
   }, [imageIsPortrait]);
 
   useEffect(() => {
     showUpdatedLocation();
   }, [target]);
-
 
   const handleFilterClick = () => {
     setShowFilter(false);
@@ -59,7 +53,6 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const showUpdatedLocation = () => {
     return (
       <ShowPicture
-        // pictureUri only in dev with local images
         uri={uri}
         guess={true}
         description={description}
@@ -72,7 +65,8 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         handleIconPress={handleIconPress}
         showModal={showModal}
         handleConfirm={handleConfirm}
-        onCancel={onCancel} />
+        onCancel={onCancel}
+        />
     );
   }
 
