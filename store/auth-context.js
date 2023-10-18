@@ -8,9 +8,12 @@ export const AuthContext = createContext({
   access_token: '',
   expiry: '',
   userId: '',
+  scoreId: '',
   IsAuthenticated: false,
   authenticate: () => {},
   logout: () => {},
+  tokenAuthentication: () => {},
+  saveScoreId: () => {}
 });
 
 export default function AuthContextProvider({ children }) {
@@ -22,7 +25,7 @@ export default function AuthContextProvider({ children }) {
   const [access_token, setAccess_token] = useState('');
 
   const [userId, setUserId] = useState('');
-
+  const [scoreId, setScoreId] = useState('');
 
   function tokenAuthentication(token) {
     setAuthToken(token);
@@ -53,12 +56,18 @@ export default function AuthContextProvider({ children }) {
     setExpiry('');
     setAccess_token('');
     setUserId('');
+    setScoreId('');
     AsyncStorage.removeItem('token');
     AsyncStorage.removeItem('client');
     AsyncStorage.removeItem('expiry');
     AsyncStorage.removeItem('access_token');
     AsyncStorage.removeItem('uid');
     AsyncStorage.removeItem('userId');
+  };
+
+  function saveScoreId(scoreId) {
+    setScoreId(scoreId);
+    AsyncStorage.setItem('scoreId', scoreId);
   };
 
   const value = {
@@ -68,10 +77,12 @@ export default function AuthContextProvider({ children }) {
     access_token: access_token,
     expiry: expiry,
     userId: userId,
+    scoreId: scoreId,
     IsAuthenticated: !!authToken,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
+    saveScoreId: saveScoreId
   };
   return (
     <AuthContext.Provider value={value}>
