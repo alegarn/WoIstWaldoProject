@@ -6,11 +6,29 @@ import AuthContent from '../../components/Auth/AuthContent';
 
 import { login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
+import { getScoreId } from '../../utils/auth';
 
 
 function LoginScreen() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authContext = useContext(AuthContext);
+
+  const handleAuthDataSaving = async (response) => {
+    authContext.authenticate({
+      token: response.headers.authorization,
+      expiry: response.headers.expiry,
+      access_token: response.headers['access-token'],
+      uid: response.headers.uid,
+      client: response.headers.client,
+      userId: response.data.data.id
+    });
+  };
+
+  const handleScoreId = async () => {
+    const scoreId = await getScoreId();
+    scoreId.status === 200 && authContext.saveScoreId(scoreId.data.score_id) && console.log("scoreId saved!");
+    scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
+  };
 
   async function signInHandler({email, password}) {
     setIsAuthenticating(true);
@@ -18,14 +36,8 @@ function LoginScreen() {
       const response = await login({email, password});
       console.log("response login screen", response);
       if (response.status === 200) {
-        authContext.authenticate({
-          token: response.headers.authorization,
-          expiry: response.headers.expiry,
-          access_token: response.headers['access-token'],
-          uid: response.headers.uid,
-          client: response.headers.client,
-          userId: response.data.data.id
-        });
+        const auth = handleAuthDataSaving(response);
+        const scoreId = await handleScoreId();
       } else {
           console.log(response);
           Alert.alert('Invalid input', `${response}`);

@@ -2,7 +2,7 @@ import { useContext, useState } from 'react';
 import { Alert } from 'react-native';
 
 import AuthContent from '../../components/Auth/AuthContent';
-import { createUser, login } from '../../utils/auth';
+import { createUser, getScoreId, login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -11,6 +11,25 @@ function SignupScreen({navigation}) {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const authContext = useContext(AuthContext);
+
+
+  const handleAuthDataSaving = async (authentification) => {
+    authContext.authenticate({
+      token: authentification.headers.authorization,
+      expiry: authentification.headers.expiry,
+      access_token: authentification.headers['access-token'],
+      uid: authentification.headers.uid,
+      client: authentification.headers.client,
+      userId: authentification.data.data.id
+    });
+  };
+
+
+  const handleScoreId = async () => {
+    const scoreId = await getScoreId();
+    scoreId.status === 200 && authContext.saveScoreId(scoreId.data.score_id) && console.log("scoreId saved!");
+    scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem", "Try to reconnect");
+  };
 
   async function signUpHandler({email, password, confirmPassword, username}) {
     setIsAuthenticating(true);
@@ -29,14 +48,8 @@ function SignupScreen({navigation}) {
 
           if (authentification.status === 200) {
             console.log("Authentication successful");
-            authContext.authenticate({
-              token: authentification.headers.authorization,
-              expiry: authentification.headers.expiry,
-              access_token: authentification.headers['access-token'],
-              uid: authentification.headers.uid,
-              client: authentification.headers.client,
-              userId: authentification.data.data.id
-            });
+            await handleAuthDataSaving(authentification);
+            await handleScoreId();
           };
           break;
         case 422:

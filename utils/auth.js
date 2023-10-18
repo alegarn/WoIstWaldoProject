@@ -1,6 +1,32 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+export async function getBackendHeaders() {
+  const token = await AsyncStorage.getItem("token");
+  const uid = await AsyncStorage.getItem("uid");
+  const expiry = await AsyncStorage.getItem("expiry");
+  const access_token = await AsyncStorage.getItem("access_token");
+  const client = await AsyncStorage.getItem("client");
+  const userId = await AsyncStorage.getItem("userId");
+  return { token, uid, expiry, access_token, client, userId };
+};
+
+export function setHeaders({ token, uid, expiry, access_token, client }) {
+  const headers = {
+    Authorization: token,
+    HTTP_AUTHORIZATION: token,
+    "access-token": access_token,
+    client: client,
+    expiry: expiry,
+    uid: uid,
+    "token-type": "Bearer",
+    "Content-Type": "application/json;charset=UTF-8",
+    Accept: "*/*",
+  };
+  return headers;
+};
+
+
 async function authenticate({email, password}) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_in`;
   const headers = {
@@ -23,7 +49,23 @@ async function authenticate({email, password}) {
   return response;
 };
 
+export async function getScoreId() {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_score_id`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.get(url, config).then((response) => {
+    return {status: response.status, data: response.data };
+  }).catch((error) => {
+    console.log("error getScoreId", error);
 
+    return { status: error.request.status, data: error};
+  });
+
+  return response;
+};
 
 export async function createUser({ email, password, confirmPassword, username }) {
 
@@ -75,12 +117,4 @@ export async function login({email, password}) {
   return await authenticate({email, password});
 };
 
-export async function getBackendHeaders() {
-  const token = await AsyncStorage.getItem("token");
-  const uid = await AsyncStorage.getItem("uid");
-  const expiry = await AsyncStorage.getItem("expiry");
-  const access_token = await AsyncStorage.getItem("access_token");
-  const client = await AsyncStorage.getItem("client");
-  const userId = await AsyncStorage.getItem("userId");
-  return { token, uid, expiry, access_token, client, userId };
-};
+

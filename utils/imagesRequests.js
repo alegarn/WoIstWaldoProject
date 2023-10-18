@@ -1,22 +1,7 @@
 import axios from "axios";
 import * as FileSystem from 'expo-file-system';
 import Image from "../models/image";
-import { getBackendHeaders } from "./auth";
-
-function setHeaders({ token, uid, expiry, access_token, client }) {
-  const headers = {
-    Authorization: token,
-    HTTP_AUTHORIZATION: token,
-    "access-token": access_token,
-    client: client,
-    expiry: expiry,
-    uid: uid,
-    "token-type": "Bearer",
-    "Content-Type": "application/json;charset=UTF-8",
-    Accept: "*/*",
-  };
-  return headers;
-};
+import { setHeaders, getBackendHeaders } from "./auth";
 
 function setAWSHeaders(fileExtension, contentLength) {
 
@@ -193,7 +178,7 @@ export async function getImages(pictureId) {
     return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
   };
 
-  if (imagesInfos.data.data.length === 0) {
+  if (imagesInfos.data?.data?.length === 0) {
     return { isError: false, images: [] };
   };
 
@@ -233,7 +218,6 @@ export async function getImages(pictureId) {
     console.log("isError.isError", isError);
     return { isError: true, title: "There is an error, please retry later", message: isError?.error };
   };
-
 
   // Now you can use the file path to display the image
   //console.log('File saved to', images[0].imageFile);

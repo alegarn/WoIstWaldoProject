@@ -4,6 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
 import { removeImageFromList } from '../../utils/storageDatum';
+import { updateUserScore } from '../../utils/scoreRequests';
 
 export default function ShowSuccess({ navigation, route }) {
 
@@ -11,8 +12,17 @@ export default function ShowSuccess({ navigation, route }) {
   const pictureId = route.params?.pictureId;
   const listId = route.params?.listId;
 
+  const handleScore = async () => {
+    const response = await updateUserScore({
+      score: 1,
+      pictureId: pictureId
+    });
+  };
+
+
   useLayoutEffect(() => {
     removeImageFromList(listId);
+    handleScore();
     // score: pictureId, userId
   }, []);
 

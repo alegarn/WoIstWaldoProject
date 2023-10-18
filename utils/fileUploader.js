@@ -4,7 +4,7 @@
 
 import * as FileSystem from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
-import { getUploadUrl, saveImageInfos, saveImageToAws } from "./requests";
+import { getUploadUrl, saveImageInfos, saveImageToAws } from "./imagesRequests";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 
