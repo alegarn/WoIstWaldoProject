@@ -5,7 +5,7 @@ import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-g
 import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
-import { getImages } from '../../utils/requests';
+import { getImages } from '../../utils/imagesRequests';
 import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid } from '../../utils/storageDatum';
 
 import * as FileSystem from 'expo-file-system';
@@ -35,7 +35,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     console.log("handleData");
 
     const lastId = await getLastImageId();
-    const updatedImageList = data.map((image, index) => ({
+    const updatedImageList = data?.map((image, index) => ({
       ...image,
       listId: lastId + index + 1,
     }));
@@ -102,7 +102,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
       if (response.isError === false) {
         console.log("response.isError", response.isError);
-        await handleData(response.data);
+        await handleData(response.images);
         await saveLastImageUuid();
         setNoMoreCard(false);
       };
