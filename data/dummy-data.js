@@ -1,5 +1,5 @@
-import Image from '../models/image';
-
+/* import Image from '../models/image';
+ */
 /* export const IMAGES = [
   new Image(
     1,

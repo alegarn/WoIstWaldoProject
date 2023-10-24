@@ -342,7 +342,7 @@ export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, 
     return { status: 200 };
   })
   .catch((error) => {
-    console.log("error", error);
+    console.log("saveImageInfos error", error);
     return {
       status: error.request.status,
       message: error.message

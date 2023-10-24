@@ -43,7 +43,7 @@ export const GlobalStyle = {
     error100: '#fcdcbf',
     error500: '#f37c13',
   },
-}
+};
 
 /* https://colorhunt.co/palette/6528f7a076f9d7bbf5ede4ff */
 /* #6528F7

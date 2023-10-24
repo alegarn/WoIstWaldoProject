@@ -30,3 +30,34 @@ export async function updateUserScore({ score, pictureId }) {
   return response;
 };
 
+export async function getRankingData() {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/scores`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.get(url, config).then((response) => {
+    return { status: response.status, data: response.data };
+  })
+  .catch((error) => {
+    return { status: error.request.status, message: error.message };
+  });
+  return response;
+};
+
+export async function getUserScores({username}) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_scores?username=${username}`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.get(url, config).then((response) => {
+    return { status: response.status, data: response.data };
+  })
+  .catch((error) => {
+    return { status: error.request.status, message: error.message };
+  });
+  return response;
+};
