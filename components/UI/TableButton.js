@@ -3,7 +3,7 @@ import { GlobalStyle } from "../../constants/theme";
 
   export default function TableButton({cellData, rowData, onPress, windowHeight, windowWidth}) {
     return(
-      <View style={[styles.btn, { width: windowWidth * 0.18, height: windowHeight * 0.03}]}>
+      <View style={[styles.btn, { width: windowWidth * 0.18, height: windowHeight * 0.03, borderRadius: 5,}]}>
         <Pressable
           onPress={() => onPress(cellData, rowData)}
           style={ ({pressed}) => pressed && styles.pressed}>
@@ -18,12 +18,11 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   btn: {
-    backgroundColor: '#fff',
-    borderRadius: 5,
+    backgroundColor: GlobalStyle.color.primaryColor500,
     alignSelf: "center",
   },
   btnText: {
     textAlign: 'center',
-    color: GlobalStyle.color.tertiaryColor700,
+    color: "white",
   },
 });
