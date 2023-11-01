@@ -1,8 +1,8 @@
-import { useLayoutEffect, useState, useEffect } from "react";
-import { View, Text } from "react-native";
+import { useEffect } from "react";
+import { View } from "react-native";
 
 import LoadingOverlay from "../components/UI/LoadingOverlay";
-import { InterstitialAd, AdEventType, TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
+import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
 
 /* import { InterstitialAd, TestIds, AdEventType } from 'react-native-google-mobile-ads'; */
 /* const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxx/yyyyyyyyyyyyyy'; */
@@ -35,16 +35,12 @@ https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent
 
 export default function AdScreen({navigation, route}){
 
+  const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
 
   const showLoadingOverlay = () => {
     const message = "Loading Ads";
     return <LoadingOverlay message={message} />;
   };
-
-
-  const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
-
-  /*  */
 
   const toResultScreen = () => {
     navigation.replace("ResultScreen", {
@@ -61,7 +57,6 @@ export default function AdScreen({navigation, route}){
       listId: listId
     });
   };
-
 
   const { isLoaded, isClosed, load, show } = useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
@@ -94,31 +89,11 @@ export default function AdScreen({navigation, route}){
     keywords: ['fashion', 'clothing'],
   }); */
 
-/*   const waitSomeTime = async (myFunction) => {
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    myFunction();
-  }; */
-
-
-
-/*   useLayoutEffect(() => {
-    waitSomeTime(toResultScreen);
-  }, [route]); */
-
-
-  /*
-  useEffect(() => {
-  interstitial.load();
-  setTimeout(() => {
-    interstitial.show()
-  }, 20000);
-}, []);
- */
 
   return(
     <View>
       {isLoaded ? (
-          show()
+        show()
       )
       : (
         // No advert ready to show yet

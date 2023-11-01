@@ -70,6 +70,14 @@
           "visibility": "hidden",
           "behavior": "inset-swipe"
         }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class com.google.android.gms.internal.consent_sdk.** { *; }"
+          }
+        }
       ]
     ],
     "extra": {
@@ -80,6 +88,7 @@
   },
   "react-native-google-mobile-ads": {
     "android_app_id": "ca-app-pub-1838983009101821~6524275274",
-    "ios_app_id": "ca-app-pub-xxxxxxxx~xxxxxxxx"
+    "ios_app_id": "ca-app-pub-xxxxxxxx~xxxxxxxx",
+    "delay_app_measurement_init": true
   }
 }

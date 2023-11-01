@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useLayoutEffect } from 'react';
 
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -30,8 +30,7 @@ import { AuthContext } from './store/auth-context';
 
 import 'expo-dev-client';
 
-
-import mobileAds, { MaxAdContentRating } from 'react-native-google-mobile-ads';
+import { getUserConsent } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
@@ -40,31 +39,6 @@ NavigationBar.setPositionAsync("relative");
 NavigationBar.setVisibilityAsync("hidden");
 NavigationBar.setBehaviorAsync("inset-swipe");
 setStatusBarHidden(true, "none");
-/*  */
-
-mobileAds()
-  .setRequestConfiguration({
-    // Update all future requests suitable for parental guidance
-    maxAdContentRating: MaxAdContentRating.PG,
-
-    // Indicates that you want your content treated as child-directed for purposes of COPPA.
-    tagForChildDirectedTreatment: true,
-
-    // Indicates that you want the ad request to be handled in a
-    // manner suitable for users under the age of consent.
-    tagForUnderAgeOfConsent: true,
-
-    // An array of test device IDs to allow.
-    testDeviceIdentifiers: ['EMULATOR'],
-  })
-  .then(() => {
-    console.log("Request config successfully set!");
-    mobileAds()
-    .initialize()
-    .then(adapterStatuses => {
-      console.log("Initialization complete!");
-    });
-  });
 
 
 
@@ -203,7 +177,7 @@ function Root() {
     };
     fetchToken();
 
-  })
+  });
 
   if (isTryingLogging) {
     const message = 'Logging in...';
@@ -216,6 +190,11 @@ function Root() {
 
 
 export default function App() {
+
+  useLayoutEffect(() => {
+    getUserConsent();
+  })
+
   return (
     <>
       <StatusBar style="dark" />
