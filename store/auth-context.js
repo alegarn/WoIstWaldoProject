@@ -1,5 +1,6 @@
 import { createContext, useState } from "react";
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { emptyImageList } from "../utils/storageDatum";
 
 export const AuthContext = createContext({
   token: '',
@@ -63,6 +64,7 @@ export default function AuthContextProvider({ children }) {
     AsyncStorage.removeItem('access_token');
     AsyncStorage.removeItem('uid');
     AsyncStorage.removeItem('userId');
+    emptyImageList();
   };
 
   function saveScoreId(scoreId) {

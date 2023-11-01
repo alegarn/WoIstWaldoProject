@@ -92,7 +92,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
       return showNoMoreCard();
     };
 
-    if ((localImageList === null) && (!asyncImagesAreLoading)) {
+    if ((localImageList === null) && (!asyncImagesAreLoading) || ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList === null))) {
       console.log("localImageList === null");
       const response = await getImages(null);
 
@@ -106,16 +106,12 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         await saveLastImageUuid();
         setNoMoreCard(false);
       };
-
-
     };
 
     if (((localImageList !== null) || (localImageList?.length >= 4) && (!asyncImagesAreLoading))) {
       setImageList(localImageList);
       setNoMoreCard(false);
     };
-
-
 
   };
 
@@ -152,7 +148,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     startGuessing({item});
   });
 
-  const handleNewImagesLoading = async() => {
+  const handleNewImagesLoading = async () => {
     console.log("handleNewImagesLoading");
     console.log("asyncImagesAreLoading", asyncImagesAreLoading);
     console.log("imageList", imageList);
@@ -162,8 +158,11 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
       await saveLastImageUuid();
       setAsyncImagesAreLoading(false);
       setNoMoreCard(false);
-
     };
+/*  if ((!asyncImagesAreLoading) && (imageList == null)) {
+      const localImageList = await getLocalImages();
+
+} */
     return null;
   };
 
