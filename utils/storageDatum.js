@@ -1,10 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-
+import * as FileSystem from "expo-file-system";
 
 export async function getLocalImages() {
   console.log("getLocalImages");
   const imageList = await AsyncStorage.getItem("imageList");
-  console.log("getLocalImages imageList", imageList);
+  console.log("getLocalImages localImageList", imageList);
   return imageList ? JSON.parse(imageList) : null;
 };
 
@@ -45,7 +45,20 @@ export async function getLastImageUuid() {
   return lastImageUuid;
 };
 
+async function removeFromCache(localUri) {
+  await FileSystem.deleteAsync(localUri, { idempotent: true });
+};
+
 export async function emptyImageList() {
+  const localList = await AsyncStorage.getItem("imageList")
+  console.log("emptyImageList imageList", localList);
+
+  if ((localList !== null) && (localList !== "[]")) {
+    JSON.parse(localList).forEach( async (image) => {
+      await removeFromCache(image.imageFile)
+    });
+  };
+
   await AsyncStorage.removeItem("imageList");
 };
 

@@ -40,7 +40,7 @@ function LoginScreen() {
         const scoreId = await handleScoreId();
       } else {
           console.log(response);
-          Alert.alert('Invalid input', `${response}`);
+          Alert.alert('Invalid input, please retry', `${response}`);
           setIsAuthenticating(false);
         };
     } catch (err) {
