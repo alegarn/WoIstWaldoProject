@@ -19,3 +19,6 @@ web-build/
 .env
 
 assets/test_images/*
+
+android*
+ios*

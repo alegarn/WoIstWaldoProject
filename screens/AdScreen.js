@@ -1,5 +1,8 @@
-import { useLayoutEffect } from "react";
-import { View, Text } from "react-native";
+import { useEffect } from "react";
+import { View } from "react-native";
+
+import LoadingOverlay from "../components/UI/LoadingOverlay";
+import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
 
 /* import { InterstitialAd, TestIds, AdEventType } from 'react-native-google-mobile-ads'; */
 /* const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxx/yyyyyyyyyyyyyy'; */
@@ -28,20 +31,15 @@ https://docs.page/invertase/react-native-google-mobile-ads/displaying-ads#inters
 /* European User Consent
 https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent */
 
+
+
 export default function AdScreen({navigation, route}){
 
   const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
 
-  /*
-  the options object includes the requestNonPersonalizedAdsOnly property, which tells the AdMob network to only show non-personalized ads
-  const interstitial = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL, {
-    requestNonPersonalizedAdsOnly: true,
-    keywords: ['fashion', 'clothing'],
-  }); */
-
-  const waitSomeTime = async (myFunction) => {
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-    myFunction();
+  const showLoadingOverlay = () => {
+    const message = "Loading Ads";
+    return <LoadingOverlay message={message} />;
   };
 
   const toResultScreen = () => {
@@ -60,23 +58,47 @@ export default function AdScreen({navigation, route}){
     });
   };
 
-  useLayoutEffect(() => {
-    waitSomeTime(toResultScreen);
-  }, [route]);
+  const { isLoaded, isClosed, load, show } = useInterstitialAd(TestIds.INTERSTITIAL, {
+    requestNonPersonalizedAdsOnly: true,
+  });
+
+  useEffect(() => {
+    // Start loading the interstitial straight away
+    load();
+  }, [load]);
+
+  useEffect(() => {
+    if (isClosed) {
+      // Action after the ad is closed
+      toResultScreen();
+    };
+  }, [isClosed, navigation]);
+
+
+  // No advert ready to show yet
+  if (!isLoaded) {
+    return showLoadingOverlay();
+  };
+
 
 
   /*
-  useEffect(() => {
-  interstitial.load();
-  setTimeout(() => {
-    interstitial.show()
-  }, 20000);
-}, []);
- */
+  the options object includes the requestNonPersonalizedAdsOnly property, which tells the AdMob network to only show non-personalized ads
+  const interstitial = InterstitialAd.createForAdRequest(TestIds.INTERSTITIAL, {
+    requestNonPersonalizedAdsOnly: true,
+    keywords: ['fashion', 'clothing'],
+  }); */
+
 
   return(
     <View>
-      <Text>AdScreen, do you want want to test every 5 sec with real ads ... ?</Text>
+      {isLoaded ? (
+        show()
+      )
+      : (
+        // No advert ready to show yet
+        showLoadingOverlay()
+      )}
     </View>
   )
 };

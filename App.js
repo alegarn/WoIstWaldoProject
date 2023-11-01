@@ -1,4 +1,4 @@
-import { useContext, useState, useEffect } from 'react';
+import { useContext, useState, useEffect, useLayoutEffect } from 'react';
 
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -26,6 +26,20 @@ import RankingScreen from './screens/RankingScreen';
 
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
+
+
+import 'expo-dev-client';
+
+import { getUserConsent } from './utils/adHandling';
+
+import * as NavigationBar from "expo-navigation-bar";
+import { setStatusBarHidden } from "expo-status-bar";
+
+NavigationBar.setPositionAsync("relative");
+NavigationBar.setVisibilityAsync("hidden");
+NavigationBar.setBehaviorAsync("inset-swipe");
+setStatusBarHidden(true, "none");
+
 
 
 
@@ -163,7 +177,7 @@ function Root() {
     };
     fetchToken();
 
-  })
+  });
 
   if (isTryingLogging) {
     const message = 'Logging in...';
@@ -176,6 +190,11 @@ function Root() {
 
 
 export default function App() {
+
+  useLayoutEffect(() => {
+    getUserConsent();
+  })
+
   return (
     <>
       <StatusBar style="dark" />
