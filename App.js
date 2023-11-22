@@ -169,7 +169,7 @@ function Root() {
 
   useEffect(() => {
     async function fetchToken() {
-      const storedToken = await AsyncStorage.getItem('token')
+      const storedToken = await SecureStore.getItemAsync('token')
       if (storedToken) {
         authContext.tokenAuthentication(storedToken);
       }

@@ -1,5 +1,6 @@
 import { createContext, useState } from "react";
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
+
 import { emptyImageList } from "../utils/storageDatum";
 
 export const AuthContext = createContext({
@@ -32,14 +33,14 @@ export default function AuthContextProvider({ children }) {
     setAuthToken(token);
   };
 
-  function authenticate({token, client, expiry, access_token, userId, uid}) {
+  async function authenticate({token, client, expiry, access_token, userId, uid}) {
     setAuthToken(token);
-    AsyncStorage.setItem('token', token);
-    AsyncStorage.setItem('client', client);
-    AsyncStorage.setItem('expiry', expiry);
-    AsyncStorage.setItem('access_token', access_token);
-    AsyncStorage.setItem('userId', userId);
-    AsyncStorage.setItem('uid', uid);
+    await SecureStore.setItemAsync('token', token);
+    await SecureStore.setItemAsync('client', client);
+    await SecureStore.setItemAsync('expiry', expiry);
+    await SecureStore.setItemAsync('access_token', access_token);
+    await SecureStore.setItemAsync('uid', uid);
+    await SecureStore.setItemAsync('userId', userId);
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
@@ -49,7 +50,7 @@ export default function AuthContextProvider({ children }) {
     console.log("context", token, expiry, access_token, userId, client, uid);
   };
 
-  function logout() {
+  async function logout() {
     setIsAuthenticated(false);
     setAuthToken(null);
     setClient('');
@@ -58,18 +59,18 @@ export default function AuthContextProvider({ children }) {
     setAccess_token('');
     setUserId('');
     setScoreId('');
-    AsyncStorage.removeItem('token');
-    AsyncStorage.removeItem('client');
-    AsyncStorage.removeItem('expiry');
-    AsyncStorage.removeItem('access_token');
-    AsyncStorage.removeItem('uid');
-    AsyncStorage.removeItem('userId');
+    await SecureStore.deleteItemAsync('token');
+    await SecureStore.deleteItemAsync('client');
+    await SecureStore.deleteItemAsync('expiry');
+    await SecureStore.deleteItemAsync('access_token');
+    await SecureStore.deleteItemAsync('uid');
+    await SecureStore.deleteItemAsync('userId');
     emptyImageList();
   };
 
-  function saveScoreId(scoreId) {
+  async function saveScoreId(scoreId) {
     setScoreId(scoreId);
-    AsyncStorage.setItem('scoreId', scoreId);
+    await SecureStore.setItemAsync('scoreId', scoreId);
   };
 
   const value = {

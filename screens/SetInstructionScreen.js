@@ -80,7 +80,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     const imageInfos = {
       uri: uri,
-      userId: await AsyncStorage.getItem("userId"),
+      userId: await SecureStore.getItemAsync("userId"),
       fileExtension: fileExtension,
       imageHeight: imageHeight,
       imageWidth: imageWidth,

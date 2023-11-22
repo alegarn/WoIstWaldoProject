@@ -5,7 +5,7 @@
 import * as FileSystem from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
 import { getUploadUrl, saveImageInfos, saveImageToAws } from "./imagesRequests";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
 
 
 async function handleGetUploadUrl({context}) {
@@ -33,7 +33,7 @@ const exportImage = async ({url, filename, uri, fileExtension, contentLength, us
 
 const exportPictureData = async ({ imagesInfos, context }) => {
   const saveImageResponse = saveImageInfos({
-    userId: await AsyncStorage.getItem("userId"),
+    userId: await SecureStore.getItemAsync("userId"),
     imagesInfos: {
       user_id: imagesInfos.userId,
       name: imagesInfos.name,
@@ -70,7 +70,7 @@ export async function imageUploader({ imageInfos, context }) {
     return uploadUrlData;
   };
 
-  const userId = await AsyncStorage.getItem("userId");
+  const userId = await SecureStore.getItemAsync("userId");
 
   const exportImageData = await exportImage({
     url: uploadUrlData.data.url,
