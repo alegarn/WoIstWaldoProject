@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
 
@@ -9,6 +9,8 @@ import { getImages } from '../../utils/imagesRequests';
 import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid } from '../../utils/storageDatum';
 
 import * as FileSystem from 'expo-file-system';
+import { AuthContext } from '../../store/auth-context';
+import { errorLog } from '../../utils/errorLog';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, startGuessing }) {
@@ -18,7 +20,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   const [noMoreCard, setNoMoreCard] = useState(true);
   const [swipeDirection, setSwipeDirection] = useState('--');
 
-
+  const context = useContext(AuthContext);
 
 
   async function setImageListAsync(localImageList) {
@@ -34,7 +36,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   const handleData = async (data) => {
     console.log("handleData");
 
-    const lastId = await getLastImageId();
+    const lastId = await getLastImageId(context);
     const updatedImageList = data?.map((image, index) => ({
       ...image,
       listId: lastId + index + 1,
@@ -42,21 +44,24 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
     if (imageList === null) {
       console.log("updatedImageList handleData imageList null");
-      await storeImageList(updatedImageList);
+      await storeImageList(updatedImageList, context);
       setImageList(updatedImageList);
     };
 
     if (imageList !== null) {
       console.log("updatedImageList handleData imageList !== null");
-      const newImageList = await updateImageList(updatedImageList);
+      const newImageList = await updateImageList(updatedImageList, context);
       setImageList(newImageList);
     };
   };
 
-  async function loadNewImages() {
+  const loadNewImages = async () => {
     console.log("loadNewImages");
-    const lastImageUuid = await getLastImageUuid();
-    const response = await getImages(lastImageUuid);
+    const lastImageUuid = await getLastImageUuid(context);
+    /*  */
+    const pictureId = lastImageUuid;
+    /*  */
+    const response = await getImages({ pictureId, context });
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
     };
@@ -73,7 +78,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     console.log("handleGetImagesList");
 
     //emptyImageList();
-    const localImageList = await getLocalImages();
+    const localImageList = await getLocalImages(context);
 
     console.log("localImageList", localImageList?.length);
     // if localImageList [] or null, get Images() / show loadingOverlay
@@ -94,7 +99,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
 
     if ((localImageList === null) && (!asyncImagesAreLoading) || ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList === null))) {
       console.log("localImageList === null");
-      const response = await getImages(null);
+      const response = await getImages({pictureId: null, context});
 
       if (response.isError === true) {
         Alert.alert(response.title, response.message);
@@ -103,7 +108,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
       if (response.isError === false) {
         console.log("response.isError", response.isError);
         await handleData(response.images);
-        await saveLastImageUuid();
+        await saveLastImageUuid(context);
         setNoMoreCard(false);
       };
     };
@@ -122,8 +127,12 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
     // delete image
-    await removeImageFromList(id);
-    await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
+    try {
+      await removeImageFromList(id, context);
+      await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
+    } catch (error) {
+      errorLog({ functionName: "removeCard", error: error.message });
+    };
     setImageList(updatedImageList);
 
     console.log("updatedImageList removeCard", updatedImageList);
@@ -149,13 +158,13 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   });
 
   const handleNewImagesLoading = async () => {
-    console.log("handleNewImagesLoading");
-    console.log("asyncImagesAreLoading", asyncImagesAreLoading);
-    console.log("imageList", imageList);
+    //console.log("handleNewImagesLoading");
+    //console.log("asyncImagesAreLoading", asyncImagesAreLoading);
+    //console.log("imageList", imageList);
     if ((!asyncImagesAreLoading) && (imageList !== null) && (imageList?.length < 4)) {
-      const localImageList = await getLocalImages();
-      await loadNewImages(localImageList);
-      await saveLastImageUuid();
+      // const localImageList = await getLocalImages(context);
+      await loadNewImages();
+      await saveLastImageUuid(context);
       setAsyncImagesAreLoading(false);
       setNoMoreCard(false);
     };

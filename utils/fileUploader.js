@@ -5,12 +5,15 @@
 import * as FileSystem from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
 import { getUploadUrl, saveImageInfos, saveImageToAws } from "./imagesRequests";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SecureStore from 'expo-secure-store';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from "react-native";
+import { errorLog } from "./errorLog";
 
 
 async function handleGetUploadUrl({context}) {
 
-  const response = await getUploadUrl();
+  const response = await getUploadUrl(context);
 
   return { status: response.status, title: response.title, message: response.message, data: response.data };
 };
@@ -32,8 +35,18 @@ const exportImage = async ({url, filename, uri, fileExtension, contentLength, us
 };
 
 const exportPictureData = async ({ imagesInfos, context }) => {
+  /*  */
+  let userId = "";
+
+  try {
+    userId = await SecureStore.getItemAsync("userId")
+  } catch (error) {
+    errorLog({ functionName: "exportPictureData SecureStore.getItemAsync", error: error.message });
+    userId = context.userId;
+  };
+
   const saveImageResponse = saveImageInfos({
-    userId: await AsyncStorage.getItem("userId"),
+    userId: userId,
     imagesInfos: {
       user_id: imagesInfos.userId,
       name: imagesInfos.name,
@@ -58,6 +71,7 @@ const exportPictureData = async ({ imagesInfos, context }) => {
   });
 
   return saveImageResponse
+  /*  */
 };
 
 
@@ -70,7 +84,14 @@ export async function imageUploader({ imageInfos, context }) {
     return uploadUrlData;
   };
 
-  const userId = await AsyncStorage.getItem("userId");
+  let userId = "";
+
+  try {
+    userId = await SecureStore.getItemAsync("userId");
+  } catch (error) {
+    errorLog({ functionName: "imageUploader SecureStore.getItemAsync", error: error.message });
+    userId = context.userId;
+  };
 
   const exportImageData = await exportImage({
     url: uploadUrlData.data.url,
@@ -102,6 +123,7 @@ export async function imageUploader({ imageInfos, context }) {
     },
     context: context
   });
+
   console.log("imageInfosSaved", imageInfosSaved);
   if (imageInfosSaved.status !== 200) {
     return imageInfosSaved;

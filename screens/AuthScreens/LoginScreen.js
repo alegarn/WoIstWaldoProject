@@ -25,12 +25,12 @@ function LoginScreen() {
   };
 
   const handleScoreId = async () => {
-    const scoreId = await getScoreId();
+    const scoreId = await getScoreId(authContext);
     scoreId.status === 200 && authContext.saveScoreId(scoreId.data.score_id) && console.log("scoreId saved!");
     scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
   };
 
-  async function signInHandler({email, password}) {
+  const signInHandler = async({email, password}) => {
     setIsAuthenticating(true);
     try {
       const response = await login({email, password});

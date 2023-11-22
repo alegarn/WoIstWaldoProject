@@ -1,14 +1,32 @@
 import axios from 'axios';
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
+import { errorLog } from './errorLog';
 
-export async function getBackendHeaders() {
-  const token = await AsyncStorage.getItem("token");
-  const uid = await AsyncStorage.getItem("uid");
-  const expiry = await AsyncStorage.getItem("expiry");
-  const access_token = await AsyncStorage.getItem("access_token");
-  const client = await AsyncStorage.getItem("client");
-  const userId = await AsyncStorage.getItem("userId");
-  return { token, uid, expiry, access_token, client, userId };
+export async function getBackendHeaders(context) {
+  /*  */
+  try {
+    const token = await SecureStore.getItemAsync("token");
+    const uid = await SecureStore.getItemAsync("uid");
+    const expiry = await SecureStore.getItemAsync("expiry");
+    const access_token = await SecureStore.getItemAsync("access_token");
+    const client = await SecureStore.getItemAsync("client");
+    const userId = await SecureStore.getItemAsync("userId");
+    const scoreId = await SecureStore.getItemAsync("scoreId");
+    return { token, uid, expiry, access_token, client, userId, scoreId };
+  } catch (error) {
+    errorLog({ functionName: "getBackendHeaders SecureStore.getItemAsync", error: error.message });
+    const token = context.token;
+    const uid = context.uid;
+    const expiry = context.expiry;
+    const access_token = context.access_token;
+    const client = context.client;
+    const userId = context.userId;
+    const scoreId = context.scoreId;
+    return { token, uid, expiry, access_token, client, userId, scoreId };
+  };
+  /*  */
 };
 
 export function setHeaders({ token, uid, expiry, access_token, client }) {
@@ -49,8 +67,8 @@ async function authenticate({email, password}) {
   return response;
 };
 
-export async function getScoreId() {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+export async function getScoreId(context) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_score_id`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
@@ -60,7 +78,6 @@ export async function getScoreId() {
     return {status: response.status, data: response.data };
   }).catch((error) => {
     console.log("error getScoreId", error);
-
     return { status: error.request.status, data: error};
   });
 

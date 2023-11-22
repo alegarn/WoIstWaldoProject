@@ -25,8 +25,8 @@ function SignupScreen({navigation}) {
   };
 
 
-  const handleScoreId = async () => {
-    const scoreId = await getScoreId();
+  const handleScoreId = async (authContext) => {
+    const scoreId = await getScoreId(authContext);
     scoreId.status === 200 && authContext.saveScoreId(scoreId.data.score_id) && console.log("scoreId saved!");
     scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem", "Try to reconnect");
   };
@@ -49,7 +49,7 @@ function SignupScreen({navigation}) {
           if (authentification.status === 200) {
             console.log("Authentication successful");
             await handleAuthDataSaving(authentification);
-            await handleScoreId();
+            await handleScoreId(authContext);
           };
           break;
         case 422:

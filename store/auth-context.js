@@ -1,6 +1,10 @@
 import { createContext, useState } from "react";
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
 import { emptyImageList } from "../utils/storageDatum";
+import { Alert } from "react-native";
+import { errorLog } from "../utils/errorLog";
 
 export const AuthContext = createContext({
   token: '',
@@ -11,10 +15,13 @@ export const AuthContext = createContext({
   userId: '',
   scoreId: '',
   IsAuthenticated: false,
+  imageList: '',
+  lastImageUuid: '',
   authenticate: () => {},
   logout: () => {},
   tokenAuthentication: () => {},
-  saveScoreId: () => {}
+  saveScoreId: () => {},
+  logs: "",
 });
 
 export default function AuthContextProvider({ children }) {
@@ -28,48 +35,74 @@ export default function AuthContextProvider({ children }) {
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
 
+  const [imageList, setImageList] = useState('');
+  const [lastImageUuid, setLastImageUuid] = useState('');
+
+
   function tokenAuthentication(token) {
     setAuthToken(token);
   };
 
-  function authenticate({token, client, expiry, access_token, userId, uid}) {
+  async function authenticate({token, client, expiry, access_token, userId, uid}) {
+    try {
+      await SecureStore.setItemAsync('token', token);
+      await SecureStore.setItemAsync('client', client);
+      await SecureStore.setItemAsync('expiry', expiry);
+      await SecureStore.setItemAsync('access_token', access_token);
+      await SecureStore.setItemAsync('userId', userId);
+      await SecureStore.setItemAsync('uid', uid);
+    } catch (error) {
+      errorLog({ functionName: "/store/auth-context.js authenticate", error: error.message});
+    };
     setAuthToken(token);
-    AsyncStorage.setItem('token', token);
-    AsyncStorage.setItem('client', client);
-    AsyncStorage.setItem('expiry', expiry);
-    AsyncStorage.setItem('access_token', access_token);
-    AsyncStorage.setItem('userId', userId);
-    AsyncStorage.setItem('uid', uid);
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
-    console.log("context", token, expiry, access_token, userId, client, uid);
+    //console.log("context", token, expiry, access_token, userId, client, uid);
   };
 
-  function logout() {
+  const logout = async () => {
     setIsAuthenticated(false);
-    setAuthToken(null);
+    setAuthToken('');
     setClient('');
     setUid('');
     setExpiry('');
     setAccess_token('');
     setUserId('');
     setScoreId('');
-    AsyncStorage.removeItem('token');
-    AsyncStorage.removeItem('client');
-    AsyncStorage.removeItem('expiry');
-    AsyncStorage.removeItem('access_token');
-    AsyncStorage.removeItem('uid');
-    AsyncStorage.removeItem('userId');
-    emptyImageList();
+    try {
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('client');
+      await SecureStore.deleteItemAsync('expiry');
+      await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('uid');
+      await SecureStore.deleteItemAsync('userId');
+      await SecureStore.deleteItemAsync('scoreId');
+    } catch (error) {
+      Alert.alert("Error logout removeItem", error.message);
+      errorLog({ functionName: "/store/auth-context.js logout", error: error.message });
+    };
+    try {
+      await emptyImageList(imageList);
+    } catch (error) {
+      errorLog({ functionName: "/store/auth-context.js logout emptyImageList", error: error.message });
+    };
+    setImageList('');
+    setLastImageUuid('');
+    console.log("logout", "authToken", authToken, client, expiry, access_token, userId, client, uid);
+    return true;
   };
 
-  function saveScoreId(scoreId) {
+  async function saveScoreId(scoreId) {
     setScoreId(scoreId);
-    AsyncStorage.setItem('scoreId', scoreId);
+    try {
+      await SecureStore.setItemAsync('scoreId', scoreId);
+    } catch (error) {
+      errorLog({ functionName: "/store/auth-context.js saveScoreId", error: error.message });
+    };
   };
 
   const value = {
@@ -84,8 +117,11 @@ export default function AuthContextProvider({ children }) {
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
-    saveScoreId: saveScoreId
+    saveScoreId: saveScoreId,
+    imageList: imageList,
+    lastImageUuid: lastImageUuid,
   };
+
   return (
     <AuthContext.Provider value={value}>
       {children}

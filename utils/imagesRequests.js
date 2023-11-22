@@ -24,9 +24,9 @@ function errorType(status) {
 };
 
 
-export async function getUploadUrl() {
+export async function getUploadUrl(context) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/aws_requests/get_secure_upload_url`;
-  const { token, uid, expiry, access_token, client } = await getBackendHeaders();
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
@@ -153,7 +153,7 @@ async function handleImagesDownload(image) {
 };
 
 
-export async function getImages(pictureId) {
+export async function getImages({ pictureId, context }) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
 

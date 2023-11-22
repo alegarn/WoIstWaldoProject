@@ -53,8 +53,9 @@ export async function getUserConsent () {
    */
 
   const consentInfo = await AdsConsent.requestInfoUpdate({
-    debugGeography: AdsConsentDebugGeography.EEA,
-    testDeviceIdentifiers: ['TEST-DEVICE-HASHED-ID'],
+    debugGeography: AdsConsentDebugGeography.NOT_EEA,
+    //debugGeography: AdsConsentDebugGeography.EEA,
+    //testDeviceIdentifiers: ['TEST-DEVICE-HASHED-ID'],
   });
 
   const { status } = await AdsConsent.loadAndShowConsentFormIfRequired();

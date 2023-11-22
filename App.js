@@ -1,9 +1,11 @@
+import { registerRootComponent } from 'expo';
 import { useContext, useState, useEffect, useLayoutEffect } from 'react';
 
-import { StatusBar } from 'react-native';
+import { Alert, StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
@@ -34,6 +36,8 @@ import { getUserConsent } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
+import { errorLog } from './utils/errorLog';
+import LogScreen from './screens/LogScreen';
 
 NavigationBar.setPositionAsync("relative");
 NavigationBar.setVisibilityAsync("hidden");
@@ -147,6 +151,14 @@ function AuthenticatedStack() {
             presentation: "modal",
             headerShown: true
           }} />
+        <Stack.Screen
+          name="LogScreen"
+          component={LogScreen}
+          options={{
+            title: "Log",
+            presentation: "modal",
+            headerShown: true
+          }} />
       </Stack.Navigator>
     </>
   );
@@ -169,10 +181,20 @@ function Root() {
 
   useEffect(() => {
     async function fetchToken() {
-      const storedToken = await AsyncStorage.getItem('token')
+
+      /*  */
+      let storedToken = "";
+      try {
+        storedToken = await SecureStore.getItemAsync('token');
+      } catch (error) {
+        errorLog({ functionName: "fetchToken", error: error.message});
+        storedToken = authContext.token;
+      };
+      /*  */
+
       if (storedToken) {
         authContext.tokenAuthentication(storedToken);
-      }
+      };
       setIsTryingLogging(false);
     };
     fetchToken();
@@ -204,3 +226,5 @@ export default function App() {
     </>
   );
 };
+
+registerRootComponent(App);

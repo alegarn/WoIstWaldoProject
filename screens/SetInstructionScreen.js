@@ -7,6 +7,7 @@ import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
+import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
@@ -17,6 +18,7 @@ import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
+import { errorLog } from '../utils/errorLog';
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
@@ -36,7 +38,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const target = route.params?.target;
   const imageDimensionStyle = { width: screenWidth, height: screenHeight }
 
+  /*  */
   const context = useContext(AuthContext);
+  /*  */
 
   const getPermissions = async () => {
 
@@ -78,9 +82,20 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
+    /*  */
+
+    let userId = "";
+    try {
+      userId = await SecureStore.getItemAsync("userId")
+    } catch (error) {
+      errorLog({ functionName: "handleConfirmModal", error: error.message });
+      userId = context.userId;
+    };
+    /*  */
+
     const imageInfos = {
       uri: uri,
-      userId: await AsyncStorage.getItem("userId"),
+      userId: userId,
       fileExtension: fileExtension,
       imageHeight: imageHeight,
       imageWidth: imageWidth,

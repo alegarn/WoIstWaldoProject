@@ -35,10 +35,12 @@ https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent
 
 export default function AdScreen({navigation, route}){
 
+  const testId = "ca-app-pub-3940256099942544/1033173712";
+
   const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
 
   const showLoadingOverlay = () => {
-    const message = "Loading Ads";
+    const message = "Loading Ads (go after 5 secs)";
     return <LoadingOverlay message={message} />;
   };
 
@@ -58,14 +60,16 @@ export default function AdScreen({navigation, route}){
     });
   };
 
-  const { isLoaded, isClosed, load, show } = useInterstitialAd(TestIds.INTERSTITIAL, {
+  const { isLoaded, isClosed, load, show } = useInterstitialAd(testId, {
     requestNonPersonalizedAdsOnly: true,
   });
 
   useEffect(() => {
     // Start loading the interstitial straight away
-    load();
-  }, [load]);
+    //load();
+    setTimeout(() => {  toResultScreen(); }, 5000);
+
+  }, [/* load */]);
 
   useEffect(() => {
     if (isClosed) {
@@ -75,10 +79,10 @@ export default function AdScreen({navigation, route}){
   }, [isClosed, navigation]);
 
 
-  // No advert ready to show yet
+/*   // No advert ready to show yet
   if (!isLoaded) {
     return showLoadingOverlay();
-  };
+  }; */
 
 
 
