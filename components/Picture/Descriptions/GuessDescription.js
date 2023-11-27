@@ -1,16 +1,11 @@
 import { View, Text, StyleSheet } from 'react-native';
 import IconButton from '../../UI/IconButton';
 
-
-
-
-
-
 export default function GuessDescription({ item, showFullDescription, toggleDescription, style }) {
 
   return (
     <View style={[styles.descriptionArea, style]}>
-      {item.description.length > 3 && (
+      {(item?.description?.length > 3) && (
           <IconButton
             icon= {showFullDescription ? "chevron-down" : "chevron-up"}
             color="white"
@@ -20,7 +15,7 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
       <Text
         style={styles.cardDescriptionStyle}
         numberOfLines={showFullDescription ? undefined : 3}>
-        {item.description}
+        {item?.description ? item?.description : "No description"}
       </Text>
     </View>
   )

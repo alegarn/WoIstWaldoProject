@@ -19,18 +19,6 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   const [swipeDirection, setSwipeDirection] = useState('--');
 
 
-
-
-  async function setImageListAsync(localImageList) {
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        setImageList(localImageList);
-        resolve();
-      }, 1000);
-    });
-  };
-
-
   const handleData = async (data) => {
     console.log("handleData");
 
@@ -76,20 +64,29 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     const localImageList = await getLocalImages();
 
     // if localImageList [] or null, get Images() / show loadingOverlay
+    if (localImageList !== null) {
 
-    if ((localImageList !== null) && (localImageList?.length < 4) && (!asyncImagesAreLoading)) {
-      handleNewImagesLoading();
+      //swiping
+      if ((localImageList?.length < 4) && (!asyncImagesAreLoading)) {
+        await handleNewImagesLoading();
+      };
+
+      // swiping after 0 images (got internet problems)
+      if ((localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList !== null)) {
+        await handleNewImagesLoading();
+      };
+
+      // lauching / swiping and no more cards
+      if ((localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList?.length === 0)) {
+        const cardsLeft = await handleNewImagesLoading();
+        if (cardsLeft === false) {
+          return showNoMoreCard();
+        };
+      };
     };
 
-    if ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading)) {
-      handleNewImagesLoading();
-    };
-
-    if ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList?.length === 0)) {
-      return showNoMoreCard();
-    };
-
-    if ((localImageList === null) && (!asyncImagesAreLoading) || ((localImageList !== null) && (localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList === null))) {
+    // get images on first launching after 0 images
+    if ((localImageList === null) && (!asyncImagesAreLoading) || ((localImageList?.length === 0) && (!asyncImagesAreLoading) && (imageList === null))) {
       console.log("localImageList === null");
       const response = await getImages(null);
 
@@ -126,7 +123,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     console.log("updatedImageList removeCard", updatedImageList);
 
     if ((updatedImageList.length < 4) && (!asyncImagesAreLoading)) {
-      handleNewImagesLoading();
+      await handleNewImagesLoading();
       if (updateImageList.length === 0) {
         setNoMoreCard(true);
       };
@@ -139,7 +136,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 
-  const gesture = Gesture.Pan()
+  const gesture = Gesture.LongPress()
     .onEnd(() => {
     const item = imageList.slice(-1)[0];
     startGuessing({item});
@@ -155,12 +152,13 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
       await saveLastImageUuid();
       setAsyncImagesAreLoading(false);
       setNoMoreCard(false);
+      return true
     };
 /*  if ((!asyncImagesAreLoading) && (imageList == null)) {
       const localImageList = await getLocalImages();
 
 } */
-    return null;
+    return false;
   };
 
   useLayoutEffect(() => {
@@ -168,7 +166,9 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   }, []);
 
   useEffect(() => {
-    handleNewImagesLoading();
+    if (!asyncImagesAreLoading) {
+      handleNewImagesLoading();
+    };
   }, [asyncImagesAreLoading])
 
   const showIsLoading = () => {
@@ -212,7 +212,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         showNoMoreCard()
       ) : (
         <>
-          <Text style={styles.titleText}>Zoom to Play or Swipe</Text>
+          <Text style={styles.titleText}>Press Longely to Play or Swipe</Text>
           <GestureHandlerRootView style={styles.container}>
             {noMoreCard ?
               showIsLoading() :

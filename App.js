@@ -3,7 +3,6 @@ import { useContext, useState, useEffect, useLayoutEffect } from 'react';
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 
 import { GlobalStyle } from './constants/theme';
@@ -193,7 +192,9 @@ function Root() {
 export default function App() {
 
   useLayoutEffect(() => {
-    getUserConsent();
+    if (__DEV__) {
+      //getUserConsent();
+    };
   })
 
   return (

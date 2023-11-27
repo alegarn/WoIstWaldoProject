@@ -41,7 +41,7 @@ async function adConfig() {
 };
 
 
-export async function getUserConsent () {
+export async function getUserConsent() {
   const config = await adConfig();
   console.log("config", config);
 
