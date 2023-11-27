@@ -75,10 +75,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     //emptyImageList();
     const localImageList = await getLocalImages();
 
-    console.log("localImageList", localImageList?.length);
     // if localImageList [] or null, get Images() / show loadingOverlay
-
-
 
     if ((localImageList !== null) && (localImageList?.length < 4) && (!asyncImagesAreLoading)) {
       handleNewImagesLoading();

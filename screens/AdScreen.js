@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import LoadingOverlay from "../components/UI/LoadingOverlay";
@@ -35,6 +35,9 @@ https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent
 
 export default function AdScreen({navigation, route}){
 
+  const [showOverlay, setShowOverlay] = useState(false);
+
+
   const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
 
   const showLoadingOverlay = () => {
@@ -58,17 +61,26 @@ export default function AdScreen({navigation, route}){
     });
   };
 
-  const { isLoaded, isClosed, load, show } = useInterstitialAd(TestIds.INTERSTITIAL, {
+  const { isLoaded, isClosed, load, show } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
-  });
+  }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+
+  const showProdLoadingOverlay = () => {
+    setShowOverlay(true);
+
+    setTimeout(() => {
+      setShowOverlay(false);
+      toResultScreen();
+    }, 5000);
+  };
 
   useEffect(() => {
     // Start loading the interstitial straight away
-    load();
+    __DEV__ ? load() : showProdLoadingOverlay();
   }, [load]);
 
   useEffect(() => {
-    if (isClosed) {
+    if (isClosed && __DEV__) {
       // Action after the ad is closed
       toResultScreen();
     };
@@ -76,7 +88,7 @@ export default function AdScreen({navigation, route}){
 
 
   // No advert ready to show yet
-  if (!isLoaded) {
+  if (!isLoaded && __DEV__) {
     return showLoadingOverlay();
   };
 
@@ -92,12 +104,16 @@ export default function AdScreen({navigation, route}){
 
   return(
     <View>
-      {isLoaded ? (
-        show()
-      )
+      {__DEV__ ?(
+        isLoaded ? (
+          show()
+        )
+        : (
+          // No advert ready to show yet
+          showLoadingOverlay()
+        ))
       : (
-        // No advert ready to show yet
-        showLoadingOverlay()
+        showOverlay && <LoadingOverlay message={"Loading Ads... Are you a test user? Sorry, just wait 5 seconds :3 "}  />
       )}
     </View>
   )
