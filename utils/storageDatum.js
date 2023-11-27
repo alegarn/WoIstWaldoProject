@@ -53,6 +53,8 @@ export async function emptyImageList() {
   const localList = await AsyncStorage.getItem("imageList")
   console.log("emptyImageList imageList", localList);
 
+  console.log("if (localList !== null) && (localList !== '[]')", (localList !== null) && (localList !== "[]"));
+
   if ((localList !== null) && (localList !== "[]")) {
     JSON.parse(localList).forEach( async (image) => {
       await removeFromCache(image.imageFile)

@@ -26,7 +26,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           swipeDirection = 'Right';
         } else if (gestureState.dx < -screenWidth + 250) {
           swipeDirection = 'Left';
-        }
+        };
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (
