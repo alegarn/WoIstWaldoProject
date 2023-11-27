@@ -21,7 +21,10 @@
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos.",
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos."
       },
-      "bundleIdentifier": "com.alegarn.WoIstWaldoProject"
+      "bundleIdentifier": "com.alegarn.WoIstWaldoProject",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {

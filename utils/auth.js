@@ -1,13 +1,13 @@
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 
 export async function getBackendHeaders() {
-  const token = await AsyncStorage.getItem("token");
-  const uid = await AsyncStorage.getItem("uid");
-  const expiry = await AsyncStorage.getItem("expiry");
-  const access_token = await AsyncStorage.getItem("access_token");
-  const client = await AsyncStorage.getItem("client");
-  const userId = await AsyncStorage.getItem("userId");
+  const token = await SecureStore.getItemAsync("token");
+  const uid = await SecureStore.getItemAsync("uid");
+  const expiry = await SecureStore.getItemAsync("expiry");
+  const access_token = await SecureStore.getItemAsync("access_token");
+  const client = await SecureStore.getItemAsync("client");
+  const userId = await SecureStore.getItemAsync("userId");
   return { token, uid, expiry, access_token, client, userId };
 };
 
