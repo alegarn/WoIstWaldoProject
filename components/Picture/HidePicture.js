@@ -49,7 +49,10 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
         handleIconPress={handleIconPress}
         showModal={showModal}
         handleConfirm={handleConfirm}
-        onCancel={onCancel} />
+        onCancel={onCancel}
+        imageHeight={imageHeight}
+        imageWidth={imageWidth}
+        />
     );
   }
 
