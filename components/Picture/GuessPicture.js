@@ -1,21 +1,27 @@
 import { useState, useEffect, useLayoutEffect } from 'react';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress } from "../../utils/targetLocation";
+import { handlePicturePress, determineImageCorners } from "../../utils/targetLocation";
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
+import { setImageDimensions } from '../../utils/imageDimensions';
 
-export default function GuessPicture({ imageFile, description, imageIsPortrait, hiddenLocation, screenDimensions, toAdScreen }) {
 
-  const uri = imageFile;
-  const screenWidth = screenDimensions.width;
-  const screenHeight = screenDimensions.height;
+export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen }) {
 
   const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
+
+  const uri = imageFile;
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
+  const isPortrait = imageIsPortrait;
+  const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
+  const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
@@ -31,10 +37,14 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   const handlePress = (event) => {
+    const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
+
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight});
-    setTouchLocation(location);
+    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle, topLeft});
+    if (location && target) {
+    setTouchLocation(location)
     setTarget(target);
+    };
   };
 
   const handleIconPress = () => {
@@ -59,16 +69,17 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         touchLocation={touchLocation}
-        hiddenLocation={hiddenLocation}
+        //hiddenLocation={hiddenLocation}
         handlePress={handlePress}
         target={target}
         handleIconPress={handleIconPress}
         showModal={showModal}
         handleConfirm={handleConfirm}
         onCancel={onCancel}
+        imageDimensionStyle={imageDimensionStyle}
         />
     );
-  }
+  };
 
   if (showFilter) {
     return(

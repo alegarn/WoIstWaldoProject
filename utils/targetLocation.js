@@ -1,10 +1,37 @@
 function determineLocation({locationX, locationY, newImageWidth, newImageHeight}) {
   const touchX = (locationX / newImageWidth).toFixed(2);
   const touchY = (locationY / newImageHeight).toFixed(2);
-  const location = { x: touchX, y: touchY };
-  return location;
+  return { x: touchX, y: touchY };
 };
 
+export function determineImageCorners({ maxImageHeight, maxImageWidth, screenWidth, screenHeight }) {
+  const centerX = screenWidth / 2;
+  const centerY = screenHeight / 2;
+
+  const imageHalfWidth = maxImageWidth / 2;
+  const imageHalfHeight = maxImageHeight / 2;
+
+  const topLeft = {
+    x: centerX - imageHalfWidth,
+    y: centerY - imageHalfHeight,
+  };
+
+  /* const topRight = {
+    x: centerX + imageHalfWidth,
+    y: centerY - imageHalfHeight,
+  };
+
+  const bottomLeft = {
+    x: centerX - imageHalfWidth,
+    y: centerY + imageHalfHeight,
+  };
+
+  const bottomRight = {
+    x: centerX + imageHalfWidth,
+    y: centerY + imageHalfHeight,
+  }; */
+  return { topLeft: topLeft, topRight: topRight, bottomLeft: bottomLeft, bottomRight: bottomRight };
+};
 
 function handleTargetSize(screenWidth, screenHeight) {
   // size = mode (0.1, 0.05, 0.01)
@@ -16,12 +43,6 @@ function setTarget({ locationX, locationY, targetSize }) {
     position: 'absolute',
     width: targetSize,
     height: targetSize,
-    /*  */
-/*     borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: "white",
- */
-    /*  */
     left: locationX - targetSize / 2, // Adjusted to center the icon horizontally
     top: locationY - targetSize / 2, // Adjusted to center the icon vertically
   };
@@ -30,15 +51,11 @@ function setTarget({ locationX, locationY, targetSize }) {
   return target;
 };
 
-export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
+export const handlePicturePress = ({event, screenHeight, screenWidth, imageDimensionStyle, topLeft}) => {
   const { locationX, locationY } = event.nativeEvent;
-  const newImageWidth = screenWidth;
-  const newImageHeight = screenHeight;
 
-
-  console.log("newImageWidth", newImageWidth);
-  console.log("newImageHeight", newImageHeight);
-
+  const newImageWidth = imageDimensionStyle.width;
+  const newImageHeight = imageDimensionStyle.height;
 
   // Check if the touch event is within the image boundaries
   if (
@@ -49,14 +66,13 @@ export const handlePicturePress = ({event, screenHeight, screenWidth}) => {
   ) {
 
     const location = determineLocation({ locationX, locationY, newImageWidth, newImageHeight });
-    const targetSize = handleTargetSize(newImageWidth, newImageHeight);
+    const targetSize = handleTargetSize(screenWidth, screenHeight);
     const target = setTarget({ locationX, locationY, targetSize });
 
-    console.log("location", location);
     return ({ location, target });
 
-    };
-  return null;
+  };
+  return ({ location: null, target: null });
 };
 
 function determineCircleRadius(targetSize){
@@ -83,9 +99,6 @@ function determineIsOnTarget({hiddenTrgtAbsLoc, guessTrgtAbsLoc, circleRadius}) 
   // Define a threshold for determining if the guess is on target
   const threshold = circleRadius*2; // Adjust this value as needed
 
-  console.log("circleRadius", circleRadius);
-  console.log("max", circleRadius*2);
-  console.log("distance", distance);
   // Check if the distance is within the threshold
   if (distance <= threshold) {
     return true; // Guess is on target

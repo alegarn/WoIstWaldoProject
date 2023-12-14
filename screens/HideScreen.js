@@ -2,14 +2,13 @@ import { Dimensions } from 'react-native';
 import HidePicture from '../components/Picture/HidePicture';
 
 export default function HideScreen({ navigation, route }) {
-
-  console.log("HideScreen route.params", route.params);
   const uri = route.params?.uri;
+  let screenDimensions = {};
+
   const screenHeight = Dimensions.get('window').height;
   const screenWidth = Dimensions.get('window').width;
 
   const isPortrait = route.params?.isPortrait;
-  let screenDimensions = {};
   isPortrait ? (screenDimensions = { width: screenWidth, height: screenHeight }) : (screenDimensions = { width: screenHeight, height: screenWidth }) ;
 
   return (

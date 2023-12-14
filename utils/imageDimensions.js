@@ -14,7 +14,6 @@ function handleLargePortraitDimensions({ imageHeight, imageWidth, screenHeight, 
   const heightRatio = screenHeight / imageHeight;
 
   let scaleFactor = Math.min(widthRatio, heightRatio);
-  //console.log("widthRatio", widthRatio, "heightRatio", heightRatio, "scaleFactor", scaleFactor);
   if (scaleFactor > ratios.screenRatio) {
     scaleFactor = ratios.screenRatio; // Limit the scale factor to 1 to ensure the image is not larger than the screen
   };
@@ -22,14 +21,11 @@ function handleLargePortraitDimensions({ imageHeight, imageWidth, screenHeight, 
   maxWidth = imageWidth * scaleFactor;
   maxHeight = imageHeight * scaleFactor;
 
-  //console.log("1 maxWidth", maxWidth, "maxHeight", maxHeight);
-
   // Check if the image height is smaller than the screen height
   if (maxHeight < screenHeight) {
     // Resize the image until it reaches the border of the screen
     maxHeight = screenHeight;
     maxWidth = imageWidth * (screenHeight / imageHeight);
-    //console.log("2 maxWidth ", maxWidth, "maxHeight", maxHeight);
     if (maxWidth <= screenWidth) {
       return { maxHeight, maxWidth };
     };
@@ -37,7 +33,6 @@ function handleLargePortraitDimensions({ imageHeight, imageWidth, screenHeight, 
 
   maxWidth = screenWidth;
   maxHeight = imageHeight * (screenWidth / imageWidth);
-  //console.log("3 maxWidth ", maxWidth, "maxHeight", maxHeight);
   if (maxHeight <= screenHeight) {
     return { maxHeight, maxWidth };
   };
@@ -67,7 +62,7 @@ function handleLargeLandscapeDimensions({ imageHeight, imageWidth, screenHeight,
   const heightRatio = screenHeight / imageHeight;
 
   let scaleFactor = Math.min(widthRatio, heightRatio);
-  console.log("widthRatio", widthRatio, "heightRatio", heightRatio, "scaleFactor", scaleFactor);
+  //console.log("widthRatio", widthRatio, "heightRatio", heightRatio, "scaleFactor", scaleFactor);
   if (scaleFactor > ratios.screenRatio) {
     scaleFactor = ratios.screenRatio; // Limit the scale factor to 1 to ensure the image is not larger than the screen
   };
@@ -94,7 +89,7 @@ function handleLargeLandscapeDimensions({ imageHeight, imageWidth, screenHeight,
   return { maxHeight, maxWidth };
 };
 
-function handleSmallLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios }) {
+function handleSmallLandscapeDimensions({  imageWidth, screenHeight, ratios }) {
   let maxHeight = 0;
   let maxWidth = 0;
 
@@ -133,21 +128,18 @@ export function setImageDimensions({
   isPortrait
 }) {
 
-  const dimensions = { screenHeight, screenWidth, imageWidth, imageHeight, isPortrait };
   const ratios = setRatios({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
-
-  console.log("setImageDimensions", dimensions, ratios);
 
   if (isPortrait) {
 
     const { maxHeight, maxWidth } = handlePortraitDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios });
-    return { maxHeight, maxWidth };
+    return { maxImageHeight: maxHeight, maxImageWidth: maxWidth };
 
   } else {
 
     // is landscape
     const { maxHeight, maxWidth } = handleLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios });
-    return { maxHeight, maxWidth };
+    return { maxImageHeight:maxHeight, maxImageWidth:maxWidth };
 
   };
 
@@ -160,14 +152,5 @@ function setRatios({ imageHeight, imageWidth, screenHeight, screenWidth, isPortr
     return { imageRatio: imageWidth / imageHeight, screenRatio: screenHeight / screenWidth };
   };
 };
-
-
-
-export function handleCornersLocations({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait, touchLocation, targetSize }) {
-  // orientation!!!
-  // x ok, y 0
-  console.log("wesh");
-};
-
 
 
