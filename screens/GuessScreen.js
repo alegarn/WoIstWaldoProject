@@ -6,7 +6,7 @@ import { isOnTarget } from "../utils/targetLocation";
 
 export default function GuessScreen({ navigation, route }) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, /* hiddenLocation */, listId} = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, /* hiddenLocation, */ listId} = route.params;
   //console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, /* "/* hiddenLocation */" */, /* hiddenLocation */, "listId", listId);
 
   const screenWidth = Dimensions.get('window').width;
