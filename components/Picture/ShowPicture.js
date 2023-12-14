@@ -2,27 +2,18 @@ import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
-
-
 import MoveableTextBox from '../UI/MovableTextBox';
-// pictureUri only in dev with local images
-export default function ShowPicture({ /* hiddenLocation, */ uri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel }) {
 
-  const imageDimensionStyle = { width: screenWidth, height: screenHeight }
-
+export default function ShowPicture({ /* hiddenLocation, */ uri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
   return (
-    <View style={styles.container}>
-      <Pressable onPress={handlePress} style={styles.pressable}>
+    <View style={styles.container} >
+      <Pressable onPress={handlePress}  style={styles.pressable} >
         <ImageBackground
           source={{uri : uri}}
           resizeMode='stretch'
-          style={[styles.image, imageDimensionStyle ]}>
-{/*
-          {touchLocation && (
-            <Text style={styles.locationText}>
-              Touch Location: {touchLocation.x}, {touchLocation.y}
-            </Text>
-          )} */}
+          style={[styles.image, imageDimensionStyle ]}
+          >
+
           {touchLocation && (
             <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle}/>
           )}
@@ -31,11 +22,12 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
             <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
           ) : null }
 
-{/*           {hiddenLocation && (
-            <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} style={hiddenTargetStyle}/>
+          {/* {hiddenLocation && (
+            <IconButton icon={"close-circle-outline"} color={"green"} size={target.targetSize} style={hiddenTargetStyle}/>
           )} */}
         </ImageBackground>
-      </Pressable>
+
+    </Pressable>
 
 
 
@@ -61,17 +53,8 @@ const styles = StyleSheet.create({
   },
   pressable: {
     flex: 1,
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  image: {
-    maxWidth: '100%',
-    maxHeight: '100%',
   },
   locationText: {
     position: 'absolute',

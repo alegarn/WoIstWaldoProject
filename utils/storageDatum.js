@@ -18,12 +18,14 @@ function getLastListId(list) {
 
 export async function getLastImageId() {
   console.log("getLastImageId");
-  const imageList = await AsyncStorage.getItem("imageList");
-  if ((imageList !== null) && (imageList !== "[]")) {
-    const imageListObject = JSON.parse(imageList);
+  const localImageList = await AsyncStorage.getItem("imageList");
+
+  if ((localImageList !== null) && (localImageList !== "[]")) {
+    const imageListObject = JSON.parse(localImageList);
     const lastListId = getLastListId(imageListObject);
     return lastListId;
   };
+
   return 0;
 };
 
@@ -62,6 +64,7 @@ export async function emptyImageList() {
   };
 
   await AsyncStorage.removeItem("imageList");
+  await AsyncStorage.removeItem("lastImageUuid");
 };
 
 export async function storeImageList(imageList) {

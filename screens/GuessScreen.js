@@ -6,17 +6,18 @@ import { isOnTarget } from "../utils/targetLocation";
 
 export default function GuessScreen({ navigation, route }) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId} = route.params;
-  console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, "hiddenLocation", hiddenLocation, "screenHeight", screenHeight, "screenWidth", screenWidth);
-
-  console.log("isPortrait", isPortrait);
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, /* hiddenLocation */, listId} = route.params;
+  //console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, /* "/* hiddenLocation */" */, /* hiddenLocation */, "listId", listId);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
   const uri = imageFile;
 
-  let screenDimensions = { width: screenWidth, height: screenHeight };
-  isPortrait ? null : screenDimensions = { width: screenHeight, height: screenWidth };
+  let screenDimensions = {};
+  isPortrait ?
+    (screenDimensions = { width: screenWidth, height: screenHeight }) :
+    (screenDimensions = { width: screenHeight, height: screenWidth });
+
 
   function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
@@ -44,9 +45,11 @@ export default function GuessScreen({ navigation, route }) {
       pictureId={pictureId}
       description={description}
       imageIsPortrait={isPortrait}
-      hiddenLocation={hiddenLocation}
+      imageHeight={imageHeight}
+      imageWidth={imageWidth}
+      //hiddenLocation={hiddenLocation}
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
     />
-  )
+  );
 };

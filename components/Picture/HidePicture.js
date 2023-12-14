@@ -1,10 +1,13 @@
 import  { useState, useLayoutEffect, useEffect } from 'react';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress } from '../../utils/targetLocation';
+import { handlePicturePress, determineImageCorners } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
+
+import { setImageDimensions } from '../../utils/imageDimensions';
+
 
 export default function HidePicture({ navigation, uri, imageIsPortrait, imageWidth, imageHeight, screenDimensions}) {
 
@@ -15,6 +18,11 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
 
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
+
+  const isPortrait = imageIsPortrait;
+  const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
+  const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
+
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
@@ -30,10 +38,15 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
   };
 
   const handlePress = (event) => {
+
+    const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
+
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight});
-    setTouchLocation(location);
+    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle, topLeft});
+    if (location && target) {
+    setTouchLocation(location)
     setTarget(target);
+    };
   };
 
   const showUpdatedLocation = () => {
@@ -49,7 +62,9 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
         handleIconPress={handleIconPress}
         showModal={showModal}
         handleConfirm={handleConfirm}
-        onCancel={onCancel} />
+        onCancel={onCancel}
+        imageDimensionStyle={imageDimensionStyle}
+        />
     );
   }
 
