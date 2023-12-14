@@ -24,7 +24,6 @@ export const handleOrientation = async (orientation) => {
 export const handleImageOrientation = async ({ imageIsPortrait }) => {
 
   const orientation = await checkOrientation();
-  console.log("orientation", orientation);
 
   if ( imageIsPortrait && (orientation === 3 || orientation === 4)) {
     changeOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
@@ -34,14 +33,7 @@ export const handleImageOrientation = async ({ imageIsPortrait }) => {
     changeOrientation(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
   };
 
-  const newOrientation = await checkOrientation();
-  console.log("orientation result", newOrientation);
-  console.log("imageIsPortrait", imageIsPortrait);
-
   return null;
 };
 
 
-/*   const handleOrientationChange = (o) => {
-    setOrientation(o.orientationInfo.orientation);
-  }; */
