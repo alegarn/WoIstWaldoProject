@@ -40,6 +40,13 @@ async function adConfig() {
   return config;
 };
 
+export async function loadAds() {
+  const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
+    requestNonPersonalizedAdsOnly: true,
+  }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+
+  __DEV__ && !isLoaded ? load() : null;
+};
 
 export async function getUserConsent() {
   const config = await adConfig();
@@ -60,4 +67,5 @@ export async function getUserConsent() {
   const { status } = await AdsConsent.loadAndShowConsentFormIfRequired();
   /* put it in context */
 
+  return { status };
 };

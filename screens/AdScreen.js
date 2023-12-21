@@ -104,7 +104,7 @@ export default function AdScreen({navigation, route}){
 
   return(
     <View>
-      {__DEV__ ?(
+      {__DEV__ ? (
         isLoaded ? (
           show()
         )
