@@ -30,7 +30,7 @@ import { AuthContext } from './store/auth-context';
 
 import 'expo-dev-client';
 
-import { getUserConsent } from './utils/adHandling';
+import { getUserConsent, loadAds } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
@@ -194,6 +194,7 @@ export default function App() {
   useLayoutEffect(() => {
     if (__DEV__) {
       //getUserConsent();
+      loadAds();
     };
   })
 
