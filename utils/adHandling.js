@@ -67,5 +67,5 @@ export async function getUserConsent() {
   const { status } = await AdsConsent.loadAndShowConsentFormIfRequired();
   /* put it in context */
 
-  loadAds();
+  return { status };
 };

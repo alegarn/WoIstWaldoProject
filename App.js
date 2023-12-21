@@ -193,7 +193,7 @@ export default function App() {
 
   useLayoutEffect(() => {
     if (__DEV__) {
-      //getUserConsent();
+      //const { status } = getUserConsent();
       loadAds();
     };
   })
