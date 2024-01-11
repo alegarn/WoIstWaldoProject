@@ -10,7 +10,7 @@ import { setImageDimensions } from '../../utils/imageDimensions';
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen }) {
 
-  const [showFilter, setShowFilter] = useState(true);
+  const [showFilter, setShowFilter] = useState(true); 
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
@@ -84,13 +84,14 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   if (showFilter) {
     return(
       <GameInstructions
-            // pictureUri only in dev with local images
-            uri={uri}
-            game="guess"
-            screenWidth={screenWidth}
-            screenHeight={screenHeight}
-            imageIsPortrait={imageIsPortrait}
-            handleFilterClick={handleFilterClick} />
+        // pictureUri only in dev with local images
+        uri={uri}
+        game="guess"
+        screenWidth={screenWidth}
+        screenHeight={screenHeight}
+        imageIsPortrait={imageIsPortrait}
+        handleFilterClick={handleFilterClick}
+        imageDimensionStyle={imageDimensionStyle} />
     );
   };
 

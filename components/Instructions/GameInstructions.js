@@ -4,9 +4,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import BigButton from '../UI/BigButton';
 
-export default function GameInstructions({ uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick}) {
+export default function GameInstructions({ uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick, imageDimensionStyle }) {
 
-  const imageDimensionStyle = { width: screenWidth, height: screenHeight }
   console.log("imageDimensionStyle", imageDimensionStyle);
 
   const portraitUpperInstructions = ({ guess, imageIsPortrait }) => {
@@ -47,7 +46,7 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
       <ImageBackground
         source={{uri : uri}}
         resizeMode="stretch"
-        style={[styles.image, imageDimensionStyle]}>
+        style={imageDimensionStyle}>
         <View style={styles.filter}>
 
           <View style={styles.marginTop}>
@@ -85,10 +84,6 @@ const styles = StyleSheet.create({
     right: 0,
     bottom: 0,
 
-  },
-  image: {
-    maxWidth: '100%',
-    maxHeight: '100%',
   },
   filter: {
     position: 'absolute',
