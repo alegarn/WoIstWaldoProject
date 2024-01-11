@@ -82,7 +82,9 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
       screenWidth: screenWidth,
       isPortrait: imageIsPortrait,
       touchLocation: touchLocation,
-      target: target });
+      target: target,
+      imageDimensionStyle: imageDimensionStyle
+    });
   };
 
   const onCancel = () => {
@@ -97,7 +99,8 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         imageIsPortrait={imageIsPortrait}
-        handleFilterClick={handleFilterClick} />
+        handleFilterClick={handleFilterClick}
+        imageDimensionStyle={imageDimensionStyle} />
     );
   };
 

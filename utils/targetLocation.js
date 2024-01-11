@@ -30,7 +30,7 @@ export function determineImageCorners({ maxImageHeight, maxImageWidth, screenWid
     x: centerX + imageHalfWidth,
     y: centerY + imageHalfHeight,
   }; */
-  return { topLeft: topLeft, topRight: topRight, bottomLeft: bottomLeft, bottomRight: bottomRight };
+  return { topLeft: topLeft/* , topRight: topRight, bottomLeft: bottomLeft, bottomRight: bottomRight */ };
 };
 
 function handleTargetSize(screenWidth, screenHeight) {
@@ -115,7 +115,7 @@ export const isOnTarget = ({ location, hiddenLocation, screenWidth, screenHeight
   const hiddenTrgtAbsLoc = targetAbsoluteLocation(hiddenLocation, screenWidth, screenHeight);
   const guessTrgtAbsLoc = targetAbsoluteLocation(location, screenWidth, screenHeight);
 
-  const isOnTarget = determineIsOnTarget({hiddenTrgtAbsLoc, guessTrgtAbsLoc, circleRadius})
+  const isOnTarget = determineIsOnTarget({ hiddenTrgtAbsLoc, guessTrgtAbsLoc, circleRadius })
   console.log("isOnTarget", isOnTarget);
   return isOnTarget;
 };

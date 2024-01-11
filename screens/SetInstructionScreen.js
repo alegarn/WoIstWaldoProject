@@ -34,7 +34,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const isPortrait = route.params?.isPortrait;
   const touchLocation = route.params?.touchLocation;
   const target = route.params?.target;
-  const imageDimensionStyle = { width: screenWidth, height: screenHeight }
+  const imageDimensionStyle = route.params?.imageDimensionStyle;
 
   const context = useContext(AuthContext);
 
@@ -124,7 +124,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       <ImageBackground
         source={{uri : uri}}
         resizeMode='stretch'
-        style={[styles.image, imageDimensionStyle]}
+        style={imageDimensionStyle}
       >
         <HideDescription
           onSubmit={handlePressDescription}
@@ -149,15 +149,16 @@ export default function SetInstructionsScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     justifyContent: 'center',
     alignItems: 'center',
   },
   pressable: {
     flex: 1,
-  },
-  image: {
-    maxWidth: '100%',
-    maxHeight: '100%',
   },
   targetStyle: {
     zIndex: -1,
