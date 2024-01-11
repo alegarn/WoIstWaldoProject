@@ -3,7 +3,7 @@ import Button from "../../UI/Button";
 import InputDescription from "./InputDescription";
 
 
-export default function ShowHideDescription({inputChangeHandler, submitHandler, onCancel}) {
+export default function ShowHideDescription({ inputChangeHandler, submitHandler, onCancel }) {
   return (
     <View style={styles.container}>
       <View style={styles.descritionContainer}>
