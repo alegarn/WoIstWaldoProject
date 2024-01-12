@@ -126,7 +126,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     setSwipeDirection(swipeDirection);
   };
 
-
+/* put double-tap ? */
 /*   const gesture = Gesture.LongPress()
     .onEnd(() => {
     const item = imageList.slice(-1)[0];
@@ -181,7 +181,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         showNoMoreCard()
       ) : (
         <>
-        
+
           <GestureHandlerRootView style={styles.container}>
             {(imageList?.length === 0) && (asyncImagesAreLoading) ?
               showIsLoading() :
