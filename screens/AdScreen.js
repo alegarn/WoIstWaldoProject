@@ -61,9 +61,11 @@ export default function AdScreen({navigation, route}){
     });
   };
 
-  const { isLoaded, isClosed, load, show } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
-    requestNonPersonalizedAdsOnly: true,
-  }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+  const { isLoaded, isClosed, load, show } = __DEV__ ? 
+    useInterstitialAd(TestIds.INTERSTITIAL, {
+      requestNonPersonalizedAdsOnly: true, 
+    }) : 
+    { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
 
   const showProdLoadingOverlay = () => {
     setShowOverlay(true);
@@ -76,7 +78,7 @@ export default function AdScreen({navigation, route}){
 
   useEffect(() => {
     // Start loading the interstitial straight away
-    __DEV__ ? load() : showProdLoadingOverlay();
+    __DEV__ && !isLoaded? load() : showProdLoadingOverlay();
   }, [load]);
 
   useEffect(() => {
