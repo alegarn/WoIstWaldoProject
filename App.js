@@ -30,7 +30,8 @@ import { AuthContext } from './store/auth-context';
 
 import 'expo-dev-client';
 
-import { getUserConsent, loadAds } from './utils/adHandling';
+import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
+import { getUserConsent } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
@@ -39,8 +40,6 @@ NavigationBar.setPositionAsync("relative");
 NavigationBar.setVisibilityAsync("hidden");
 NavigationBar.setBehaviorAsync("inset-swipe");
 setStatusBarHidden(true, "none");
-
-
 
 
 const Stack = createNativeStackNavigator();
@@ -61,8 +60,19 @@ function AuthStack() {
 };
 
 
-function AuthenticatedStack() {
-  const authContext = useContext(AuthContext);
+function AuthenticatedStack({ authContext }) {
+  /* Start loading ads */
+  const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
+    requestNonPersonalizedAdsOnly: true,
+  }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+
+  useLayoutEffect(() => {
+    __DEV__ && !isLoaded ? load() : null;
+  }, []);
+  
+  // test device id or in production
+  // getUserConsent();
+
   return (
     <>
       <Stack.Navigator
@@ -153,11 +163,10 @@ function AuthenticatedStack() {
 };
 
 
-function Navigation() {
-  const authContext = useContext(AuthContext);
+function Navigation({ authContext }) {
   return (
     <NavigationContainer>
-      {authContext.IsAuthenticated ? <AuthenticatedStack /> : <AuthStack />}
+      {authContext.IsAuthenticated ? <AuthenticatedStack authContext={authContext} /> : <AuthStack />}
     </NavigationContainer>
   );
 };
@@ -165,7 +174,6 @@ function Navigation() {
 function Root() {
   const [isTryingLogging, setIsTryingLogging] = useState(true);
   const authContext = useContext(AuthContext);
-
 
   useEffect(() => {
     async function fetchToken() {
@@ -184,19 +192,12 @@ function Root() {
     return <LoadingOverlay message={message} />
   };
 
-  return <Navigation />
+  return <Navigation  authContext={authContext}/>
 
 };
 
 
 export default function App() {
-
-  useLayoutEffect(() => {
-    if (__DEV__) {
-      //const { status } = getUserConsent();
-      loadAds();
-    };
-  })
 
   return (
     <>
