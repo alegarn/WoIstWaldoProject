@@ -70,6 +70,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     };
   };
 
+  /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = async () => {
     console.log("handleImagesLoading");
 
@@ -126,11 +127,11 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 
-  const gesture = Gesture.LongPress()
+/*   const gesture = Gesture.LongPress()
     .onEnd(() => {
     const item = imageList.slice(-1)[0];
     startGuessing({item});
-  });
+  }); */
 
 
   useLayoutEffect(() => {
@@ -158,18 +159,18 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 
-  const GestureCard = ({item, gesture }) => {
+  const GestureCard = ({ item/* , gesture */ }) => {
     return(
-      <GestureDetector gesture={gesture}>
-        <SwipeableCard
+/*       <GestureDetector  gesture={gesture} >
+ */        <SwipeableCard
           item={item}
           removeCard={() => removeCard(item.listId)}
           swipedDirection={lastSwipedDirection}
           screenWidth={screenWidth}
           onPress={startGuessing}
         />
-      </GestureDetector>
-    );
+/*       </GestureDetector>
+ */    );
   };
 
   return (
@@ -180,7 +181,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         showNoMoreCard()
       ) : (
         <>
-          <Text style={styles.titleText}>Press Longely to Play or Swipe</Text>
+        
           <GestureHandlerRootView style={styles.container}>
             {(imageList?.length === 0) && (asyncImagesAreLoading) ?
               showIsLoading() :
@@ -190,7 +191,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
                 (
                   <>
                     {imageList?.map((item, id) => (
-                      <GestureCard item={item} gesture={gesture} key={id}/>
+                      <GestureCard item={item} /* gesture={gesture} */ key={id}/>
                     ))}
                   </>
                 )
@@ -203,7 +204,8 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
     </SafeAreaView>
   );
 };
-
+/*           <Text style={styles.titleText}>Press Play or Swipe</Text>
+ */
 const styles = StyleSheet.create({
   container: {
     flex: 1,

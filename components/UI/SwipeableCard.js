@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { ImageBackground, Text, StyleSheet, PanResponder, Animated, View } from 'react-native';
+import { ImageBackground, StyleSheet, PanResponder, Animated, Button } from 'react-native';
+import { GlobalStyle } from '../../constants/theme';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
 
-export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth }) {
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, onPress }) {
 
     const [showFullDescription, setShowFullDescription] = useState(false);
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
@@ -76,7 +77,6 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       },
     });
 
-
     const toggleDescription = () => {
       setShowFullDescription(!showFullDescription);
     };
@@ -96,7 +96,12 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           <ImageBackground
             source={{ uri: item.imageFile}}
             resizeMode='stretch'
-            style={[styles.imageStyle, styles.expended]}>
+            style={[styles.imageStyle, styles.expended]} >
+            <Button 
+              title="Press me or Swipe"
+              onPress={() => onPress({item})}
+              style={styles.buttonStyle}
+              color={GlobalStyle.color.secondaryColor} />
             <GuessDescription
               item={item}
               showFullDescription={showFullDescription}
@@ -127,6 +132,10 @@ const styles = StyleSheet.create({
   imageStyle: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    justifyContent: 'flex-end'
+    justifyContent: 'space-between',
   },
+  buttonStyle: {
+    borderRadius: 5,
+    padding: 10,
+  }
 });
