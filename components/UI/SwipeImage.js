@@ -11,7 +11,7 @@ import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeI
 import * as FileSystem from 'expo-file-system';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth, startGuessing }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
 
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
@@ -127,12 +127,17 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 /* put double-tap ? */
-/*   const gesture = Gesture.LongPress()
-    .onEnd(() => {
+/*   const gesture = Gesture.Tap()
+  .numberOfTaps(2)
+  .onStart(() => {
+
+*/
+/* fait bugger le bouton? */
+  const gesture = Gesture.LongPress()
+  .onEnd(() => {
     const item = imageList.slice(-1)[0];
     startGuessing({item});
-  }); */
-
+  });
 
   useLayoutEffect(() => {
     if (!asyncImagesAreLoading) {
@@ -159,18 +164,19 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
   };
 
 
-  const GestureCard = ({ item/* , gesture */ }) => {
+  const GestureCard = ({ item, gesture }) => {
     return(
-/*       <GestureDetector  gesture={gesture} >
- */        <SwipeableCard
+      <GestureDetector  gesture={gesture} >
+        <SwipeableCard
           item={item}
           removeCard={() => removeCard(item.listId)}
           swipedDirection={lastSwipedDirection}
           screenWidth={screenWidth}
-          onPress={startGuessing}
+          screenHeight={screenHeight}
+          onSwipe={startGuessing}
         />
-/*       </GestureDetector>
- */    );
+      </GestureDetector>
+    );
   };
 
   return (
@@ -181,7 +187,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
         showNoMoreCard()
       ) : (
         <>
-
+          <Text style={styles.titleText}>Double Tap or Swipe</Text>
           <GestureHandlerRootView style={styles.container}>
             {(imageList?.length === 0) && (asyncImagesAreLoading) ?
               showIsLoading() :
@@ -191,7 +197,7 @@ export default function SwipeImage({ screenWidth, startGuessing }) {
                 (
                   <>
                     {imageList?.map((item, id) => (
-                      <GestureCard item={item} /* gesture={gesture} */ key={id}/>
+                      <GestureCard item={item} gesture={gesture} key={id}/>
                     ))}
                   </>
                 )

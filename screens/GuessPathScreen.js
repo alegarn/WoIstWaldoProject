@@ -2,6 +2,7 @@ import SwipeImage from '../components/UI/SwipeImage';
 import { Dimensions } from 'react-native';
 
 const SCREEN_WIDTH = Dimensions.get('window').width
+const SCREEN_HEIGHT = Dimensions.get('window').height
 
 export default function GuessPathScreen({ navigation }) {
 
@@ -23,6 +24,7 @@ export default function GuessPathScreen({ navigation }) {
   return (
     <SwipeImage
       screenWidth={SCREEN_WIDTH}
+      screenHeight={SCREEN_HEIGHT}
       startGuessing={startGuessing}
     />
   );

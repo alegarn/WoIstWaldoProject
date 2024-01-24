@@ -3,6 +3,11 @@ import IconButton from '../../UI/IconButton';
 
 export default function GuessDescription({ item, showFullDescription, toggleDescription, style }) {
 
+  console.log("GuessDescription item", item?.description?.length); /* undefined */
+  console.log("GuessDescription showFullDescription", showFullDescription); /* false */
+
+  // item?.description?.length > 3 -> 30
+  // swipe up to show full description
   return (
     <View style={[styles.descriptionArea, style]}>
       {(item?.description?.length > 3) && (
@@ -10,12 +15,13 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
             icon= {showFullDescription ? "chevron-down" : "chevron-up"}
             color="white"
             size={30}
-            onPress={toggleDescription} />
+            /* onPress={toggleDescription} */ />
         )}
       <Text
         style={styles.cardDescriptionStyle}
         numberOfLines={showFullDescription ? undefined : 3}>
-        {item?.description ? item?.description : "No description"}
+        {(item?.description === undefined || item?.description === "") ? "No description" : item?.description}
+        {`\n GuessDescription item: ${item?.description?.length} \n showFullDescription: ${showFullDescription} \n item: ${JSON.stringify(item)}`}
       </Text>
     </View>
   )

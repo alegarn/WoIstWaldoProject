@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, PanResponder, Animated, Button } from 'react-native';
+import { ImageBackground, StyleSheet, PanResponder, Animated, Button, Alert } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
 
-export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, onPress }) {
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
 
     const [showFullDescription, setShowFullDescription] = useState(false);
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
+    const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
 
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
@@ -16,6 +17,14 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       outputRange: ['-20deg', '0deg', '20deg'],
     });
 
+    let upCard = yPosition.interpolate({
+      inputRange: [-screenHeight + 10, 0, screenHeight - 10],
+      outputRange: [10, 0, 10],
+      extrapolate: 'clamp',
+    })
+
+
+    /* overlay on long press ? */
     let panResponder = PanResponder.create({
       onStartShouldSetPanResponder: (evt, gestureState) => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => true,
@@ -23,19 +32,39 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       onMoveShouldSetPanResponderCapture: (evt, gestureState) => true,
       onPanResponderMove: (evt, gestureState) => {
         xPosition.setValue(gestureState.dx);
+        yPosition.setValue(gestureState.dy);
         if (gestureState.dx > screenWidth - 250) {
           swipeDirection = 'Right';
         } else if (gestureState.dx < -screenWidth + 250) {
           swipeDirection = 'Left';
+          /* remove */
         };
+
+        if (gestureState.dy < -screenHeight + 10) { // Swipe up threshold
+          swipeDirection = 'Up'; // Set swipe direction to Up
+          /* description overlay / play ? */
+          toggleDescription();
+        } else if (gestureState.dy > screenHeight - 10) { // Swipe down threshold
+          swipeDirection = 'Down'; // Set swipe direction to Down
+          /* description overlay */
+          toggleDescription();
+        }
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (
           gestureState.dx < screenWidth - 150 &&
-          gestureState.dx > -screenWidth + 150
+          gestureState.dx > -screenWidth + 150 &&
+          gestureState.dy < screenHeight - screenHeight / 2 &&
+          gestureState.dy > -screenHeight + screenHeight / 2
         ) {
           swipedDirection('--');
           Animated.spring(xPosition, {
+            toValue: 0,
+            speed: 5,
+            bounciness: 10,
+            useNativeDriver: false,
+          }).start();
+          Animated.spring(yPosition, { // Reset yPosition
             toValue: 0,
             speed: 5,
             bounciness: 10,
@@ -55,7 +84,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             }),
           ]).start(() => {
             swipedDirection(swipeDirection);
-            removeCard();
+            /* removeCard(); */
+            onSwipe({item});
           });
         } else if (gestureState.dx < -screenWidth + 150) {
           Animated.parallel([
@@ -73,11 +103,44 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             swipedDirection(swipeDirection);
             removeCard();
           });
+        } else if (gestureState.dy < -screenHeight + 10) {
+          Animated.parallel([
+            Animated.timing(yPosition, {
+              toValue: 0, /* screenHeight */
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(xPosition, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            })
+          ]).start(() => {
+            /* swipedDirection(swipeDirection); */
+            toggleDescription();
+          });
+        } else if (gestureState.dy < screenHeight - 10) {
+          Animated.parallel([
+            Animated.timing(yPosition, {
+              toValue: 0, /* screenHeight */
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(xPosition, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            })
+          ]).start(() => {
+            /* swipedDirection(swipeDirection); */
+            toggleDescription();
+          });
         }
       },
     });
 
     const toggleDescription = () => {
+      console.log("toggleDescription");
       setShowFullDescription(!showFullDescription);
     };
 
@@ -89,7 +152,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           styles.expended,
           {
             opacity: cardOpacity,
-            transform: [{ translateX: xPosition }, { rotate: rotateCard }],
+            transform: [{ translateX: xPosition }, { rotate: rotateCard }, { translateY: yPosition }],
           },
         ]}>
 
@@ -97,11 +160,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             source={{ uri: item.imageFile}}
             resizeMode='stretch'
             style={[styles.imageStyle, styles.expended]} >
-            <Button 
-              title="Press me or Swipe"
-              onPress={() => onPress({item})}
-              style={styles.buttonStyle}
-              color={GlobalStyle.color.secondaryColor} />
+
             <GuessDescription
               item={item}
               showFullDescription={showFullDescription}
@@ -113,7 +172,11 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
   };
 
 
-
+/*             <Button 
+              title="Press me or Swipe"
+              onPress={() => onPress({item})}
+              style={styles.buttonStyle}
+              color={GlobalStyle.color.secondaryColor} /> */
 const styles = StyleSheet.create({
   expended: {
     width: '100%',
@@ -132,7 +195,7 @@ const styles = StyleSheet.create({
   imageStyle: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
   },
   buttonStyle: {
     borderRadius: 5,
