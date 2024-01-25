@@ -17,11 +17,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       outputRange: ['-20deg', '0deg', '20deg'],
     });
 
-    let upCard = yPosition.interpolate({
-      inputRange: [-screenHeight + 10, 0, screenHeight - 10],
-      outputRange: [10, 0, 10],
-      extrapolate: 'clamp',
-    })
+    let yPositionLimits = yPosition.interpolate({
+      inputRange: [-screenHeight + 30, 0, screenHeight - 30],
+      outputRange: [-30, 0, 30],
+    });
 
 
     /* overlay on long press ? */
@@ -40,11 +39,11 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           /* remove */
         };
 
-        if (gestureState.dy < -screenHeight + 10) { // Swipe up threshold
+        if (gestureState.dy < -screenHeight + 30) { // Swipe up threshold
           swipeDirection = 'Up'; // Set swipe direction to Up
           /* description overlay / play ? */
           toggleDescription();
-        } else if (gestureState.dy > screenHeight - 10) { // Swipe down threshold
+        } else if (gestureState.dy > screenHeight - 30) { // Swipe down threshold
           swipeDirection = 'Down'; // Set swipe direction to Down
           /* description overlay */
           toggleDescription();
@@ -152,7 +151,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           styles.expended,
           {
             opacity: cardOpacity,
-            transform: [{ translateX: xPosition }, { rotate: rotateCard }, { translateY: yPosition }],
+            transform: [{ translateX: xPosition }, { rotate: rotateCard }, { translateY: yPositionLimits }],
           },
         ]}>
 
