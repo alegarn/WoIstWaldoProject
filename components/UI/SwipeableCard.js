@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ImageBackground, StyleSheet, PanResponder, Animated, Button, Alert } from 'react-native';
+import { ImageBackground, StyleSheet, PanResponder, Animated, View } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
@@ -10,8 +10,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
     const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
 
+
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
+
     let rotateCard = xPosition.interpolate({
       inputRange: [-200, 0, 200],
       outputRange: ['-20deg', '0deg', '20deg'],
@@ -32,8 +34,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       onPanResponderMove: (evt, gestureState) => {
         xPosition.setValue(gestureState.dx);
         yPosition.setValue(gestureState.dy);
+
         if (gestureState.dx > screenWidth - 250) {
           swipeDirection = 'Right';
+
         } else if (gestureState.dx < -screenWidth + 250) {
           swipeDirection = 'Left';
           /* remove */
@@ -139,7 +143,6 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     });
 
     const toggleDescription = () => {
-      console.log("toggleDescription");
       setShowFullDescription(!showFullDescription);
     };
 
@@ -148,7 +151,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         {...panResponder.panHandlers}
         style={[
           styles.cardStyle,
-          styles.expended,
+          styles.expanded,
           {
             opacity: cardOpacity,
             transform: [{ translateX: xPosition }, { rotate: rotateCard }, { translateY: yPositionLimits }],
@@ -158,8 +161,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           <ImageBackground
             source={{ uri: item.imageFile}}
             resizeMode='stretch'
-            style={[styles.imageStyle, styles.expended]} >
-
+            style={[styles.imageStyle, styles.expanded]} >
+            
             <GuessDescription
               item={item}
               showFullDescription={showFullDescription}
@@ -177,7 +180,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               style={styles.buttonStyle}
               color={GlobalStyle.color.secondaryColor} /> */
 const styles = StyleSheet.create({
-  expended: {
+  expanded: {
     width: '100%',
     height: '100%',
   },
@@ -185,7 +188,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    borderRadius: 7,
   },
   cardTitleStyle: {
     color: '#000',
@@ -199,5 +201,5 @@ const styles = StyleSheet.create({
   buttonStyle: {
     borderRadius: 5,
     padding: 10,
-  }
+  },
 });
