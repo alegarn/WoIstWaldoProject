@@ -210,8 +210,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     </SafeAreaView>
   );
 };
-/*           <Text style={styles.titleText}>Press Play or Swipe</Text>
- */
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
