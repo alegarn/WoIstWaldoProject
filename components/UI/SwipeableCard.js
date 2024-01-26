@@ -10,12 +10,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
     const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
 
-    const position = new Animated.Value(0); // Initialize position as an Animated.Value
-
-
 
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
+    const position = new Animated.Value(0); // Initialize position as an Animated.Value
 
     let rotateCard = xPosition.interpolate({
       inputRange: [-200, 0, 200],
@@ -51,6 +49,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
         const { moveX, x0 } = gestureState;
         const distanceFromMiddle = moveX - x0;
+
+        // change position value based on distance from middle
         Animated.timing(position, {
           toValue: distanceFromMiddle,
           duration: 100, // No animation duration
@@ -59,19 +59,15 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
         if (gestureState.dx > screenWidth - 250) {
           swipeDirection = 'Right';
-
         } else if (gestureState.dx < -screenWidth + 250) {
           swipeDirection = 'Left';
-          /* remove */
         };
 
         if (gestureState.dy < -screenHeight + 30) { // Swipe up threshold
           swipeDirection = 'Up'; // Set swipe direction to Up
-          /* description overlay / play ? */
           toggleDescription();
         } else if (gestureState.dy > screenHeight - 30) { // Swipe down threshold
           swipeDirection = 'Down'; // Set swipe direction to Down
-          /* description overlay */
           toggleDescription();
         }
       },
@@ -182,7 +178,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
           <ImageBackground
             source={{ uri: item.imageFile}}
-            resizeMode='stretch'
+            resizeMode='contain'
             style={[styles.imageStyle, styles.expanded]} >
             
             <GuessDescription
