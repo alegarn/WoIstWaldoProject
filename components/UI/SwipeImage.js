@@ -133,12 +133,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
 */
 /* fait bugger le bouton? */
-  const gesture = Gesture.LongPress()
+/*   const gesture = Gesture.LongPress()
   .onEnd(() => {
     const item = imageList.slice(-1)[0];
     startGuessing({item});
   });
-
+ */
   useLayoutEffect(() => {
     if (!asyncImagesAreLoading) {
       handleGetImagesList();
@@ -164,9 +164,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   };
 
 
-  const GestureCard = ({ item, gesture }) => {
+  const GestureCard = ({ item/* , gesture */ }) => {
     return(
-      <GestureDetector  gesture={gesture} >
+      /* <GestureDetector  gesture={gesture} > */
+    
         <SwipeableCard
           item={item}
           removeCard={() => removeCard(item.listId)}
@@ -175,7 +176,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
           screenHeight={screenHeight}
           onSwipe={startGuessing}
         />
-      </GestureDetector>
+   
+      /* </GestureDetector> */
     );
   };
 
@@ -187,7 +189,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
         showNoMoreCard()
       ) : (
         <>
-          <Text style={styles.titleText}>Double Tap or Swipe</Text>
+          {/* <Text style={styles.titleText}>Double Tap or Swipe</Text> */}
           <GestureHandlerRootView style={styles.container}>
             {(imageList?.length === 0) && (asyncImagesAreLoading) ?
               showIsLoading() :
@@ -197,7 +199,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
                 (
                   <>
                     {imageList?.map((item, id) => (
-                      <GestureCard item={item} gesture={gesture} key={id}/>
+                      <GestureCard item={item} /* gesture={gesture} */ key={id}/>
                     ))}
                   </>
                 )
