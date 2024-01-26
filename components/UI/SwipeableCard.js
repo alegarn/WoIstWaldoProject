@@ -36,7 +36,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
     const overlayOpacity = position.interpolate({
       inputRange: [-100, 0, 100],
-      outputRange: [0.75, 0, 0.75],
+      outputRange: [0.25, 0, 0.25],
     })
 
     /* overlay on long press ? */
