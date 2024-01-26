@@ -10,6 +10,9 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
     const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
 
+    const position = new Animated.Value(0); // Initialize position as an Animated.Value
+
+
 
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
@@ -25,6 +28,17 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     });
 
 
+    // Function to update overlay color based on position
+    const interpolatedColor = position.interpolate({
+      inputRange: [-100, 0, 100],
+      outputRange: ['red', 'rgba(255, 0, 0, 0)', 'green'],
+    });
+
+    const overlayOpacity = position.interpolate({
+      inputRange: [-100, 0, 100],
+      outputRange: [0.75, 0, 0.75],
+    })
+
     /* overlay on long press ? */
     let panResponder = PanResponder.create({
       onStartShouldSetPanResponder: (evt, gestureState) => false,
@@ -34,6 +48,14 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       onPanResponderMove: (evt, gestureState) => {
         xPosition.setValue(gestureState.dx);
         yPosition.setValue(gestureState.dy);
+
+        const { moveX, x0 } = gestureState;
+        const distanceFromMiddle = moveX - x0;
+        Animated.timing(position, {
+          toValue: distanceFromMiddle,
+          duration: 100, // No animation duration
+          useNativeDriver: false, // Use native driver for performance
+        }).start();
 
         if (gestureState.dx > screenWidth - 250) {
           swipeDirection = 'Right';
@@ -168,6 +190,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               showFullDescription={showFullDescription}
               toggleDescription={toggleDescription} />
           </ImageBackground>
+
+          <Animated.View
+            style={[StyleSheet.absoluteFill, { backgroundColor: interpolatedColor, opacity: overlayOpacity }]}
+          />
 
       </Animated.View>
     );
