@@ -1,20 +1,42 @@
 import { useState } from 'react';
-import { ImageBackground, Text, StyleSheet, PanResponder, Animated, View } from 'react-native';
+import { ImageBackground, StyleSheet, PanResponder, Animated, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
 
-export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth }) {
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
 
     const [showFullDescription, setShowFullDescription] = useState(false);
     const [xPosition, setXPosition] = useState(new Animated.Value(0));
+    const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
+
 
     let swipeDirection = '';
     let cardOpacity = new Animated.Value(1);
+    const position = new Animated.Value(0); // Initialize position as an Animated.Value
+
     let rotateCard = xPosition.interpolate({
       inputRange: [-200, 0, 200],
       outputRange: ['-20deg', '0deg', '20deg'],
     });
 
+    let yPositionLimits = yPosition.interpolate({
+      inputRange: [-screenHeight + 30, 0, screenHeight - 30],
+      outputRange: [-30, 0, 30],
+    });
+
+
+    // Function to update overlay color based on position
+    const interpolatedColor = position.interpolate({
+      inputRange: [-100, 0, 100],
+      outputRange: ['red', 'rgba(255, 0, 0, 0)', 'green'],
+    });
+
+    const overlayOpacity = position.interpolate({
+      inputRange: [-100, 0, 100],
+      outputRange: [0.25, 0, 0.25],
+    })
+
+    /* overlay on long press ? */
     let panResponder = PanResponder.create({
       onStartShouldSetPanResponder: (evt, gestureState) => false,
       onMoveShouldSetPanResponder: (evt, gestureState) => true,
@@ -22,19 +44,39 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       onMoveShouldSetPanResponderCapture: (evt, gestureState) => true,
       onPanResponderMove: (evt, gestureState) => {
         xPosition.setValue(gestureState.dx);
-        if (gestureState.dx > screenWidth - 250) {
+        yPosition.setValue(gestureState.dy);
+
+        const { moveX, x0 } = gestureState;
+        const distanceFromMiddle = moveX - x0;
+
+        // change position value based on distance from middle
+        Animated.timing(position, {
+          toValue: distanceFromMiddle,
+          duration: 100, // No animation duration
+          useNativeDriver: false, // Use native driver for performance
+        }).start();
+
+/*         if (gestureState.dx > screenWidth - (screenWidth*2/3)) {
           swipeDirection = 'Right';
-        } else if (gestureState.dx < -screenWidth + 250) {
+        } else if (gestureState.dx < -screenWidth + (screenWidth*2/3)) {
           swipeDirection = 'Left';
-        };
+        }; */
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (
-          gestureState.dx < screenWidth - 150 &&
-          gestureState.dx > -screenWidth + 150
+          gestureState.dx < screenWidth - (screenWidth * 2/3) &&
+          gestureState.dx > -screenWidth - (screenWidth *   2/3) &&
+          gestureState.dy > -screenHeight / 3 &&
+          gestureState.dy < screenHeight / 3
         ) {
           swipedDirection('--');
           Animated.spring(xPosition, {
+            toValue: 0,
+            speed: 5,
+            bounciness: 10,
+            useNativeDriver: false,
+          }).start();
+          Animated.spring(yPosition, { // Reset yPosition
             toValue: 0,
             speed: 5,
             bounciness: 10,
@@ -53,8 +95,9 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               useNativeDriver: false,
             }),
           ]).start(() => {
-            swipedDirection(swipeDirection);
-            removeCard();
+            /* swipedDirection(swipeDirection); */
+            /* removeCard(); */
+            onSwipe({item});
           });
         } else if (gestureState.dx < -screenWidth + 150) {
           Animated.parallel([
@@ -69,13 +112,44 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               useNativeDriver: false,
             }),
           ]).start(() => {
-            swipedDirection(swipeDirection);
+            /* swipedDirection(swipeDirection); */
             removeCard();
+          });
+        } else if (gestureState.dy < -screenHeight / 3 ) {
+          Animated.parallel([
+            Animated.timing(yPosition, {
+              toValue: 0, /* screenHeight */
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(xPosition, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            })
+          ]).start(() => {
+            /* swipedDirection(swipeDirection); */
+            toggleDescription();
+          });
+        } else if (gestureState.dy < screenHeight / 3) {
+          Animated.parallel([
+            Animated.timing(yPosition, {
+              toValue: 0, /* screenHeight */
+              duration: 200,
+              useNativeDriver: false,
+            }),
+            Animated.timing(xPosition, {
+              toValue: 0,
+              duration: 200,
+              useNativeDriver: false,
+            })
+          ]).start(() => {
+            /* swipedDirection(swipeDirection); */
+            toggleDescription();
           });
         }
       },
     });
-
 
     const toggleDescription = () => {
       setShowFullDescription(!showFullDescription);
@@ -86,31 +160,40 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         {...panResponder.panHandlers}
         style={[
           styles.cardStyle,
-          styles.expended,
+          styles.expanded,
           {
             opacity: cardOpacity,
-            transform: [{ translateX: xPosition }, { rotate: rotateCard }],
+            transform: [{ translateX: xPosition }, { rotate: rotateCard }, { translateY: yPositionLimits }],
           },
         ]}>
 
           <ImageBackground
             source={{ uri: item.imageFile}}
-            resizeMode='stretch'
-            style={[styles.imageStyle, styles.expended]}>
+            resizeMode='contain'
+            style={[styles.imageStyle, styles.expanded]} >
+            
             <GuessDescription
               item={item}
               showFullDescription={showFullDescription}
               toggleDescription={toggleDescription} />
           </ImageBackground>
 
+          <Animated.View
+            style={[StyleSheet.absoluteFill, { backgroundColor: interpolatedColor, opacity: overlayOpacity }]}
+          />
+
       </Animated.View>
     );
   };
 
 
-
+/*             <Button 
+              title="Press me or Swipe"
+              onPress={() => onPress({item})}
+              style={styles.buttonStyle}
+              color={GlobalStyle.color.secondaryColor} /> */
 const styles = StyleSheet.create({
-  expended: {
+  expanded: {
     width: '100%',
     height: '100%',
   },
@@ -118,7 +201,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
-    borderRadius: 7,
   },
   cardTitleStyle: {
     color: '#000',
@@ -127,6 +209,10 @@ const styles = StyleSheet.create({
   imageStyle: {
     backgroundColor: '#fff',
     borderRadius: 10,
-    justifyContent: 'flex-end'
+    justifyContent: 'flex-end',
+  },
+  buttonStyle: {
+    borderRadius: 5,
+    padding: 10,
   },
 });
