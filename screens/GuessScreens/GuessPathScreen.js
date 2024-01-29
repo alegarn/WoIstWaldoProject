@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Dimensions } from 'react-native';
 
-import SwipeImage from '../components/UI/SwipeImage';
-import SwipeInstructions from '../components/Instructions/SwipeInstructions';
+import SwipeImage from '../../components/UI/SwipeImage';
+import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 
 const SCREEN_WIDTH = Dimensions.get('window').width
 const SCREEN_HEIGHT = Dimensions.get('window').height

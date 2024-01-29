@@ -1,5 +1,5 @@
 import {  View } from 'react-native';
-import LogicalImagePicker from '../components/Picture/LogicalImagePicker';
+import LogicalImagePicker from '../../components/Picture/LogicalImagePicker';
 
 export default function HidingPathScreen({ navigation }) {
   return (
