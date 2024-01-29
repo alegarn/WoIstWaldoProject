@@ -63,25 +63,35 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         }; */
       },
       onPanResponderRelease: (evt, gestureState) => {
+        const { moveX, x0 } = gestureState;
+        const distanceFromMiddle = moveX - x0;
+
         if (
           gestureState.dx < screenWidth - (screenWidth * 2/3) &&
-          gestureState.dx > -screenWidth - (screenWidth *   2/3) &&
+          gestureState.dx > -screenWidth - (screenWidth * 2/3) &&
           gestureState.dy > -screenHeight / 3 &&
           gestureState.dy < screenHeight / 3
         ) {
-          swipedDirection('--');
-          Animated.spring(xPosition, {
-            toValue: 0,
-            speed: 5,
-            bounciness: 10,
-            useNativeDriver: false,
-          }).start();
-          Animated.spring(yPosition, { // Reset yPosition
-            toValue: 0,
-            speed: 5,
-            bounciness: 10,
-            useNativeDriver: false,
-          }).start();
+          /* swipedDirection('--'); */
+          Animated.parallel([
+            Animated.spring(xPosition, {
+              toValue: 0,
+              speed: 5,
+              bounciness: 10,
+              useNativeDriver: false,
+            }).start(),
+            Animated.spring(yPosition, { // Reset yPosition
+              toValue: 0,
+              speed: 5,
+              bounciness: 10,
+              useNativeDriver: false,
+            }).start(),
+            Animated.timing(position, {
+              toValue: distanceFromMiddle,
+              duration: 100, // No animation duration
+              useNativeDriver: false, // Use native driver for performance
+            }).start(),  
+          ])
         } else if (gestureState.dx > screenWidth - 150) {
           Animated.parallel([
             Animated.timing(xPosition, {
@@ -131,7 +141,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             /* swipedDirection(swipeDirection); */
             toggleDescription();
           });
-        } else if (gestureState.dy < screenHeight / 3) {
+        } else if (gestureState.dy > screenHeight / 3) {
           Animated.parallel([
             Animated.timing(yPosition, {
               toValue: 0, /* screenHeight */
