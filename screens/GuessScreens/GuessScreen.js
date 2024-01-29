@@ -1,8 +1,8 @@
 import { Dimensions } from 'react-native';
 
-import GuessPicture from "../components/Picture/GuessPicture";
+import GuessPicture from "../../components/Picture/GuessPicture";
 
-import { isOnTarget } from "../utils/targetLocation";
+import { isOnTarget } from "../../utils/targetLocation";
 
 export default function GuessScreen({ navigation, route }) {
 

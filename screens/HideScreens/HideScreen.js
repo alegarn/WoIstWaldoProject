@@ -1,5 +1,5 @@
 import { Dimensions } from 'react-native';
-import HidePicture from '../components/Picture/HidePicture';
+import HidePicture from '../../components/Picture/HidePicture';
 
 export default function HideScreen({ navigation, route }) {
   const uri = route.params?.uri;

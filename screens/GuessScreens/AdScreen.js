@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { View } from "react-native";
 
-import LoadingOverlay from "../components/UI/LoadingOverlay";
+import LoadingOverlay from "../../components/UI/LoadingOverlay";
 import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
 
 /* import { InterstitialAd, TestIds, AdEventType } from 'react-native-google-mobile-ads'; */

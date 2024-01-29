@@ -1,9 +1,9 @@
 import { useLayoutEffect } from "react";
 
-import { handleOrientation } from "../utils/orientation";
+import { handleOrientation } from "../../utils/orientation";
 
-import ShowSuccess from "../components/Results/ShowSuccess";
-import ShowFailure from "../components/Results/ShowFailure";
+import ShowSuccess from "../../components/Results/ShowSuccess";
+import ShowFailure from "../../components/Results/ShowFailure";
 
 export default function ResultScreen({ route, navigation }) {
 
