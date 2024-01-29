@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, View } from 'react-native';
-import { GlobalStyle } from '../../constants/theme';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
 
@@ -57,26 +56,18 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           useNativeDriver: false, // Use native driver for performance
         }).start();
 
-        if (gestureState.dx > screenWidth - 250) {
+/*         if (gestureState.dx > screenWidth - (screenWidth*2/3)) {
           swipeDirection = 'Right';
-        } else if (gestureState.dx < -screenWidth + 250) {
+        } else if (gestureState.dx < -screenWidth + (screenWidth*2/3)) {
           swipeDirection = 'Left';
-        };
-
-        if (gestureState.dy < -screenHeight + 30) { // Swipe up threshold
-          swipeDirection = 'Up'; // Set swipe direction to Up
-          toggleDescription();
-        } else if (gestureState.dy > screenHeight - 30) { // Swipe down threshold
-          swipeDirection = 'Down'; // Set swipe direction to Down
-          toggleDescription();
-        }
+        }; */
       },
       onPanResponderRelease: (evt, gestureState) => {
         if (
-          gestureState.dx < screenWidth - 150 &&
-          gestureState.dx > -screenWidth + 150 &&
-          gestureState.dy < screenHeight - screenHeight / 2 &&
-          gestureState.dy > -screenHeight + screenHeight / 2
+          gestureState.dx < screenWidth - (screenWidth * 2/3) &&
+          gestureState.dx > -screenWidth - (screenWidth *   2/3) &&
+          gestureState.dy > -screenHeight / 3 &&
+          gestureState.dy < screenHeight / 3
         ) {
           swipedDirection('--');
           Animated.spring(xPosition, {
@@ -104,7 +95,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               useNativeDriver: false,
             }),
           ]).start(() => {
-            swipedDirection(swipeDirection);
+            /* swipedDirection(swipeDirection); */
             /* removeCard(); */
             onSwipe({item});
           });
@@ -121,10 +112,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               useNativeDriver: false,
             }),
           ]).start(() => {
-            swipedDirection(swipeDirection);
+            /* swipedDirection(swipeDirection); */
             removeCard();
           });
-        } else if (gestureState.dy < -screenHeight + 10) {
+        } else if (gestureState.dy < -screenHeight / 3 ) {
           Animated.parallel([
             Animated.timing(yPosition, {
               toValue: 0, /* screenHeight */
@@ -140,7 +131,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             /* swipedDirection(swipeDirection); */
             toggleDescription();
           });
-        } else if (gestureState.dy < screenHeight - 10) {
+        } else if (gestureState.dy < screenHeight / 3) {
           Animated.parallel([
             Animated.timing(yPosition, {
               toValue: 0, /* screenHeight */
