@@ -13,14 +13,15 @@ function LoginScreen() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authContext = useContext(AuthContext);
 
-  const handleAuthDataSaving = async (response) => {
+  const handleAuthDataSaving = async (response, email) => {
     authContext.authenticate({
       token: response.headers.authorization,
       expiry: response.headers.expiry,
       access_token: response.headers['access-token'],
       uid: response.headers.uid,
       client: response.headers.client,
-      userId: response.data.data.id
+      userId: response.data.data.id,
+      email: email
     });
   };
 
@@ -36,7 +37,7 @@ function LoginScreen() {
       const response = await login({email, password});
       console.log("response login screen", response);
       if (response.status === 200) {
-        const auth = handleAuthDataSaving(response);
+        const auth = handleAuthDataSaving(response, email);
         const scoreId = await handleScoreId();
       } else {
           console.log(response);
