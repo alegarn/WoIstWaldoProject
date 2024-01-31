@@ -33,7 +33,7 @@ export default function AuthContextProvider({ children }) {
     setAuthToken(token);
   };
 
-  async function authenticate({token, client, expiry, access_token, userId, uid}) {
+  async function authenticate({token, client, expiry, access_token, userId, uid, email}) {
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('client', client);
@@ -41,13 +41,14 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('access_token', access_token);
     await SecureStore.setItemAsync('uid', uid);
     await SecureStore.setItemAsync('userId', userId);
+    await SecureStore.setItemAsync('email', email);
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
-    console.log("context", token, expiry, access_token, userId, client, uid);
+    console.log("context", token, expiry, access_token, userId, client, uid, email);
   };
 
   async function logout() {
