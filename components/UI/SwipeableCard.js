@@ -56,19 +56,14 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           useNativeDriver: false, // Use native driver for performance
         }).start();
 
-/*         if (gestureState.dx > screenWidth - (screenWidth*2/3)) {
-          swipeDirection = 'Right';
-        } else if (gestureState.dx < -screenWidth + (screenWidth*2/3)) {
-          swipeDirection = 'Left';
-        }; */
       },
       onPanResponderRelease: (evt, gestureState) => {
         const { moveX, x0 } = gestureState;
         const distanceFromMiddle = moveX - x0;
 
         if (
-          gestureState.dx < screenWidth - (screenWidth * 2/3) &&
-          gestureState.dx > -screenWidth - (screenWidth * 2/3) &&
+          gestureState.dx < screenWidth - 150 &&
+          gestureState.dx > -screenWidth + 150 &&
           gestureState.dy > -screenHeight / 3 &&
           gestureState.dy < screenHeight / 3
         ) {
@@ -79,19 +74,19 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               speed: 5,
               bounciness: 10,
               useNativeDriver: false,
-            }).start(),
+            }),
             Animated.spring(yPosition, { // Reset yPosition
               toValue: 0,
               speed: 5,
               bounciness: 10,
               useNativeDriver: false,
-            }).start(),
+            }),
             Animated.timing(position, {
               toValue: distanceFromMiddle,
               duration: 100, // No animation duration
               useNativeDriver: false, // Use native driver for performance
-            }).start(),  
-          ])
+            }),  
+          ]).start();
         } else if (gestureState.dx > screenWidth - 150) {
           Animated.parallel([
             Animated.timing(xPosition, {
@@ -106,8 +101,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             }),
           ]).start(() => {
             /* swipedDirection(swipeDirection); */
-            /* removeCard(); */
-            onSwipe({item});
+            onSwipe({ item });
           });
         } else if (gestureState.dx < -screenWidth + 150) {
           Animated.parallel([
@@ -125,7 +119,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             /* swipedDirection(swipeDirection); */
             removeCard();
           });
-        } else if (gestureState.dy < -screenHeight / 3 ) {
+        } else if (gestureState.dy < -screenHeight / 3 && (gestureState.dx < screenWidth - 150 && gestureState.dx > -screenWidth - 150) ) {
           Animated.parallel([
             Animated.timing(yPosition, {
               toValue: 0, /* screenHeight */
@@ -141,7 +135,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             /* swipedDirection(swipeDirection); */
             toggleDescription();
           });
-        } else if (gestureState.dy > screenHeight / 3) {
+        } else if (gestureState.dy > screenHeight / 3 && (gestureState.dx < screenWidth - 150 && gestureState.dx > -screenWidth - 150 )) {
           Animated.parallel([
             Animated.timing(yPosition, {
               toValue: 0, /* screenHeight */
