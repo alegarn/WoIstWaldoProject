@@ -27,7 +27,7 @@ export function setHeaders({ token, uid, expiry, access_token, client }) {
 };
 
 
-async function authenticate({email, password}) {
+async function authenticate({ email, password }) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_in`;
   const headers = {
     'Content-Type': 'application/json',
@@ -38,14 +38,16 @@ async function authenticate({email, password}) {
     'email': email,
     'password': password,
   };
+  
   const response = await axios.post(url, data, headers).then((response) => {
-
     return response;
   }).catch((error) => {
     console.log("error", error);
     return error;
   });
+  
   console.log("response authenticate", response);
+  
   return response;
 };
 
@@ -116,5 +118,4 @@ export async function createUser({ email, password, confirmPassword, username })
 export async function login({email, password}) {
   return await authenticate({email, password});
 };
-
 

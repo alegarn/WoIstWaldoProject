@@ -9,20 +9,23 @@ import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
 import LoadingOverlay from './components/UI/LoadingOverlay';
 
-
+// Auth screens
 import LoginScreen from './screens/AuthScreens/LoginScreen';
 import SignupScreen from './screens/AuthScreens/SignupScreen';
 
 import HomeScreen from './screens/HomeScreen';
-import HidingPathScreen from './screens/HidingPathScreen';
-import HideScreen from './screens/HideScreen';
-import SetInstructionsScreen from './screens/SetInstructionScreen';
-import GuessPathScreen from './screens/GuessPathScreen';
-import GuessScreen from './screens/GuessScreen';
-import AdScreen from './screens/AdScreen';
-import ResultScreen from './screens/ResultScreen';
-import RankingScreen from './screens/RankingScreen';
+// Hide screens
+import HidingPathScreen from './screens/HideScreens/HidingPathScreen';
+import HideScreen from './screens/HideScreens/HideScreen';
+// Guess screens
+import GuessPathScreen from './screens/GuessScreens/GuessPathScreen';
+import GuessScreen from './screens/GuessScreens/GuessScreen';
+import AdScreen from './screens/GuessScreens/AdScreen';
+import ResultScreen from './screens/GuessScreens/ResultScreen';
 
+import SetInstructionsScreen from './screens/SetInstructionScreen';
+import RankingScreen from './screens/RankingScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
@@ -30,6 +33,7 @@ import { AuthContext } from './store/auth-context';
 
 import 'expo-dev-client';
 
+// AdMob
 import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
 import { getUserConsent } from './utils/adHandling';
 
@@ -83,15 +87,33 @@ function AuthenticatedStack({ authContext }) {
         <Stack.Screen
           name="HomeScreen"
           component={HomeScreen}
-          options={{
+          options={({ navigation }) => ({
             presentation: "modal",
             headerShown: true,
-            headerRight: ({tintColor}) => (
-              <IconButton
-                icon="exit"
-                color={tintColor}
-                size={24}
-                onPress={authContext.logout}/>)
+            headerRight: ({ tintColor }) => (
+              <>
+                <IconButton
+                  icon="settings"
+                  color={tintColor}
+                  size={24}
+                  onPress={() => navigation.navigate("SettingsScreen")}
+                  style={{ marginRight: 20 }}
+                />
+                <IconButton
+                  icon="exit"
+                  color={tintColor}
+                  size={24}
+                  onPress={authContext.logout}
+                />
+              </>
+            )
+          })} />
+        <Stack.Screen
+          name='SettingsScreen'
+          component={SettingsScreen}
+          options={{
+            presentation: "modal",
+            headerShown: true
           }} />
         <Stack.Screen
           name="HidingPathScreen"
