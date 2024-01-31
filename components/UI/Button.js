@@ -9,14 +9,18 @@ export default function Button({ children, style, onPress, mode, thin, cancel })
       style ?? style,
       thin && { paddingVertical: 0, paddingHorizontal: 2, padding: 0 },
       mode === "flat" && { backgroundColor: "transparent" },
-      cancel && mode !== "flat" && { backgroundColor: "red" }]}>
+      cancel && mode !== "flat" && { backgroundColor: "red" }]}
+    >
       <Pressable onPress={onPress} style={({pressed}) => pressed && styles.pressed} >
         <View style={[mode === "flat" && styles.flat]}>
           <Text style={[
             styles.buttonText,
             mode === "flat" && styles.flatText,
             cancel && mode !== "flat" && styles.cancelButtonText,
-            cancel && mode === "flat" && styles.flatCancelText]}>{children}</Text>
+            cancel && mode === "flat" && styles.flatCancelText]}
+            >
+              {children}  
+          </Text>
         </View>
       </Pressable>
     </View>
