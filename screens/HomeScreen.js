@@ -22,7 +22,7 @@ export default function HomeScreen({ navigation }) {
   };
 
   const toGuessPathScreen = () => {
-    navigation.replace('GuessPathScreen');
+    navigation.navigate('GuessPathScreen');
   };
 
   const toRankingScreen = () => {

@@ -1,13 +1,11 @@
-import { useState } from 'react';
-
-import { useContext } from "react";
-import { AuthContext } from "../store/auth-context";
-
+import { useState, useContext } from 'react';
 import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
 import * as SecureStore from 'expo-secure-store';
+
+import { AuthContext } from "../store/auth-context";
 
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
@@ -106,7 +104,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
     handleOrientation("portrait");
     setIsLoading(false);
 
-    navigation.replace("HomeScreen");
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'HomeScreen' }],
+    });
   };
 
   const onCancelModal = () => {
