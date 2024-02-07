@@ -148,7 +148,7 @@ function AuthenticatedStack({ authContext }) {
                 color={"white"}
                 size={24}
                 style={{ marginRight: 20 }}
-                onPress={() => navigation.replace("HomeScreen")} />)
+                onPress={() => navigation.goBack()} />)
           })} />
         <Stack.Screen
           name="GuessScreen"
