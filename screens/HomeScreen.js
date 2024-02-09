@@ -7,6 +7,11 @@ import { handleOrientation } from '../utils/orientation';
 
 export default function HomeScreen({ navigation }) {
 
+  function areDatasInStore() {
+    /* before upload check! */
+    /* 1 store: ok -> true */
+    /* 2 store: not ok -> context: ok -> true */
+  };
 
   useFocusEffect(() => {
     handleOrientation("portrait");
