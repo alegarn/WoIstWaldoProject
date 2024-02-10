@@ -1,17 +1,31 @@
-import{ View, StyleSheet} from 'react-native';
+import { useContext, useLayoutEffect } from 'react';
+import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
 
 import BigButton from '../components/UI/BigButton';
 import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
+import { AuthContext } from '../store/auth-context';
 
 export default function HomeScreen({ navigation }) {
 
-  function areDatasInStore() {
-    /* before upload check! */
-    /* 1 store: ok -> true */
-    /* 2 store: not ok -> context: ok -> true */
+  const context = useContext(AuthContext);
+
+  const verifyLoginInfos = async () => {
+    const token = await SecureStore?.getItemAsync("token");
+    console.log("token", token);
+    const contextToken = context?.token;
+    console.log("context", contextToken);
+    if (!token && !contextToken) {
+      Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
+    }
   };
+
+  /* UseLayoutEffect or Focus ? */
+  useLayoutEffect(() => {
+    verifyLoginInfos();
+  })
 
   useFocusEffect(() => {
     handleOrientation("portrait");
