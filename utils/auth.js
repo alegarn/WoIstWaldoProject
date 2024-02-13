@@ -2,12 +2,12 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 export async function getBackendHeaders() {
-  const token = await SecureStore.getItemAsync("token");
-  const uid = await SecureStore.getItemAsync("uid");
-  const expiry = await SecureStore.getItemAsync("expiry");
-  const access_token = await SecureStore.getItemAsync("access_token");
-  const client = await SecureStore.getItemAsync("client");
-  const userId = await SecureStore.getItemAsync("userId");
+  const token = await SecureStore?.getItemAsync("token");
+  const uid = await SecureStore?.getItemAsync("uid");
+  const expiry = await SecureStore?.getItemAsync("expiry");
+  const access_token = await SecureStore?.getItemAsync("access_token");
+  const client = await SecureStore?.getItemAsync("client");
+  const userId = await SecureStore?.getItemAsync("userId");
   return { token, uid, expiry, access_token, client, userId };
 };
 
