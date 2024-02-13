@@ -44,12 +44,30 @@ export default function RankingScreen() {
     Alert.alert("Complementary Scores of " + username, infoString);
   };
 
+  const handleError = (message, status) => {
+    if (status === 401) {
+      Alert.alert("There is a problem with the server", `${message}. Your authentication failed. Try to reconnect. You canno't get a ranking.`);
+      return
+    };
+    if (status !== 200) {
+      Alert.alert("There is a problem with the server", `${message}. Try to reconnect. You canno't get a ranking.`);
+      return
+    };
+  };
+
+
 
   const handleRankingData = async () => {
-    const tableHeaders = RANKING.tableHeaders;
+    const tableHeaders = RANKING?.tableHeaders;
     const rankingData = await getRankingData();
-    const data =  rankingData.data.data;
-    const pagyData = rankingData.data.pagy;
+
+    if (rankingData?.status !== 200) {
+      handleError(rankingData?.message, rankingData?.status);
+      return
+    };
+
+    const data =  rankingData?.data?.data;
+    const pagyData = rankingData?.data?.pagy;
     const finalDatum = convertToRanking(tableHeaders, data, pagyData);
     setRankingDatum(finalDatum);
     return rankingData;
