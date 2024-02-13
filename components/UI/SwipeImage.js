@@ -1,14 +1,14 @@
-import { useEffect, useLayoutEffect, useState } from 'react';
+import { useContext, useLayoutEffect, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
-import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
+import * as FileSystem from 'expo-file-system';
 
 import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/imagesRequests';
 import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid } from '../../utils/storageDatum';
-
-import * as FileSystem from 'expo-file-system';
+import { AuthContext } from '../../store/auth-context';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
@@ -18,6 +18,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   const [noMoreCard, setNoMoreCard] = useState(false);
   const [swipeDirection, setSwipeDirection] = useState('--');
 
+  const context = useContext(AuthContext);
 
   const handleData = async (data) => {
     console.log("handleData");
@@ -55,10 +56,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     };
   };
 
-  async function loadNewImages() {
+  async function loadNewImages(context) {
     console.log("loadNewImages");
     const lastImageUuid = await getLastImageUuid();
-    const response = await getImages(lastImageUuid);
+    const response = await getImages(lastImageUuid, context);
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
@@ -75,7 +76,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     console.log("handleImagesLoading");
 
     setAsyncImagesAreLoading(true);
-    const isCardLeft = await loadNewImages();
+    const isCardLeft = await loadNewImages(context);
     isCardLeft ? null : setNoMoreCard(true);
     await saveLastImageUuid();
     setAsyncImagesAreLoading(false);
