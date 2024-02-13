@@ -10,7 +10,7 @@ import * as SecureStore from 'expo-secure-store';
 
 async function handleGetUploadUrl({context}) {
 
-  const response = await getUploadUrl();
+  const response = await getUploadUrl(context);
 
   return { status: response.status, title: response.title, message: response.message, data: response.data };
 };

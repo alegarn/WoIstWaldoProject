@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 
 import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
+import { AuthContext } from '../store/auth-context';
 
 export default function RankingScreen() {
 
   const [rankingDatum, setRankingDatum] = useState(null);
+
+  const context = useContext(AuthContext);
 
   function convertToRanking(tableHeaders, rankingData, pagyData) {
     const totalPages = pagyData.pages;
@@ -30,7 +33,7 @@ export default function RankingScreen() {
   };
 
   const showSpecificDatum = async (username) => {
-    const response = await getUserScores({username});
+    const response = await getUserScores({username, context: context});
     console.log("response", response);
     const scores = response?.data;
     let infoString = '';
@@ -59,7 +62,7 @@ export default function RankingScreen() {
 
   const handleRankingData = async () => {
     const tableHeaders = RANKING?.tableHeaders;
-    const rankingData = await getRankingData();
+    const rankingData = await getRankingData(context);
 
     if (rankingData?.status !== 200) {
       handleError(rankingData?.message, rankingData?.status);

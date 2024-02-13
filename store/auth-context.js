@@ -11,6 +11,7 @@ export const AuthContext = createContext({
   expiry: '',
   userId: '',
   scoreId: '',
+  headers: {},
   IsAuthenticated: false,
   authenticate: () => {},
   logout: () => {},
@@ -25,9 +26,11 @@ export default function AuthContextProvider({ children }) {
   const [uid, setUid] = useState('');
   const [expiry, setExpiry] = useState('');
   const [access_token, setAccess_token] = useState('');
-
+  
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
+
+  const [headers, setHeaders] = useState({});
 
   function tokenAuthentication(token) {
     setAuthToken(token);
@@ -48,6 +51,8 @@ export default function AuthContextProvider({ children }) {
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
+
+    setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
   };
 
@@ -60,6 +65,7 @@ export default function AuthContextProvider({ children }) {
     setAccess_token('');
     setUserId('');
     setScoreId('');
+    setHeaders({});
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('client');
     await SecureStore.deleteItemAsync('expiry');
@@ -82,6 +88,7 @@ export default function AuthContextProvider({ children }) {
     expiry: expiry,
     userId: userId,
     scoreId: scoreId,
+    headers: headers,
     IsAuthenticated: !!authToken,
     authenticate: authenticate,
     logout: logout,

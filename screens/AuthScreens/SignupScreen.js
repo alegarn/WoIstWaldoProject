@@ -26,7 +26,7 @@ function SignupScreen({navigation}) {
 
 
   const handleScoreId = async () => {
-    const scoreId = await getScoreId();
+    const scoreId = await getScoreId(authContext);
     scoreId.status === 200 && authContext.saveScoreId(scoreId.data.score_id) && console.log("scoreId saved!");
     scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem", "Try to reconnect");
   };

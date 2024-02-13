@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect } from 'react';
+import { useContext } from 'react';
 import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as SecureStore from 'expo-secure-store';
@@ -17,18 +17,15 @@ export default function HomeScreen({ navigation }) {
     console.log("token", token);
     const contextToken = context?.token;
     console.log("context", contextToken);
-    if (!token && !contextToken) {
+    if (token === null && contextToken === null) {
       Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
-    }
+    };
   };
 
-  /* UseLayoutEffect or Focus ? */
-  useLayoutEffect(() => {
-    verifyLoginInfos();
-  })
 
   useFocusEffect(() => {
     handleOrientation("portrait");
+    verifyLoginInfos();
   });
 
   function navigationHandler({ screenName }) {
