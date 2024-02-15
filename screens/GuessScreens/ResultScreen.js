@@ -14,10 +14,6 @@ export default function ResultScreen({ route, navigation }) {
   }, []);
 
 
-  function userEarnPoints(pictureId) {
-    console.log(`User earned 1 point! (or not :) )`);
-  };
-
   if (onTarget) {
     userEarnPoints(pictureId)
     return <ShowSuccess navigation={navigation} route={route} />;
