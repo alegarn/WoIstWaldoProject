@@ -12,13 +12,22 @@ export default function HomeScreen({ navigation }) {
 
   const context = useContext(AuthContext);
 
+
+  const verifyTokenIsValid = async (token) => {
+    /* backend call */
+    return true
+  };
+
   const verifyLoginInfos = async () => {
-    const token = await SecureStore?.getItemAsync("token");
-    console.log("token", token);
-    const contextToken = context?.token;
-    console.log("context", contextToken);
-    if (token === null && contextToken === null) {
+    const isToken = context.verifyIsLoggedIn();
+    if (!isToken) {
       Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
+    };
+    
+    const response = await verifyTokenIsValid(context.token);
+    if (response === false) {
+      Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
+      context.IsAuthenticated(false);
     };
   };
 
