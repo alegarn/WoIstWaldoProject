@@ -55,8 +55,11 @@ async function getImagesInfos({ config, userId }) {
     //console.log("response getImagesInfos", response);
     return response;
   }).catch((error) => {
-    console.log("error getImagesInfos", error.request);
-    return null;
+    //console.log("error getImagesInfos", error.request);
+    if (error.request.status === 404) {
+      return { data: 404 };
+    };
+    return { data: null };
   });
   return response;
 };
@@ -96,7 +99,6 @@ function verifyItsBase64(imageData) {
   if (base64Regex.test(imageData)) {
     // Extract the base64 data
     const base64Data = imageData.replace(base64Regex, '');
-    //console.log("base64Data.substring(0, 100)", base64Data.substring(0, 100));
     return base64Data;
   } else {
     console.log('The string is not a base64 image.');
@@ -174,8 +176,12 @@ export async function getImages(pictureId, context) {
     imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
   };
 
-  if (imagesInfos.data === undefined) {
+  if (imagesInfos?.data === null) {
     return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
+  };
+
+  if (imagesInfos?.data === 404) {
+    return { isError: true, title: "Their is an authentication error.", message: "Please reconnect" };
   };
 
   if (imagesInfos.data?.data?.length === 0) {
@@ -222,46 +228,6 @@ export async function getImages(pictureId, context) {
   // Now you can use the file path to display the image
   //console.log('File saved to', images[0].imageFile);
   return { isError: false, images: images };
-
-  /*  */
-
-  /* file system */
-  /* async function downloadImage(uri, filename) {
-    let fileUri = FileSystem.cacheDirectory + filename;
-    let options = {};
-    await FileSystem.downloadAsync(uri, fileUri, options)
-      .then(({ uri }) => {
-        console.log('Finished downloading to ', uri);
-      })
-      .catch(error => {
-        console.error(error);
-      });
-      return fileUri;
-  }; */
-
-  // Usage
-  let fileUri = await downloadImage(response.data.url, `images-v1/${filename}`);
-  console.log("fileUri", fileUri);
-  /*  */
-
-
-
-  /* Base64 reading */
-  // Extract the base64 data
-  /* let options = { encoding: FileSystem.EncodingType.Base64 };
-  const file = FileSystem.readAsStringAsync(fileUri, options).then(data => {
-              const base64 = 'data:image/jpeg;base64' + data;
-              console.log("base64 done");
-              return base64; // are you sure you want to resolve the data and not the base64 string?
-          }).catch(err => {
-              console.log("​getFile -> err", err);
-              reject(err) ;
-          });
-
-  console.log("file", file); */
-  /*  */
-
-  return fileUri;
 };
 
 

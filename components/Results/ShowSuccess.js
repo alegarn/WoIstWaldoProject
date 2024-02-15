@@ -23,11 +23,10 @@ export default function ShowSuccess({ navigation, route }) {
     });
   };
 
-
+/* useEffect________________________________________________ */
   useLayoutEffect(() => {
     removeImageFromList(listId);
     handleScore();
-    // score: pictureId, userId
   }, []);
 
   useLayoutEffect(() => {
