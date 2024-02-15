@@ -78,8 +78,7 @@ export async function getScoreId(context) {
   const response = await axios.get(url, config).then((response) => {
     return {status: response.status, data: response.data };
   }).catch((error) => {
-    console.log("error getScoreId", error);
-
+    console.log("error getScoreId", error.request);
     return { status: error.request.status, data: error};
   });
 
