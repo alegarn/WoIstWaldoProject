@@ -16,7 +16,8 @@ export const AuthContext = createContext({
   authenticate: () => {},
   logout: () => {},
   tokenAuthentication: () => {},
-  saveScoreId: () => {}
+  saveScoreId: () => {},
+  verifyIsLoggedIn: () => {},
 });
 
 export default function AuthContextProvider({ children }) {
@@ -80,6 +81,19 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('scoreId', scoreId);
   };
 
+
+  async function verifyIsLoggedIn() {
+    const token = await SecureStore.getItemAsync('token');
+    console.log("verifyIsLoggedIn", "token", token, "authToken", authToken);
+    if (token || authToken) {
+      setIsAuthenticated(true);
+      return true;
+    } else {
+      setIsAuthenticated(false);
+      return false;
+    };
+  };
+
   const value = {
     token: authToken,
     client: client,
@@ -93,7 +107,8 @@ export default function AuthContextProvider({ children }) {
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
-    saveScoreId: saveScoreId
+    saveScoreId: saveScoreId,
+    verifyIsLoggedIn: verifyIsLoggedIn
   };
   return (
     <AuthContext.Provider value={value}>
