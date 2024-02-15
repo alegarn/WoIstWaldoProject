@@ -23,6 +23,7 @@ export async function getBackendHeaders(context) {
     return { token, uid, expiry, access_token, client, userId };
   } else {
     const { token, uid, expiry, access_token, client, userId } = await getBackendHeadersFromStorage();
+    /* if valid token */
     return { token, uid, expiry, access_token, client, userId };
   };
 };
