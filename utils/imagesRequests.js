@@ -56,8 +56,8 @@ async function getImagesInfos({ config, userId }) {
     return response;
   }).catch((error) => {
     //console.log("error getImagesInfos", error.request);
-    if (error.request.status === 404) {
-      return { data: 404 };
+    if (error.request.status === 401) {
+      return { data: 401 };
     };
     return { data: null };
   });
@@ -180,7 +180,7 @@ export async function getImages(pictureId, context) {
     return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
   };
 
-  if (imagesInfos?.data === 404) {
+  if (imagesInfos?.data === 401) {
     return { isError: true, title: "Their is an authentication error.", message: "Please reconnect" };
   };
 
