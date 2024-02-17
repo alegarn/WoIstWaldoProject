@@ -1,15 +1,48 @@
-import{ View, StyleSheet} from 'react-native';
+import { useContext } from 'react';
+import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import * as SecureStore from 'expo-secure-store';
 
 import BigButton from '../components/UI/BigButton';
 import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
+import { AuthContext } from '../store/auth-context';
+import { getScoreId } from '../utils/auth';
 
 export default function HomeScreen({ navigation }) {
+
+  const context = useContext(AuthContext);
+
+
+  const verifyTokenIsValid = async () => {
+    const response = await getScoreId(context);
+    
+    if (response.status !== 200 && response.status !== 401) {
+      Alert.alert("Error, there is a server problem.", "Any upload will not be possible. \nPlease wait and try again later");
+    };
+
+    if (response.status === 401) {
+      Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
+      context.logout();
+    };
+
+
+  };
+
+  const verifyLoginInfos = async () => {
+    const isToken = context.verifyIsLoggedIn();
+    if (!isToken) {
+      Alert.alert("Error, your session has expired", "Any upload will not be possible. \nPlease re-log in first");
+    };
+    
+    const response = await verifyTokenIsValid(context.token);
+
+  };
 
 
   useFocusEffect(() => {
     handleOrientation("portrait");
+    verifyLoginInfos();
   });
 
   function navigationHandler({ screenName }) {

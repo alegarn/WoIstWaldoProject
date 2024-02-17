@@ -2,8 +2,8 @@ import axios from "axios";
 import { getBackendHeaders } from "./auth";
 import { setHeaders } from "./auth";
 
-export async function updateUserScore({ score, pictureId }) {
-  const { token, uid, expiry, access_token, client, userId, scoreId } = await getBackendHeaders();
+export async function updateUserScore({ score, pictureId, context }) {
+  const { token, uid, expiry, access_token, client, userId, scoreId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/scores/${scoreId}`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
@@ -30,8 +30,8 @@ export async function updateUserScore({ score, pictureId }) {
   return response;
 };
 
-export async function getRankingData() {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+export async function getRankingData(context) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/scores`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
@@ -46,8 +46,8 @@ export async function getRankingData() {
   return response;
 };
 
-export async function getUserScores({username}) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders();
+export async function getUserScores({username, context}) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_scores?username=${username}`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {

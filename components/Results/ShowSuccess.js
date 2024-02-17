@@ -1,10 +1,11 @@
-import { useState, useLayoutEffect } from 'react';
+import { useState, useLayoutEffect, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
 import { removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
+import { AuthContext } from '../../store/auth-context';
 
 export default function ShowSuccess({ navigation, route }) {
 
@@ -12,18 +13,20 @@ export default function ShowSuccess({ navigation, route }) {
   const pictureId = route.params?.pictureId;
   const listId = route.params?.listId;
 
+  const context = useContext(AuthContext);
+
   const handleScore = async () => {
     const response = await updateUserScore({
       score: 1,
-      pictureId: pictureId
+      pictureId: pictureId,
+      context: context
     });
   };
 
-
+/* useEffect________________________________________________ */
   useLayoutEffect(() => {
     removeImageFromList(listId);
     handleScore();
-    // score: pictureId, userId
   }, []);
 
   useLayoutEffect(() => {

@@ -1,14 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 
 import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
+import { AuthContext } from '../store/auth-context';
 
 export default function RankingScreen() {
 
   const [rankingDatum, setRankingDatum] = useState(null);
+
+  const context = useContext(AuthContext);
 
   function convertToRanking(tableHeaders, rankingData, pagyData) {
     const totalPages = pagyData.pages;
@@ -30,7 +33,7 @@ export default function RankingScreen() {
   };
 
   const showSpecificDatum = async (username) => {
-    const response = await getUserScores({username});
+    const response = await getUserScores({username, context: context});
     console.log("response", response);
     const scores = response?.data;
     let infoString = '';
@@ -44,12 +47,30 @@ export default function RankingScreen() {
     Alert.alert("Complementary Scores of " + username, infoString);
   };
 
+  const handleError = (message, status) => {
+    if (status === 401) {
+      Alert.alert("There is a problem with the server", `${message}. Your authentication failed. Try to reconnect. You canno't get a ranking.`);
+      return
+    };
+    if (status !== 200) {
+      Alert.alert("There is a problem with the server", `${message}. Try to reconnect. You canno't get a ranking.`);
+      return
+    };
+  };
+
+
 
   const handleRankingData = async () => {
-    const tableHeaders = RANKING.tableHeaders;
-    const rankingData = await getRankingData();
-    const data =  rankingData.data.data;
-    const pagyData = rankingData.data.pagy;
+    const tableHeaders = RANKING?.tableHeaders;
+    const rankingData = await getRankingData(context);
+
+    if (rankingData?.status !== 200) {
+      handleError(rankingData?.message, rankingData?.status);
+      return
+    };
+
+    const data =  rankingData?.data?.data;
+    const pagyData = rankingData?.data?.pagy;
     const finalDatum = convertToRanking(tableHeaders, data, pagyData);
     setRankingDatum(finalDatum);
     return rankingData;

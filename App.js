@@ -202,7 +202,7 @@ function Root() {
       const storedToken = await SecureStore.getItemAsync('token')
       if (storedToken) {
         authContext.tokenAuthentication(storedToken);
-      }
+      };
       setIsTryingLogging(false);
     };
     fetchToken();
