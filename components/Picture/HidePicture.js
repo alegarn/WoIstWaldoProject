@@ -24,6 +24,15 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
   const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
 
 
+/* debug */
+const [showDebugModal, setShowDebugModal] = useState(false);
+
+const toggleDebugModal = () => {
+  setShowDebugModal(!showDebugModal);
+};
+/*  */
+
+
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({ imageIsPortrait });
@@ -39,10 +48,10 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
 
   const handlePress = (event) => {
 
-    const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
+    //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
 
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle, topLeft});
+    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
     if (location && target) {
     setTouchLocation(location)
     setTarget(target);
@@ -53,6 +62,7 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
     return (
       <ShowPicture
         uri={uri}
+        guess={false}
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         isPortrait={imageIsPortrait}
@@ -64,6 +74,9 @@ export default function HidePicture({ navigation, uri, imageIsPortrait, imageWid
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
+        /* debug */
+        showDebugModal={showDebugModal}
+        setShowDebugModal={toggleDebugModal}
         />
     );
   }

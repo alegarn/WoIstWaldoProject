@@ -15,6 +15,15 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
   const [showModal, setShowModal] = useState(false);
 
+/* debug */
+  const [showDebugModal, setShowDebugModal] = useState(false);
+
+  const toggleDebugModal = () => {
+    setShowDebugModal(!showDebugModal);
+  };
+/*  */
+
+
   const uri = imageFile;
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
@@ -37,10 +46,11 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   const handlePress = (event) => {
-    const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
+    // still needed?
+    //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
 
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle, topLeft});
+    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
     if (location && target) {
     setTouchLocation(location)
     setTarget(target);
@@ -69,7 +79,6 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         screenWidth={screenWidth}
         screenHeight={screenHeight}
         touchLocation={touchLocation}
-        //hiddenLocation={hiddenLocation}
         handlePress={handlePress}
         target={target}
         handleIconPress={handleIconPress}
@@ -77,6 +86,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
+        /*  */
+        showDebugModal={showDebugModal}
+        setShowDebugModal={toggleDebugModal}
         />
     );
   };

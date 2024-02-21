@@ -37,8 +37,9 @@ function LoginScreen() {
       const response = await login({email, password});
       console.log("response login screen", response);
       if (response.status === 200) {
-        const auth = handleAuthDataSaving(response, email);
+        const auth = await handleAuthDataSaving(response, email);
         const scoreId = await handleScoreId();
+        setIsAuthenticating(false);
       } else {
           console.log(response);
           Alert.alert('Invalid input, please retry', `${response}`);

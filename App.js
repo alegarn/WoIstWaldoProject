@@ -194,25 +194,26 @@ function Navigation({ authContext }) {
 };
 
 function Root() {
-  const [isTryingLogging, setIsTryingLogging] = useState(true);
+  const [isTryingLogging, setIsTryingLogging] = useState(false);
   const authContext = useContext(AuthContext);
 
-  useEffect(() => {
+  /* useEffect(() => {
     async function fetchToken() {
-      const storedToken = await SecureStore.getItemAsync('token')
-      if (storedToken) {
+      const storedToken = await SecureStore.getItemAsync('token');
+      const bearerTokenRegex = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
+      if (storedToken !== null && bearerTokenRegex.test(storedToken) ) {
         authContext.tokenAuthentication(storedToken);
       };
       setIsTryingLogging(false);
     };
     fetchToken();
 
-  });
-
-  if (isTryingLogging) {
+  }, [authContext.access_token]);
+ */
+/*   if (isTryingLogging) {
     const message = 'Logging in...';
     return <LoadingOverlay message={message} />
-  };
+  }; */
 
   return <Navigation  authContext={authContext}/>
 
