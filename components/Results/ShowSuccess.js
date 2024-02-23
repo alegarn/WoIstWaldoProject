@@ -9,12 +9,17 @@ import { AuthContext } from '../../store/auth-context';
 
 export default function ShowSuccess({ navigation, route }) {
 
+  
   const [showSuccessImageAnimated, setshowSuccessImageAnimated] = useState(true);
+  
+  // used to get the image owner and point the user earning points
   const pictureId = route.params?.pictureId;
+
   const listId = route.params?.listId;
 
   const context = useContext(AuthContext);
 
+  // used to point the users earning points
   const handleScore = async () => {
     const response = await updateUserScore({
       score: 1,
@@ -25,6 +30,7 @@ export default function ShowSuccess({ navigation, route }) {
 
 /* useEffect________________________________________________ */
   useLayoutEffect(() => {
+    // remove image from list (from the mobile storage)
     removeImageFromList(listId);
     handleScore();
   }, []);
