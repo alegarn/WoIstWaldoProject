@@ -7,15 +7,14 @@ import ShowFailure from "../../components/Results/ShowFailure";
 
 export default function ResultScreen({ route, navigation }) {
 
-  const { onTarget, pictureId } = route.params;
-
   useLayoutEffect(() => {
     handleOrientation("portrait");
   }, []);
 
+  const { onTarget } = route?.params;
+
 
   if (onTarget) {
-    userEarnPoints(pictureId)
     return <ShowSuccess navigation={navigation} route={route} />;
   };
 
