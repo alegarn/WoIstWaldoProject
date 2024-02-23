@@ -1,13 +1,13 @@
-import { useContext, useState, useEffect, useLayoutEffect } from 'react';
+import { useContext, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import * as SecureStore from 'expo-secure-store';
+//import * as SecureStore from 'expo-secure-store';
 
 import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
-import LoadingOverlay from './components/UI/LoadingOverlay';
+//import LoadingOverlay from './components/UI/LoadingOverlay';
 
 // Auth screens
 import LoginScreen from './screens/AuthScreens/LoginScreen';
@@ -34,8 +34,9 @@ import { AuthContext } from './store/auth-context';
 import 'expo-dev-client';
 
 // AdMob
-import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
+/* import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
 import { getUserConsent } from './utils/adHandling';
+ */
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
@@ -66,13 +67,13 @@ function AuthStack() {
 
 function AuthenticatedStack({ authContext }) {
   /* Start loading ads */
-  const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
+/*   const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
   }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
 
   useLayoutEffect(() => {
     __DEV__ && !isLoaded ? load() : null;
-  }, []);
+  }, []); */
   
   // test device id or in production
   // getUserConsent();
