@@ -16,11 +16,11 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const [showModal, setShowModal] = useState(false);
 
 /* debug */
-  const [showDebugModal, setShowDebugModal] = useState(false);
+  /* const [showDebugModal, setShowDebugModal] = useState(false);
 
   const toggleDebugModal = () => {
     setShowDebugModal(!showDebugModal);
-  };
+  }; */
 /*  */
 
 
@@ -86,9 +86,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
-        /*  */
-        showDebugModal={showDebugModal}
-        setShowDebugModal={toggleDebugModal}
+        /* for debug */
+       /*  showDebugModal={showDebugModal}
+        setShowDebugModal={toggleDebugModal} */
         />
     );
   };

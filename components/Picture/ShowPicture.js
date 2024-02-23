@@ -7,12 +7,12 @@ import { useEffect, useLayoutEffect, useState } from 'react';
 
 import ClipboardModal from '../UI/ClipboardModal';
 
-export default function ShowPicture({ /* hiddenLocation, */ showDebugModal, setShowDebugModal, uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
+export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
 
+/* mode debug */
+/*  const [debugText, setDebugText] = useState("");
 
-  const [debugText, setDebugText] = useState("");
-
-  useEffect(() => {
+   useEffect(() => {
     const text = `touchLocation, guess, target \n\n
     Those are datas to help me debug your phone (location, guess, target): \n
     touchLocation:
@@ -31,8 +31,9 @@ export default function ShowPicture({ /* hiddenLocation, */ showDebugModal, setS
   useLayoutEffect(() => {
     Alert.alert("Debug", `Tap on the screen, if the little target cannot be seen, copy the text from the modal (pop up) \n\n Button "Copy \n\n
     mail: alexgarnier78310@protonmail.com`);
-  }, []);
+  }, []); */
 
+  /* mode debug */
 
   return (
     <View style={styles.container} >
@@ -67,13 +68,13 @@ export default function ShowPicture({ /* hiddenLocation, */ showDebugModal, setS
           {"Do you want to validate this ?"}
         </CenteredModal> : null}
 {/*  */}
-        { showDebugModal ?
+{/*         { showDebugModal ?
         <ClipboardModal 
           onPress={setShowDebugModal} 
           onCancel={setShowDebugModal} 
           isModalVisible={showDebugModal} 
           debugText={debugText}>
-        </ClipboardModal> : null}
+        </ClipboardModal> : null} */}
 {/*  */}
     </View>
   );

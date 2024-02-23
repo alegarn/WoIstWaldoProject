@@ -6,11 +6,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 
-export default function ClipboardModal({ children, onCancel, onPress , isModalVisible, debugText}) {
+export default function ClipboardModal({  onCancel, onPress , isModalVisible, debugText}) {
 
   const copyToClipboard = () => {
     console.log("copyToClipboard", debugText);
-    Clipboard.setString(children);
+    console.log(typeof(debugText)); 
+    Clipboard.setString(debugText);
   };
 
   return (

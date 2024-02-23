@@ -46,9 +46,13 @@ export default function HomeScreen({ navigation }) {
   };
 
   useLayoutEffect(() => {
-    Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
+    /* home debug message */
+    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
     Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
-    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`);
+    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
+    /*  */
+
+    Alert.alert("Welcome to WoIstWaldo !", "No debug mode this time")
   }, []);
 
 
