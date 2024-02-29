@@ -1,10 +1,40 @@
-import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
+import { View, Pressable, StyleSheet, ImageBackground, Alert } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import MoveableTextBox from '../UI/MovableTextBox';
+import { useEffect, useLayoutEffect, useState } from 'react';
 
-export default function ShowPicture({ /* hiddenLocation, */ uri, guess, description, screenWidth, screenHeight, isPortrait,  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
+import ClipboardModal from '../UI/ClipboardModal';
+
+export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
+
+/* mode debug */
+/*  const [debugText, setDebugText] = useState("");
+
+   useEffect(() => {
+    const text = `touchLocation, guess, target \n\n
+    Those are datas to help me debug your phone (location, guess, target): \n
+    touchLocation:
+    if not like {}, problem
+    is: ${JSON.stringify(touchLocation)} \n 
+    guess: is ${guess} \n
+    if undefinied/null, problem
+    target: like {}, if not,problem 
+    is: ${JSON.stringify(target)} \n
+    Other bug ? 
+    add it here: \n`
+    setDebugText(text)
+    setShowDebugModal();
+  }, [touchLocation]);
+
+  useLayoutEffect(() => {
+    Alert.alert("Debug", `Tap on the screen, if the little target cannot be seen, copy the text from the modal (pop up) \n\n Button "Copy \n\n
+    mail: alexgarnier78310@protonmail.com`);
+  }, []); */
+
+  /* mode debug */
+
   return (
     <View style={styles.container} >
       <Pressable onPress={handlePress}  style={styles.pressable} >
@@ -13,11 +43,11 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
           resizeMode='stretch'
           style={[styles.image, imageDimensionStyle ]}
           >
-
+{/* no cross, when guess, if null  */}
           {touchLocation && (
             <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle}/>
           )}
-
+{/* target not showing for guessscreen */}
           { guess ? (
             <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
           ) : null }
@@ -25,6 +55,8 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
           {/* {hiddenLocation && (
             <IconButton icon={"close-circle-outline"} color={"green"} size={target.targetSize} style={hiddenTargetStyle}/>
           )} */}
+
+          {}
         </ImageBackground>
 
     </Pressable>
@@ -35,7 +67,15 @@ export default function ShowPicture({ /* hiddenLocation, */ uri, guess, descript
         <CenteredModal onPress={handleConfirm} onCancel={onCancel} isModalVisible={showModal}>
           {"Do you want to validate this ?"}
         </CenteredModal> : null}
-
+{/*  */}
+{/*         { showDebugModal ?
+        <ClipboardModal 
+          onPress={setShowDebugModal} 
+          onCancel={setShowDebugModal} 
+          isModalVisible={showDebugModal} 
+          debugText={debugText}>
+        </ClipboardModal> : null} */}
+{/*  */}
     </View>
   );
 };

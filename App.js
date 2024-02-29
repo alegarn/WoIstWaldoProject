@@ -1,13 +1,13 @@
-import { useContext, useState, useEffect, useLayoutEffect } from 'react';
+import { useContext, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import * as SecureStore from 'expo-secure-store';
+//import * as SecureStore from 'expo-secure-store';
 
 import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
-import LoadingOverlay from './components/UI/LoadingOverlay';
+//import LoadingOverlay from './components/UI/LoadingOverlay';
 
 // Auth screens
 import LoginScreen from './screens/AuthScreens/LoginScreen';
@@ -34,8 +34,9 @@ import { AuthContext } from './store/auth-context';
 import 'expo-dev-client';
 
 // AdMob
-import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
+/* import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
 import { getUserConsent } from './utils/adHandling';
+ */
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
@@ -66,13 +67,13 @@ function AuthStack() {
 
 function AuthenticatedStack({ authContext }) {
   /* Start loading ads */
-  const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
+/*   const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
   }) : { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
 
   useLayoutEffect(() => {
     __DEV__ && !isLoaded ? load() : null;
-  }, []);
+  }, []); */
   
   // test device id or in production
   // getUserConsent();
@@ -194,25 +195,26 @@ function Navigation({ authContext }) {
 };
 
 function Root() {
-  const [isTryingLogging, setIsTryingLogging] = useState(true);
+  const [isTryingLogging, setIsTryingLogging] = useState(false);
   const authContext = useContext(AuthContext);
 
-  useEffect(() => {
+  /* useEffect(() => {
     async function fetchToken() {
-      const storedToken = await SecureStore.getItemAsync('token')
-      if (storedToken) {
+      const storedToken = await SecureStore.getItemAsync('token');
+      const bearerTokenRegex = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
+      if (storedToken !== null && bearerTokenRegex.test(storedToken) ) {
         authContext.tokenAuthentication(storedToken);
       };
       setIsTryingLogging(false);
     };
     fetchToken();
 
-  });
-
-  if (isTryingLogging) {
+  }, [authContext.access_token]);
+ */
+/*   if (isTryingLogging) {
     const message = 'Logging in...';
     return <LoadingOverlay message={message} />
-  };
+  }; */
 
   return <Navigation  authContext={authContext}/>
 

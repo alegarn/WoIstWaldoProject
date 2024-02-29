@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import LoadingOverlay from "../../components/UI/LoadingOverlay";
-import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
+
+//import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
 
 /* import { InterstitialAd, TestIds, AdEventType } from 'react-native-google-mobile-ads'; */
 /* const adUnitId = __DEV__ ? TestIds.INTERSTITIAL : 'ca-app-pub-xxxxxxxxxxxxx/yyyyyyyyyyyyyy'; */
@@ -35,7 +36,7 @@ https://docs.page/invertase/react-native-google-mobile-ads/european-user-consent
 
 export default function AdScreen({navigation, route}){
 
-  const [showOverlay, setShowOverlay] = useState(false);
+  const [showOverlay, setShowOverlay] = useState(true);
 
 
   const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId } = route.params;
@@ -61,14 +62,19 @@ export default function AdScreen({navigation, route}){
     });
   };
 
-  const { isLoaded, isClosed, load, show } = __DEV__ ? 
+
+  /* test debug */
+  const { isLoaded, isClosed, load, show } = { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+/*   const { isLoaded, isClosed, load, show } = __DEV__ ? 
     useInterstitialAd(TestIds.INTERSTITIAL, {
       requestNonPersonalizedAdsOnly: true, 
     }) : 
     { isLoaded: false, isClosed: false, load: () => {}, show: () => {} };
+ */
+
+
 
   const showProdLoadingOverlay = () => {
-    setShowOverlay(true);
 
     setTimeout(() => {
       setShowOverlay(false);
@@ -78,7 +84,8 @@ export default function AdScreen({navigation, route}){
 
   useEffect(() => {
     // Start loading the interstitial straight away
-    __DEV__ && !isLoaded? load() : showProdLoadingOverlay();
+    //__DEV__ && !isLoaded? load() : showProdLoadingOverlay();
+    showProdLoadingOverlay()
   }, [load]);
 
   useEffect(() => {
@@ -86,6 +93,7 @@ export default function AdScreen({navigation, route}){
       // Action after the ad is closed
       toResultScreen();
     };
+
   }, [isClosed, navigation]);
 
 
