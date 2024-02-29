@@ -15,7 +15,10 @@ export default function ShowFailure({ navigation, route }) {
 
 
   useEffect(() => {
+    // stop the animation
     const timeout = setTimeout(() => {
+      // 2 times
+      console.log("showFailureImageAnimated", showFailureImageAnimated);
       setShowSadImageAnimated(false);
     }, 1000);
 
@@ -39,20 +42,17 @@ export default function ShowFailure({ navigation, route }) {
 
   return (
     <>
-
-        <View style={styles.container}>
-          {showFailureImageAnimated ?
-            <ImageAnimated success={false} />
-          :
-          <>
-            <Text style={styles.title}>You didn't find it :(</Text>
-            <ResultChoices navigation={navigation} retryGuess={retryGuess} success={false} />
-          </>
-          }
-        </View>
+      <View style={styles.container}>
+        {showFailureImageAnimated ?
+          <ImageAnimated success={false} />
+        :
+        <>
+          <Text style={styles.title}>You didn't find it :(</Text>
+          <ResultChoices navigation={navigation} retryGuess={retryGuess} success={false} />
+        </>
+        }
+      </View>
     </>
-
-
   );
 };
 

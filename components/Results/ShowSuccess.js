@@ -29,16 +29,18 @@ export default function ShowSuccess({ navigation, route }) {
   };
 
 /* useEffect________________________________________________ */
-  useLayoutEffect(() => {
-    // remove image from list (from the mobile storage)
-    removeImageFromList(listId);
-    handleScore();
-  }, []);
 
   useLayoutEffect(() => {
+    // stop the animation
     const timeout = setTimeout(() => {
+      console.log("showSuccessImageAnimated", showSuccessImageAnimated);
       setshowSuccessImageAnimated(false);
     }, 1000);
+    
+    // remove image from list (from the mobile storage)
+    removeImageFromList(listId);
+    // update score
+    handleScore();
 
     return () => clearTimeout(timeout);
   }, []);
