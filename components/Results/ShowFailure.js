@@ -13,6 +13,7 @@ export default function ShowFailure({ navigation, route }) {
   const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
 
 
+/* useEffect________________________________________________ */
 
   useEffect(() => {
     // stop the animation

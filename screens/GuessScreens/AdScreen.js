@@ -75,18 +75,17 @@ export default function AdScreen({navigation, route}){
 
 
   const showProdLoadingOverlay = () => {
-
     setTimeout(() => {
       setShowOverlay(false);
       toResultScreen();
     }, 5000);
   };
 
-  useEffect(() => {
+ useEffect(() => {
     // Start loading the interstitial straight away
     //__DEV__ && !isLoaded? load() : showProdLoadingOverlay();
-    showProdLoadingOverlay()
-  }, [load]);
+    showProdLoadingOverlay();
+  }, []);
 
   useEffect(() => {
     if (isClosed && __DEV__) {

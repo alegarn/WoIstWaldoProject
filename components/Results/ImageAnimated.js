@@ -23,9 +23,6 @@ export default function ImageAnimated({ success }) {
     }).start();
   };
 
-  // showed 2 times (n°2, 3)
-
-  console.log("success", success);
   success ? startSuccessAnimation() : startFailureAnimation();
 
   const animationStyle =  success ?
