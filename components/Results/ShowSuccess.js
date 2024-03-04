@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
@@ -30,7 +30,7 @@ export default function ShowSuccess({ navigation, route }) {
 
 /* useEffect________________________________________________ */
 
-  useLayoutEffect(() => {
+  useEffect(() => {
     // stop the animation
     const timeout = setTimeout(() => {
       console.log("showSuccessImageAnimated", showSuccessImageAnimated);
