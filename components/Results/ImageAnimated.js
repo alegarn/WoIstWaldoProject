@@ -7,7 +7,7 @@ export default function ImageAnimated({ success }) {
   const startSuccessAnimation = () => {
     console.log("startSuccessAnimation");
     Animated.timing(imageAnimationValue, {
-      toValue: 0,
+      toValue: 1,
       duration: 1000,
       useNativeDriver: true
     }).start();
