@@ -2,10 +2,10 @@ import { useRef } from 'react';
 import { StyleSheet, Animated, Easing } from 'react-native';
 
 export default function ImageAnimated({ success }) {
-
   const imageAnimationValue = useRef(new Animated.Value(0)).current;
 
   const startSuccessAnimation = () => {
+    console.log("startSuccessAnimation");
     Animated.timing(imageAnimationValue, {
       toValue: 1,
       duration: 1000,
@@ -14,12 +14,13 @@ export default function ImageAnimated({ success }) {
   };
 
   const startFailureAnimation = () => {
-      Animated.timing(imageAnimationValue, {
-        toValue: 100,
-        duration: 1000,
-        easing: Easing.quad,
-        useNativeDriver: true,
-      }).start();
+    console.log("startFailureAnimation");
+    Animated.timing(imageAnimationValue, {
+      toValue: 100,
+      duration: 1000,
+      easing: Easing.quad,
+      useNativeDriver: true,
+    }).start();
   };
 
   success ? startSuccessAnimation() : startFailureAnimation();

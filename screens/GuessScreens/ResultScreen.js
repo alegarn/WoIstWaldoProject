@@ -7,6 +7,9 @@ import ShowFailure from "../../components/Results/ShowFailure";
 
 export default function ResultScreen({ route, navigation }) {
 
+  // load twice (1)
+  console.log("ResultScreen");
+
   useLayoutEffect(() => {
     handleOrientation("portrait");
   }, []);

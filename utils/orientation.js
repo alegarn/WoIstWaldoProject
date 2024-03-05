@@ -11,6 +11,8 @@ const changeOrientation = async (newOrientation) => {
 };
 
 export const handleOrientation = async (orientation) => {
+  // 4
+  console.log("handleOrientation", orientation);
 /*   const [orientation, setOrientation] = useState(null); */
   const currentOrientation = await checkOrientation();
 

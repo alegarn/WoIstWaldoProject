@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useContext } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
@@ -29,16 +29,18 @@ export default function ShowSuccess({ navigation, route }) {
   };
 
 /* useEffect________________________________________________ */
-  useLayoutEffect(() => {
-    // remove image from list (from the mobile storage)
-    removeImageFromList(listId);
-    handleScore();
-  }, []);
 
-  useLayoutEffect(() => {
+  useEffect(() => {
+    // stop the animation
     const timeout = setTimeout(() => {
+      console.log("showSuccessImageAnimated", showSuccessImageAnimated);
       setshowSuccessImageAnimated(false);
     }, 1000);
+    
+    // remove image from list (from the mobile storage)
+    removeImageFromList(listId);
+    // update score
+    handleScore();
 
     return () => clearTimeout(timeout);
   }, []);
