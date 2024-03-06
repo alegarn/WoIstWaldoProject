@@ -104,12 +104,13 @@ const styles = StyleSheet.create({
   filterIconContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
   },
   filterText: {
     color: 'white',
     fontSize: 23,
     fontWeight: 'bold',
     position: "relative",
-
   },
 });
