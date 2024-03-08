@@ -5,8 +5,7 @@
 import * as FileSystem from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
 import { getUploadUrl, saveImageInfos, saveImageToAws } from "./imagesRequests";
-import * as SecureStore from 'expo-secure-store';
-
+import { checkSecureStoreItem } from "./auth";
 
 async function handleGetUploadUrl({context}) {
 
@@ -32,8 +31,10 @@ const exportImage = async ({url, filename, uri, fileExtension, contentLength, us
 };
 
 const exportPictureData = async ({ imagesInfos, context }) => {
+
+  const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
   const saveImageResponse = saveImageInfos({
-    userId: await SecureStore.getItemAsync("userId"),
+    userId: userId,
     imagesInfos: {
       user_id: imagesInfos.userId,
       name: imagesInfos.name,
@@ -70,7 +71,7 @@ export async function imageUploader({ imageInfos, context }) {
     return uploadUrlData;
   };
 
-  const userId = await SecureStore.getItemAsync("userId");
+  const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
   const exportImageData = await exportImage({
     url: uploadUrlData.data.url,
