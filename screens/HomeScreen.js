@@ -1,7 +1,6 @@
 import { useContext, useLayoutEffect } from 'react';
 import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as SecureStore from 'expo-secure-store';
 
 import BigButton from '../components/UI/BigButton';
 import { GlobalStyle } from '../constants/theme';
