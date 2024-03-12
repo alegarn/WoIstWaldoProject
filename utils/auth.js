@@ -10,7 +10,7 @@ export async function getBackendHeadersFromStorage() {
   const client = await SecureStore?.getItemAsync("client");
   const userId = await SecureStore?.getItemAsync("userId");
   return { token, uid, expiry, access_token, client, userId };
-}
+};
 
 export async function getBackendHeadersFromContext(context) {
   const { token, uid, expiry, access_token, client, userId } = context;
@@ -135,3 +135,29 @@ export async function login({email, password}) {
   return await authenticate({email, password});
 };
 
+function isNullOrUndefined(value) {
+  return value === undefined || value === null;
+};
+
+function contextEquivalent(value, context) {
+  const contextKeys = Object.keys(context);
+  
+  for (let key of contextKeys) {
+    if (key === value) {
+      return context[key];
+    };
+  };
+  
+  return null;
+};
+
+export async function checkSecureStoreItem({ secureStoreValue, context }) {
+  let item = await SecureStore.getItemAsync(secureStoreValue);
+  const result = isNullOrUndefined(item);
+  if (result) {
+    return contextEquivalent(item, context);
+  }; 
+  if (!result) {
+    return item;
+  };
+};

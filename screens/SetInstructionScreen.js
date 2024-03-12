@@ -3,7 +3,6 @@ import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
-import * as SecureStore from 'expo-secure-store';
 
 import { AuthContext } from "../store/auth-context";
 
@@ -15,6 +14,7 @@ import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
+import { checkSecureStoreItem } from '../utils/auth';
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
@@ -76,9 +76,11 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
+    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
+
     const imageInfos = {
       uri: uri,
-      userId: await SecureStore.getItemAsync("userId"),
+      userId: userId,
       fileExtension: fileExtension,
       imageHeight: imageHeight,
       imageWidth: imageWidth,
