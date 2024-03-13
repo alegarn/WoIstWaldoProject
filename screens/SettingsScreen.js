@@ -3,9 +3,11 @@ import { View, Text, TextInput, Alert, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
+import { getUserName } from '../utils/auth';
 
 export default SettingsScreen = () => {
   const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
@@ -16,6 +18,11 @@ export default SettingsScreen = () => {
     console.log("email", email); 
     console.log("email", typeof email);  
     return email;
+  };
+
+  const getUsername = async () => {
+    const username = await getUserName();
+    setUsername(username);
   };
 
   useLayoutEffect(() => {
