@@ -7,8 +7,11 @@ import { GlobalStyle } from '../constants/theme';
 export default SettingsScreen = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState('');
 
   const getEmail = async () => {
+    // combine with the context
     const email = await SecureStore.getItemAsync('email'); 
     console.log("email", email); 
     console.log("email", typeof email);  
@@ -54,6 +57,13 @@ export default SettingsScreen = () => {
         
         <Text style={styles.title}>Change Password:</Text>
         <TextInput
+          value={oldPassword}
+          onChangeText={setOldPassword}
+          placeholder="Enter your current password"
+          secureTextEntry
+          style={styles.textInput}
+        />
+        <TextInput
           value={password}
           onChangeText={setPassword}
           placeholder="Enter new password"
@@ -61,8 +71,8 @@ export default SettingsScreen = () => {
           style={styles.textInput}
         />
         <TextInput
-          value={password}
-          onChangeText={setPassword}
+          value={confirmPassword}
+          onChangeText={confirmPassword}
           placeholder="Confirm new password"
           secureTextEntry
           style={styles.textInput}
