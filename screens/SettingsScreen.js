@@ -1,9 +1,11 @@
-import { useLayoutEffect, useState } from 'react';
+import { useContext, useLayoutEffect, useState } from 'react';
 import { View, Text, TextInput, Alert, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
 import { updateUser } from '../utils/auth';
+import { AuthContext } from '../store/auth-context';
+
 
 export default SettingsScreen = () => {
 
@@ -12,6 +14,8 @@ export default SettingsScreen = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
+
+  const context = useContext(AuthContext);
 
   const getEmail = async () => {
 
@@ -55,7 +59,7 @@ export default SettingsScreen = () => {
     const data = {
       'email': email
     };
-    updateUser({email: email});
+    updateUser({ context, data });
     Alert.alert('Email changed successfully!');
   };
 
