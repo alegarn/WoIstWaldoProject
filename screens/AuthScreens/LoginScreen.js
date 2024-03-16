@@ -21,7 +21,8 @@ function LoginScreen() {
       uid: response.headers.uid,
       client: response.headers.client,
       userId: response.data.data.id,
-      email: email
+      email: email,
+      username: response.data.data.username
     });
   };
 

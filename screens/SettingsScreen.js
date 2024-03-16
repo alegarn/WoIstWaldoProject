@@ -3,9 +3,10 @@ import { View, Text, TextInput, Alert, StyleSheet } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
-import { getUserName } from '../utils/auth';
+import { updateUser } from '../utils/auth';
 
 export default SettingsScreen = () => {
+
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -13,6 +14,7 @@ export default SettingsScreen = () => {
   const [oldPassword, setOldPassword] = useState('');
 
   const getEmail = async () => {
+
     // combine with the context
     const email = await SecureStore.getItemAsync('email'); 
     console.log("email", email); 
@@ -20,21 +22,46 @@ export default SettingsScreen = () => {
     return email;
   };
 
-  const getUsername = async () => {
-    const username = await getUserName();
-    setUsername(username);
+  const getUserName = async () => {
+    // combine with the context
+    const username = await SecureStore.getItemAsync('username');
+    return username;
   };
 
   useLayoutEffect(() => {
     getEmail().then((email) => {
       setEmail(email);
-    })
-  })
+    });
+    getUserName().then((username) => {
+      setUsername(username);
+    });
+  }, []);
 
+/*   const data = {
+    'username': username,
+    'email': email,
+    'password': password,
+    'password_confirmation': confirmPassword,
+    'confirm_success_url': "exp://192.168.1.18:8081", 
+  }; */
+
+  const changeEmail = (text) => {
+    setEmail(text);
+  };
 
   const handleChangeEmail = () => {
     // Implement logic to change user's email
+    console.log("email", email);
+    const data = {
+      'email': email
+    };
+    updateUser({email: email});
     Alert.alert('Email changed successfully!');
+  };
+
+  const handleChangeUsername = () => {
+    // Implement logic to change user's username
+    Alert.alert('Username changed successfully!');
   };
 
   const handleChangePassword = () => {
@@ -54,10 +81,19 @@ export default SettingsScreen = () => {
         <TextInput
           value={email}
           onChangeText={setEmail}
-          placeholder={"Enter new email (current: " +`${email})`}
           style={styles.textInput}
         />
         <Button children="Save" onPress={handleChangeEmail} style={styles.button} />
+
+      </View>
+      <View style={styles.boxContainer}>
+        <Text style={styles.title}>Change Username:</Text>
+        <TextInput
+          value={username}
+          onChangeText={setUsername}
+          style={styles.textInput}
+        />
+        <Button children="Save" onPress={handleChangeUsername} style={styles.button} />
 
       </View>
       <View style={styles.boxContainer}>
@@ -79,7 +115,7 @@ export default SettingsScreen = () => {
         />
         <TextInput
           value={confirmPassword}
-          onChangeText={confirmPassword}
+          onChangeText={setConfirmPassword}
           placeholder="Confirm new password"
           secureTextEntry
           style={styles.textInput}

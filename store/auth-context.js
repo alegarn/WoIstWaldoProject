@@ -30,6 +30,7 @@ export default function AuthContextProvider({ children }) {
   
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
+  const [username, setUsername] = useState('');
 
   const [headers, setHeaders] = useState({});
 
@@ -37,7 +38,7 @@ export default function AuthContextProvider({ children }) {
     setAuthToken(token);
   };
 
-  async function authenticate({token, client, expiry, access_token, userId, uid, email}) {
+  async function authenticate({token, client, expiry, access_token, userId, uid, email, username}) {
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('client', client);
@@ -46,13 +47,14 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('uid', uid);
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
+    await SecureStore.setItemAsync('username', username);
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
-
+    setUsername(username);
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
   };
@@ -66,6 +68,7 @@ export default function AuthContextProvider({ children }) {
     setAccess_token('');
     setUserId('');
     setScoreId('');
+    setUsername('');
     setHeaders({});
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('client');
@@ -74,6 +77,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('uid');
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('email');
+    await SecureStore.deleteItemAsync('username');
     emptyImageList();
   };
 
