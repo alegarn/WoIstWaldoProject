@@ -161,3 +161,23 @@ export async function checkSecureStoreItem({ secureStoreValue, context }) {
     return item;
   };
 };
+
+export async function getUserName({ context }) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${context.userId}/get_user_name`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.get(url, config).then((response) => {
+    return {status: response.status, data: response.data };
+  }).catch((error) => {
+    console.log("error getUsername", error.request);
+    return { status: error.request.status, data: error};
+  });
+
+  return response;
+
+  //const username = await fetchUsername();
+  //return username;
+};
