@@ -1,5 +1,5 @@
 import { useContext, useLayoutEffect, useState } from 'react';
-import { View, Text, TextInput, Alert, StyleSheet } from 'react-native';
+import { View, Text, TextInput, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
@@ -53,24 +53,44 @@ export default SettingsScreen = () => {
     setEmail(text);
   };
 
-  const handleChangeEmail = () => {
+  const handleChangeEmail = async () => {
     // Implement logic to change user's email
-    console.log("email", email);
     const data = {
       'email': email
     };
-    updateUser({ context, data });
-    Alert.alert('Email changed successfully!');
+    const response = await updateUser({ context, data });
+    
+    response?.status === 200
+      && context.changeEmail(response.data.email) 
+      && setEmail(response.data.email)
+      && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);;
+    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
+    console.log("setting response", response?.status);
   };
 
   const handleChangeUsername = () => {
+    const data = {
+      'username': username
+    };
+    //unpermitted_parameters
+    const response = updateUser({ context, data });
     // Implement logic to change user's username
-    Alert.alert('Username changed successfully!');
+    Alert.alert('Username changed ?');
   };
 
   const handleChangePassword = () => {
     // Implement logic to change user's password
-    Alert.alert('Password changed successfully!');
+    const data = {
+      'current_password': oldPassword,
+      'password': password,
+      'password_confirmation': confirmPassword
+    };
+    const response = updateUser({ context, data });
+    response?.status === 'success' &&
+      Alert.alert('Password changed successfully!', 'Your new password is ready!');
+      // weird error (success but error)
+    response?.status !== 'success' &&
+      Alert.alert('Error', `${response?.data}`);
   };
 
   const handleDeleteAccount = () => {
@@ -79,59 +99,60 @@ export default SettingsScreen = () => {
   };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.boxContainer}>
-        <Text style={styles.title}>Change Email:</Text>
-        <TextInput
-          value={email}
-          onChangeText={setEmail}
-          style={styles.textInput}
-        />
-        <Button children="Save" onPress={handleChangeEmail} style={styles.button} />
+    <SafeAreaView style={styles.container}>
+      <ScrollView contentContainerStyle={styles.scrollContainer}>
+        <View style={styles.boxContainer}>
+          <Text style={styles.title}>Change Email:</Text>
+          <TextInput
+            value={email}
+            onChangeText={setEmail}
+            style={styles.textInput}
+          />
+          <Button children="Save" onPress={handleChangeEmail} style={styles.button} />
 
-      </View>
-      <View style={styles.boxContainer}>
-        <Text style={styles.title}>Change Username:</Text>
-        <TextInput
-          value={username}
-          onChangeText={setUsername}
-          style={styles.textInput}
-        />
-        <Button children="Save" onPress={handleChangeUsername} style={styles.button} />
+          <Text style={styles.title}>Change Username:</Text>
+          <TextInput
+            value={username}
+            onChangeText={setUsername}
+            style={styles.textInput}
+          />
+          <Button children="Save" onPress={handleChangeUsername} style={styles.button} />
 
-      </View>
-      <View style={styles.boxContainer}>
-        
-        <Text style={styles.title}>Change Password:</Text>
-        <TextInput
-          value={oldPassword}
-          onChangeText={setOldPassword}
-          placeholder="Enter your current password"
-          secureTextEntry
-          style={styles.textInput}
-        />
-        <TextInput
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Enter new password"
-          secureTextEntry
-          style={styles.textInput}
-        />
-        <TextInput
-          value={confirmPassword}
-          onChangeText={setConfirmPassword}
-          placeholder="Confirm new password"
-          secureTextEntry
-          style={styles.textInput}
-        />
-        <Button children="Save" onPress={handleChangePassword} style={styles.button} />
-      </View>
+        </View>
 
-      <View style={styles.dangerZoneContainer}>
-        <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
-        <Button children="Delete Account" onPress={handleDeleteAccount} cancel={true} style={styles.button} /* add flat */ />
-      </View>
-    </View>
+        <View style={styles.boxContainer}>
+          
+          <Text style={styles.title}>Change Password:</Text>
+          <TextInput
+            value={oldPassword}
+            onChangeText={setOldPassword}
+            placeholder="Enter your current password"
+            secureTextEntry
+            style={styles.textInput}
+          />
+          <TextInput
+            value={password}
+            onChangeText={setPassword}
+            placeholder="Enter new password"
+            secureTextEntry
+            style={styles.textInput}
+          />
+          <TextInput
+            value={confirmPassword}
+            onChangeText={setConfirmPassword}
+            placeholder="Confirm new password"
+            secureTextEntry
+            style={styles.textInput}
+          />
+          <Button children="Save" onPress={handleChangePassword} style={styles.button} />
+        </View>
+
+        <View style={styles.dangerZoneContainer}>
+          <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
+          <Button children="Delete Account" onPress={handleDeleteAccount} cancel={true} style={styles.button} /* add flat */ />
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
@@ -140,6 +161,10 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     backgroundColor: "white"
+  },
+  scrollContainer: {
+    flexGrow: 1,
+    alignItems: 'center',
   },
   boxContainer: {
     flexDirection: 'column',

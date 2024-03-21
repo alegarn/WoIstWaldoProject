@@ -3,9 +3,10 @@ import { View, Pressable, StyleSheet, ImageBackground, Alert } from 'react-nativ
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import MoveableTextBox from '../UI/MovableTextBox';
-import { useEffect, useLayoutEffect, useState } from 'react';
 
-import ClipboardModal from '../UI/ClipboardModal';
+//debug
+//import { useEffect, useLayoutEffect, useState } from 'react';
+//import ClipboardModal from '../UI/ClipboardModal';
 
 export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
 
