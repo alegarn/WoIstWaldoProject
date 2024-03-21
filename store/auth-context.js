@@ -11,6 +11,8 @@ export const AuthContext = createContext({
   expiry: '',
   userId: '',
   scoreId: '',
+  username: '',
+  email: '',
   headers: {},
   IsAuthenticated: false,
   authenticate: () => {},
@@ -32,6 +34,7 @@ export default function AuthContextProvider({ children }) {
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
   const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
 
   const [headers, setHeaders] = useState({});
 
@@ -49,6 +52,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username);
+
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
@@ -56,6 +60,7 @@ export default function AuthContextProvider({ children }) {
     setAccess_token(access_token);
     setUserId(userId);
     setUsername(username);
+    setEmail(email);
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
   };
@@ -70,7 +75,9 @@ export default function AuthContextProvider({ children }) {
     setUserId('');
     setScoreId('');
     setUsername('');
+    setEmail('');
     setHeaders({});
+
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('client');
     await SecureStore.deleteItemAsync('expiry');
@@ -79,6 +86,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('email');
     await SecureStore.deleteItemAsync('username');
+
     emptyImageList();
   };
 
@@ -113,6 +121,8 @@ export default function AuthContextProvider({ children }) {
     scoreId: scoreId,
     headers: headers,
     IsAuthenticated: !!authToken,
+    username: username,
+    email: email,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,

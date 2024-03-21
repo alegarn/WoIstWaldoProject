@@ -1,11 +1,10 @@
 import { useContext, useLayoutEffect, useState } from 'react';
 import { View, Text, TextInput, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
-import * as SecureStore from 'expo-secure-store';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
 import { updateUser } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
-
+import { checkSecureStoreItem } from '../utils/auth';
 
 export default SettingsScreen = () => {
 
@@ -20,7 +19,7 @@ export default SettingsScreen = () => {
   const getEmail = async () => {
 
     // combine with the context
-    const email = await SecureStore.getItemAsync('email'); 
+    const email = checkSecureStoreItem({ secureStoreValue: 'email', context })
     console.log("email", email); 
     console.log("email", typeof email);  
     return email;
@@ -28,7 +27,7 @@ export default SettingsScreen = () => {
 
   const getUserName = async () => {
     // combine with the context
-    const username = await SecureStore.getItemAsync('username');
+    const username = checkSecureStoreItem({ secureStoreValue: 'username', context })
     return username;
   };
 
@@ -48,10 +47,6 @@ export default SettingsScreen = () => {
     'password_confirmation': confirmPassword,
     'confirm_success_url': "exp://192.168.1.18:8081", 
   }; */
-
-  const changeEmail = (text) => {
-    setEmail(text);
-  };
 
   const handleChangeEmail = async () => {
     // Implement logic to change user's email
