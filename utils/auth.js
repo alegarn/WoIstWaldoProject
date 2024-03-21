@@ -172,7 +172,7 @@ export async function getUserName({ context }) {
   };
   const response = await axios.get(url, config).then((response) => {
     console.log("response getUserName", response.data);
-    return {status: response.status, data: response.data };
+    return { status: response.status, data: response.data };
   }).catch((error) => {
     console.log("error getUsername", error.request);
     return { status: error.request.status, data: error};
@@ -184,20 +184,6 @@ export async function getUserName({ context }) {
   //return username;
 };
 
-function setUpdateType(updateType) {
-  if (updateType === "username") {
-
-    return "username";
-  };
-  if (updateType === "email") {
-    return "email";
-  };
-  if (updateType === "password") {
-    return "password";
-  };
-  return updateType;
-};
-
 export async function updateUser({ context, data }) {
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
@@ -206,12 +192,12 @@ export async function updateUser({ context, data }) {
     headers: headers,
   };
 
-  const response = await axios.put(url, data, config).then((response) => {
+  return await axios.put(url, data, config).then((response) => {
     console.log("response updateUser", response.data);
-    return {status: response.status, data: response.data };
+    return { status: response.status, data: response.data };
   }).catch((error) => {
-    console.log("error updateUser", error.request);
-    return { status: error.request.status, data: error};
+//    console.log("error updateUser", error.request);
+    return { status: error.request.status, data: error };
   });
   
-}
+};
