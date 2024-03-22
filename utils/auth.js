@@ -192,12 +192,12 @@ export async function updateUser({ context, data }) {
     headers: headers,
   };
 
-  return await axios.put(url, data, config).then((response) => {
+  const response = await axios.put(url, data, config).then((response) => {
     console.log("response updateUser", response.data);
-    return { status: response.status, data: response.data };
+    return { status: response.status, data: response.data.data };
   }).catch((error) => {
-//    console.log("error updateUser", error.request);
+    console.log("error updateUser", error.request);
     return { status: error.request.status, data: error };
   });
-  
+  return response;
 };
