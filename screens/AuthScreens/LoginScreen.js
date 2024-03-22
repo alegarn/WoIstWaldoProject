@@ -41,11 +41,18 @@ function LoginScreen() {
         const auth = await handleAuthDataSaving(response, email);
         const scoreId = await handleScoreId();
         setIsAuthenticating(false);
+      } else if (response.status === 401) {
+        console.log(response);
+        Alert.alert('Invalid credentials, please retry', `Change your email or password before retrying \n ${response}`);
+        setIsAuthenticating(false); 
+      }
+      else if (response.status === 500) {
+        Alert.alert('Server error, please retry later', `Server problem on our side :/ \n ${response}`);
+        setIsAuthenticating(false);
       } else {
-          console.log(response);
-          Alert.alert('Invalid input, please retry', `${response}`);
-          setIsAuthenticating(false);
-        };
+        Alert.alert('Error, please retry later', `${response}`);
+        setIsAuthenticating(false);
+      };
     } catch (err) {
       console.log(err);
       Alert.alert('There is an error', err);
