@@ -19,7 +19,8 @@ export default SettingsScreen = () => {
   const getEmail = async () => {
 
     // combine with the context
-    const email = checkSecureStoreItem({ secureStoreValue: 'email', context })
+    const email = await checkSecureStoreItem({ secureStoreValue: 'email', context })
+    // returns object
     console.log("email", email); 
     console.log("email", typeof email);  
     return email;
@@ -27,7 +28,7 @@ export default SettingsScreen = () => {
 
   const getUserName = async () => {
     // combine with the context
-    const username = checkSecureStoreItem({ secureStoreValue: 'username', context })
+    const username = await checkSecureStoreItem({ secureStoreValue: 'username', context })
     return username;
   };
 
@@ -54,10 +55,11 @@ export default SettingsScreen = () => {
       'email': email
     };
     const response = await updateUser({ context, data });
-    
+    console.log("handleChangeEmail setting response", response?.status);
+    console.log("email", response?.data?.email);
     response?.status === 200
-      && context.changeEmail(response.data.email) 
-      && setEmail(response.data.email)
+      && context.changeUserEmail(response?.data?.email) 
+      && setEmail(response?.data?.email)
       && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);;
     response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
     console.log("setting response", response?.status);
@@ -73,18 +75,20 @@ export default SettingsScreen = () => {
     Alert.alert('Username changed ?');
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     // Implement logic to change user's password
     const data = {
       'current_password': oldPassword,
       'password': password,
       'password_confirmation': confirmPassword
     };
-    const response = updateUser({ context, data });
-    response?.status === 'success' &&
+    const response = await updateUser({ context, data });
+    console.log("handleChangePassword setting response", response?.status);
+
+    response?.status === 200 &&
       Alert.alert('Password changed successfully!', 'Your new password is ready!');
       // weird error (success but error)
-    response?.status !== 'success' &&
+    response?.status !== 200 &&
       Alert.alert('Error', `${response?.data}`);
   };
 
