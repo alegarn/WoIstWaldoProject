@@ -36,18 +36,25 @@ function LoginScreen() {
     setIsAuthenticating(true);
     try {
       const response = await login({email, password});
-      console.log("response login screen", response);
+      //console.log("response login screen", response);
       if (response.status === 200) {
         const auth = await handleAuthDataSaving(response, email);
         const scoreId = await handleScoreId();
         setIsAuthenticating(false);
+      } else if (response.status === 401) {
+        //console.log(response);
+        Alert.alert('Invalid credentials, please retry', `Change your email or password before retrying \n ${response}`);
+        setIsAuthenticating(false); 
+      }
+      else if (response.status === 500) {
+        Alert.alert('Server error, please retry later', `Server problem on our side :/ \n ${response}`);
+        setIsAuthenticating(false);
       } else {
-          console.log(response);
-          Alert.alert('Invalid input, please retry', `${response}`);
-          setIsAuthenticating(false);
-        };
+        Alert.alert('Error, please retry later', `${response}`);
+        setIsAuthenticating(false);
+      };
     } catch (err) {
-      console.log(err);
+      //console.log(err);
       Alert.alert('There is an error', err);
       setIsAuthenticating(false);
     };
