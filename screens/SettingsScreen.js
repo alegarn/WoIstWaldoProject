@@ -59,7 +59,7 @@ export default SettingsScreen = () => {
     console.log("email", response?.data?.email);
     response?.status === 200
       && context.changeUserEmail(response?.data?.email) 
-      && setEmail(response?.data?.email)
+//      && setEmail(response?.data?.email)
       && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);;
     response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
     console.log("setting response", response?.status);
