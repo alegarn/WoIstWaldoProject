@@ -1,10 +1,11 @@
-import { useContext, useLayoutEffect, useState } from 'react';
+import { useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { View, Text, TextInput, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import Button from '../components/UI/Button';
 import { GlobalStyle } from '../constants/theme';
-import { updateUser } from '../utils/auth';
+import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
+import CenteredModal from '../components/UI/CenteredModal';
 
 export default SettingsScreen = () => {
 
@@ -14,24 +15,38 @@ export default SettingsScreen = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
 
+  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [confirmMessage, setConfirmMessage] = useState('');
+  const [selectedOption, setSelectedOption] = useState(null);
+
   const context = useContext(AuthContext);
+
+  // Fetch email and username from secure storage__________________________________
 
   const getEmail = async () => {
 
     // combine with the context
-    const email = await checkSecureStoreItem({ secureStoreValue: 'email', context })
+    const email = await checkSecureStoreItem({ 
+      secureStoreValue: 'email', 
+      context 
+    })
     // returns object
     console.log("email", email); 
     console.log("email", typeof email);  
     return email;
   };
 
+  // Fetch username_______________________________________________________________
   const getUserName = async () => {
     // combine with the context
-    const username = await checkSecureStoreItem({ secureStoreValue: 'username', context })
+    const username = await checkSecureStoreItem({ 
+      secureStoreValue: 'username', 
+      context 
+    })
     return username;
   };
 
+  // useEffect to fetch email and username_________________________________________
   useLayoutEffect(() => {
     getEmail().then((email) => {
       setEmail(email);
@@ -49,30 +64,38 @@ export default SettingsScreen = () => {
     'confirm_success_url': "exp://192.168.1.18:8081", 
   }; */
 
+
+  // Setting functions____________________________________________________________
+
   const handleChangeEmail = async () => {
     // Implement logic to change user's email
     const data = {
-      'email': email
+      'email': email,
     };
+
     const response = await updateUser({ context, data });
     console.log("handleChangeEmail setting response", response?.status);
     console.log("email", response?.data?.email);
     response?.status === 200
       && context.changeUserEmail(response?.data?.email) 
 //      && setEmail(response?.data?.email)
-      && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);;
+      && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
     response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
     console.log("setting response", response?.status);
   };
 
-  const handleChangeUsername = () => {
+  const handleChangeUsername = async () => {
     const data = {
-      'username': username
+      'username': username,
     };
-    //unpermitted_parameters
-    const response = updateUser({ context, data });
-    // Implement logic to change user's username
-    Alert.alert('Username changed ?');
+
+    const response = await updateUser({ context, data });
+    console.log("handleChangeUsername setting response", response);
+    response?.status === 200
+      && context.changeUsername(username)
+      && Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
+    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
+
   };
 
   const handleChangePassword = async () => {
@@ -82,6 +105,7 @@ export default SettingsScreen = () => {
       'password': password,
       'password_confirmation': confirmPassword
     };
+
     const response = await updateUser({ context, data });
     console.log("handleChangePassword setting response", response?.status);
 
@@ -92,9 +116,63 @@ export default SettingsScreen = () => {
       Alert.alert('Error', `${response?.data}`);
   };
 
-  const handleDeleteAccount = () => {
-    // Implement logic to delete user's account
-    Alert.alert('Account deleted successfully!');
+  const handleDeleteAccount = async () => {
+    // send delete request
+    const response = await deleteAccount({ context });
+    response?.status === 200 &&
+      Alert.alert('Account deleted successfully!');
+  };
+
+
+  // Modal functions_____________________________________________________________
+
+  const handleButtonClick = (option) => {
+    setSelectedOption(option);
+    switch (option) {
+      case 'email':
+        setConfirmMessage('Are you sure you want to change your email?');
+        break;
+      case 'username':
+        setConfirmMessage('Are you sure you want to change your username?');
+        break;
+      case 'password':
+        setConfirmMessage('Are you sure you want to change your password?');
+        break;
+      case 'delete':
+        setConfirmMessage('Are you sure you want to delete your account?');
+        break;
+      default:
+        console.log('Invalid option selected');
+        break;
+    };
+    // get message
+    setIsModalVisible(true);
+  };
+
+  const handleConfirm = () => {
+    switch (selectedOption) {
+      case 'email':
+        handleChangeEmail();
+        break;
+      case 'username':
+        handleChangeUsername();
+        break;
+      case 'password':
+        handleChangePassword();
+        break;
+      case 'delete':
+        handleDeleteAccount();
+        break;        
+      default:
+        console.log('Invalid option selected');
+        break;
+    };
+    setIsModalVisible(false);
+  };
+
+
+  const handleCancel = () => {
+    setIsModalVisible(false);
   };
 
   return (
@@ -107,7 +185,7 @@ export default SettingsScreen = () => {
             onChangeText={setEmail}
             style={styles.textInput}
           />
-          <Button children="Save" onPress={handleChangeEmail} style={styles.button} />
+          <Button children="Save" onPress={() => handleButtonClick('email')} style={styles.button} />
 
           <Text style={styles.title}>Change Username:</Text>
           <TextInput
@@ -115,7 +193,7 @@ export default SettingsScreen = () => {
             onChangeText={setUsername}
             style={styles.textInput}
           />
-          <Button children="Save" onPress={handleChangeUsername} style={styles.button} />
+          <Button children="Save" onPress={() => handleButtonClick('username')} style={styles.button} />
 
         </View>
 
@@ -143,13 +221,27 @@ export default SettingsScreen = () => {
             secureTextEntry
             style={styles.textInput}
           />
-          <Button children="Save" onPress={handleChangePassword} style={styles.button} />
+          <Button 
+            children="Save" 
+            onPress={() => handleButtonClick('password')} 
+            style={styles.button} 
+          />
         </View>
 
         <View style={styles.dangerZoneContainer}>
           <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
-          <Button children="Delete Account" onPress={handleDeleteAccount} cancel={true} style={styles.button} /* add flat */ />
+          <Button 
+            children="Delete Account" 
+            onPress={() => handleButtonClick('delete')} 
+            cancel={true} 
+            style={styles.button} /* add flat */ />
         </View>
+        <CenteredModal 
+          isModalVisible={isModalVisible} 
+          onPress={handleConfirm} 
+          onCancel={handleCancel} 
+          children={confirmMessage}
+        />
       </ScrollView>
     </SafeAreaView>
   );
