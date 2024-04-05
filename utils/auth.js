@@ -201,3 +201,20 @@ export async function updateUser({ context, data }) {
   });
   return response;
 };
+
+export async function deleteAccount({ context, data }) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.delete(url, config).then((response) => {
+    console.log("response deleteAccount", response.data);
+    return { status: response.status, data: response.data.data };
+  }).catch((error) => {
+    console.log("error deleteAccount", error.request);
+    return { status: error.request.status, data: error };
+  });
+  return response;
+}
