@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect } from 'react';
+import { useContext, useEffect } from 'react';
 import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -7,12 +7,11 @@ import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
+import * as SecureStore from 'expo-secure-store';
 
 export default function HomeScreen({ navigation }) {
-
   
   const context = useContext(AuthContext);
-
 
 
   const verifyTokenIsValid = async () => {
@@ -41,17 +40,31 @@ export default function HomeScreen({ navigation }) {
           "Error, your session has expired", 
           "Any upload will not be possible. \nPlease re-log in first");
     };
-
+    return null;
   };
 
-  useLayoutEffect(() => {
-    /* home debug message */
+  const checkSecureStoreOk = async () => {
+    const isSecureStoreOk = await SecureStore.isAvailableAsync()
+      .then((promiseResult) => {
+        if (promiseResult) {
+          return true;
+        } else {
+          return false;
+        };
+      });
+    Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${isSecureStoreOk}`);
+    return null;
+  };
+
+
+  useEffect(() => {
+    /* To delete - home debug message */
     /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
     Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
-
-    Alert.alert("Welcome to WoIstWaldo !", "No debug mode this time")
+    checkSecureStoreOk();
+    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
 
 
@@ -61,9 +74,9 @@ export default function HomeScreen({ navigation }) {
     verifyLoginInfos();
   });
 
-  function navigationHandler({ screenName }) {
+/*   function navigationHandler({ screenName }) {
     navigation.navigate(screenName);
-  };
+  }; */
 
 
   const toHidingPathScreen = () => {
