@@ -98,6 +98,7 @@ export default function AuthContextProvider({ children }) {
 
   async function changeUserEmail(email) {
     setEmail(email);
+    setUid(email);
     await SecureStore.setItemAsync('email', email);
   };
 
