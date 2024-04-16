@@ -78,9 +78,8 @@ export default SettingsScreen = () => {
     console.log("email", response?.data?.email);
     response?.status === 200
       && context.changeUserEmail(response?.data?.email) 
-//      && setEmail(response?.data?.email)
       && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
+    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
     console.log("setting response", response?.status);
   };
 
@@ -94,7 +93,7 @@ export default SettingsScreen = () => {
     response?.status === 200
       && context.changeUsername(username)
       && Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `${response?.data}`);
+    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
 
   };
 
@@ -130,10 +129,10 @@ export default SettingsScreen = () => {
     setSelectedOption(option);
     switch (option) {
       case 'email':
-        setConfirmMessage('Are you sure you want to change your email?');
+        setConfirmMessage(`Are you sure you want to change your email to ${email} ?`);
         break;
       case 'username':
-        setConfirmMessage('Are you sure you want to change your username?');
+        setConfirmMessage(`Are you sure you want to change your username to ${username}?`);
         break;
       case 'password':
         setConfirmMessage('Are you sure you want to change your password?');
@@ -145,7 +144,6 @@ export default SettingsScreen = () => {
         console.log('Invalid option selected');
         break;
     };
-    // get message
     setIsModalVisible(true);
   };
 
