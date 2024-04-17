@@ -68,7 +68,6 @@ export default SettingsScreen = () => {
   // Setting functions____________________________________________________________
 
   const handleChangeEmail = async () => {
-    // Implement logic to change user's email
     const data = {
       'email': email,
     };
@@ -98,7 +97,6 @@ export default SettingsScreen = () => {
   };
 
   const handleChangePassword = async () => {
-    // Implement logic to change user's password
     const data = {
       'current_password': oldPassword,
       'password': password,
@@ -116,10 +114,13 @@ export default SettingsScreen = () => {
   };
 
   const handleDeleteAccount = async () => {
-    // send delete request
     const response = await deleteAccount({ context });
-    response?.status === 200 &&
-      Alert.alert('Account deleted successfully!');
+    console.log("handleDeleteAccount setting response", response?.status);
+    response?.status === 200 
+      && context.logout();
+      //&& Alert.alert('Account deleted successfully!', `${response?.data?.message}\nWe are sorry to see you go!`);
+    response?.status !== 200 
+      && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}`);
   };
 
 
@@ -138,7 +139,7 @@ export default SettingsScreen = () => {
         setConfirmMessage('Are you sure you want to change your password?');
         break;
       case 'delete':
-        setConfirmMessage('Are you sure you want to delete your account?');
+        setConfirmMessage(`!!! PERMANENT DELETION !!! \n\nAre you sure you want to delete your account?\n\n !!! PERMANENT DELETION !!!`);
         break;
       default:
         console.log('Invalid option selected');
