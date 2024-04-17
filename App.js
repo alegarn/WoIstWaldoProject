@@ -1,4 +1,4 @@
-import { useContext, useState/* , useEffect, useLayoutEffect */ } from 'react';
+import { useContext, useEffect, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
 import { StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
@@ -30,6 +30,7 @@ import SettingsScreen from './screens/SettingsScreen';
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
 
+import LoadingOverlay from './components/UI/LoadingOverlay';
 
 import 'expo-dev-client';
 
@@ -40,6 +41,7 @@ import { getUserConsent } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
+import { logout } from './utils/auth';
 
 NavigationBar.setPositionAsync("relative");
 NavigationBar.setVisibilityAsync("hidden");
@@ -78,6 +80,29 @@ function AuthenticatedStack({ authContext }) {
   // test device id or in production
   // getUserConsent();
 
+  const [showOverlay, setShowOverlay] = useState(false);
+
+  const showLoadingOverlay = () => {
+    const message = "Disconnecting...";
+    return <LoadingOverlay message={message} />;
+  };
+
+  const disconnecting = async () => {
+    setShowOverlay(true); // Show the overlay when logout is initiated
+    await logout({ context: authContext});
+    authContext.logout();
+  };
+
+  useEffect(() => {
+    if (!authContext.isAuthenticated) {
+      setShowOverlay(false); // Stop the overlay when logout is completed
+    };
+  }, [authContext.isAuthenticated]);
+
+  if (showOverlay) {
+    return showLoadingOverlay();
+  };
+
   return (
     <>
       <Stack.Navigator
@@ -104,7 +129,7 @@ function AuthenticatedStack({ authContext }) {
                   icon="exit"
                   color={tintColor}
                   size={24}
-                  onPress={authContext.logout}
+                  onPress={() => disconnecting()}
                 />
               </>
             )

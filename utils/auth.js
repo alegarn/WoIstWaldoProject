@@ -136,6 +136,22 @@ export async function login({email, password}) {
   return await authenticate({email, password});
 };
 
+export async function logout({ context }) {
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_out`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.delete(url, config).then((response) => {
+    return { status: response.status, data: response.data };
+  }).catch((error) => {
+    console.log("error logout", error.request);
+    return { status: error.request.status, data: error };
+  });
+  return response;
+};
+
 function isNullOrUndefined(value) {
   return value === undefined || value === null;
 };
@@ -218,4 +234,4 @@ export async function deleteAccount({ context }) {
       return { status: error?.request?.status, data: error };
     });
   return response;
-}
+};
