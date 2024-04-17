@@ -116,11 +116,15 @@ export default SettingsScreen = () => {
   const handleDeleteAccount = async () => {
     const response = await deleteAccount({ context });
     console.log("handleDeleteAccount setting response", response?.status);
-    response?.status === 200 
-      && context.logout();
-      //&& Alert.alert('Account deleted successfully!', `${response?.data?.message}\nWe are sorry to see you go!`);
+    
+    if (response?.status === 200) {
+      context.logout();
+      Alert.alert('Account deleted successfully!', `${response?.data?.message}\nWe are sorry to see you go!`);
+    };
+
     response?.status !== 200 
       && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}`);
+    return null;
   };
 
 
