@@ -17,12 +17,12 @@ export default function HomeScreen({ navigation }) {
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
     
-    if (response.status !== 200 && response.status !== 401) {
+    if (response?.status !== 200 && response?.status !== 401) {
       Alert.alert("Error, there is a server problem.", "Any upload will not be possible. \nPlease wait and try again later");
       return false;
     };
 
-    if (response.status === 401) {
+    if (response?.status === 401) {
       context.logout();
       return false;
     };
