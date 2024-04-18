@@ -67,7 +67,6 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function logout() {
-    setIsAuthenticated(false);
     setAuthToken(null);
     setClient('');
     setUid('');
@@ -89,6 +88,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('username');
 
     emptyImageList();
+    setIsAuthenticated(false);
   };
 
   async function saveScoreId(scoreId) {
