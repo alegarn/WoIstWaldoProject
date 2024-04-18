@@ -87,7 +87,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('email');
     await SecureStore.deleteItemAsync('username');
 
-    emptyImageList();
+    await emptyImageList();
     setIsAuthenticated(false);
   };
 
