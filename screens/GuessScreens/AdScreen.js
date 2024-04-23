@@ -98,7 +98,8 @@ export default function AdScreen({navigation, route}){
 
   // No advert ready to show yet
   if (!isLoaded && __DEV__) {
-    return showLoadingOverlay();
+    //return showLoadingOverlay();
+    return <LoadingOverlay message={"Loading Ads... Are you a test user? Sorry, just wait 5 seconds :3 "}  />
   };
 
 
