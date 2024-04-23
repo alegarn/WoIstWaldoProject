@@ -6,6 +6,7 @@ import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
 import CenteredModal from '../components/UI/CenteredModal';
+import LoadingOverlay from '../components/UI/LoadingOverlay';
 
 export default SettingsScreen = () => {
 
@@ -14,7 +15,8 @@ export default SettingsScreen = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
-
+  // UI states __________________________________________________________________
+  const [isLoading, setIsLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
   const [confirmMessage, setConfirmMessage] = useState('');
   const [selectedOption, setSelectedOption] = useState(null);
@@ -119,7 +121,10 @@ export default SettingsScreen = () => {
     
     if (response?.status === 200) {
       context.logout();
-      Alert.alert('Account deleted successfully!', `${response?.data?.message}\nWe are sorry to see you go!`);
+      Alert.alert(
+        'Account deleted successfully!', 
+      `${response?.data?.message}\nWe are sorry to see you go!`
+      );
     };
 
     response?.status !== 200 
@@ -153,6 +158,7 @@ export default SettingsScreen = () => {
   };
 
   const handleConfirm = () => {
+    setIsLoading(true);
     switch (selectedOption) {
       case 'email':
         handleChangeEmail();
@@ -170,84 +176,98 @@ export default SettingsScreen = () => {
         console.log('Invalid option selected');
         break;
     };
+    setIsLoading(false);
     setIsModalVisible(false);
   };
-
 
   const handleCancel = () => {
     setIsModalVisible(false);
   };
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scrollContainer}>
-        <View style={styles.boxContainer}>
-          <Text style={styles.title}>Change Email:</Text>
-          <TextInput
-            value={email}
-            onChangeText={setEmail}
-            style={styles.textInput}
-          />
-          <Button children="Save" onPress={() => handleButtonClick('email')} style={styles.button} />
 
-          <Text style={styles.title}>Change Username:</Text>
-          <TextInput
-            value={username}
-            onChangeText={setUsername}
-            style={styles.textInput}
-          />
-          <Button children="Save" onPress={() => handleButtonClick('username')} style={styles.button} />
+  // LoadingOverlay functions ________________________________________________________
+  const showLoadingOverlay = () => {
+    const message = "Updating...";
+    return <LoadingOverlay message={message} />;
+  };
 
-        </View>
+  if (isLoading) {
+    return showLoadingOverlay();
+  };
 
-        <View style={styles.boxContainer}>
-          
-          <Text style={styles.title}>Change Password:</Text>
-          <TextInput
-            value={oldPassword}
-            onChangeText={setOldPassword}
-            placeholder="Enter your current password"
-            secureTextEntry
-            style={styles.textInput}
+  if (!isLoading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <ScrollView contentContainerStyle={styles.scrollContainer}>
+          <View style={styles.boxContainer}>
+            <Text style={styles.title}>Change Email:</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              style={styles.textInput}
+            />
+            <Button children="Save" onPress={() => handleButtonClick('email')} style={styles.button} />
+  
+            <Text style={styles.title}>Change Username:</Text>
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              style={styles.textInput}
+            />
+            <Button children="Save" onPress={() => handleButtonClick('username')} style={styles.button} />
+  
+          </View>
+  
+          <View style={styles.boxContainer}>
+            
+            <Text style={styles.title}>Change Password:</Text>
+            <TextInput
+              value={oldPassword}
+              onChangeText={setOldPassword}
+              placeholder="Enter your current password"
+              secureTextEntry
+              style={styles.textInput}
+            />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Enter new password"
+              secureTextEntry
+              style={styles.textInput}
+            />
+            <TextInput
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              placeholder="Confirm new password"
+              secureTextEntry
+              style={styles.textInput}
+            />
+            <Button 
+              children="Save" 
+              onPress={() => handleButtonClick('password')} 
+              style={styles.button} 
+            />
+          </View>
+  
+          <View style={styles.dangerZoneContainer}>
+            <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
+            <Button 
+              children="Delete Account" 
+              onPress={() => handleButtonClick('delete')} 
+              cancel={true} 
+              style={styles.button} /* add flat */ />
+          </View>
+          <CenteredModal 
+            isModalVisible={isModalVisible} 
+            onPress={handleConfirm} 
+            onCancel={handleCancel} 
+            children={confirmMessage}
           />
-          <TextInput
-            value={password}
-            onChangeText={setPassword}
-            placeholder="Enter new password"
-            secureTextEntry
-            style={styles.textInput}
-          />
-          <TextInput
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            placeholder="Confirm new password"
-            secureTextEntry
-            style={styles.textInput}
-          />
-          <Button 
-            children="Save" 
-            onPress={() => handleButtonClick('password')} 
-            style={styles.button} 
-          />
-        </View>
-
-        <View style={styles.dangerZoneContainer}>
-          <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
-          <Button 
-            children="Delete Account" 
-            onPress={() => handleButtonClick('delete')} 
-            cancel={true} 
-            style={styles.button} /* add flat */ />
-        </View>
-        <CenteredModal 
-          isModalVisible={isModalVisible} 
-          onPress={handleConfirm} 
-          onCancel={handleCancel} 
-          children={confirmMessage}
-        />
-      </ScrollView>
-    </SafeAreaView>
-  );
+        </ScrollView>
+      </SafeAreaView>
+    );
+  };
+  
 };
 
 const styles = StyleSheet.create({
