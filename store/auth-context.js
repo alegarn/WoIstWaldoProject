@@ -11,6 +11,8 @@ export const AuthContext = createContext({
   expiry: '',
   userId: '',
   scoreId: '',
+  username: '',
+  email: '',
   headers: {},
   IsAuthenticated: false,
   authenticate: () => {},
@@ -18,6 +20,8 @@ export const AuthContext = createContext({
   tokenAuthentication: () => {},
   saveScoreId: () => {},
   verifyIsLoggedIn: () => {},
+  changeUserEmail: () => {},
+  changeUsername: () => {},
 });
 
 export default function AuthContextProvider({ children }) {
@@ -30,6 +34,8 @@ export default function AuthContextProvider({ children }) {
   
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
+  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
 
   const [headers, setHeaders] = useState({});
 
@@ -37,7 +43,7 @@ export default function AuthContextProvider({ children }) {
     setAuthToken(token);
   };
 
-  async function authenticate({token, client, expiry, access_token, userId, uid, email}) {
+  async function authenticate({token, client, expiry, access_token, userId, uid, email, username}) {
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('client', client);
@@ -46,19 +52,21 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('uid', uid);
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
+    await SecureStore.setItemAsync('username', username);
+
     setClient(client);
     setUid(uid);
     setIsAuthenticated(true);
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
-
+    setUsername(username);
+    setEmail(email);
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
   };
 
   async function logout() {
-    setIsAuthenticated(false);
     setAuthToken(null);
     setClient('');
     setUid('');
@@ -66,7 +74,10 @@ export default function AuthContextProvider({ children }) {
     setAccess_token('');
     setUserId('');
     setScoreId('');
+    setUsername('');
+    setEmail('');
     setHeaders({});
+
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('client');
     await SecureStore.deleteItemAsync('expiry');
@@ -74,7 +85,10 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('uid');
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('email');
-    emptyImageList();
+    await SecureStore.deleteItemAsync('username');
+
+    await emptyImageList();
+    setIsAuthenticated(false);
   };
 
   async function saveScoreId(scoreId) {
@@ -82,6 +96,16 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('scoreId', scoreId);
   };
 
+  async function changeUserEmail(email) {
+    setEmail(email);
+    setUid(email);
+    await SecureStore.setItemAsync('email', email);
+  };
+
+  async function changeUsername(username) {
+    setUsername(username);
+    await SecureStore.setItemAsync('username', username);
+  };
 
   async function verifyIsLoggedIn() {
     const token = await SecureStore.getItemAsync('token');
@@ -105,11 +129,15 @@ export default function AuthContextProvider({ children }) {
     scoreId: scoreId,
     headers: headers,
     IsAuthenticated: !!authToken,
+    username: username,
+    email: email,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
     saveScoreId: saveScoreId,
-    verifyIsLoggedIn: verifyIsLoggedIn
+    verifyIsLoggedIn: verifyIsLoggedIn,
+    changeUserEmail: changeUserEmail,
+    changeUsername: changeUsername
   };
   return (
     <AuthContext.Provider value={value}>

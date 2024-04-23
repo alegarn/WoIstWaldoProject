@@ -59,6 +59,7 @@ async function authenticate({ email, password }) {
   const response = await axios.post(url, data, headers).then((response) => {
     return response;
   }).catch((error) => {
+    console.log("error authenticate", error.request);
     console.log("error", error);
     return error;
   });
@@ -135,6 +136,22 @@ export async function login({email, password}) {
   return await authenticate({email, password});
 };
 
+export async function logout({ context }) {
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_out`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.delete(url, config).then((response) => {
+    return { status: response.status, data: response.data };
+  }).catch((error) => {
+    console.log("error logout", error.request);
+    return { status: error.request.status, data: error };
+  });
+  return response;
+};
+
 function isNullOrUndefined(value) {
   return value === undefined || value === null;
 };
@@ -160,4 +177,61 @@ export async function checkSecureStoreItem({ secureStoreValue, context }) {
   if (!result) {
     return item;
   };
+};
+
+export async function getUserName({ context }) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${context.userId}/get_user_name`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.get(url, config).then((response) => {
+    console.log("response getUserName", response.data);
+    return { status: response.status, data: response.data };
+  }).catch((error) => {
+    console.log("error getUsername", error.request);
+    return { status: error.request.status, data: error};
+  });
+
+  return response;
+
+  //const username = await fetchUsername();
+  //return username;
+};
+
+export async function updateUser({ context, data }) {
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+
+  const response = await axios.put(url, data, config).then((response) => {
+    console.log("response updateUser", response.data);
+    return { status: response.status, data: response.data.data };
+  }).catch((error) => {
+    console.log("error updateUser", error.request);
+    return { status: error.request.status, data: error };
+  });
+  return response;
+};
+
+export async function deleteAccount({ context }) {
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
+  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const config = {
+    headers: headers,
+  };
+  const response = await axios.delete(url, config)
+    .then((response) => {
+      console.log("response deleteAccount", response?.data);
+      return { status: response?.status, data: response?.data };
+    }).catch((error) => {
+      console.log("error deleteAccount", error?.request);
+      return { status: error?.request?.status, data: error };
+    });
+  return response;
 };

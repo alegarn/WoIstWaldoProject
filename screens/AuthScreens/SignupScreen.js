@@ -15,12 +15,14 @@ function SignupScreen({navigation}) {
 
   const handleAuthDataSaving = async (authentification) => {
     authContext.authenticate({
-      token: authentification.headers.authorization,
-      expiry: authentification.headers.expiry,
-      access_token: authentification.headers['access-token'],
-      uid: authentification.headers.uid,
-      client: authentification.headers.client,
-      userId: authentification.data.data.id
+      token: authentification?.headers?.authorization,
+      expiry: authentification?.headers?.expiry,
+      access_token: authentification?.headers['access-token'],
+      uid: authentification?.headers?.uid,
+      client: authentification?.headers?.client,
+      userId: authentification?.data?.data?.id,
+      email: authentification?.data?.data?.email,
+      username: authentification?.data?.data?.username
     });
   };
 
@@ -38,8 +40,6 @@ function SignupScreen({navigation}) {
       const {response, status, token, expiry, access_token} = await createUser({email, password, confirmPassword, username});
 
       console.log("response", response);
-
-      setIsAuthenticating(false);
 
       switch (status) {
         case 200:
@@ -62,6 +62,7 @@ function SignupScreen({navigation}) {
           Alert.alert('User creation failed', 'Please retry later.');
           break;
       };
+      setIsAuthenticating(false);
 
     } catch (err) {
       console.log(err);
