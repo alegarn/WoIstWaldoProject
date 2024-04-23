@@ -8,7 +8,7 @@ export default function LoadingOverlay({ message }) {
     <View style={styles.container}>
       <View style={styles.vertical}>
         <Text style={styles.message}>{message}</Text>
-          <Spinner />
+        <Spinner />
       </View>
     </View>
   );
@@ -21,16 +21,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   message: {
-    fontSize: 20,
+    fontSize: 30,
     color: GlobalStyle.color.secondaryColor100,
+    flexWrap: "wrap",
   },
   vertical: {
     flexDirection: "column",
     justifyContent: "center",
-  },
-  horizontal: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 10,
+    alignItems: "center",
   },
 });
