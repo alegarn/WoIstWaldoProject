@@ -16,7 +16,6 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
   const [noMoreCard, setNoMoreCard] = useState(false);
-  const [swipeDirection, setSwipeDirection] = useState('--');
 
   const context = useContext(AuthContext);
 
@@ -122,11 +121,6 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     };
   };
 
-  const lastSwipedDirection = (swipeDirection) => {
-    // nop left / later right ?
-    setSwipeDirection(swipeDirection);
-  };
-
 /* put double-tap ? */
 /*   const gesture = Gesture.Tap()
   .numberOfTaps(2)
@@ -172,7 +166,6 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
         <SwipeableCard
           item={item}
           removeCard={() => removeCard(item.listId)}
-          swipedDirection={lastSwipedDirection}
           screenWidth={screenWidth}
           screenHeight={screenHeight}
           onSwipe={startGuessing}
