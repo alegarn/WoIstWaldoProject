@@ -32,7 +32,9 @@ export default function ImageAnimated({ success }) {
   return (
     <>
       <Animated.Image
-        source={success ? require("../../assets/icons/stars.png") : require("../../assets/icons/tears.png")}
+        source={success ? 
+          require("../../assets/icons/stars.png") : 
+          require("../../assets/icons/tears.png")}
         style={[styles.image, animationStyle ]}
       />
     </>
