@@ -19,15 +19,24 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const context = useContext(AuthContext);
 
+  // Functions __________________________________________________________________
+
+  /*
+   * Handles the data received and updates the image list.
+   *
+   * @param {Array} data - The data to be handled.
+   * @return {Promise<boolean>} A promise that resolves to true if the updated image list has elements, false otherwise.
+   */
   const handleData = async (data) => {
     console.log("handleData");
 
     const lastId = await getLastImageId();
+    // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
     const updatedImageList = data?.map((image, index) => ({
-      ...image,
-      listId: lastId + index,
+     ...image,
+     listId: lastId + 1 + index,
     }));
-
+   
     if (imageList === null) {
       console.log("updatedImageList handleData imageList null");
       await storeImageList(updatedImageList);
@@ -62,11 +71,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
+      return null;
     };
     if (response.isError === false) {
       console.log("response.images", response.isError);
       const isCardLeft = await handleData(response.images);
-      return isCardLeft
+      return isCardLeft;
     };
   };
 
@@ -81,7 +91,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     setAsyncImagesAreLoading(false);
   };
 
-
+  /*
+  * Handles the retrieval of the list of images.
+  *
+  * @return {null} Returns null if the localImageList is not null and has a length of at least 4.
+  */
   const handleGetImagesList = async () => {
     console.log("handleGetImagesList");
 
@@ -94,12 +108,18 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       return null;
     };
 
+    // new images are loaded
     await handleImagesLoading();
   };
 
 
 
-
+  /*
+   * Asynchronously removes a card from the image list based on the provided id.
+   *
+   * @param {string} id - The id of the card to be removed.
+   * @return {null}
+   */
   const removeCard = async (id) => {
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
@@ -119,27 +139,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     if ((updatedImageList?.length < 4) && (!asyncImagesAreLoading)) {
       await handleImagesLoading();
     };
+    return null;
   };
 
-/* put double-tap ? */
-/*   const gesture = Gesture.Tap()
-  .numberOfTaps(2)
-  .onStart(() => {
-
-*/
-/* fait bugger le bouton? */
-/*   const gesture = Gesture.LongPress()
-  .onEnd(() => {
-    const item = imageList.slice(-1)[0];
-    startGuessing({item});
-  });
- */
+  // Effects __________________________________________________________________
   useLayoutEffect(() => {
     if (!asyncImagesAreLoading) {
       handleGetImagesList();
     };
   }, []);
 
+  // Components functions ________________________________________________________
   const showIsLoading = () => {
     const message='Loading new images...';
     return <LoadingOverlay message={message} />
@@ -192,7 +202,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
                   :
                 (
                   <>
-                    {imageList?.map((item, id) => (
+                    {[...imageList].reverse().map((item, id) => (
+                    //{imageList?.map((item, id) => (
                       <GestureCard item={item} /* gesture={gesture} */ key={id}/>
                     ))}
                   </>
