@@ -20,14 +20,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  message: {
-    fontSize: 30,
-    color: GlobalStyle.color.secondaryColor100,
-    flexWrap: "wrap",
-  },
   vertical: {
     flexDirection: "column",
     justifyContent: "center",
     alignItems: "center",
+  },
+  message: {
+    fontSize: 30,
+    color: GlobalStyle.color.secondaryColor100,
+    flexWrap: "wrap",
   },
 });
