@@ -1,4 +1,4 @@
-import { useContext, useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import{ View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -8,9 +8,11 @@ import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
 import * as SecureStore from 'expo-secure-store';
+import CenteredModal from '../components/UI/CenteredModal';
 
 export default function HomeScreen({ navigation }) {
-  
+  const [showModal, setShowModal] = useState(true);
+
   const context = useContext(AuthContext);
 
 
@@ -56,6 +58,13 @@ export default function HomeScreen({ navigation }) {
     return null;
   };
 
+  const isTutorialNeeded = async () => {
+    console.log(`context.isFirstTime: ${context.isFirstTime}`);
+    context.isFirstTime ? 
+      setShowModal(true) 
+      : setShowModal(false);
+  };
+
 
   useEffect(() => {
     /* To delete - home debug message */
@@ -64,6 +73,7 @@ export default function HomeScreen({ navigation }) {
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
     checkSecureStoreOk();
+    isTutorialNeeded();
     //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
 
@@ -80,7 +90,9 @@ export default function HomeScreen({ navigation }) {
 
 
   const toHidingPathScreen = () => {
-    navigation.navigate('HidingPathScreen');
+    navigation.navigate('HidingPathScreen', {
+      isTutorial: false
+    });
   };
 
   const toGuessPathScreen = () => {
@@ -89,6 +101,18 @@ export default function HomeScreen({ navigation }) {
 
   const toRankingScreen = () => {
     navigation.navigate('RankingScreen');
+  };
+
+  const cancelTutorial = async () => {
+    await context.isTutorialDone(true);
+    setShowModal(false);
+    return false;
+  };
+
+  const toTutorial = () => {
+    navigation.navigate('HidingPathScreen', {
+      isTutorial: true
+    });
   };
 
   return (
@@ -104,6 +128,11 @@ export default function HomeScreen({ navigation }) {
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />
+      {showModal ? (<CenteredModal 
+        children={"Welcome, do you want to do the tutorial?"} 
+        onCancel={() => cancelTutorial()} 
+        onPress={() => toTutorial()}/> )
+        : (null)}
     </View>
   );
 }

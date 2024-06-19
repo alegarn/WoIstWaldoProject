@@ -38,6 +38,7 @@ export default function AuthContextProvider({ children }) {
   const [email, setEmail] = useState('');
 
   const [headers, setHeaders] = useState({});
+  const [isFirstTime, setIsFirstTime] = useState(true);
 
   function tokenAuthentication(token) {
     setAuthToken(token);
@@ -119,6 +120,10 @@ export default function AuthContextProvider({ children }) {
     };
   };
 
+  async function isTutorialDone(answer) {
+    setIsFirstTime(answer);
+  };
+
   const value = {
     token: authToken,
     client: client,
@@ -131,14 +136,17 @@ export default function AuthContextProvider({ children }) {
     IsAuthenticated: !!authToken,
     username: username,
     email: email,
+    isFirstTime: isFirstTime,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
     saveScoreId: saveScoreId,
     verifyIsLoggedIn: verifyIsLoggedIn,
     changeUserEmail: changeUserEmail,
-    changeUsername: changeUsername
+    changeUsername: changeUsername,
+    isTutorialDone: isTutorialDone
   };
+
   return (
     <AuthContext.Provider value={value}>
       {children}
