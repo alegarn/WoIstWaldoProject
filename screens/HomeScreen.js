@@ -91,7 +91,7 @@ export default function HomeScreen({ navigation }) {
 
   const toHidingPathScreen = () => {
     navigation.navigate('HidingPathScreen', {
-      isTutorial: false
+      isTutorial: false,
     });
   };
 
@@ -111,7 +111,7 @@ export default function HomeScreen({ navigation }) {
 
   const toTutorial = () => {
     navigation.navigate('HidingPathScreen', {
-      isTutorial: true
+      isTutorial: true,
     });
   };
 

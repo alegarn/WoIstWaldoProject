@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
 
-export default function LogicalImagePicker({ navigation }) {
+export default function LogicalImagePicker({ navigation, isTutorial }) {
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
   // State for the image url
@@ -125,11 +125,13 @@ export default function LogicalImagePicker({ navigation }) {
   const showImage = () => {
     return(
       <ShowImagePicker
-      takePictureHandler={takePictureHandler}
-      pickImage={pickImage}
-      image={image}
-      imageWidth={imageWidth}
-      imageHeight={imageHeight} />
+        takePictureHandler={takePictureHandler}
+        pickImage={pickImage}
+        image={image}
+        imageWidth={imageWidth}
+        imageHeight={imageHeight}
+        isTutorial={isTutorial} 
+      />
     );
   };
 
