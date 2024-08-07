@@ -8,10 +8,11 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-export default function BigButton({ text, onPress, buttonStyle }) {
+const BigButton = forwardRef(({ text, onPress, buttonStyle }, ref) => {
   return (
     <>
       <Pressable
+        ref={ref}
         style={({ pressed }) =>
           [
             styles.homeButton,
@@ -25,7 +26,7 @@ export default function BigButton({ text, onPress, buttonStyle }) {
       </Pressable>
     </>
   );
-}
+});
 
 const styles = StyleSheet.create({
   pressed: {
@@ -64,3 +65,5 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 });
+
+export default BigButton;
