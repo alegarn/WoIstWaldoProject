@@ -10,16 +10,11 @@ import { getScoreId } from '../utils/auth';
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 
-import TutorialOverlay from '../components/UI/TutorialOverlay';
-import { useRef } from 'react';
-
 export default function HomeScreen({ navigation }) {
   const [showModal, setShowModal] = useState(true);
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
-
-  const bigButtonRef = useRef(null);
 
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
@@ -126,11 +121,12 @@ export default function HomeScreen({ navigation }) {
         text="Hide Waldo"
         onPress={toHidingPathScreen}
         buttonStyle="big"
-        ref={bigButtonRef} />
+        ref={hidingButtonRef} />
       <BigButton
         text="Find Waldo"
         onPress={toGuessPathScreen}
-        buttonStyle="big" />
+        buttonStyle="big" 
+        ref={findingButtonRef}/>
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />
@@ -138,16 +134,6 @@ export default function HomeScreen({ navigation }) {
         children={"Welcome, do you want to do the tutorial?"} 
         onCancel={() => cancelTutorial()} 
         onPress={() => toTutorial()}/> )
-        : (null)}
-      {isTutorial ? (<TutorialOverlay 
-        onPress={() => {}} 
-        targetPosition={{
-          top: bigButtonRef.current.measure().pageY,
-          left: bigButtonRef.current.measure().pageX
-        }} 
-        highlightArea={{height: 100, width: 100}} 
-        instructions={"text"} 
-        instructionsPosition={{top: 50, left: 50}}/>) 
         : (null)}
     </View>
   );
