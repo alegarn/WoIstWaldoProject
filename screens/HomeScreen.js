@@ -121,12 +121,12 @@ export default function HomeScreen({ navigation }) {
         text="Hide Waldo"
         onPress={toHidingPathScreen}
         buttonStyle="big"
-        ref={hidingButtonRef} />
+       />
       <BigButton
         text="Find Waldo"
         onPress={toGuessPathScreen}
         buttonStyle="big" 
-        ref={findingButtonRef}/>
+        />
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />

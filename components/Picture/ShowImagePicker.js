@@ -2,17 +2,48 @@ import { View, Image, StyleSheet } from 'react-native';
 
 import BigButton from '../UI/BigButton';
 import TutorialOverlay from '../UI/TutorialOverlay';
-import { useRef } from 'react';
+import { useEffect, useState } from 'react';
 
-export default function ShowImagePicker({ takePictureHandler, image, imageWidth, imageHeight, pickImage }) {
-  const bigButtonRef = useRef(null);
+export default function ShowImagePicker(
+  { takePictureHandler, 
+    image, 
+    imageWidth, 
+    imageHeight, 
+    pickImage, 
+    isTutorial 
+  }) {
+
+  
+  const [layoutValues, setLayoutValues] = useState(null);
+
+  useEffect(() => {
+    console.log("layoutValues", layoutValues);
+    //   LOG  layoutValues null
+    if (isTutorial && layoutValues != null) {
+      const {x, y, width, height} = layoutValues;
+      console.log("onLayout", x, y, width, height);
+    }
+
+  }, [layoutValues]);
+
   return (
     <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>
       <View style={[styles.buttonsContainer, {marginTop: image ? 10 : 0,}]}>
-        <BigButton 
+        {isTutorial ?
+          (<BigButton 
           text="Take a Picture" 
           onPress={takePictureHandler}
-          ref={bigButtonRef} />
+          onLayout={(event) => {
+            const {x, y, width, height} = event.nativeEvent.layout;
+            setLayoutValues({ x, y, width, height });
+          }}
+          />)
+          : 
+          (<BigButton 
+            text="Take a Picture" 
+            onPress={takePictureHandler}
+           />)
+        }
         <BigButton text="Select an Image" onPress={pickImage} />
       </View>
       {image && (
@@ -23,14 +54,8 @@ export default function ShowImagePicker({ takePictureHandler, image, imageWidth,
       {isTutorial && (
         <TutorialOverlay 
           isVisible={true} 
-          targetPosition={{
-            top: bigButtonRef.current.measure().pageY,
-            left: bigButtonRef.current.measure().pageX
-          }}
-          highlightArea={{
-            height: bigButtonRef.current && bigButtonRef.current.measure()?.height || 0, 
-            width: bigButtonRef.current && bigButtonRef.current.measure()?.width || 0
-          }} 
+          targetPosition={ layoutValues ?? {top: layoutValues?.y, left: layoutValues?.x}}
+          highlightArea={ layoutValues ?? {width: layoutValues?.width, height: layoutValues?.height}} 
           instructions={"text"}
           instructionsPosition={{top: 50, left: 50}}
           onPress={() => {console.log("next")}} />

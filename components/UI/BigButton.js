@@ -1,5 +1,6 @@
 import { Text, StyleSheet, Dimensions, Pressable, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
+import { forwardRef } from 'react';
 
 const screenHeight = Dimensions.get('window').height;
 const hideGuessButtonHeight = screenHeight * 0.35;
