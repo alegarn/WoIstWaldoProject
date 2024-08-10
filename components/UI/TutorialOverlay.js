@@ -10,8 +10,8 @@ const TutorialOverlay = forwardRef(({ onPress, targetPosition, highlightArea, in
     setIsVisible(false);
   };
 
-  console.log("targetPosition", targetPosition);
-  console.log("highlightArea", highlightArea);
+  console.log("Overlay targetPosition", targetPosition);
+  console.log("Overlay highlightArea", highlightArea);
 
   /*targetPosition {"left": undefined, "top": undefined}
   LOG  highlightArea {"height": undefined, "width": undefined}
@@ -25,7 +25,10 @@ const TutorialOverlay = forwardRef(({ onPress, targetPosition, highlightArea, in
     <Modal transparent={true} animationType="fade" visible={isVisible}>
       <View style={styles.overlay}>
         {/* This is the clear area that is clickable */}
-        <Pressable style={[styles.clickableArea, { top: targetPosition?.top, left: targetPosition?.left }]} onPress={onPress}>          
+        <Pressable 
+          style={[styles.clickableArea, { top: targetPosition?.top, left: targetPosition?.left }]} 
+          onPress={onPress}
+          >          
           {/* This could be used to show a border or some highlight */}
           <View style={[styles.highlight, { height: highlightArea?.height, width: highlightArea?.width }]} />        
         </Pressable>
