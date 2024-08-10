@@ -12,16 +12,15 @@ export default function ShowImagePicker(
     pickImage, 
     isTutorial 
   }) {
-
   
-  const [layoutValues, setLayoutValues] = useState(null);
+  const [layoutValues, setLayoutValues] = useState({x: 0, y: 0, width: 0, height: 0});
 
   useEffect(() => {
-    console.log("layoutValues", layoutValues);
+    console.log("useEffect layoutValues", layoutValues);
     //   LOG  layoutValues null
     if (isTutorial && layoutValues != null) {
       const {x, y, width, height} = layoutValues;
-      console.log("onLayout", x, y, width, height);
+      console.log("useEffect onLayout", x, y, width, height);
     }
 
   }, [layoutValues]);
@@ -30,20 +29,31 @@ export default function ShowImagePicker(
     <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>
       <View style={[styles.buttonsContainer, {marginTop: image ? 10 : 0,}]}>
         {isTutorial ?
-          (<BigButton 
-          text="Take a Picture" 
-          onPress={takePictureHandler}
-          onLayout={(event) => {
-            const {x, y, width, height} = event.nativeEvent.layout;
-            setLayoutValues({ x, y, width, height });
-          }}
-          />)
+          (
+            <View
+              onLayout={(event) => {
+                const { x, y, width, height } = event.nativeEvent.layout;
+                setLayoutValues({ x, y, width, height });
+                console.log("View onLayout", x, y, width, height);
+              }} 
+              >
+              <BigButton 
+                text="Take a Picture" 
+                onPress={takePictureHandler}
+                style={{ width: 200, height: 50 }} // Temporarily set a fixed size
+                onLayout={(event) => {
+                  const { x, y, width, height } = event.nativeEvent.layout;
+                  console.log("onLayout BigButton", x, y, width, height);
+                }}
+                />
+            </View>
+          )
           : 
-          (<BigButton 
+          <BigButton 
             text="Take a Picture" 
             onPress={takePictureHandler}
-           />)
-        }
+           /> 
+        } 
         <BigButton text="Select an Image" onPress={pickImage} />
       </View>
       {image && (

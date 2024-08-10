@@ -1,6 +1,5 @@
-import { Text, StyleSheet, Dimensions, Pressable, Platform } from 'react-native';
+import { Text, StyleSheet, Dimensions, Pressable, Platform, View } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
-import { forwardRef } from 'react';
 
 const screenHeight = Dimensions.get('window').height;
 const hideGuessButtonHeight = screenHeight * 0.35;
@@ -9,11 +8,14 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-const BigButton = forwardRef(({ text, onPress, buttonStyle }, ref) => {
+const BigButton = (({ text, onPress, buttonStyle }) => {
   return (
-    <>
+    <View
+      onLayout={({ nativeEvent }) => {
+        console.log('onLayout view', nativeEvent.layout);
+      }
+      }>
       <Pressable
-        ref={ref}
         style={({ pressed }) =>
           [
             styles.homeButton,
@@ -25,7 +27,7 @@ const BigButton = forwardRef(({ text, onPress, buttonStyle }, ref) => {
         onPress={onPress}>
         <Text style={styles.homeButtonText}>{text}</Text>
       </Pressable>
-    </>
+    </View>
   );
 });
 
