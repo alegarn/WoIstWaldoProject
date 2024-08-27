@@ -1,4 +1,4 @@
-import { Text, StyleSheet, Dimensions, Pressable, Platform } from 'react-native';
+import { Text, StyleSheet, Dimensions, Pressable, Platform, View } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
 const screenHeight = Dimensions.get('window').height;
@@ -8,10 +8,10 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-export default function BigButton({ text, onPress, buttonStyle }) {
+const BigButton = (({ text, onPress, buttonStyle }) => {
   return (
-    <>
-      <Pressable
+    <View>
+        <Pressable
         style={({ pressed }) =>
           [
             styles.homeButton,
@@ -23,9 +23,9 @@ export default function BigButton({ text, onPress, buttonStyle }) {
         onPress={onPress}>
         <Text style={styles.homeButtonText}>{text}</Text>
       </Pressable>
-    </>
+    </View>
   );
-}
+});
 
 const styles = StyleSheet.create({
   pressed: {
@@ -64,3 +64,5 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
 });
+
+export default BigButton;
