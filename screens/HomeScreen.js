@@ -62,7 +62,7 @@ export default function HomeScreen({ navigation }) {
     console.log(`context.isFirstTime: ${context.isFirstTime}`);
     context.isFirstTime ? 
       setShowModal(true) 
-      : setShowModal(false);
+      : setShowModal(false);    
   };
 
 
@@ -73,7 +73,7 @@ export default function HomeScreen({ navigation }) {
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
     checkSecureStoreOk();
-    isTutorialNeeded();
+    isTutorialNeeded(); 
     //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
 
@@ -130,11 +130,14 @@ export default function HomeScreen({ navigation }) {
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />
-      {showModal ? (<CenteredModal 
-        children={"Welcome, do you want to do the tutorial?"} 
-        onCancel={() => cancelTutorial()} 
-        onPress={() => toTutorial()}/> )
-        : (null)}
+      {showModal && 
+        <CenteredModal 
+          isModalVisible={showModal}
+          children={"Welcome, do you want to do the tutorial? \n It will help you to learn how to play the game in 5 minutes."} 
+          onCancel={() => cancelTutorial()} 
+          onPress={() => toTutorial()}
+          />
+      }
     </View>
   );
 }
