@@ -1,13 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable } from 'react-native';
+import { INSTRUCTIONS } from '../../constants/instructions';
 
-
-const TutorialOverlay =( instructions, instructionsPosition ) => {
+const TutorialOverlay =({ screen, instructionsPosition}) => {
   const [isVisible, setIsVisible] = useState(true);
-
+  const [instructions, setInstructions] = useState("instructions");
   const closeModal = () => {
     setIsVisible(false);
   };
+
+  useEffect(() => {
+    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]);   
+  }, [screen]);
 
   return (
     <Modal transparent={true} animationType="fade" visible={isVisible}>
@@ -68,6 +72,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 10,
+    width: '80%',
   },
   instructions: {
     fontSize: 16,
