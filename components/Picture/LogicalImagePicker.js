@@ -114,9 +114,10 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
       uri: pickedImage.assets[0].uri,
       imageWidth: pickedImage.assets[0].width,
       imageHeight: pickedImage.assets[0].height,
-      screenHeight:isPortrait ? screenWidth : screenHeight,
-      screenWidth:isPortrait ? screenHeight : screenWidth,
-      isPortrait:isPortrait,
+      screenHeight: isPortrait ? screenWidth : screenHeight,
+      screenWidth: isPortrait ? screenHeight : screenWidth,
+      isPortrait: isPortrait,
+      isTutorial: isTutorial,
     });
 
   };

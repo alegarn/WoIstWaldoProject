@@ -1,16 +1,21 @@
-import React, { useState } from 'react';
+import { useState, forwardRef } from 'react';
 import { Modal, View, Text, StyleSheet, Dimensions, Pressable } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
-const TutorialOverlay = React.forwardRef(({ onPress, targetPosition, highlightArea, instructions, instructionsPosition }, ref) => {
+const TutorialOverlay = forwardRef(({ onPress, targetPosition, highlightArea, instructions, instructionsPosition }, ref) => {
   const [isVisible, setIsVisible] = useState(true);
 
   const closeModal = () => {
     setIsVisible(false);
   };
 
-  console.log("targetPosition", targetPosition);
+  console.log("Overlay targetPosition", targetPosition);
+  console.log("Overlay highlightArea", highlightArea);
+
+  /*targetPosition {"left": undefined, "top": undefined}
+  LOG  highlightArea {"height": undefined, "width": undefined}
+  */
 
   if (!targetPosition) {
     return null; // Return null or handle the case where targetPosition is null
@@ -20,12 +25,16 @@ const TutorialOverlay = React.forwardRef(({ onPress, targetPosition, highlightAr
     <Modal transparent={true} animationType="fade" visible={isVisible}>
       <View style={styles.overlay}>
         {/* This is the clear area that is clickable */}
-        <Pressable style={[styles.clickableArea, { top: targetPosition.top, left: targetPosition.left }]} onPress={onPress}>          {/* This could be used to show a border or some highlight */}
-          <View style={[styles.highlight, { height: highlightArea.height, width: highlightArea.width }]} />        
+        <Pressable 
+          style={[styles.clickableArea, { top: targetPosition?.top, left: targetPosition?.left }]} 
+          onPress={onPress}
+          >          
+          {/* This could be used to show a border or some highlight */}
+          <View style={[styles.highlight, { height: highlightArea?.height, width: highlightArea?.width }]} />        
         </Pressable>
 
         {/* Arrow pointing to the clickable area */}
-        <View style={[styles.arrow, targetPosition ? { top: targetPosition.top + targetPosition.height, left: targetPosition.left + targetPosition.width / 2 - 10 } : {}]} />
+        <View style={[styles.arrow, targetPosition ?? { top: targetPosition?.top + highlightArea?.height, left: targetPosition?.left + highlightArea?.width / 2 - 10 } ]} />
 
         {/* Instruction Modal */}
         <View style={[styles.instructionModal, instructionsPosition]}>

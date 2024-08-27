@@ -2,14 +2,35 @@ import { View, Image, StyleSheet } from 'react-native';
 
 import BigButton from '../UI/BigButton';
 import TutorialOverlay from '../UI/TutorialOverlay';
+import { useEffect, useState } from 'react';
 
-export default function ShowImagePicker({ takePictureHandler, image, imageWidth, imageHeight, pickImage }) {
+export default function ShowImagePicker(
+  { takePictureHandler, 
+    image, 
+    imageWidth, 
+    imageHeight, 
+    pickImage, 
+    isTutorial 
+  }) {
+  
 
   return (
     <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>
       <View style={[styles.buttonsContainer, {marginTop: image ? 10 : 0,}]}>
-        <BigButton text="Take a Picture" onPress={takePictureHandler} />
-        <BigButton text="Select an Image" onPress={pickImage} />
+        {isTutorial ?
+            <BigButton 
+              text="Take a Picture" 
+              onPress={takePictureHandler}
+              />
+          : 
+            <>
+              <BigButton 
+                text="Take a Picture" 
+                onPress={takePictureHandler}
+              /> 
+              <BigButton text="Select an Image" onPress={pickImage} />
+            </>
+        } 
       </View>
       {image && (
         <View style={styles.imageContainer}>
@@ -19,10 +40,11 @@ export default function ShowImagePicker({ takePictureHandler, image, imageWidth,
       {isTutorial && (
         <TutorialOverlay 
           isVisible={true} 
-          targetPosition={bigButtonRef.current && bigButtonRef.current.measure()}
-          highlightArea={{height: 100, width: 100}} 
+          targetPosition={ layoutValues ?? {top: layoutValues?.y, left: layoutValues?.x}}
+          highlightArea={ layoutValues ?? {width: layoutValues?.width, height: layoutValues?.height}} 
           instructions={"text"}
           instructionsPosition={{top: 50, left: 50}}
+          screenStyle={"ShowImagePicker"}
           onPress={() => {console.log("next")}} />
       )}
     </View>

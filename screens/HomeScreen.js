@@ -1,5 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
-import{ View, StyleSheet, Alert} from 'react-native';
+import { View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import BigButton from '../components/UI/BigButton';
@@ -12,9 +12,9 @@ import CenteredModal from '../components/UI/CenteredModal';
 
 export default function HomeScreen({ navigation }) {
   const [showModal, setShowModal] = useState(true);
+  const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
-
 
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
@@ -120,11 +120,13 @@ export default function HomeScreen({ navigation }) {
       <BigButton
         text="Hide Waldo"
         onPress={toHidingPathScreen}
-        buttonStyle="big" />
+        buttonStyle="big"
+       />
       <BigButton
         text="Find Waldo"
         onPress={toGuessPathScreen}
-        buttonStyle="big" />
+        buttonStyle="big" 
+        />
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />
