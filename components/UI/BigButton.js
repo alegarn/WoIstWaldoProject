@@ -10,12 +10,8 @@ const rankingButtonWidth = screenWidth * 0.75;
 
 const BigButton = (({ text, onPress, buttonStyle }) => {
   return (
-    <View
-      onLayout={({ nativeEvent }) => {
-        console.log('onLayout view', nativeEvent.layout);
-      }
-      }>
-      <Pressable
+    <View>
+        <Pressable
         style={({ pressed }) =>
           [
             styles.homeButton,
