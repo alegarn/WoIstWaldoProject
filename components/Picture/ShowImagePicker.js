@@ -38,10 +38,8 @@ export default function ShowImagePicker(
       )}
       {isTutorial && (
         <TutorialOverlay 
-          isVisible={true} 
           instructions={"text"}
           instructionsPosition={{top: 50, left: 50}}
-          screenStyle={"ShowImagePicker"}
           onPress={() => {console.log("next")}} />
       )}
     </View>

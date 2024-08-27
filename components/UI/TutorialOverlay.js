@@ -2,15 +2,11 @@ import { useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable } from 'react-native';
 
 
-const TutorialOverlay =( targetPosition, instructions, instructionsPosition ) => {
+const TutorialOverlay =( instructions, instructionsPosition ) => {
   const [isVisible, setIsVisible] = useState(true);
 
   const closeModal = () => {
     setIsVisible(false);
-  };
-
-  if (!targetPosition) {
-    return null; // Return null or handle the case where targetPosition is null
   };
 
   return (
