@@ -2,7 +2,6 @@ import { View, Image, StyleSheet } from 'react-native';
 
 import BigButton from '../UI/BigButton';
 import TutorialOverlay from '../UI/TutorialOverlay';
-import { useEffect, useState } from 'react';
 
 export default function ShowImagePicker(
   { takePictureHandler, 
@@ -40,8 +39,6 @@ export default function ShowImagePicker(
       {isTutorial && (
         <TutorialOverlay 
           isVisible={true} 
-          targetPosition={ layoutValues ?? {top: layoutValues?.y, left: layoutValues?.x}}
-          highlightArea={ layoutValues ?? {width: layoutValues?.width, height: layoutValues?.height}} 
           instructions={"text"}
           instructionsPosition={{top: 50, left: 50}}
           screenStyle={"ShowImagePicker"}
