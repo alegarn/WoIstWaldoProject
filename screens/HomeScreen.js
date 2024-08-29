@@ -9,6 +9,7 @@ import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
+import TutorialOverlay from '../components/UI/TutorialOverlay';
 
 export default function HomeScreen({ navigation }) {
   const [showModal, setShowModal] = useState(true);
@@ -109,6 +110,10 @@ export default function HomeScreen({ navigation }) {
     return false;
   };
 
+  const startTutorial = async () => {
+    setIsTutorial(true);
+  };
+
   const toTutorial = () => {
     navigation.navigate('HidingPathScreen', {
       isTutorial: true,
@@ -130,11 +135,21 @@ export default function HomeScreen({ navigation }) {
       <BigButton
         text="Ranking"
         onPress={toRankingScreen} />
-      {showModal && 
+      {
+        showModal && 
         <CenteredModal 
           isModalVisible={showModal}
-          children={"Welcome, do you want to do the tutorial? \n It will help you to learn how to play the game in 5 minutes."} 
+          children={"Welcome, do you want to do the tutorial? \n\n It will help you to learn how to play the game in 5 minutes. \n\n Later it is possible to do it again."} 
           onCancel={() => cancelTutorial()} 
+          onPress={() => startTutorial()}
+          />
+      }
+      {
+        isTutorial &&
+        <TutorialOverlay
+          isVisible={isTutorial}
+          screen="HomeScreen"
+          instructionsPosition={{top:0, left: 0}}
           onPress={() => toTutorial()}
           />
       }
