@@ -6,21 +6,24 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
   const [closeButtonText, setCloseButtonText] = useState("Close");
-
-  let imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+  const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
+  
   const updateImageUrl = (screen) => {
     switch (screen) {
       case "HomeScreen":
-        imageUrl = require("../../assets/tutorial/farm_pict_home_320.jpg");
+        setImageUrl(require("../../assets/tutorial/farm_pict_home_320.jpg"));
         break;  
       case "HidingPathScreen":
-        imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+        setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
+        break;
+      case "HideScreen":
+        setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
         break;
     
       default:
-        imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+        setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
         break;
-      }
+      };
       return null;
     };
 
@@ -36,6 +39,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
 
   const onPressAction = () => {
     if (onPress !== undefined) {
+      closeModal();
       onPress();
     };
     if (onPress === undefined) {
