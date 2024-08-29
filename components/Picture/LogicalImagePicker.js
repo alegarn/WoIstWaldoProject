@@ -26,7 +26,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
   async function grantPermission(requestPermission) {
     const permissionResponse = await requestPermission();
     return permissionResponse.granted;
-  }
+  };
 
   // Function to verify camera permission
   async function verifyPermission() {
@@ -89,6 +89,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
       screenHeight:isPortrait ? screenWidth : screenHeight,
       screenWidth:isPortrait ? screenHeight : screenWidth,
       isPortrait:isPortrait,
+      isTutorial: isTutorial,
     });
 
     return null
