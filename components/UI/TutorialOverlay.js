@@ -7,9 +7,27 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
   const [instructions, setInstructions] = useState("instructions");
   const [closeButtonText, setCloseButtonText] = useState("Close");
 
+  let imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+  const updateImageUrl = (screen) => {
+    switch (screen) {
+      case "HomeScreen":
+        imageUrl = require("../../assets/tutorial/farm_pict_home_320.jpg");
+        break;  
+      case "HidingPathScreen":
+        imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+        break;
+    
+      default:
+        imageUrl = require("../../assets/tutorial/farm_pict_320.jpg");
+        break;
+      }
+      return null;
+    };
+
   useEffect(() => {
     setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
     setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
+    updateImageUrl(screen);
   }, [screen]);
 
   const closeModal = () => {
@@ -22,7 +40,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
     };
     if (onPress === undefined) {
       closeModal();
-    }
+    };
   };
 
   return (
@@ -42,7 +60,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
  */}
         {/* Instruction Modal */}
         <ScrollView style={[styles.instructionModal, instructionsPosition]}>
-          <Image source={require('../../assets/tutorial/farm_pict_320.jpg')} style={styles.image}/>
+          <Image source={imageUrl} style={styles.image}/>
           <Text style={styles.instructions}>{instructions}</Text>
           <Pressable onPress={onPressAction} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>{closeButtonText}</Text>
