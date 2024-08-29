@@ -2,19 +2,28 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
-const TutorialOverlay =({ screen, instructionsPosition}) => {
+const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
   const [closeButtonText, setCloseButtonText] = useState("Close");
-
-  const closeModal = () => {
-    setIsVisible(false);
-  };
 
   useEffect(() => {
     setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
     setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
   }, [screen]);
+
+  const closeModal = () => {
+    setIsVisible(false);
+  };
+
+  const onPressAction = () => {
+    if (onPress !== undefined) {
+      onPress();
+    };
+    if (onPress === undefined) {
+      closeModal();
+    }
+  };
 
   return (
     <Modal transparent={true} animationType="fade" visible={isVisible}>
@@ -35,7 +44,7 @@ const TutorialOverlay =({ screen, instructionsPosition}) => {
         <ScrollView style={[styles.instructionModal, instructionsPosition]}>
           <Image source={require('../../assets/tutorial/farm_pict_320.jpg')} style={styles.image}/>
           <Text style={styles.instructions}>{instructions}</Text>
-          <Pressable onPress={closeModal} style={styles.closeButton}>
+          <Pressable onPress={onPressAction} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>{closeButtonText}</Text>
           </Pressable>
         </ScrollView>
