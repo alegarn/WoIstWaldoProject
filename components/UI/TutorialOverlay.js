@@ -1,13 +1,20 @@
-import { useState } from 'react';
-import { Modal, View, Text, StyleSheet, Pressable } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
+import { INSTRUCTIONS } from '../../constants/instructions';
 
-
-const TutorialOverlay =( instructions, instructionsPosition ) => {
+const TutorialOverlay =({ screen, instructionsPosition}) => {
   const [isVisible, setIsVisible] = useState(true);
+  const [instructions, setInstructions] = useState("instructions");
+  const [closeButtonText, setCloseButtonText] = useState("Close");
 
   const closeModal = () => {
     setIsVisible(false);
   };
+
+  useEffect(() => {
+    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
+    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
+  }, [screen]);
 
   return (
     <Modal transparent={true} animationType="fade" visible={isVisible}>
@@ -25,12 +32,13 @@ const TutorialOverlay =( instructions, instructionsPosition ) => {
 {/*         <View style={[styles.arrow, targetPosition ?? { top: targetPosition?.top + highlightArea?.height, left: targetPosition?.left + highlightArea?.width / 2 - 10 } ]} />
  */}
         {/* Instruction Modal */}
-        <View style={[styles.instructionModal, instructionsPosition]}>
+        <ScrollView style={[styles.instructionModal, instructionsPosition]}>
+          <Image source={require('../../assets/tutorial/farm_pict_320.jpg')} style={styles.image}/>
           <Text style={styles.instructions}>{instructions}</Text>
           <Pressable onPress={closeModal} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>Close</Text>
+            <Text style={styles.closeButtonText}>{closeButtonText}</Text>
           </Pressable>
-        </View>
+        </ScrollView>
       </View>
     </Modal>
   );
@@ -42,6 +50,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  image: {
+    maxWidth: '100%',
+    minHeight: 80,
   },
   clickableArea: {
     position: 'absolute',
@@ -68,14 +80,18 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     padding: 20,
     borderRadius: 10,
+    width: '80%',
+    maxHeight: '90%',
+    alignContent: 'center',
   },
   instructions: {
-    fontSize: 16,
+    fontSize: 18,
     color: 'black',
     textAlign: 'center',
   },
   closeButton: {
     marginTop: 20,
+    marginBottom: 40,
     paddingVertical: 10,
     paddingHorizontal: 20,
     backgroundColor: '#3498db',
@@ -84,6 +100,7 @@ const styles = StyleSheet.create({
   closeButtonText: {
     color: 'white',
     fontSize: 16,
+    textAlign: 'center',
   },
 });
 
