@@ -40,7 +40,7 @@ export default function ShowImagePicker(
         <TutorialOverlay 
           screen={"HidingPathScreen"}
           instructionsPosition={{top:0, left: 0}}
-          onPress={() => {console.log("next")}} />
+         />
       )}
     </View>
   );
