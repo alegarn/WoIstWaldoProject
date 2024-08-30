@@ -12,6 +12,7 @@ import ModalContent from '../components/UI/ModalContent';
 import { imageUploader } from "../utils/fileUploader";
 import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
+import TutorialOverlay from '../components/UI/TutorialOverlay';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
@@ -23,7 +24,6 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
 
-
   const uri = route.params?.uri;
   const imageWidth = route.params?.imageWidth;
   const imageHeight = route.params?.imageHeight;
@@ -33,6 +33,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const touchLocation = route.params?.touchLocation;
   const target = route.params?.target;
   const imageDimensionStyle = route.params?.imageDimensionStyle;
+  const isTutorial = route.params?.isTutorial;
 
   const context = useContext(AuthContext);
 
@@ -58,7 +59,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const onCancelGoBack = () => {
-    navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait });
+    navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial });
   };
 
   const handleConfirmModal = async () => {
@@ -108,7 +109,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     navigation.reset({
       index: 0,
-      routes: [{ name: 'HomeScreen' }],
+      routes: [{ name: 'HomeScreen', params: { isTutorial } }],
     });
   };
 
@@ -137,14 +138,28 @@ export default function SetInstructionsScreen({ navigation, route }) {
           textInputConfig={{ multiline: true }}/>
         <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
       </ImageBackground>
-      {showModal ?
-      <CenteredModal onPress={handleConfirmModal} onCancel={onCancelModal} isModalVisible={showModal}>
-        <ModalContent
-          description={description}
-          screenHeight={screenHeight}
-          screenWidth={screenWidth}
-          guessPath={false} />
-      </CenteredModal> : null}
+      {
+        showModal &&
+          <CenteredModal 
+            onPress={handleConfirmModal} 
+            onCancel={onCancelModal} 
+            isModalVisible={showModal}
+          >
+            <ModalContent
+              description={description}
+              screenHeight={screenHeight}
+              screenWidth={screenWidth}
+              guessPath={false} 
+            />
+          </CenteredModal> 
+      }
+      {
+        isTutorial && 
+          <TutorialOverlay 
+            screen={"SetInstructionScreen"}
+            instructionsPosition={{top:0, left: 0}}
+          />
+        }
     </View>
   )
 };

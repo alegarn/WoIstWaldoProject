@@ -127,9 +127,8 @@ const toggleDebugModal = () => {
         {
           isTutorial &&
            <TutorialOverlay
-           isVisible={true}
-           screen={"HideScreen"}
-           instructionsPosition={{top:0, left: 0}}
+            screen={"HideScreen"}
+            instructionsPosition={{top:0, left: 0}}
            />
         }
       </>
