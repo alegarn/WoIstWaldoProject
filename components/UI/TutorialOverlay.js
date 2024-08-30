@@ -16,7 +16,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
       case "HidingPathScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
         break;
-      case "HideScreen":
+      case "HideScreen" && "SetInstructionScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
         break;
     
@@ -69,6 +69,8 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
           <Pressable onPress={onPressAction} style={styles.closeButton}>
             <Text style={styles.closeButtonText}>{closeButtonText}</Text>
           </Pressable>
+          {/* screen === "HomeScreen" && <Pressable onPress={onPress} style={styles.closeButton}><Text style={styles.closeButtonText}>Guess</Text></Pressable> */}
+          {/* screen === "HomeScreen" && <Pressable onPress={onPress} style={styles.closeButton}><Text style={styles.closeButtonText}>Close</Text></Pressable> */}
         </ScrollView>
       </View>
     </Modal>
