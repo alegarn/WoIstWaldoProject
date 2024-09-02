@@ -25,7 +25,8 @@ export default function GuessPathScreen({ navigation, route }) {
       hiddenLocation: item.touchLocation,
       screenHeight: item.screenHeight,
       screenWidth: item.screenWidth,
-      listId: item.listId
+      listId: item.listId,
+      isTutorial: isTutorial
     });
   };
 

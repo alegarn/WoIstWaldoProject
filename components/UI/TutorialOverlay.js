@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
-const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
+const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) => {
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
   const [closeButtonText, setCloseButtonText] = useState("Close");
@@ -16,7 +16,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
       case "HidingPathScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
         break;
-      case "HideScreen" && "SetInstructionScreen":
+      case "HideScreen" && "SetInstructionScreen" && "GuessScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
         break;
       case "GuessPathScreen":
@@ -68,7 +68,16 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
         {/* Instruction Modal */}
         <View style={styles.instructionModalContainer}>
           <ScrollView style={[styles.instructionModal, instructionsPosition]}>
-            <Image source={imageUrl} style={styles.image}/>
+            
+            {isPortrait ? 
+              <Image source={imageUrl} style={styles.image}/> 
+              : 
+              isPortrait === false &&
+              <View style={styles.imageContainer}>
+                <Image source={imageUrl} style={styles.image}/>
+              </View>
+            }
+            
             <Text style={styles.instructions}>{instructions}</Text>
             {/* reduce space between buttons, border ? */} 
           </ScrollView>
@@ -101,6 +110,11 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
 
 const styles = StyleSheet.create({
   overlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
@@ -118,6 +132,11 @@ const styles = StyleSheet.create({
   instructionModal: {
     borderRadius: 10,
     alignContent: 'center',
+  },
+  imageContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   image: {
     maxWidth: '100%',
