@@ -19,6 +19,9 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
       case "HideScreen" && "SetInstructionScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
         break;
+      case "GuessPathScreen":
+        setImageUrl(require("../../assets/tutorial/farm_pict_guess_320.jpg"));
+        break;
     
       default:
         setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
@@ -63,15 +66,34 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress}) => {
 {/*         <View style={[styles.arrow, targetPosition ?? { top: targetPosition?.top + highlightArea?.height, left: targetPosition?.left + highlightArea?.width / 2 - 10 } ]} />
  */}
         {/* Instruction Modal */}
-        <ScrollView style={[styles.instructionModal, instructionsPosition]}>
-          <Image source={imageUrl} style={styles.image}/>
-          <Text style={styles.instructions}>{instructions}</Text>
-          <Pressable onPress={onPressAction} style={styles.closeButton}>
-            <Text style={styles.closeButtonText}>{closeButtonText}</Text>
-          </Pressable>
-          {/* screen === "HomeScreen" && <Pressable onPress={onPress} style={styles.closeButton}><Text style={styles.closeButtonText}>Guess</Text></Pressable> */}
-          {/* screen === "HomeScreen" && <Pressable onPress={onPress} style={styles.closeButton}><Text style={styles.closeButtonText}>Close</Text></Pressable> */}
-        </ScrollView>
+        <View style={styles.instructionModalContainer}>
+          <ScrollView style={[styles.instructionModal, instructionsPosition]}>
+            <Image source={imageUrl} style={styles.image}/>
+            <Text style={styles.instructions}>{instructions}</Text>
+            {/* reduce space between buttons, border ? */} 
+          </ScrollView>
+          {
+              screen === "HomeScreen" ?
+                <>
+                  <View style={styles.splitButtonContainer}>
+                    <Pressable onPress={() => onPress?.Hide()} style={[styles.splitButton, styles.splitButtonLeft]}>
+                      <Text style={styles.closeButtonText}>{closeButtonText?.Hide}</Text>
+                    </Pressable>
+                    <Pressable onPress={() => onPress?.Guess()} style={[styles.splitButton, styles.splitButtonRight]}>
+                      <Text style={styles.closeButtonText}>{closeButtonText?.Guess}</Text>
+                    </Pressable>
+                  </View>
+                  <Pressable onPress={closeModal} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>Close</Text>
+                  </Pressable>  
+                </>
+              :
+                <Pressable onPress={onPressAction} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>{closeButtonText}</Text>
+                </Pressable>
+            }
+
+        </View>
       </View>
     </Modal>
   );
@@ -84,10 +106,70 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  instructionModalContainer: {
+    backgroundColor: 'white',
+    padding: 20,
+    borderRadius: 10,
+    alignItems: 'center',
+    width: '80%',
+    maxHeight: '80%',
+    overflow: 'hidden',
+  },
+  instructionModal: {
+    borderRadius: 10,
+    alignContent: 'center',
+  },
   image: {
     maxWidth: '100%',
     minHeight: 80,
   },
+  instructions: {
+    fontSize: 18,
+    color: 'black',
+    textAlign: 'center',
+  },
+  marginBottom: {
+    marginBottom: 40,
+  },
+  button: {
+    marginTop: 20,
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    backgroundColor: '#3498db',
+    borderRadius: 5,
+  },
+  splitButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginTop: 20,
+    borderRadius: 5,
+    backgroundColor: '#3498db',
+    borderStyle: 'solid',    
+    borderWidth: 1,
+    fontSize: 18,
+  },
+  splitButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+  },
+  splitButtonLeft: {
+    borderRightWidth: 1,
+  },
+  splitButtonRight: {
+  },
+  closeButton: {
+    marginTop: 20,
+    paddingVertical: 10,
+    backgroundColor: 'red',
+    borderRadius: 5,
+    width: '100%',
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  /*
   clickableArea: {
     position: 'absolute',
     backgroundColor: 'transparent',
@@ -109,32 +191,7 @@ const styles = StyleSheet.create({
     borderRightColor: 'transparent',
     borderBottomColor: 'white',
   },
-  instructionModal: {
-    backgroundColor: 'white',
-    padding: 20,
-    borderRadius: 10,
-    width: '80%',
-    maxHeight: '90%',
-    alignContent: 'center',
-  },
-  instructions: {
-    fontSize: 18,
-    color: 'black',
-    textAlign: 'center',
-  },
-  closeButton: {
-    marginTop: 20,
-    marginBottom: 40,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#3498db',
-    borderRadius: 5,
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    textAlign: 'center',
-  },
+  */
 });
 
 export default TutorialOverlay;
