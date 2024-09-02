@@ -6,16 +6,17 @@ import ImageAnimated from './ImageAnimated';
 import { removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
 import { AuthContext } from '../../store/auth-context';
+import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowSuccess({ navigation, route }) {
 
-  
   const [showSuccessImageAnimated, setshowSuccessImageAnimated] = useState(true);
   
   // used to get the image owner and point the user earning points
   const pictureId = route.params?.pictureId;
 
   const listId = route.params?.listId;
+  const isTutorial = route.params?.isTutorial;
 
   const context = useContext(AuthContext);
 
@@ -52,14 +53,25 @@ export default function ShowSuccess({ navigation, route }) {
         <Text style={[styles.subtitle, styles.marginBottom]}>
           <Text style={styles.title}>1</Text> point earned!
         </Text>
-        <ResultChoices navigation={navigation} success={true} />
+        <ResultChoices 
+          navigation={navigation} 
+          success={true} 
+          isTutorial={isTutorial} 
+        />
+        {
+          isTutorial &&
+            <TutorialOverlay
+              screen={"ShowSuccess"}
+            />
+        }
       </>
     );
   };
 
   return (
     <View style={styles.container}>
-      {showSuccessImageAnimated ?
+      {
+        showSuccessImageAnimated ?
           <ImageAnimated success={true} />
         :
           <ShowResult navigation={navigation} />

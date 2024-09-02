@@ -16,5 +16,9 @@ export const INSTRUCTIONS = {
     GuessPathScreenModalBtn: "Choose a picture",
     GuessScreen: "Guessing - Step 2\n\nGood, here is your picture!\n\nWhat is written in the description ? Can you guess where the target is hidden from it ?\n\nYes? Click on it when you see the image and then click again on the target when you think it's the correct area.\n\n Example: On the image i thought the goose is the correct target, by it's description 'the hidden animal is giving me goosebumps', so i clicked on it.",
     GuessScreenModalBtn: "Guess the location!",
+    ShowSuccess: "You found it!\n\nBravo, you earned point each time you guess right!",
+    ShowSuccessModalBtn: "Show the results",
+    ShowFailure: "You missed it!\n\nTry again or take a new picture !",
+    ShowFailureModalBtn: "Continue",
   },
 };

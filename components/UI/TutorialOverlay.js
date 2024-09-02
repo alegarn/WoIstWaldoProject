@@ -22,7 +22,13 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       case "GuessPathScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_guess_320.jpg"));
         break;
-    
+      case "ShowSuccess":
+        setImageUrl(require("../../assets/tutorial/farm_pict_success_320.jpg"));
+        break;
+      case "ShowFailure":
+        setImageUrl(require("../../assets/tutorial/farm_pict_failure_320.jpg"));
+        break;
+
       default:
         setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
         break;

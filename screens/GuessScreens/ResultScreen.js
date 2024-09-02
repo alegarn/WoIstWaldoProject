@@ -16,7 +16,6 @@ export default function ResultScreen({ route, navigation }) {
 
   const { onTarget } = route?.params;
 
-
   if (onTarget) {
     return <ShowSuccess navigation={navigation} route={route} />;
   };
