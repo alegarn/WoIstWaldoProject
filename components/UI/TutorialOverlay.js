@@ -69,13 +69,13 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
         <View style={styles.instructionModalContainer}>
           <ScrollView style={[styles.instructionModal, instructionsPosition]}>
             
-            {isPortrait ? 
+            {isPortrait === true || isPortrait === undefined ? 
               <Image source={imageUrl} style={styles.image}/> 
               : 
               isPortrait === false &&
-              <View style={styles.imageContainer}>
-                <Image source={imageUrl} style={styles.image}/>
-              </View>
+                <View style={styles.imageContainer}>
+                  <Image source={imageUrl} style={styles.image}/>
+                </View>
             }
             
             <Text style={styles.instructions}>{instructions}</Text>
