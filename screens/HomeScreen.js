@@ -11,12 +11,12 @@ import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 
-export default function HomeScreen({ navigation }) {
+export default function HomeScreen({ navigation, route }) {
   const [showModal, setShowModal] = useState(true);
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
-
+  
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
     
@@ -61,7 +61,8 @@ export default function HomeScreen({ navigation }) {
 
   const isTutorialNeeded = async () => {
     console.log(`context.isFirstTime: ${context.isFirstTime}`);
-    context.isFirstTime ? 
+    const tutorialModal = (context?.isFirstTime === true) || (route?.params?.isTutorial === true);
+    tutorialModal ? 
       setShowModal(true) 
       : setShowModal(false);    
   };
@@ -114,7 +115,13 @@ export default function HomeScreen({ navigation }) {
     setIsTutorial(true);
   };
 
-  const toTutorial = () => {
+  const toGuessTutorial = () => {
+    navigation.replace('GuessPathScreen', {
+      isTutorial: true,
+    });
+  };
+
+  const toHideTutorial = () => {
     navigation.replace('HidingPathScreen', {
       isTutorial: true,
     });
@@ -147,10 +154,12 @@ export default function HomeScreen({ navigation }) {
       {
         isTutorial &&
         <TutorialOverlay
-          isVisible={isTutorial}
           screen="HomeScreen"
-          instructionsPosition={{top:0, left: 0}}
-          onPress={() => toTutorial()}
+          instructionsPosition={{}}
+          onPress={
+            {Guess: () => toGuessTutorial(), 
+             Hide: () => toHideTutorial()}
+            }
           />
       }
     </View>
