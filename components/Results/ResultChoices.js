@@ -1,10 +1,20 @@
 import { View, StyleSheet } from 'react-native';
 
 import BigButton from '../UI/BigButton';
+import { useContext } from 'react';
+import { AuthContext } from '../../store/auth-context';
 
 export default function ResultChoices({ navigation, success, retryGuess, isTutorial }) {
 
-  function returnHome() {
+  const context = useContext(AuthContext);
+
+  const returnHome = () => {
+    isTutorial 
+      && context.updateTutorialStatus({ 
+        isTutorial: context.isFirstTime?.isTutorial, 
+        guessPathDone: true, 
+        hidePathDone: context.isFirstTime?.hidePathDone 
+      });
     navigation.reset({
       index: 0,
       routes: [{ name: 'HomeScreen', params: { isTutorial: isTutorial } }],

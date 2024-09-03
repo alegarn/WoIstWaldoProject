@@ -107,9 +107,16 @@ export default function SetInstructionsScreen({ navigation, route }) {
     handleOrientation("portrait");
     setIsLoading(false);
 
+    isTutorial 
+      && context.updateTutorialStatus({ 
+        isTutorial: context.isFirstTime?.isTutorial, 
+        guessPathDone: context.isFirstTime?.guessPathDone, 
+        hidePathDone: true,
+      });
+
     navigation.reset({
       index: 0,
-      routes: [{ name: 'HomeScreen', params: { isTutorial } }],
+      routes: [{ name: 'HomeScreen', params: { isTutorial: isTutorial } }],
     });
   };
 
