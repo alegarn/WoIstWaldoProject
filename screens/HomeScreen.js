@@ -15,6 +15,7 @@ export default function HomeScreen({ navigation, route }) {
   const [showModal, setShowModal] = useState(true);
   /* isTutorial:  { still: true, guessPathDone: false, hidePathDone: false} */
   /* do it again near logout */
+  /* validate when success */
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
@@ -63,7 +64,7 @@ export default function HomeScreen({ navigation, route }) {
 
   const isTutorialNeeded = async () => {
     console.log(`context.isFirstTime: ${context.isFirstTime}`);
-    const tutorialModal = (context?.isFirstTime === true) || (route?.params?.isTutorial === true);
+    const tutorialModal = (context?.isFirstTime?.tutorial === true) || (route?.params?.isTutorial === true);
     tutorialModal ? 
       setShowModal(true) 
       : setShowModal(false);    
@@ -94,9 +95,7 @@ export default function HomeScreen({ navigation, route }) {
 
 
   const toHidingPathScreen = () => {
-    navigation.navigate('HidingPathScreen', {
-      isTutorial: false,
-    });
+    navigation.navigate('HidingPathScreen');
   };
 
   const toGuessPathScreen = () => {
@@ -108,12 +107,13 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const cancelTutorial = async () => {
-    await context.isTutorialDone(true);
+    await context.isTutorialStillOn(false);
     setShowModal(false);
     return false;
   };
 
   const startTutorial = async () => {
+    await context.isTutorialStillOn(true);
     setIsTutorial(true);
   };
 
