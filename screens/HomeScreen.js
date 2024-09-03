@@ -13,6 +13,8 @@ import TutorialOverlay from '../components/UI/TutorialOverlay';
 
 export default function HomeScreen({ navigation, route }) {
   const [showModal, setShowModal] = useState(true);
+  /* isTutorial:  { still: true, guessPathDone: false, hidePathDone: false} */
+  /* do it again near logout */
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
@@ -155,7 +157,6 @@ export default function HomeScreen({ navigation, route }) {
         isTutorial &&
         <TutorialOverlay
           screen="HomeScreen"
-          instructionsPosition={{}}
           onPress={
             {Guess: () => toGuessTutorial(), 
              Hide: () => toHideTutorial()}
