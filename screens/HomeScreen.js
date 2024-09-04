@@ -63,7 +63,8 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const isTutorialNeeded = async () => {
-    console.log(`context.isFirstTime: ${context.isFirstTime}`);
+    /* happens to fast, updated context is not ready */
+    console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
     const tutorialModal = (context?.isFirstTime?.tutorial === true) || (route?.params?.isTutorial === true);
     tutorialModal ? 
       setShowModal(true) 
@@ -107,13 +108,15 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const cancelTutorial = async () => {
-    await context.isTutorialStillOn(false);
+    console.log("cancelTutorial");
+    await context.turnTutorialOn(false);
+    setIsTutorial(false);
     setShowModal(false);
     return false;
   };
 
   const startTutorial = async () => {
-    await context.isTutorialStillOn(true);
+    await context.turnTutorialOn(true);
     setIsTutorial(true);
   };
 
@@ -157,10 +160,11 @@ export default function HomeScreen({ navigation, route }) {
         isTutorial &&
         <TutorialOverlay
           screen="HomeScreen"
-          onPress={
-            {Guess: () => toGuessTutorial(), 
-             Hide: () => toHideTutorial()}
-            }
+          onPress={{
+            Guess: () => toGuessTutorial(), 
+            Hide: () => toHideTutorial(),
+            finish: () => cancelTutorial()
+          }}
           />
       }
     </View>

@@ -107,7 +107,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
                     </Pressable>
 
                   </View>
-                  <Pressable onPress={closeModal} style={styles.closeButton}>
+                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
                     <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
                   </Pressable>  
                 </>
