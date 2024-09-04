@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
+import TutorialOverlay from '../UI/TutorialOverlay';
 
 
 
@@ -10,7 +11,7 @@ export default function ShowFailure({ navigation, route }) {
 
   const [showFailureImageAnimated, setShowSadImageAnimated] = useState(true);
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, isTutorial } = route?.params;
 
 
 /* useEffect________________________________________________ */
@@ -38,21 +39,35 @@ export default function ShowFailure({ navigation, route }) {
       isPortrait: isPortrait,
       hiddenLocation: hiddenLocation,
       screenHeight: screenHeight,
-      screenWidth: screenWidth });
+      screenWidth: screenWidth,
+      isTutorial: isTutorial
+    });
   };
 
   return (
     <>
       <View style={styles.container}>
-        {showFailureImageAnimated ?
-          <ImageAnimated success={false} />
-        :
-        <>
-          <Text style={styles.title}>You didn't find it :(</Text>
-          <ResultChoices navigation={navigation} retryGuess={retryGuess} success={false} />
-        </>
+        {
+          showFailureImageAnimated ?
+            <ImageAnimated success={false} />
+          :
+            <>
+              <Text style={styles.title}>You didn't find it :(</Text>
+              <ResultChoices 
+                navigation={navigation} 
+                retryGuess={retryGuess} 
+                success={false} 
+                isTutorial={isTutorial} 
+              />
+            </>
         }
       </View>
+      {
+        isTutorial &&
+          <TutorialOverlay
+            screen={"ShowFailure"}
+          />
+      }
     </>
   );
 };
