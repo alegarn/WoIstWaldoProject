@@ -46,7 +46,7 @@ export default function ShowSuccess({ navigation, route }) {
     return () => clearTimeout(timeout);
   }, []);
 
-  const ShowResult = ({ navigation }) => {
+  const ShowResult = ({ navigation, isTutorial }) => {
     return (
       <>
         <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
@@ -74,7 +74,10 @@ export default function ShowSuccess({ navigation, route }) {
         showSuccessImageAnimated ?
           <ImageAnimated success={true} />
         :
-          <ShowResult navigation={navigation} />
+          <ShowResult 
+            navigation={navigation} 
+            isTutorial={isTutorial} 
+          />
       }
     </View>
   );

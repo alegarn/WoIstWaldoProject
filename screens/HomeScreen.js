@@ -15,6 +15,7 @@ export default function HomeScreen({ navigation, route }) {
   const [showModal, setShowModal] = useState(true);
   /* isTutorial:  { still: true, guessPathDone: false, hidePathDone: false} */
   /* do it again near logout */
+  /* validate when success */
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
@@ -62,9 +63,16 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const isTutorialNeeded = async () => {
-    console.log(`context.isFirstTime: ${context.isFirstTime}`);
-    const tutorialModal = (context?.isFirstTime === true) || (route?.params?.isTutorial === true);
-    tutorialModal ? 
+    //console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
+    let tutorial = context.isFirstTime?.tutorial;
+    let guessPathDone = context.isFirstTime?.guessPathDone;
+    let hidePathDone = context.isFirstTime?.hidePathDone;
+    
+    const tutorialModalIsShown = 
+      ((tutorial === true) || (route?.params?.isTutorial === true))
+      && ((guessPathDone === false) || (hidePathDone === false));
+    
+    tutorialModalIsShown ? 
       setShowModal(true) 
       : setShowModal(false);    
   };
@@ -94,9 +102,7 @@ export default function HomeScreen({ navigation, route }) {
 
 
   const toHidingPathScreen = () => {
-    navigation.navigate('HidingPathScreen', {
-      isTutorial: false,
-    });
+    navigation.navigate('HidingPathScreen');
   };
 
   const toGuessPathScreen = () => {
@@ -108,12 +114,15 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const cancelTutorial = async () => {
-    await context.isTutorialDone(true);
+    console.log("cancelTutorial");
+    await context.turnTutorialOn(false);
+    setIsTutorial(false);
     setShowModal(false);
     return false;
   };
 
   const startTutorial = async () => {
+    await context.turnTutorialOn(true);
     setIsTutorial(true);
   };
 
@@ -157,10 +166,11 @@ export default function HomeScreen({ navigation, route }) {
         isTutorial &&
         <TutorialOverlay
           screen="HomeScreen"
-          onPress={
-            {Guess: () => toGuessTutorial(), 
-             Hide: () => toHideTutorial()}
-            }
+          onPress={{
+            Guess: () => toGuessTutorial(), 
+            Hide: () => toHideTutorial(),
+            finish: () => cancelTutorial()
+          }}
           />
       }
     </View>

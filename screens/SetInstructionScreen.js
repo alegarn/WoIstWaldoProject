@@ -24,17 +24,19 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
 
-  const uri = route.params?.uri;
-  const imageWidth = route.params?.imageWidth;
-  const imageHeight = route.params?.imageHeight;
-  const screenHeight = route.params?.screenHeight;
-  const screenWidth = route.params?.screenWidth;
-  const isPortrait = route.params?.isPortrait;
-  const touchLocation = route.params?.touchLocation;
-  const target = route.params?.target;
-  const imageDimensionStyle = route.params?.imageDimensionStyle;
-  const isTutorial = route.params?.isTutorial;
-
+  const { 
+    uri, 
+    imageWidth, 
+    imageHeight, 
+    screenHeight, 
+    screenWidth, 
+    isPortrait, 
+    touchLocation, 
+    target, 
+    imageDimensionStyle, 
+    isTutorial 
+  } = route?.params;
+  
   const context = useContext(AuthContext);
 
   const getPermissions = async () => {
@@ -62,23 +64,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
     navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial });
   };
 
-  const handleConfirmModal = async () => {
-
-    let permissionStatus = await getPermissions();
-    if (!permissionStatus) {
-      return;
-    };
-
-    const fileExtension = handleImageType(uri);
-    const validType = isTypeValid(fileExtension);
-
-    if (!validType) {
-      Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
-      return;
-    };
-
-    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
-
+  const handleImage = async ({userId, fileExtension}) => {
     const imageInfos = {
       uri: uri,
       userId: userId,
@@ -101,16 +87,51 @@ export default function SetInstructionsScreen({ navigation, route }) {
       Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
       return;
     };
+  };
 
+  const handleScreenUi = () => {
     setShowModal(false);
-
     handleOrientation("portrait");
     setIsLoading(false);
+  };
+
+  const handleTutorialUpdate = async () => {
+    await context.updateTutorialStatus({ 
+      tutorial: true, 
+      guessPathDone: context.isFirstTime?.guessPathDone, 
+      hidePathDone: true,
+    });
+  };
+
+  const handleConfirmModal = async () => {
+
+    let permissionStatus = await getPermissions();
+    if (!permissionStatus) {
+      return;
+    };
+ 
+    const fileExtension = handleImageType(uri);
+    const validType = isTypeValid(fileExtension);
+
+    if (!validType) {
+      Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
+      return;
+    };
+
+    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
+
+    //await handleImage({userId, fileExtension});
+    handleScreenUi();
+    isTutorial && await handleTutorialUpdate();
 
     navigation.reset({
       index: 0,
-      routes: [{ name: 'HomeScreen', params: { isTutorial } }],
+      routes: [{ 
+        name: 'HomeScreen', 
+        params: { isTutorial: isTutorial } 
+      }],
     });
+
   };
 
   const onCancelModal = () => {

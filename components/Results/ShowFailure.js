@@ -65,7 +65,7 @@ export default function ShowFailure({ navigation, route }) {
       {
         isTutorial &&
           <TutorialOverlay
-            screen={"ShowSuccess"}
+            screen={"ShowFailure"}
           />
       }
     </>

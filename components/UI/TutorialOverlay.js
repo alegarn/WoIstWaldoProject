@@ -91,15 +91,24 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
               screen === "HomeScreen" ?
                 <>
                   <View style={styles.splitButtonContainer}>
-                    <Pressable onPress={() => onPress?.Hide()} style={[styles.splitButton, styles.splitButtonLeft]}>
-                      <Text style={styles.closeButtonText}>{closeButtonText?.Hide}</Text>
+
+                    <Pressable 
+                      onPress={() => onPress?.Hide()} 
+                      style={[styles.splitButton, styles.splitButtonLeft]}
+                    >
+                      <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
                     </Pressable>
-                    <Pressable onPress={() => onPress?.Guess()} style={[styles.splitButton, styles.splitButtonRight]}>
-                      <Text style={styles.closeButtonText}>{closeButtonText?.Guess}</Text>
+
+                    <Pressable 
+                      onPress={() => onPress?.Guess()} 
+                      style={[styles.splitButton, styles.splitButtonRight]}
+                    >
+                      <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
                     </Pressable>
+
                   </View>
-                  <Pressable onPress={closeModal} style={styles.closeButton}>
-                    <Text style={styles.closeButtonText}>Close</Text>
+                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
                   </Pressable>  
                 </>
               :
