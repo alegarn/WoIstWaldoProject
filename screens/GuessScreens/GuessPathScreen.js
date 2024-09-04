@@ -38,11 +38,12 @@ export default function GuessPathScreen({ navigation, route }) {
           imageIsPortrait={true}
           handleFilterClick={() => setShowOverlay(false)}
         />
-        {isTutorial && 
-          <TutorialOverlay
-            screen={"GuessPathScreen"}
-            instructionsPosition={{top:0, left: 0}}
-          />  
+        {
+          isTutorial && 
+            <TutorialOverlay
+              screen={"GuessPathScreen"}
+              instructionsPosition={{top:0, left: 0}}
+            />
         }
       </>
       

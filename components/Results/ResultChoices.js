@@ -8,16 +8,20 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
 
   const context = useContext(AuthContext);
 
-  const returnHome = () => {
-    isTutorial 
-      && context.updateTutorialStatus({ 
-        isTutorial: context.isFirstTime?.isTutorial, 
+  const returnHome = async () => {
+    isTutorial
+      && await context.updateTutorialStatus({ 
+        tutorial: true, 
         guessPathDone: true, 
         hidePathDone: context.isFirstTime?.hidePathDone 
       });
+    
     navigation.reset({
       index: 0,
-      routes: [{ name: 'HomeScreen', params: { isTutorial: isTutorial } }],
+      routes: [{ 
+        name: 'HomeScreen', 
+        params: { isTutorial: isTutorial } 
+      }],
     });
   };
 
@@ -29,7 +33,10 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
   function backToSwipe() {
     navigation.reset({
       index: 1,
-      routes: [{ name: 'GuessPathScreen', params: { isTutorial: isTutorial } }],
+      routes: [{ 
+        name: 'GuessPathScreen', 
+        params: { isTutorial: isTutorial } 
+      }],
     });
   };
 
@@ -38,7 +45,10 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
       <BigButton text="Go to Home" onPress={returnHome} />
       {
         success === false && 
-          <BigButton text="Retry this one" onPress={handleRetry}/>
+          <BigButton 
+            text="Retry this one" 
+            onPress={handleRetry} 
+          />
       }
       <BigButton text="Another one" onPress={backToSwipe} />
     </View>
