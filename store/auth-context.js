@@ -127,11 +127,16 @@ export default function AuthContextProvider({ children }) {
     };
   };
 
-  async function isTutorialStillOn(answer) {
-    setIsFirstTime({tutorial: answer, guessPathDone: isFirstTime.guessPathDone, hidePathDone: isFirstTime.hidePathDone});
+  async function turnTutorialOn(answer) {
+    setIsFirstTime({
+      tutorial: answer, 
+      guessPathDone: isFirstTime?.guessPathDone, 
+      hidePathDone: isFirstTime?.hidePathDone
+    });
   };
 
   async function updateTutorialStatus(isFirstTime) {
+    console.log("isFirstTime", JSON.stringify(isFirstTime));
     await SecureStore.setItemAsync('isFirstTime', JSON.stringify(isFirstTime));
     setIsFirstTime(isFirstTime);
   };
@@ -156,7 +161,7 @@ export default function AuthContextProvider({ children }) {
     verifyIsLoggedIn: verifyIsLoggedIn,
     changeUserEmail: changeUserEmail,
     changeUsername: changeUsername,
-    isTutorialStillOn: isTutorialStillOn,
+    turnTutorialOn: turnTutorialOn,
     updateTutorialStatus: updateTutorialStatus
   };
 
