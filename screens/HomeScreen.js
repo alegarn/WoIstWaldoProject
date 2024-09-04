@@ -63,10 +63,16 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const isTutorialNeeded = async () => {
-    /* happens to fast, updated context is not ready */
-    console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
-    const tutorialModal = (context?.isFirstTime?.tutorial === true) || (route?.params?.isTutorial === true);
-    tutorialModal ? 
+    //console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
+    let tutorial = context.isFirstTime?.tutorial;
+    let guessPathDone = context.isFirstTime?.guessPathDone;
+    let hidePathDone = context.isFirstTime?.hidePathDone;
+    
+    const tutorialModalIsShown = 
+      ((tutorial === true) || (route?.params?.isTutorial === true))
+      && ((guessPathDone === false) || (hidePathDone === false));
+    
+    tutorialModalIsShown ? 
       setShowModal(true) 
       : setShowModal(false);    
   };
