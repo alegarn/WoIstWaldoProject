@@ -64,10 +64,16 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
 
 
 
-      {showModal ?
-        <CenteredModal onPress={handleConfirm} onCancel={onCancel} isModalVisible={showModal}>
-          {"Do you want to validate this ?"}
-        </CenteredModal> : null}
+      {
+        showModal &&
+          <CenteredModal 
+            onPress={handleConfirm} 
+            onCancel={onCancel} 
+            isModalVisible={showModal}
+          >
+            {"Do you want to validate this ?"}
+          </CenteredModal>
+      }
 {/*  */}
 {/*         { showDebugModal ?
         <ClipboardModal 

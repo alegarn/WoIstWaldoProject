@@ -214,7 +214,12 @@ function AuthenticatedStack({ authContext }) {
 function Navigation({ authContext }) {
   return (
     <NavigationContainer>
-      {authContext.IsAuthenticated ? <AuthenticatedStack authContext={authContext} /> : <AuthStack />}
+      {
+        authContext.IsAuthenticated ? 
+          <AuthenticatedStack authContext={authContext} /> 
+          : 
+          <AuthStack />
+      }
     </NavigationContainer>
   );
 };
