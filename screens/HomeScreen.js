@@ -10,16 +10,14 @@ import { getScoreId } from '../utils/auth';
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
+import IconButton from '../components/UI/IconButton';
 
 export default function HomeScreen({ navigation, route }) {
   const [showModal, setShowModal] = useState(true);
-  /* isTutorial:  { still: true, guessPathDone: false, hidePathDone: false} */
-  /* do it again near logout */
-  /* validate when success */
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
-  
+
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
     
@@ -78,6 +76,8 @@ export default function HomeScreen({ navigation, route }) {
   };
 
 
+  /* useEffect _______________________________ */
+
   useEffect(() => {
     /* To delete - home debug message */
     /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
@@ -96,10 +96,8 @@ export default function HomeScreen({ navigation, route }) {
     verifyLoginInfos();
   });
 
-/*   function navigationHandler({ screenName }) {
-    navigation.navigate(screenName);
-  }; */
 
+  /* Functions _______________________________ */
 
   const toHidingPathScreen = () => {
     navigation.navigate('HidingPathScreen');
@@ -139,41 +137,52 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   return (
-    <View style={styles.homeContainer}>
-      <BigButton
-        text="Hide Waldo"
-        onPress={toHidingPathScreen}
-        buttonStyle="big"
-       />
-      <BigButton
-        text="Find Waldo"
-        onPress={toGuessPathScreen}
-        buttonStyle="big" 
-        />
-      <BigButton
-        text="Ranking"
-        onPress={toRankingScreen} />
-      {
-        showModal && 
-        <CenteredModal 
-          isModalVisible={showModal}
-          children={"Welcome, do you want to do the tutorial? \n\n It will help you to learn how to play the game in 5 minutes. \n\n Later it is possible to do it again."} 
-          onCancel={() => cancelTutorial()} 
-          onPress={() => startTutorial()}
+    <>
+      <View style={styles.homeContainer}>
+        <BigButton
+          text="Hide Waldo"
+          onPress={toHidingPathScreen}
+          buttonStyle="big"
           />
-      }
-      {
-        isTutorial &&
-        <TutorialOverlay
-          screen="HomeScreen"
-          onPress={{
-            Guess: () => toGuessTutorial(), 
-            Hide: () => toHideTutorial(),
-            finish: () => cancelTutorial()
-          }}
+        <BigButton
+          text="Find Waldo"
+          onPress={toGuessPathScreen}
+          buttonStyle="big" 
           />
-      }
-    </View>
+        <BigButton
+          text="Ranking"
+          onPress={toRankingScreen} />
+        {
+          showModal && 
+          <CenteredModal 
+            isModalVisible={showModal}
+            children={"Welcome, do you want to do the tutorial? \n\n It will help you to learn how to play the game in 5 minutes. \n\n Later it is possible to do it again."} 
+            onCancel={() => cancelTutorial()} 
+            onPress={() => startTutorial()}
+            />
+        }
+        {
+          isTutorial &&
+          <TutorialOverlay
+            screen="HomeScreen"
+            onPress={{
+              Guess: () => toGuessTutorial(), 
+              Hide: () => toHideTutorial(),
+              finish: () => cancelTutorial()
+            }}
+            />
+        }
+
+      </View>
+      <IconButton
+        icon={"book"}
+        color={"white"}
+        size={24}
+        style={styles.tutorialButton}
+        onPress={() => setIsTutorial(true)}
+      />
+  </>
+    
   );
 }
 
@@ -183,5 +192,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: GlobalStyle.color.primaryColor500,
+  },
+  tutorialButton: {
+    position: "absolute",
+    top: 15,
+    right: 15,
+    zIndex: 1
   },
 })
