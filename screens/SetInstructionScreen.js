@@ -120,7 +120,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
-    //await handleImage({userId, fileExtension});
+    await handleImage({userId, fileExtension});
     handleScreenUi();
     isTutorial && await handleTutorialUpdate();
 
@@ -178,6 +178,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
         isTutorial && 
           <TutorialOverlay 
             screen={"SetInstructionScreen"}
+            isPortrait={isPortrait}
             instructionsPosition={{top:0, left: 0}}
           />
         }

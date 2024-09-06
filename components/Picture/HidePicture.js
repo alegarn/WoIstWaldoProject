@@ -128,6 +128,7 @@ const toggleDebugModal = () => {
           isTutorial &&
            <TutorialOverlay
             screen={"HideScreen"}
+            isPortrait={imageIsPortrait}
             instructionsPosition={{top:0, left: 0}}
            />
         }
