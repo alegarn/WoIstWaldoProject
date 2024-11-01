@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated } from 'react-native';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
 const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) => {
@@ -8,6 +8,34 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
   const [closeButtonText, setCloseButtonText] = useState("Close");
   const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
   
+
+  const [completeScrollBarHeight, setCompleteScrollBarHeight] = useState(1);
+  const [visibleScrollBarHeight, setVisibleScrollBarHeight] = useState(0);
+  
+  const scrollIndicatorSize =
+    completeScrollBarHeight > visibleScrollBarHeight
+      ? (visibleScrollBarHeight * visibleScrollBarHeight) /
+        completeScrollBarHeight
+      : visibleScrollBarHeight;
+  
+  const scrollIndicator = useRef(new Animated.Value(0)).current;
+
+  const difference = visibleScrollBarHeight > scrollIndicatorSize ? 
+    visibleScrollBarHeight - scrollIndicatorSize
+    : 1;
+
+  const scrollIndicatorPosition = Animated.multiply(
+    scrollIndicator,
+    visibleScrollBarHeight / completeScrollBarHeight
+  ).interpolate({
+    inputRange: [0, difference],
+    outputRange: [0, difference],
+    extrapolate: "clamp",
+  });
+
+  console.log("scrollIndicatorPosition",scrollIndicatorPosition);
+  console.log("scrollIndicatorSize",scrollIndicatorSize);
+
   const updateImageUrl = (screen) => {
     switch (screen) {
       case "HomeScreen":
@@ -73,7 +101,32 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
  */}
         {/* Instruction Modal */}
         <View style={styles.instructionModalContainer}>
-          <ScrollView style={[styles.instructionModal, instructionsPosition]}>
+
+          <View style={styles.rowContainer}>
+
+          <ScrollView 
+            style={[styles.instructionModal, instructionsPosition]}
+            persistentScrollbar={true}
+            //showsVerticalScrollIndicator={true}
+
+            contentContainerStyle={{ paddingRight: 3 }}
+            showsVerticalScrollIndicator={false}
+            onContentSizeChange={height => {
+              setCompleteScrollBarHeight(height);
+            }}
+            onLayout={({
+              nativeEvent: {
+                layout: { height },
+              },
+            }) => {
+              setVisibleScrollBarHeight(height);
+            }}
+            onScroll={Animated.event(
+              [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
+              { useNativeDriver: false }
+            )}
+            scrollEventThrottle={16}
+          >
             
             {
               isPortrait === true || isPortrait === undefined ? 
@@ -88,36 +141,58 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
             <Text style={styles.instructions}>{instructions}</Text>
             {/* reduce space between buttons, border ? */} 
           </ScrollView>
+          <View
+            style={{
+              height: "100%",
+              width: 6,
+              backgroundColor: "#52057b",
+              borderRadius: 8,
+              }}
+          >
+            <Animated.View
+              style={{
+                width: 6,
+                borderRadius: 8,
+                backgroundColor: "#bc6ff1",
+                height: scrollIndicatorSize,
+                transform: [{ translateY: scrollIndicatorPosition }],
+              }}
+            />
+          </View>
+
+          </View>
+          
           {
-              screen === "HomeScreen" ?
-                <>
-                  <View style={styles.splitButtonContainer}>
+            screen === "HomeScreen" ?
+              <>
+                <View style={styles.splitButtonContainer}>
 
-                    <Pressable 
-                      onPress={() => onPress?.Hide()} 
-                      style={[styles.splitButton, styles.splitButtonLeft]}
-                    >
-                      <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
-                    </Pressable>
+                  <Pressable 
+                    onPress={() => onPress?.Hide()} 
+                    style={[styles.splitButton, styles.splitButtonLeft]}
+                  >
+                    <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
+                  </Pressable>
 
-                    <Pressable 
-                      onPress={() => onPress?.Guess()} 
-                      style={[styles.splitButton, styles.splitButtonRight]}
-                    >
-                      <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
-                    </Pressable>
+                  <Pressable 
+                    onPress={() => onPress?.Guess()} 
+                    style={[styles.splitButton, styles.splitButtonRight]}
+                  >
+                    <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
+                  </Pressable>
 
-                  </View>
-                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
-                    <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
-                  </Pressable>  
-                </>
-              :
-                <Pressable onPress={onPressAction} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>{closeButtonText}</Text>
-                </Pressable>
-            }
+                </View>
+                <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
+                </Pressable>  
+              </>
+            :
+              <Pressable onPress={onPressAction} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>{closeButtonText}</Text>
+              </Pressable>
+          }
 
+          
         </View>
       </View>
     </Modal>
@@ -138,12 +213,25 @@ const styles = StyleSheet.create({
   },
   instructionModalContainer: {
     backgroundColor: 'white',
-    padding: 20,
+    // padding: 20,
     borderRadius: 10,
     alignItems: 'center',
     width: '80%',
     maxHeight: '80%',
     overflow: 'hidden',
+    flexDirection: 'column', // row or column
+  },
+  columnContainer: { //
+    flexDirection: 'column',
+    width: '100%',
+    height: '100%',
+    padding: 20,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    height: '80%',
+    padding: 20,
   },
   instructionModal: {
     borderRadius: 10,
