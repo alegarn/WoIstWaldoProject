@@ -3,7 +3,7 @@ export const INSTRUCTIONS = {
   Tutorial: {
     HomeScreen: "Welcome to WoIstWaldo tutorial. \n\n The game has 2 parts.\n\n 1 - Hiding Part\n\nChoose a picture, or take it, which contains the thing (the Waldo) you want others to guess. Then point where you want to hide it. Finally describe it. \n\n 2 - Guessing part\n\nChoose a picture from other players. Then read the description and guess what they wanted to hide. \n\n  Let's try it!\n\nHide or Guess first ?",
     HomeScreenModalBtn: {
-      hide :"Hide the Waldo",
+      hide : "Hide the Waldo",
       guess: "Guess the Waldo",
       finish: "Finish the tutorial"
     },

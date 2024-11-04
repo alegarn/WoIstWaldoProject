@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image } from 'react-native';
+import { useEffect, useState, useRef } from 'react';
+import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated } from 'react-native';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
 const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) => {
@@ -8,6 +8,34 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
   const [closeButtonText, setCloseButtonText] = useState("Close");
   const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
   
+  //ScrollBar states, variables
+  const [completeScrollBarHeight, setCompleteScrollBarHeight] = useState(1);
+  const [visibleScrollBarHeight, setVisibleScrollBarHeight] = useState(0);
+  
+  const scrollIndicatorSize =
+    completeScrollBarHeight > visibleScrollBarHeight
+      ? (visibleScrollBarHeight * visibleScrollBarHeight) /
+        completeScrollBarHeight
+      : visibleScrollBarHeight;
+
+      
+  const difference = visibleScrollBarHeight > scrollIndicatorSize ? 
+      visibleScrollBarHeight - scrollIndicatorSize
+      : 1;
+      
+  const scrollIndicator = useRef(new Animated.Value(0)).current;
+
+  const scrollIndicatorPosition = Animated.multiply(
+    scrollIndicator,
+    visibleScrollBarHeight / completeScrollBarHeight
+  ).interpolate({
+    inputRange: [0, difference],
+    outputRange: [0, difference],
+    extrapolate: "clamp",
+  });
+
+  // Scrollbar end
+
   const updateImageUrl = (screen) => {
     switch (screen) {
       case "HomeScreen":
@@ -73,51 +101,99 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
  */}
         {/* Instruction Modal */}
         <View style={styles.instructionModalContainer}>
-          <ScrollView style={[styles.instructionModal, instructionsPosition]}>
-            
-            {
-              isPortrait === true || isPortrait === undefined ? 
-                <Image source={imageUrl} style={styles.image}/> 
-                : 
-                isPortrait === false &&
-                  <View style={styles.imageContainer}>
-                    <Image source={imageUrl} style={styles.image}/>
-                  </View>
-            }
-            
-            <Text style={styles.instructions}>{instructions}</Text>
-            {/* reduce space between buttons, border ? */} 
-          </ScrollView>
+
+          <View style={styles.rowContainer}>
+
+            <ScrollView 
+              style={[styles.instructionModal, instructionsPosition]}
+              persistentScrollbar={true}
+
+              contentContainerStyle={{ paddingRight: 3 }}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={(width, height) => {
+                setCompleteScrollBarHeight(height);
+              }}
+              onLayout={({
+                nativeEvent: {
+                  layout: { height },
+                },
+              }) => {
+                setVisibleScrollBarHeight(height);
+              }}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
+                { useNativeDriver: false }
+              )}
+              scrollEventThrottle={16}
+            >
+              
+              {
+                isPortrait === true || isPortrait === undefined ? 
+                  <Image source={imageUrl} style={styles.image}/> 
+                  : 
+                  isPortrait === false &&
+                    <View style={styles.imageContainer}>
+                      <Image source={imageUrl} style={styles.image}/>
+                    </View>
+              }
+              
+              <Text style={styles.instructions}>{instructions}</Text>
+            </ScrollView>
+            {/* scrollbar elements */}
+            <View
+              style={[styles.scrollbar, styles.scrollbarContainer]}
+            >
+              <Animated.View
+                style={[
+                  styles.scrollbar, 
+                  styles.scrollbarIndicator,
+                  {
+                    height: scrollIndicatorSize,
+                    transform: [{ translateY: scrollIndicatorPosition }]
+                  }]
+                }
+              />
+            </View>
+
+          </View>
+          
           {
-              screen === "HomeScreen" ?
-                <>
-                  <View style={styles.splitButtonContainer}>
+            screen === "HomeScreen" ?
+              <View style={styles.buttonsContainer}>
+                <View style={styles.splitButtonContainer}>
 
-                    <Pressable 
-                      onPress={() => onPress?.Hide()} 
-                      style={[styles.splitButton, styles.splitButtonLeft]}
-                    >
-                      <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
-                    </Pressable>
+                  <Pressable 
+                    onPress={() => onPress?.Hide()} 
+                    style={[styles.splitButton, styles.splitButtonLeft]}
+                  >
+                    <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
+                  </Pressable>
 
-                    <Pressable 
-                      onPress={() => onPress?.Guess()} 
-                      style={[styles.splitButton, styles.splitButtonRight]}
-                    >
-                      <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
-                    </Pressable>
+                  <Pressable 
+                    onPress={() => onPress?.Guess()} 
+                    style={[styles.splitButton, styles.splitButtonRight]}
+                  >
+                    <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
+                  </Pressable>
 
-                  </View>
-                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
-                    <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
-                  </Pressable>  
-                </>
-              :
-                <Pressable onPress={onPressAction} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>{closeButtonText}</Text>
+                </View>
+
+                <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
+                  <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
                 </Pressable>
-            }
+                  
+              </View>
+            :
 
+            <View style={styles.buttonsContainer}>
+              <Pressable onPress={onPressAction} style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>{closeButtonText}</Text>
+              </Pressable>
+            </View>
+
+          }
+
+          
         </View>
       </View>
     </Modal>
@@ -138,12 +214,18 @@ const styles = StyleSheet.create({
   },
   instructionModalContainer: {
     backgroundColor: 'white',
-    padding: 20,
     borderRadius: 10,
     alignItems: 'center',
     width: '80%',
     maxHeight: '80%',
     overflow: 'hidden',
+    flexDirection: 'column',
+    padding: 10,
+  },
+  rowContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    height: '80%',
   },
   instructionModal: {
     borderRadius: 10,
@@ -163,8 +245,23 @@ const styles = StyleSheet.create({
     color: 'black',
     textAlign: 'center',
   },
-  marginBottom: {
-    marginBottom: 40,
+  scrollbar: {
+    width: 6,
+    borderRadius: 8,
+  },
+  scrollbarContainer: {
+    height: "100%",
+    backgroundColor: "#bc6ff1",
+  },
+  scrollbarIndicator: {
+    backgroundColor: "#52057b",
+  },
+  buttonsContainer: {
+    width: '100%',
+    height: '20%',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
   },
   button: {
     marginTop: 20,
@@ -176,7 +273,6 @@ const styles = StyleSheet.create({
   splitButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
     borderRadius: 5,
     backgroundColor: '#3498db',
     borderStyle: 'solid',    
@@ -193,7 +289,7 @@ const styles = StyleSheet.create({
   splitButtonRight: {
   },
   closeButton: {
-    marginTop: 20,
+    marginTop: 10,
     paddingVertical: 10,
     backgroundColor: 'red',
     borderRadius: 5,
@@ -203,6 +299,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     textAlign: 'center',
+    fontWeight: 'bold',
   },
   /*
   clickableArea: {
