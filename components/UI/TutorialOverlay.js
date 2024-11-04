@@ -190,7 +190,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
                 <Text style={styles.closeButtonText}>{closeButtonText}</Text>
               </Pressable>
             </View>
-            
+
           }
 
           
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
     width: '80%',
     maxHeight: '80%',
     overflow: 'hidden',
-    flexDirection: 'column', // row or column
+    flexDirection: 'column',
     padding: 10,
   },
   rowContainer: {
