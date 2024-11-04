@@ -17,12 +17,15 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       ? (visibleScrollBarHeight * visibleScrollBarHeight) /
         completeScrollBarHeight
       : visibleScrollBarHeight;
-  
+
+      
+  const difference = visibleScrollBarHeight > scrollIndicatorSize ? 
+      visibleScrollBarHeight - scrollIndicatorSize
+      : 1;
+      
   const scrollIndicator = useRef(new Animated.Value(0)).current;
 
-  const difference = visibleScrollBarHeight > scrollIndicatorSize ? 
-    visibleScrollBarHeight - scrollIndicatorSize
-    : 1;
+
 
   const scrollIndicatorPosition = Animated.multiply(
     scrollIndicator,
@@ -35,6 +38,9 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
 
   console.log("scrollIndicatorPosition",scrollIndicatorPosition);
   console.log("scrollIndicatorSize",scrollIndicatorSize);
+  console.log("completeScrollBarHeight",completeScrollBarHeight);
+  console.log("visibleScrollBarHeight",visibleScrollBarHeight);
+  console.log("scrollIndicator",scrollIndicator);
 
   const updateImageUrl = (screen) => {
     switch (screen) {
@@ -111,7 +117,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
 
             contentContainerStyle={{ paddingRight: 3 }}
             showsVerticalScrollIndicator={false}
-            onContentSizeChange={height => {
+            onContentSizeChange={(width, height) => {
               setCompleteScrollBarHeight(height);
             }}
             onLayout={({
