@@ -141,21 +141,17 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
             </ScrollView>
             {/* scrollbar elements */}
             <View
-              style={{
-                height: "100%",
-                width: 6,
-                backgroundColor: "#52057b",
-                borderRadius: 8,
-                }}
+              style={[styles.scrollbar, styles.scrollbarContainer]}
             >
               <Animated.View
-                style={{
-                  width: 6,
-                  borderRadius: 8,
-                  backgroundColor: "#bc6ff1",
-                  height: scrollIndicatorSize,
-                  transform: [{ translateY: scrollIndicatorPosition }],
-                }}
+                style={[
+                  styles.scrollbar, 
+                  styles.scrollbarIndicator,
+                  {
+                    height: scrollIndicatorSize,
+                    transform: [{ translateY: scrollIndicatorPosition }]
+                  }]
+                }
               />
             </View>
 
@@ -247,8 +243,16 @@ const styles = StyleSheet.create({
     color: 'black',
     textAlign: 'center',
   },
-  marginBottom: {
-    marginBottom: 40,
+  scrollbar: {
+    width: 6,
+    borderRadius: 8,
+  },
+  scrollbarContainer: {
+    height: "100%",
+    backgroundColor: "#bc6ff1",
+  },
+  scrollbarIndicator: {
+    backgroundColor: "#52057b",
   },
   buttonsContainer: {
     width: '100%',
