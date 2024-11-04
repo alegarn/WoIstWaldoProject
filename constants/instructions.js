@@ -14,7 +14,7 @@ export const INSTRUCTIONS = {
     HideScreenModalBtn: "Point the target", 
     SetInstructionScreen: "Hiding - Step 3\n\nDescribe the thing you hid. Riddles, questions, wordplay should be funnier than a plain description.\n\nRemember, when someone guess your picture, you earn a point.\n\nExample: I hid the goose in the image. Then write 'the hidden animal is giving me goosebumps ;)' \n\n",
     SetInstructionScreenModalBtn: "Describe my hidden location",
-    GuessPathScreen: "Guessing - Step 1\n\nChoose a picture from other players. Swipe right if both the picture and/or description seems appealing.\n\nIf not swift left to get a new picture.",
+    GuessPathScreen: "Guessing - Step 1\n\nChoose a picture from other players. Swipe right if both the picture and/or description seems appealing.\n\nIf not swipe left to get a new picture.",
     GuessPathScreenModalBtn: "Choose a picture",
     GuessScreen: "Guessing - Step 2\n\nGood, here is your picture!\n\nWhat is written in the description ? Can you guess where the target is hidden from it ?\n\nYes? Click on it when you see the image and then click again on the target when you think it's the correct area.\n\n Example: On the image i thought the goose is the correct target, by it's description 'the hidden animal is giving me goosebumps', so i clicked on it.",
     GuessScreenModalBtn: "Guess the location!",
