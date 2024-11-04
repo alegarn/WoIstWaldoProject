@@ -104,65 +104,66 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
 
           <View style={styles.rowContainer}>
 
-          <ScrollView 
-            style={[styles.instructionModal, instructionsPosition]}
-            persistentScrollbar={true}
+            <ScrollView 
+              style={[styles.instructionModal, instructionsPosition]}
+              persistentScrollbar={true}
 
-            contentContainerStyle={{ paddingRight: 3 }}
-            showsVerticalScrollIndicator={false}
-            onContentSizeChange={(width, height) => {
-              setCompleteScrollBarHeight(height);
-            }}
-            onLayout={({
-              nativeEvent: {
-                layout: { height },
-              },
-            }) => {
-              setVisibleScrollBarHeight(height);
-            }}
-            onScroll={Animated.event(
-              [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
-              { useNativeDriver: false }
-            )}
-            scrollEventThrottle={16}
-          >
-            
-            {
-              isPortrait === true || isPortrait === undefined ? 
-                <Image source={imageUrl} style={styles.image}/> 
-                : 
-                isPortrait === false &&
-                  <View style={styles.imageContainer}>
-                    <Image source={imageUrl} style={styles.image}/>
-                  </View>
-            }
-            
-            <Text style={styles.instructions}>{instructions}</Text>
-          </ScrollView>
-          <View
-            style={{
-              height: "100%",
-              width: 6,
-              backgroundColor: "#52057b",
-              borderRadius: 8,
+              contentContainerStyle={{ paddingRight: 3 }}
+              showsVerticalScrollIndicator={false}
+              onContentSizeChange={(width, height) => {
+                setCompleteScrollBarHeight(height);
               }}
-          >
-            <Animated.View
+              onLayout={({
+                nativeEvent: {
+                  layout: { height },
+                },
+              }) => {
+                setVisibleScrollBarHeight(height);
+              }}
+              onScroll={Animated.event(
+                [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
+                { useNativeDriver: false }
+              )}
+              scrollEventThrottle={16}
+            >
+              
+              {
+                isPortrait === true || isPortrait === undefined ? 
+                  <Image source={imageUrl} style={styles.image}/> 
+                  : 
+                  isPortrait === false &&
+                    <View style={styles.imageContainer}>
+                      <Image source={imageUrl} style={styles.image}/>
+                    </View>
+              }
+              
+              <Text style={styles.instructions}>{instructions}</Text>
+            </ScrollView>
+            {/* scrollbar elements */}
+            <View
               style={{
+                height: "100%",
                 width: 6,
+                backgroundColor: "#52057b",
                 borderRadius: 8,
-                backgroundColor: "#bc6ff1",
-                height: scrollIndicatorSize,
-                transform: [{ translateY: scrollIndicatorPosition }],
-              }}
-            />
-          </View>
+                }}
+            >
+              <Animated.View
+                style={{
+                  width: 6,
+                  borderRadius: 8,
+                  backgroundColor: "#bc6ff1",
+                  height: scrollIndicatorSize,
+                  transform: [{ translateY: scrollIndicatorPosition }],
+                }}
+              />
+            </View>
 
           </View>
           
           {
             screen === "HomeScreen" ?
-              <>
+              <View style={styles.buttonsContainer}>
                 <View style={styles.splitButtonContainer}>
 
                   <Pressable 
@@ -180,14 +181,18 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
                   </Pressable>
 
                 </View>
+
                 <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
                   <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
-                </Pressable>  
-              </>
+                </Pressable>
+                  
+              </View>
             :
+            <View style={styles.buttonsContainer}>
               <Pressable onPress={onPressAction} style={styles.closeButton}>
                 <Text style={styles.closeButtonText}>{closeButtonText}</Text>
               </Pressable>
+            </View>
           }
 
           
@@ -211,25 +216,18 @@ const styles = StyleSheet.create({
   },
   instructionModalContainer: {
     backgroundColor: 'white',
-    // padding: 20,
     borderRadius: 10,
     alignItems: 'center',
     width: '80%',
     maxHeight: '80%',
     overflow: 'hidden',
     flexDirection: 'column', // row or column
-  },
-  columnContainer: { //
-    flexDirection: 'column',
-    width: '100%',
-    height: '100%',
-    padding: 20,
+    padding: 10,
   },
   rowContainer: {
     flexDirection: 'row',
     width: '100%',
     height: '80%',
-    padding: 20,
   },
   instructionModal: {
     borderRadius: 10,
@@ -252,6 +250,13 @@ const styles = StyleSheet.create({
   marginBottom: {
     marginBottom: 40,
   },
+  buttonsContainer: {
+    width: '100%',
+    height: '20%',
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'space-evenly',
+  },
   button: {
     marginTop: 20,
     paddingVertical: 10,
@@ -262,7 +267,6 @@ const styles = StyleSheet.create({
   splitButtonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
-    marginTop: 20,
     borderRadius: 5,
     backgroundColor: '#3498db',
     borderStyle: 'solid',    
@@ -279,7 +283,7 @@ const styles = StyleSheet.create({
   splitButtonRight: {
   },
   closeButton: {
-    marginTop: 20,
+    marginTop: 10,
     paddingVertical: 10,
     backgroundColor: 'red',
     borderRadius: 5,
@@ -289,6 +293,7 @@ const styles = StyleSheet.create({
     color: 'white',
     fontSize: 16,
     textAlign: 'center',
+    fontWeight: 'bold',
   },
   /*
   clickableArea: {
