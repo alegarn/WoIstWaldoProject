@@ -8,7 +8,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
   const [closeButtonText, setCloseButtonText] = useState("Close");
   const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
   
-
+  //ScrollBar states, variables
   const [completeScrollBarHeight, setCompleteScrollBarHeight] = useState(1);
   const [visibleScrollBarHeight, setVisibleScrollBarHeight] = useState(0);
   
@@ -25,8 +25,6 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       
   const scrollIndicator = useRef(new Animated.Value(0)).current;
 
-
-
   const scrollIndicatorPosition = Animated.multiply(
     scrollIndicator,
     visibleScrollBarHeight / completeScrollBarHeight
@@ -36,11 +34,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     extrapolate: "clamp",
   });
 
-  console.log("scrollIndicatorPosition",scrollIndicatorPosition);
-  console.log("scrollIndicatorSize",scrollIndicatorSize);
-  console.log("completeScrollBarHeight",completeScrollBarHeight);
-  console.log("visibleScrollBarHeight",visibleScrollBarHeight);
-  console.log("scrollIndicator",scrollIndicator);
+  // Scrollbar end
 
   const updateImageUrl = (screen) => {
     switch (screen) {
@@ -113,7 +107,6 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
           <ScrollView 
             style={[styles.instructionModal, instructionsPosition]}
             persistentScrollbar={true}
-            //showsVerticalScrollIndicator={true}
 
             contentContainerStyle={{ paddingRight: 3 }}
             showsVerticalScrollIndicator={false}
@@ -145,7 +138,6 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
             }
             
             <Text style={styles.instructions}>{instructions}</Text>
-            {/* reduce space between buttons, border ? */} 
           </ScrollView>
           <View
             style={{
