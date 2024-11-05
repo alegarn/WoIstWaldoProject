@@ -65,7 +65,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
 
     // Check if the scroll is at the bottom
-    if (/* ( */layoutMeasurement.height + contentOffset.y >= contentSize.height - 1) /* || (visibleScrollBarHeight.toString() >= completeScrollBarHeight.toFixed(0)) )*/ {
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 1) {
       // Call your function here when scrolled to the bottom
       setButtonIsVisible(true);
     }
