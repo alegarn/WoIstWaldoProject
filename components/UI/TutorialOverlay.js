@@ -11,6 +11,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
   //ScrollBar states, variables
   const [completeScrollBarHeight, setCompleteScrollBarHeight] = useState(1);
   const [visibleScrollBarHeight, setVisibleScrollBarHeight] = useState(0);
+  const [buttonIsVisible, setButtonIsVisible] = useState(false);
   
   const scrollIndicatorSize =
     completeScrollBarHeight > visibleScrollBarHeight
@@ -25,6 +26,14 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       
   const scrollIndicator = useRef(new Animated.Value(0)).current;
 
+  useEffect(() => {
+    console.log("scrollIndicator", scrollIndicator); 
+    console.log("scrollIndicatorPosition", scrollIndicatorPosition); 
+    console.log("visibleScrollBarHeight", visibleScrollBarHeight);
+    console.log("completeScrollBarHeight", completeScrollBarHeight);  
+  }, [scrollIndicator]);
+  
+
   const scrollIndicatorPosition = Animated.multiply(
     scrollIndicator,
     visibleScrollBarHeight / completeScrollBarHeight
@@ -33,6 +42,34 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     outputRange: [0, difference],
     extrapolate: "clamp",
   });
+
+/*   const showButtons = async (event) => {
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+    console.log("scroll");
+            
+    // Check if the scroll is at the bottom
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height) {
+      // Call your function here when scrolled to the bottom
+      console.log("bottom");
+      setButtonIsVisible(!isVisible);
+    }
+  }; */
+
+  const handleScroll = (event) => {
+    // Call the animated event handler
+    Animated.event(
+      [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
+      { useNativeDriver: false }
+    )(event);
+
+    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+
+    // Check if the scroll is at the bottom
+    if (/* ( */layoutMeasurement.height + contentOffset.y >= contentSize.height - 1) /* || (visibleScrollBarHeight.toString() >= completeScrollBarHeight.toFixed(0)) )*/ {
+      // Call your function here when scrolled to the bottom
+      setButtonIsVisible(true);
+    }
+  };
 
   // Scrollbar end
 
@@ -64,6 +101,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       return null;
     };
 
+  // UseEffect ________________________________________________________________
   useEffect(() => {
     setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
     setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
@@ -102,7 +140,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
         {/* Instruction Modal */}
         <View style={styles.instructionModalContainer}>
 
-          <View style={styles.rowContainer}>
+          <View style={[styles.rowContainer, { maxHeight: buttonIsVisible ? '80%' : '95%' }]}>
 
             <ScrollView 
               style={[styles.instructionModal, instructionsPosition]}
@@ -120,10 +158,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
               }) => {
                 setVisibleScrollBarHeight(height);
               }}
-              onScroll={Animated.event(
-                [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
-                { useNativeDriver: false }
-              )}
+              onScroll={handleScroll}
               scrollEventThrottle={16}
             >
               
@@ -159,37 +194,45 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
           
           {
             screen === "HomeScreen" ?
-              <View style={styles.buttonsContainer}>
-                <View style={styles.splitButtonContainer}>
 
-                  <Pressable 
-                    onPress={() => onPress?.Hide()} 
-                    style={[styles.splitButton, styles.splitButtonLeft]}
-                  >
-                    <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
+              buttonIsVisible === true ?
+              (
+                <View style={styles.buttonsContainer}>
+                  <View style={styles.splitButtonContainer}>
+
+                    <Pressable 
+                      onPress={() => onPress?.Hide()} 
+                      style={[styles.splitButton, styles.splitButtonLeft]}
+                    >
+                      <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
+                    </Pressable>
+
+                    <Pressable 
+                      onPress={() => onPress?.Guess()} 
+                      style={[styles.splitButton, styles.splitButtonRight]}
+                    >
+                      <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
+                    </Pressable>
+
+                  </View>
+
+                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
                   </Pressable>
-
-                  <Pressable 
-                    onPress={() => onPress?.Guess()} 
-                    style={[styles.splitButton, styles.splitButtonRight]}
-                  >
-                    <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
-                  </Pressable>
-
+                    
                 </View>
-
-                <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
-                  <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
-                </Pressable>
-                  
-              </View>
+              ) : null
+              
             :
 
+            buttonIsVisible === true ?
+            (
             <View style={styles.buttonsContainer}>
               <Pressable onPress={onPressAction} style={styles.closeButton}>
                 <Text style={styles.closeButtonText}>{closeButtonText}</Text>
               </Pressable>
             </View>
+            ) : null
 
           }
 
@@ -217,15 +260,15 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     width: '80%',
-    maxHeight: '80%',
+    maxHeight: '100%',
     overflow: 'hidden',
     flexDirection: 'column',
-    padding: 10,
+    justifyContent: 'space-evenly',
+    paddingHorizontal: 10,
   },
   rowContainer: {
     flexDirection: 'row',
     width: '100%',
-    height: '80%',
   },
   instructionModal: {
     borderRadius: 10,
@@ -258,7 +301,7 @@ const styles = StyleSheet.create({
   },
   buttonsContainer: {
     width: '100%',
-    height: '20%',
+    maxHeight: '20%',
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'space-evenly',
