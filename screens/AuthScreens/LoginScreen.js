@@ -4,10 +4,9 @@ import { Alert } from 'react-native';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import AuthContent from '../../components/Auth/AuthContent';
 
-import { login } from '../../utils/auth';
+import { getIsTutorialFinished, login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 import { getScoreId } from '../../utils/auth';
-
 
 function LoginScreen() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -32,6 +31,18 @@ function LoginScreen() {
     scoreId.status !== 200 && console.log("scoreId not saved") && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
   };
 
+  const handleVerifyTutorialIsFinished = async () => {
+    // look isTutorialFinished !!!
+    const isTutorialFinished = await getIsTutorialFinished(authContext);
+    isTutorialFinished.status === 200 
+      && authContext.saveIsTutorialFinished(isTutorialFinished.data) 
+      && console.log("isTutorialFinished saved!");
+    isTutorialFinished.status !== 200 
+      && console.log("isTutorialFinished not saved") 
+      && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
+    // authContext.verifyTutorialIsFinished(authContext.userId);
+  };
+
   async function signInHandler({email, password}) {
     setIsAuthenticating(true);
     try {
@@ -40,6 +51,7 @@ function LoginScreen() {
       if (response.status === 200) {
         const auth = await handleAuthDataSaving(response, email);
         const scoreId = await handleScoreId();
+        const isTutorialFinished = await handleVerifyTutorialIsFinished();
         setIsAuthenticating(false);
       } else if (response.status === 401) {
         //console.log(response);
