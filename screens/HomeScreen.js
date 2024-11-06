@@ -61,13 +61,13 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const isTutorialNeeded = async () => {
-    //console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
-    let tutorial = context.isFirstTime?.tutorial;
-    let guessPathDone = context.isFirstTime?.guessPathDone;
-    let hidePathDone = context.isFirstTime?.hidePathDone;
+    //console.log(`context.isTutorialFinished: ${JSON.stringify(context.isTutorialFinished)}`);
+    let isTutorial = context.isTutorialFinished?.isTutorial;
+    let guessPathDone = context.isTutorialFinished?.guessPathDone;
+    let hidePathDone = context.isTutorialFinished?.hidePathDone;
     
     const tutorialModalIsShown = 
-      ((tutorial === true) || (route?.params?.isTutorial === true))
+      ((isTutorial === true) || (route?.params?.isTutorial === true))
       && ((guessPathDone === false) || (hidePathDone === false));
     
     tutorialModalIsShown ? 

@@ -13,12 +13,14 @@ export const AuthContext = createContext({
   scoreId: '',
   username: '',
   email: '',
+  isTutorialFinished: false,
   headers: {},
   IsAuthenticated: false,
   authenticate: () => {},
   logout: () => {},
   tokenAuthentication: () => {},
   saveScoreId: () => {},
+  saveIsTutorialFinished: () => {},
   verifyIsLoggedIn: () => {},
   changeUserEmail: () => {},
   changeUsername: () => {},
@@ -38,7 +40,7 @@ export default function AuthContextProvider({ children }) {
   const [email, setEmail] = useState('');
 
   const [headers, setHeaders] = useState({});
-  const [isFirstTime, setIsFirstTime] = useState({tutorial: true, guessPathDone: false, hidePathDone: false});
+  const [isTutorialFinished, setIsTutorialFinished] = useState({isTutorial: true, guessPathDone: false, hidePathDone: false});
 
   function tokenAuthentication(token) {
     setAuthToken(token);
@@ -55,7 +57,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username);
     /* variable to server */
-    await SecureStore.setItemAsync('isFirstTime', JSON.stringify({tutorial: true, guessPathDone: false, hidePathDone: false}));
+    await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}));
 
     setClient(client);
     setUid(uid);
@@ -65,8 +67,8 @@ export default function AuthContextProvider({ children }) {
     setUserId(userId);
     setUsername(username);
     setEmail(email);
-    /* variable to server */
-    setIsFirstTime({tutorial: true, guessPathDone: false, hidePathDone: false});
+    /* variable to server, related to isTutorialFinished */
+    setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
     
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
@@ -83,7 +85,7 @@ export default function AuthContextProvider({ children }) {
     setUsername('');
     setEmail('');
     setHeaders({});
-    setIsFirstTime({});
+    setIsTutorialFinished({});
 
     await SecureStore.deleteItemAsync('token');
     await SecureStore.deleteItemAsync('client');
@@ -93,7 +95,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('email');
     await SecureStore.deleteItemAsync('username');
-    await SecureStore.deleteItemAsync('isFirstTime');
+    await SecureStore.deleteItemAsync('isTutorialFinished');
 
     await emptyImageList();
     setIsAuthenticated(false);
@@ -102,6 +104,19 @@ export default function AuthContextProvider({ children }) {
   async function saveScoreId(scoreId) {
     setScoreId(scoreId);
     await SecureStore.setItemAsync('scoreId', scoreId);
+  };
+
+  async function saveIsTutorialFinished(isTutorialFinished) {
+    if (isTutorialFinished) {
+      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: false, guessPathDone: true, hidePathDone: true}))
+      setIsTutorialFinished({isTutorial: false, guessPathDone: true, hidePathDone: true});
+    };
+    
+    if (isTutorialFinished === false) {
+      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}))
+      setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
+    };
+    
   };
 
   async function changeUserEmail(email) {
@@ -128,17 +143,17 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function turnTutorialOn(answer) {
-    setIsFirstTime({
-      tutorial: answer, 
-      guessPathDone: isFirstTime?.guessPathDone, 
-      hidePathDone: isFirstTime?.hidePathDone
+    setIsTutorialFinished({
+      isTutorial: answer, 
+      guessPathDone: isTutorialFinished?.guessPathDone, 
+      hidePathDone: isTutorialFinished?.hidePathDone
     });
   };
 
-  async function updateTutorialStatus(isFirstTime) {
-    console.log("isFirstTime", JSON.stringify(isFirstTime));
-    await SecureStore.setItemAsync('isFirstTime', JSON.stringify(isFirstTime));
-    setIsFirstTime(isFirstTime);
+  async function updateTutorialStatus(isTutorialFinished) {
+    console.log("isTutorialFinished", JSON.stringify(isTutorialFinished));
+    await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify(isTutorialFinished));
+    setIsTutorialFinished(isTutorialFinished);
   };
 
   const value = {
@@ -153,11 +168,12 @@ export default function AuthContextProvider({ children }) {
     IsAuthenticated: !!authToken,
     username: username,
     email: email,
-    isFirstTime: isFirstTime,
+    isTutorialFinished: isTutorialFinished,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
     saveScoreId: saveScoreId,
+    saveIsTutorialFinished: saveIsTutorialFinished,
     verifyIsLoggedIn: verifyIsLoggedIn,
     changeUserEmail: changeUserEmail,
     changeUsername: changeUsername,

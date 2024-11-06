@@ -97,8 +97,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const handleTutorialUpdate = async () => {
     await context.updateTutorialStatus({ 
-      tutorial: true, 
-      guessPathDone: context.isFirstTime?.guessPathDone, 
+      isTutorial: true, 
+      guessPathDone: context.isTutorialFinished?.guessPathDone, 
       hidePathDone: true,
     });
   };
