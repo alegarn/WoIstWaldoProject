@@ -177,11 +177,11 @@ export async function getImages(pictureId, context) {
   };
 
   if (imagesInfos?.data === null) {
-    return { isError: true, title: "Their is an error downloading user's images.", message: "Please retry later..." };
+    return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
   };
 
   if (imagesInfos?.data === 401) {
-    return { isError: true, title: "Their is an authentication error.", message: "Please reconnect" };
+    return { isError: true, title: "There is an authentication error.", message: "Please reconnect" };
   };
 
   if (imagesInfos.data?.data?.length === 0) {
