@@ -35,7 +35,7 @@ function LoginScreen() {
     // look isTutorialFinished !!!
     const isTutorialFinished = await getIsTutorialFinished(authContext);
     isTutorialFinished.status === 200 
-      && authContext.saveIsTutorialFinished(isTutorialFinished.data) 
+      && authContext.saveIsTutorialFinished(isTutorialFinished.data.is_tutorial_finished) 
       && console.log("isTutorialFinished saved!");
     isTutorialFinished.status !== 200 
       && console.log("isTutorialFinished not saved") 
