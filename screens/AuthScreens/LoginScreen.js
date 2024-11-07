@@ -4,9 +4,10 @@ import { Alert } from 'react-native';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import AuthContent from '../../components/Auth/AuthContent';
 
-import { getIsTutorialFinished, login } from '../../utils/auth';
+import { login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 import { getScoreId } from '../../utils/auth';
+import { getIsTutorialFinished } from '../../utils/tutorialHandler';
 
 function LoginScreen() {
   const [isAuthenticating, setIsAuthenticating] = useState(false);
