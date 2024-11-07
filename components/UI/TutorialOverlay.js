@@ -51,8 +51,16 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     }
   };
 
-  // Scrollbar end
+  // Scrollbar end 
 
+  // UseEffect ________________________________________________________________
+  useEffect(() => {
+    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
+    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
+    updateImageUrl(screen);
+  }, [screen]);
+
+  // Functions ________________________________________________________________
   const updateImageUrl = (screen) => {
     switch (screen) {
       case "HomeScreen":
@@ -79,14 +87,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
         break;
       };
       return null;
-    };
-
-  // UseEffect ________________________________________________________________
-  useEffect(() => {
-    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
-    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
-    updateImageUrl(screen);
-  }, [screen]);
+  };
 
   const closeModal = () => {
     setIsVisible(false);

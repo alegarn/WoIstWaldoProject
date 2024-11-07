@@ -86,23 +86,6 @@ export async function getScoreId(context) {
   return response;
 };
 
-export async function getIsTutorialFinished(context) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
-  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_is_tutorial_finished`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
-  const config = {
-    headers: headers,
-  };
-  const response = await axios.get(url, config).then((response) => {
-    return {status: response.status, data: response.data };
-  }).catch((error) => {
-    console.log("error getIsTutorialFinished", error.request);
-    return { status: error.request.status, data: error};
-  });
-
-  return response;
-};
-
 export async function createUser({ email, password, confirmPassword, username }) {
 
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth`

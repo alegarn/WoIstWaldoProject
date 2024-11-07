@@ -7,13 +7,15 @@ import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
+import { setIsTutorialFinished } from '../utils/tutorialHandler';
+
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
 
 export default function HomeScreen({ navigation, route }) {
-  const [showModal, setShowModal] = useState(true);
+  const [showModal, setShowModal] = useState(false);
   const [isTutorial, setIsTutorial] = useState(false);
 
   const context = useContext(AuthContext);
@@ -61,18 +63,20 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const isTutorialNeeded = async () => {
-    //console.log(`context.isTutorialFinished: ${JSON.stringify(context.isTutorialFinished)}`);
-    let isTutorial = context.isTutorialFinished?.isTutorial;
-    let guessPathDone = context.isTutorialFinished?.guessPathDone;
-    let hidePathDone = context.isTutorialFinished?.hidePathDone;
-    
-    const tutorialModalIsShown = 
-      ((isTutorial === true) || (route?.params?.isTutorial === true))
-      && ((guessPathDone === false) || (hidePathDone === false));
-    
-    tutorialModalIsShown ? 
-      setShowModal(true) 
-      : setShowModal(false);    
+    // fire the tutorial if needed after context is done updated on login
+    setTimeout(() => {
+      let isTutorial = context.isTutorialFinished?.isTutorial;
+      let guessPathDone = context.isTutorialFinished?.guessPathDone;
+      let hidePathDone = context.isTutorialFinished?.hidePathDone;
+      
+      const tutorialModalIsShown = 
+        ((isTutorial === true) || (route?.params?.isTutorial === true))
+        && ((guessPathDone === false) || (hidePathDone === false));
+      console.log(`tutorialModalIsShown: ${tutorialModalIsShown}`);
+      tutorialModalIsShown ? 
+        setShowModal(true) 
+        : setShowModal(false);  
+    }, 250);
   };
 
 
@@ -112,8 +116,12 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const cancelTutorial = async () => {
-    console.log("cancelTutorial");
     await context.turnTutorialOn(false);
+    await setIsTutorialFinished({ 
+      context, 
+      data: {is_tutorial_finished: true} 
+    });
+  
     setIsTutorial(false);
     setShowModal(false);
     return false;
