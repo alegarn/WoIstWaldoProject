@@ -132,7 +132,7 @@ export default function AuthContextProvider({ children }) {
 
   async function verifyIsLoggedIn() {
     const token = await SecureStore.getItemAsync('token');
-    console.log("verifyIsLoggedIn", "token", token, "authToken", authToken);
+    //console.log("verifyIsLoggedIn", "token", token, "authToken", authToken);
     if (token || authToken) {
       setIsAuthenticated(true);
       return true;
