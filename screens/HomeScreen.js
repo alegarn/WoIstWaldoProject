@@ -15,11 +15,14 @@ import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
 
 export default function HomeScreen({ navigation, route }) {
+  // States __________________________________________________________________
   const [showModal, setShowModal] = useState(false);
   const [isTutorial, setIsTutorial] = useState(false);
 
+  // Variables __________________________________________________________________
   const context = useContext(AuthContext);
 
+  /* functions ___________________________________________________________________ */
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
     
@@ -72,33 +75,13 @@ export default function HomeScreen({ navigation, route }) {
       const tutorialModalIsShown = 
         ((isTutorial === true) || (route?.params?.isTutorial === true))
         && ((guessPathDone === false) || (hidePathDone === false));
-      console.log(`tutorialModalIsShown: ${tutorialModalIsShown}`);
+
       tutorialModalIsShown ? 
         setShowModal(true) 
         : setShowModal(false);  
     }, 250);
   };
 
-
-  /* useEffect _______________________________ */
-
-  useEffect(() => {
-    /* To delete - home debug message */
-    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
-    Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
-    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
-    /*  */
-    checkSecureStoreOk();
-    isTutorialNeeded(); 
-    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
-  }, []);
-
-
-  useFocusEffect(() => {
-    handleOrientation("portrait");
-    // when leaving the app 
-    verifyLoginInfos();
-  });
 
 
   /* Functions _______________________________ */
@@ -143,6 +126,26 @@ export default function HomeScreen({ navigation, route }) {
       isTutorial: true,
     });
   };
+
+  /* useEffect _______________________________ */
+
+  useEffect(() => {
+    /* To delete - home debug message */
+    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
+    Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
+    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
+    /*  */
+    checkSecureStoreOk();
+    isTutorialNeeded(); 
+    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
+  }, []);
+
+
+  useFocusEffect(() => {
+    handleOrientation("portrait");
+    // when leaving the app 
+    verifyLoginInfos();
+  });
 
   return (
     <>

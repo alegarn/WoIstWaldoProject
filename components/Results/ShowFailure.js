@@ -11,7 +11,18 @@ export default function ShowFailure({ navigation, route }) {
 
   const [showFailureImageAnimated, setShowSadImageAnimated] = useState(true);
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, isTutorial } = route?.params;
+  const { 
+    imageFile, 
+    pictureId, 
+    description, 
+    imageHeight, 
+    imageWidth, 
+    isPortrait, 
+    hiddenLocation, 
+    screenHeight, 
+    screenWidth, 
+    isTutorial 
+  } = route?.params;
 
 
 /* useEffect________________________________________________ */
@@ -28,7 +39,7 @@ export default function ShowFailure({ navigation, route }) {
   }, []);
 
 
-
+/* functions________________________________________________ */
   function retryGuess() {
     navigation.replace('GuessScreen', {
       imageFile: imageFile,
