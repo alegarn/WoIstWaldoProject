@@ -57,7 +57,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username);
     /* variable to server */
-    await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}));
+    //await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}));
 
     setClient(client);
     setUid(uid);
@@ -68,7 +68,7 @@ export default function AuthContextProvider({ children }) {
     setUsername(username);
     setEmail(email);
     /* variable to server, related to isTutorialFinished */
-    setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
+    //setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
     
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
     console.log("context", token, expiry, access_token, userId, client, uid, email);
