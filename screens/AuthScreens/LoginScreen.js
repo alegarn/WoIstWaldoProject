@@ -33,15 +33,16 @@ function LoginScreen() {
   };
 
   const handleVerifyTutorialIsFinished = async () => {
-    // look isTutorialFinished !!!
     const isTutorialFinished = await getIsTutorialFinished(authContext);
-    isTutorialFinished.status === 200 
-      && authContext.saveIsTutorialFinished(isTutorialFinished.data.is_tutorial_finished) 
-      && console.log("isTutorialFinished saved!");
-    isTutorialFinished.status !== 200 
-      && console.log("isTutorialFinished not saved") 
-      && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
-    // authContext.verifyTutorialIsFinished(authContext.userId);
+    
+    if (isTutorialFinished !== undefined) {
+      await isTutorialFinished.status === 200 
+        && authContext.saveIsTutorialFinished(isTutorialFinished.data.is_tutorial_finished) 
+        && console.log("isTutorialFinished saved!");
+      await isTutorialFinished.status !== 200
+        && console.log("isTutorialFinished not saved") 
+        && Alert.alert("There is a problem with the server", "Try to reconnect. You canno't get a score.");
+    };
   };
 
   async function signInHandler({email, password}) {
@@ -58,8 +59,7 @@ function LoginScreen() {
         //console.log(response);
         Alert.alert('Invalid credentials, please retry', `Change your email or password before retrying \n ${response}`);
         setIsAuthenticating(false); 
-      }
-      else if (response.status === 500) {
+      } else if (response.status === 500) {
         Alert.alert('Server error, please retry later', `Server problem on our side :/ \n ${response}`);
         setIsAuthenticating(false);
       } else {
