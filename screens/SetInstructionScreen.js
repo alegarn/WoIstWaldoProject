@@ -118,7 +118,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
-    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
+    await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
     await handleImage({userId, fileExtension});
     handleScreenUi();
@@ -128,7 +128,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
       index: 0,
       routes: [{ 
         name: 'HomeScreen', 
-        params: { isTutorial: isTutorial } 
+        params: { 
+          isTutorial: isTutorial,
+          hidePathDone: true
+        } 
       }],
     });
 

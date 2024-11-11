@@ -7,7 +7,7 @@ import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
-import { setIsTutorialFinished } from '../utils/tutorialHandler';
+import { isTutorialFinished } from '../utils/tutorialHandler';
 
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
@@ -65,20 +65,37 @@ export default function HomeScreen({ navigation, route }) {
     return null;
   };
 
-  const isTutorialNeeded = async () => {
-    // fire the tutorial if needed after context is done updated on login
-    setTimeout(() => {
-      let isTutorial = context.isTutorialFinished?.isTutorial;
-      let guessPathDone = context.isTutorialFinished?.guessPathDone;
-      let hidePathDone = context.isTutorialFinished?.hidePathDone;
-      
-      const tutorialModalIsShown = 
-        ((isTutorial === true) || (route?.params?.isTutorial === true))
+  const handleTutorialModalToShow = (isTutorial, guessPathDone, hidePathDone) => {
+
+    let tutorialModalIsShown = false;
+    // Already in the tutorial ?
+    if ((isTutorial === true) && (route?.params?.isTutorial === true)) {
+      setIsTutorial(true)
+      tutorialModalIsShown = true;
+    };
+
+    // Not doing the tutorial yet
+    if (tutorialModalIsShown === false) {
+      const firstutorialModalIsShown = 
+        ((isTutorial === true) && (route?.params?.isTutorial === undefined))
         && ((guessPathDone === false) || (hidePathDone === false));
 
-      tutorialModalIsShown ? 
+      console.log("firstutorialModalIsShown", firstutorialModalIsShown);
+      
+      firstutorialModalIsShown ? 
         setShowModal(true) 
         : setShowModal(false);  
+    };
+  };
+
+  const isTutorialNeeded = () => {
+    setTimeout(() => {
+      const isTutorial = context.isTutorialFinished?.isTutorial;
+      const guessPathDone = context.isTutorialFinished?.guessPathDone;
+      const hidePathDone = context.isTutorialFinished?.hidePathDone;
+
+      isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
+      
     }, 250);
   };
 
@@ -100,9 +117,13 @@ export default function HomeScreen({ navigation, route }) {
 
   const cancelTutorial = async () => {
     await context.turnTutorialOn(false);
-    await setIsTutorialFinished({ 
+    await isTutorialFinished({ 
       context, 
-      data: {is_tutorial_finished: true} 
+      data: {
+        user: {
+          is_tutorial_finished: true
+        }
+      } 
     });
   
     setIsTutorial(false);
