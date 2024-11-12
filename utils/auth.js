@@ -44,7 +44,7 @@ export function setHeaders({ token, uid, expiry, access_token, client }) {
 };
 
 
-async function authenticate({ email, password }) {
+async function authenticateUser({ email, password }) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_in`;
   const headers = {
     'Content-Type': 'application/json',
@@ -134,7 +134,7 @@ export async function createUser({ email, password, confirmPassword, username })
 };
 
 export async function login({email, password}) {
-  return await authenticate({email, password});
+  return await authenticateUser({email, password});
 };
 
 export async function logout({ context }) {
