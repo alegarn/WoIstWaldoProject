@@ -118,7 +118,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
-    await checkSecureStoreItem({ secureStoreValue: "userId", context });
+    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
     await handleImage({userId, fileExtension});
     handleScreenUi();
