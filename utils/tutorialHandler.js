@@ -8,9 +8,10 @@ export async function getIsTutorialFinished(context) {
   const config = {
     headers: headers,
   };
+
   const response = await axios.get(url, config).then((response) => {
     console.log("response getIsTutorialFinished", response.data);
-    return {status: response.status, data: response.data };
+    return { status: response.status, data: response.data };
   }).catch((error) => {
     console.log("error getIsTutorialFinished", error.request);
     return { status: error.request.status, data: error};
@@ -19,18 +20,20 @@ export async function getIsTutorialFinished(context) {
   return response;
 };
 
-export async function setIsTutorialFinished({ context, data }) {
+export async function isTutorialFinished({ context, data }) {
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/set_is_tutorial_finished`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
   };
+  data.user.user_id = userId ;
+
   const response = await axios.put(url, data, config).then((response) => {
-    console.log("response setIsTutorialFinished", response.data);
+    console.log("response isTutorialFinished", response.data);
     return {status: response.status, data: response.data };
   }).catch((error) => {
-    console.log("error setIsTutorialFinished", error.request);
+    console.log("error isTutorialFinished", error.request);
     return { status: error.request.status, data: error};
   });
 };

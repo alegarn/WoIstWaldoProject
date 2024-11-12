@@ -76,6 +76,7 @@ export async function getScoreId(context) {
   const config = {
     headers: headers,
   };
+
   const response = await axios.get(url, config).then((response) => {
     return {status: response.status, data: response.data };
   }).catch((error) => {
@@ -181,11 +182,12 @@ export async function checkSecureStoreItem({ secureStoreValue, context }) {
 
 export async function getUserName({ context }) {
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
-  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${context.userId}/get_user_name`;
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_name`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
   };
+
   const response = await axios.get(url, config).then((response) => {
     console.log("response getUserName", response.data);
     return { status: response.status, data: response.data };
@@ -195,13 +197,10 @@ export async function getUserName({ context }) {
   });
 
   return response;
-
-  //const username = await fetchUsername();
-  //return username;
 };
 
 export async function updateUser({ context, data }) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
@@ -219,12 +218,13 @@ export async function updateUser({ context, data }) {
 };
 
 export async function deleteAccount({ context }) {
-  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
   const config = {
     headers: headers,
   };
+
   const response = await axios.delete(url, config)
     .then((response) => {
       console.log("response deleteAccount", response?.data);

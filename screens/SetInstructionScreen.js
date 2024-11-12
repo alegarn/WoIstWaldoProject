@@ -128,7 +128,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
       index: 0,
       routes: [{ 
         name: 'HomeScreen', 
-        params: { isTutorial: isTutorial } 
+        params: { 
+          isTutorial: isTutorial,
+          hidePathDone: true
+        } 
       }],
     });
 
