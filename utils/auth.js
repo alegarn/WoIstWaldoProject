@@ -56,15 +56,16 @@ async function authenticateUser({ email, password }) {
     'password': password,
   };
   
-  const response = await axios.post(url, data, headers).then((response) => {
-    return response;
-  }).catch((error) => {
-    console.log("error authenticate", error.request);
-    console.log("error", error);
-    return error;
-  });
+  const response = await axios.post(url, data, headers)
+    .then((response) => {
+      return response;
+    }).catch((error) => {
+      console.log("error authenticateUser", error.request);
+      console.log("error", error);
+      return error;
+    });
   
-  console.log("response authenticate", response);
+  console.log("response authenticateUser", response);
   
   return response;
 };
