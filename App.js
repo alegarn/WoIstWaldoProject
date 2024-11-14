@@ -79,9 +79,11 @@ function AuthenticatedStack({ authContext }) {
   
   // test device id or in production
   // getUserConsent();
-
+  
+  // useStates __________________________________________________________
   const [showOverlay, setShowOverlay] = useState(false);
 
+  // functions __________________________________________________________
   const showLoadingOverlay = () => {
     const message = "Disconnecting...";
     return <LoadingOverlay message={message} />;
@@ -93,12 +95,14 @@ function AuthenticatedStack({ authContext }) {
     authContext.logout();
   };
 
+  // useEffect ___________________________________________________________
   useEffect(() => {
     if (!authContext.isAuthenticated) {
       setShowOverlay(false); // Stop the overlay when logout is completed
     };
   }, [authContext.isAuthenticated]);
 
+  // && scoreId !== ""
   if (showOverlay) {
     return showLoadingOverlay();
   };
@@ -225,7 +229,7 @@ function Navigation({ authContext }) {
 };
 
 function Root() {
-  const [isTryingLogging, setIsTryingLogging] = useState(false);
+  //const [isTryingLogging, setIsTryingLogging] = useState(false);
   const authContext = useContext(AuthContext);
 
   /* useEffect(() => {
