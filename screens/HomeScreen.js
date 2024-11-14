@@ -86,17 +86,11 @@ export default function HomeScreen({ navigation, route }) {
 
   };
 
-  const isTutorialNeeded = async () => {
-
-    // wait that the context is having non empty data
+  const isTutorialNeeded = () => {
     const isTutorial = context.isTutorialFinished?.isTutorial;
     const guessPathDone = context.isTutorialFinished?.guessPathDone;
     const hidePathDone = context.isTutorialFinished?.hidePathDone;
-
-    console.log("isTutorialNeeded", isTutorial, guessPathDone, hidePathDone);
-
     isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
-      
   };
 
   /* Functions _______________________________ */
@@ -154,16 +148,16 @@ export default function HomeScreen({ navigation, route }) {
     Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
-    // when auth is done!
-    console.log("HomeScreen useEffect");
 
     checkSecureStoreOk();
-    // should fire after a login and the context updated
-    isTutorialNeeded(); 
 
-    console.log("HomeScreen useEffect end");
     //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
+
+  useEffect(() => {
+    isTutorialNeeded(); 
+    }, [context.isTutorialFinished]
+  );
 
 
   useFocusEffect(() => {
