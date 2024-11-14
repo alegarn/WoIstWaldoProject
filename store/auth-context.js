@@ -13,7 +13,7 @@ export const AuthContext = createContext({
   scoreId: '',
   username: '',
   email: '',
-  isTutorialFinished: false,
+  isTutorialFinished: {},
   headers: {},
   IsAuthenticated: false,
   authenticate: () => {},
@@ -40,13 +40,27 @@ export default function AuthContextProvider({ children }) {
   const [email, setEmail] = useState('');
 
   const [headers, setHeaders] = useState({});
-  const [isTutorialFinished, setIsTutorialFinished] = useState({isTutorial: true, guessPathDone: false, hidePathDone: false});
+  const [isTutorialFinished, setIsTutorialFinished] = useState({isTutorial: false, guessPathDone: false, hidePathDone: false});
+
 
   function tokenAuthentication(token) {
     setAuthToken(token);
   };
 
-  async function authenticate({token, client, expiry, access_token, userId, uid, email, username}) {
+  async function saveIsTutorialFinished(isTutorialFinishedBool) {
+    if (isTutorialFinishedBool === true) {
+      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: false, guessPathDone: true, hidePathDone: true}))
+      setIsTutorialFinished({isTutorial: false, guessPathDone: true, hidePathDone: true});
+    };
+    
+    if (isTutorialFinishedBool === false) {
+      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}))
+      setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
+    };
+  };
+
+  async function authenticate({token, client, expiry, access_token, userId, uid, email, username, isTutorialFinished, scoreId}) {
+      
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('client', client);
@@ -56,22 +70,23 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username);
-    /* variable to server */
-    //await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}));
+    await SecureStore.setItemAsync('scoreId', scoreId);
 
     setClient(client);
     setUid(uid);
-    setIsAuthenticated(true);
     setExpiry(expiry);
     setAccess_token(access_token);
     setUserId(userId);
+    setScoreId(scoreId);
     setUsername(username);
     setEmail(email);
-    /* variable to server, related to isTutorialFinished */
-    //setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
-    
     setHeaders({ token, client, expiry, access_token, userId, uid, email });
-    console.log("context", token, expiry, access_token, userId, client, uid, email);
+    
+    await saveIsTutorialFinished(isTutorialFinished);    
+
+    setIsAuthenticated(true);
+
+    //console.log("context", token, expiry, access_token, userId, client, uid, email, isTutorialFinished);
   };
 
   async function logout() {
@@ -96,6 +111,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.deleteItemAsync('email');
     await SecureStore.deleteItemAsync('username');
     await SecureStore.deleteItemAsync('isTutorialFinished');
+    await SecureStore.deleteItemAsync('scoreId');
 
     await emptyImageList();
     setIsAuthenticated(false);
@@ -104,19 +120,6 @@ export default function AuthContextProvider({ children }) {
   async function saveScoreId(scoreId) {
     setScoreId(scoreId);
     await SecureStore.setItemAsync('scoreId', scoreId);
-  };
-
-  async function saveIsTutorialFinished(isTutorialFinished) {
-    if (isTutorialFinished) {
-      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: false, guessPathDone: true, hidePathDone: true}))
-      setIsTutorialFinished({isTutorial: false, guessPathDone: true, hidePathDone: true});
-    };
-    
-    if (isTutorialFinished === false) {
-      await SecureStore.setItemAsync('isTutorialFinished', JSON.stringify({isTutorial: true, guessPathDone: false, hidePathDone: false}))
-      setIsTutorialFinished({isTutorial: true, guessPathDone: false, hidePathDone: false});
-    };
-    
   };
 
   async function changeUserEmail(email) {

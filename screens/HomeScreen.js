@@ -67,39 +67,31 @@ export default function HomeScreen({ navigation, route }) {
 
   const handleTutorialModalToShow = (isTutorial, guessPathDone, hidePathDone) => {
 
-    let tutorialModalIsShown = false;
+    // Not doing the tutorial yet
+    if ((isTutorial === true) && (route?.params?.isTutorial === undefined)) {
+      setShowModal(true) 
+      return;
+    };
+
     // Already in the tutorial ?
     if ((isTutorial === true) && (route?.params?.isTutorial === true)) {
       setIsTutorial(true)
-      tutorialModalIsShown = true;
     };
 
-    // Not doing the tutorial yet
-    if (tutorialModalIsShown === false) {
-      const firstutorialModalIsShown = 
-        ((isTutorial === true) && (route?.params?.isTutorial === undefined))
-        && ((guessPathDone === false) || (hidePathDone === false));
-
-      console.log("firstutorialModalIsShown", firstutorialModalIsShown);
-      
-      firstutorialModalIsShown ? 
-        setShowModal(true) 
-        : setShowModal(false);  
+    // Is tutorial completed ?
+    if ((isTutorial === true) && (guessPathDone === true) && (hidePathDone === true)) {
+      setIsTutorial(false);
+      setShowModal(false);
     };
+
   };
 
   const isTutorialNeeded = () => {
-    setTimeout(() => {
-      const isTutorial = context.isTutorialFinished?.isTutorial;
-      const guessPathDone = context.isTutorialFinished?.guessPathDone;
-      const hidePathDone = context.isTutorialFinished?.hidePathDone;
-
-      isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
-      
-    }, 250);
+    const isTutorial = context.isTutorialFinished?.isTutorial;
+    const guessPathDone = context.isTutorialFinished?.guessPathDone;
+    const hidePathDone = context.isTutorialFinished?.hidePathDone;
+    isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
   };
-
-
 
   /* Functions _______________________________ */
 
@@ -156,10 +148,16 @@ export default function HomeScreen({ navigation, route }) {
     Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
+
     checkSecureStoreOk();
-    isTutorialNeeded(); 
+
     //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
+
+  useEffect(() => {
+    isTutorialNeeded(); 
+    }, [context.isTutorialFinished]
+  );
 
 
   useFocusEffect(() => {
