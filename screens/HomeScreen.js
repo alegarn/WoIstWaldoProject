@@ -7,17 +7,22 @@ import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
+import { isTutorialFinished } from '../utils/tutorialHandler';
+
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
 
 export default function HomeScreen({ navigation, route }) {
-  const [showModal, setShowModal] = useState(true);
+  // States __________________________________________________________________
+  const [showModal, setShowModal] = useState(false);
   const [isTutorial, setIsTutorial] = useState(false);
 
+  // Variables __________________________________________________________________
   const context = useContext(AuthContext);
 
+  /* functions ___________________________________________________________________ */
   const verifyTokenIsValid = async () => {
     const response = await getScoreId(context);
     
@@ -60,42 +65,33 @@ export default function HomeScreen({ navigation, route }) {
     return null;
   };
 
-  const isTutorialNeeded = async () => {
-    //console.log(`context.isFirstTime: ${JSON.stringify(context.isFirstTime)}`);
-    let tutorial = context.isFirstTime?.tutorial;
-    let guessPathDone = context.isFirstTime?.guessPathDone;
-    let hidePathDone = context.isFirstTime?.hidePathDone;
-    
-    const tutorialModalIsShown = 
-      ((tutorial === true) || (route?.params?.isTutorial === true))
-      && ((guessPathDone === false) || (hidePathDone === false));
-    
-    tutorialModalIsShown ? 
+  const handleTutorialModalToShow = (isTutorial, guessPathDone, hidePathDone) => {
+
+    // Not doing the tutorial yet
+    if ((isTutorial === true) && (route?.params?.isTutorial === undefined)) {
       setShowModal(true) 
-      : setShowModal(false);    
+      return;
+    };
+
+    // Already in the tutorial ?
+    if ((isTutorial === true) && (route?.params?.isTutorial === true)) {
+      setIsTutorial(true)
+    };
+
+    // Is tutorial completed ?
+    if ((isTutorial === true) && (guessPathDone === true) && (hidePathDone === true)) {
+      setIsTutorial(false);
+      setShowModal(false);
+    };
+
   };
 
-
-  /* useEffect _______________________________ */
-
-  useEffect(() => {
-    /* To delete - home debug message */
-    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
-    Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
-    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
-    /*  */
-    checkSecureStoreOk();
-    isTutorialNeeded(); 
-    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
-  }, []);
-
-
-  useFocusEffect(() => {
-    handleOrientation("portrait");
-    // when leaving the app 
-    verifyLoginInfos();
-  });
-
+  const isTutorialNeeded = () => {
+    const isTutorial = context.isTutorialFinished?.isTutorial;
+    const guessPathDone = context.isTutorialFinished?.guessPathDone;
+    const hidePathDone = context.isTutorialFinished?.hidePathDone;
+    isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
+  };
 
   /* Functions _______________________________ */
 
@@ -112,8 +108,16 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const cancelTutorial = async () => {
-    console.log("cancelTutorial");
     await context.turnTutorialOn(false);
+    await isTutorialFinished({ 
+      context, 
+      data: {
+        user: {
+          is_tutorial_finished: true
+        }
+      } 
+    });
+  
     setIsTutorial(false);
     setShowModal(false);
     return false;
@@ -135,6 +139,32 @@ export default function HomeScreen({ navigation, route }) {
       isTutorial: true,
     });
   };
+
+  /* useEffect _______________________________ */
+
+  useEffect(() => {
+    /* To delete - home debug message */
+    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
+    Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
+    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
+    /*  */
+
+    checkSecureStoreOk();
+
+    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
+  }, []);
+
+  useEffect(() => {
+    isTutorialNeeded(); 
+    }, [context.isTutorialFinished]
+  );
+
+
+  useFocusEffect(() => {
+    handleOrientation("portrait");
+    // when leaving the app 
+    verifyLoginInfos();
+  });
 
   return (
     <>

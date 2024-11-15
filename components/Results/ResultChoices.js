@@ -11,9 +11,9 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
   const returnHome = async () => {
     isTutorial
       && await context.updateTutorialStatus({ 
-        tutorial: true, 
+        isTutorial: true, 
         guessPathDone: true, 
-        hidePathDone: context.isFirstTime?.hidePathDone 
+        hidePathDone: context.isTutorialFinished?.hidePathDone 
       });
     
     navigation.reset({

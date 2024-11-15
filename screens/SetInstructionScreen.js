@@ -97,8 +97,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const handleTutorialUpdate = async () => {
     await context.updateTutorialStatus({ 
-      tutorial: true, 
-      guessPathDone: context.isFirstTime?.guessPathDone, 
+      isTutorial: true, 
+      guessPathDone: context.isTutorialFinished?.guessPathDone, 
       hidePathDone: true,
     });
   };
@@ -128,7 +128,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
       index: 0,
       routes: [{ 
         name: 'HomeScreen', 
-        params: { isTutorial: isTutorial } 
+        params: { 
+          isTutorial: isTutorial,
+          hidePathDone: true
+        } 
       }],
     });
 

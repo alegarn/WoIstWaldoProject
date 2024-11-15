@@ -25,15 +25,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       : 1;
       
   const scrollIndicator = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    console.log("scrollIndicator", scrollIndicator); 
-    console.log("scrollIndicatorPosition", scrollIndicatorPosition); 
-    console.log("visibleScrollBarHeight", visibleScrollBarHeight);
-    console.log("completeScrollBarHeight", completeScrollBarHeight);  
-  }, [scrollIndicator]);
   
-
   const scrollIndicatorPosition = Animated.multiply(
     scrollIndicator,
     visibleScrollBarHeight / completeScrollBarHeight
@@ -42,18 +34,6 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     outputRange: [0, difference],
     extrapolate: "clamp",
   });
-
-/*   const showButtons = async (event) => {
-    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
-    console.log("scroll");
-            
-    // Check if the scroll is at the bottom
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height) {
-      // Call your function here when scrolled to the bottom
-      console.log("bottom");
-      setButtonIsVisible(!isVisible);
-    }
-  }; */
 
   const handleScroll = (event) => {
     // Call the animated event handler
@@ -71,8 +51,16 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     }
   };
 
-  // Scrollbar end
+  // Scrollbar end 
 
+  // UseEffect ________________________________________________________________
+  useEffect(() => {
+    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
+    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
+    updateImageUrl(screen);
+  }, [screen]);
+
+  // Functions ________________________________________________________________
   const updateImageUrl = (screen) => {
     switch (screen) {
       case "HomeScreen":
@@ -99,14 +87,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
         break;
       };
       return null;
-    };
-
-  // UseEffect ________________________________________________________________
-  useEffect(() => {
-    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
-    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
-    updateImageUrl(screen);
-  }, [screen]);
+  };
 
   const closeModal = () => {
     setIsVisible(false);
