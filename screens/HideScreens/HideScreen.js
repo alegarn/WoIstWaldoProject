@@ -11,6 +11,8 @@ export default function HideScreen({ navigation, route }) {
   const isPortrait = route.params?.isPortrait;
   isPortrait ? (screenDimensions = { width: screenWidth, height: screenHeight }) : (screenDimensions = { width: screenHeight, height: screenWidth }) ;
 
+  const isTutorial = route.params?.isTutorial;
+
   return (
     <>
       <HidePicture
@@ -19,7 +21,9 @@ export default function HideScreen({ navigation, route }) {
         imageWidth={route.params?.imageWidth}
         imageHeight={route.params?.imageHeight}
         screenDimensions={screenDimensions}
-        imageIsPortrait={isPortrait} />
+        imageIsPortrait={isPortrait} 
+        isTutorial={isTutorial}
+        />
     </>
   );
 };

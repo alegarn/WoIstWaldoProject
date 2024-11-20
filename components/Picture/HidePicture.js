@@ -7,9 +7,17 @@ import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 
 import { setImageDimensions } from '../../utils/imageDimensions';
+import TutorialOverlay from '../UI/TutorialOverlay';
 
 
-export default function HidePicture({ navigation, uri, imageIsPortrait, imageWidth, imageHeight, screenDimensions}) {
+export default function HidePicture({ 
+  navigation, 
+  uri, 
+  imageIsPortrait, 
+  imageWidth, 
+  imageHeight, 
+  screenDimensions, 
+  isTutorial }) {
 
   const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
@@ -96,24 +104,36 @@ const toggleDebugModal = () => {
       isPortrait: imageIsPortrait,
       touchLocation: touchLocation,
       target: target,
-      imageDimensionStyle: imageDimensionStyle
+      imageDimensionStyle: imageDimensionStyle,
+      isTutorial: isTutorial
     });
   };
 
   const onCancel = () => {
     setShowModal(false);
-  };
+  }; 
 
   if (showFilter) {
     return(
-      <GameInstructions
-        game="hide"
-        uri={uri}
-        screenWidth={screenWidth}
-        screenHeight={screenHeight}
-        imageIsPortrait={imageIsPortrait}
-        handleFilterClick={handleFilterClick}
-        imageDimensionStyle={imageDimensionStyle} />
+      <>
+        <GameInstructions
+          game="hide"
+          uri={uri}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          imageIsPortrait={imageIsPortrait}
+          handleFilterClick={handleFilterClick}
+          imageDimensionStyle={imageDimensionStyle} />
+        {
+          isTutorial &&
+           <TutorialOverlay
+            screen={"HideScreen"}
+            isPortrait={imageIsPortrait}
+            instructionsPosition={{top:0, left: 0}}
+           />
+        }
+      </>
+      
     );
   };
 

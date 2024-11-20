@@ -1,13 +1,27 @@
 import { View, StyleSheet } from 'react-native';
 
 import BigButton from '../UI/BigButton';
+import { useContext } from 'react';
+import { AuthContext } from '../../store/auth-context';
 
-export default function ResultChoices({navigation, success, retryGuess}) {
+export default function ResultChoices({ navigation, success, retryGuess, isTutorial }) {
 
-  function returnHome() {
+  const context = useContext(AuthContext);
+
+  const returnHome = async () => {
+    isTutorial
+      && await context.updateTutorialStatus({ 
+        isTutorial: true, 
+        guessPathDone: true, 
+        hidePathDone: context.isTutorialFinished?.hidePathDone 
+      });
+    
     navigation.reset({
       index: 0,
-      routes: [{ name: 'HomeScreen' }],
+      routes: [{ 
+        name: 'HomeScreen', 
+        params: { isTutorial: isTutorial } 
+      }],
     });
   };
 
@@ -19,16 +33,23 @@ export default function ResultChoices({navigation, success, retryGuess}) {
   function backToSwipe() {
     navigation.reset({
       index: 1,
-      routes: [{ name: 'GuessPathScreen' }],
+      routes: [{ 
+        name: 'GuessPathScreen', 
+        params: { isTutorial: isTutorial } 
+      }],
     });
   };
 
   return(
     <View style={styles.buttonContainer}>
       <BigButton text="Go to Home" onPress={returnHome} />
-      {success ?
-        null
-        : <BigButton text="Retry this one" onPress={handleRetry}/>}
+      {
+        success === false && 
+          <BigButton 
+            text="Retry this one" 
+            onPress={handleRetry} 
+          />
+      }
       <BigButton text="Another one" onPress={backToSwipe} />
     </View>
   )

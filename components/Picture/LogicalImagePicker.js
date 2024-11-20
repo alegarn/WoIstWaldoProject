@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
 
-export default function LogicalImagePicker({ navigation }) {
+export default function LogicalImagePicker({ navigation, isTutorial }) {
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
   // State for the image url
@@ -26,7 +26,7 @@ export default function LogicalImagePicker({ navigation }) {
   async function grantPermission(requestPermission) {
     const permissionResponse = await requestPermission();
     return permissionResponse.granted;
-  }
+  };
 
   // Function to verify camera permission
   async function verifyPermission() {
@@ -89,6 +89,7 @@ export default function LogicalImagePicker({ navigation }) {
       screenHeight:isPortrait ? screenWidth : screenHeight,
       screenWidth:isPortrait ? screenHeight : screenWidth,
       isPortrait:isPortrait,
+      isTutorial: isTutorial,
     });
 
     return null
@@ -114,9 +115,10 @@ export default function LogicalImagePicker({ navigation }) {
       uri: pickedImage.assets[0].uri,
       imageWidth: pickedImage.assets[0].width,
       imageHeight: pickedImage.assets[0].height,
-      screenHeight:isPortrait ? screenWidth : screenHeight,
-      screenWidth:isPortrait ? screenHeight : screenWidth,
-      isPortrait:isPortrait,
+      screenHeight: isPortrait ? screenWidth : screenHeight,
+      screenWidth: isPortrait ? screenHeight : screenWidth,
+      isPortrait: isPortrait,
+      isTutorial: isTutorial,
     });
 
   };
@@ -125,11 +127,13 @@ export default function LogicalImagePicker({ navigation }) {
   const showImage = () => {
     return(
       <ShowImagePicker
-      takePictureHandler={takePictureHandler}
-      pickImage={pickImage}
-      image={image}
-      imageWidth={imageWidth}
-      imageHeight={imageHeight} />
+        takePictureHandler={takePictureHandler}
+        pickImage={pickImage}
+        image={image}
+        imageWidth={imageWidth}
+        imageHeight={imageHeight}
+        isTutorial={isTutorial} 
+      />
     );
   };
 

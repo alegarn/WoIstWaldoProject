@@ -37,17 +37,22 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
 
 const styles = StyleSheet.create({
   modalContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    alignSelf: 'center',
-    maxWidth: '80%',
   },
   modalContent: {
     backgroundColor: "white",
     padding: 20,
     borderRadius: 10,
     alignItems: 'center',
+    maxWidth: '80%',
   },
   modalText: {
     fontSize: 18,

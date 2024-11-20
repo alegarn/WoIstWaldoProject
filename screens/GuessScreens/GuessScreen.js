@@ -3,10 +3,11 @@ import { Dimensions } from 'react-native';
 import GuessPicture from "../../components/Picture/GuessPicture";
 
 import { isOnTarget } from "../../utils/targetLocation";
+import TutorialOverlay from '../../components/UI/TutorialOverlay';
 
 export default function GuessScreen({ navigation, route }) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId} = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial } = route.params;
   //console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, /* "/* hiddenLocation */" */, /* hiddenLocation */, "listId", listId);
 
   const screenWidth = Dimensions.get('window').width;
@@ -32,12 +33,14 @@ export default function GuessScreen({ navigation, route }) {
       hiddenLocation: hiddenLocation,
       screenHeight: screenHeight,
       screenWidth: screenWidth,
-      listId: listId
+      listId: listId,
+      isTutorial: isTutorial
     });
   };
 
 
   return(
+    <>
     <GuessPicture
       navigation={navigation}
       // only in dev with local images, but imageFile in Prod
@@ -51,5 +54,13 @@ export default function GuessScreen({ navigation, route }) {
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
     />
+    {
+      isTutorial && 
+        <TutorialOverlay
+         screen={"GuessScreen"}
+         isPortrait={isPortrait}
+        />
+      }
+    </>  
   );
 };
