@@ -138,7 +138,8 @@ export async function login({email, password}) {
   return await authenticateUser({email, password});
 };
 
-export async function logout({ context }) {
+
+/* export async function logout({ context }) {
   const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_out`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
@@ -152,7 +153,7 @@ export async function logout({ context }) {
     return { status: error.request.status, data: error };
   });
   return response;
-};
+}; */
 
 function isNullOrUndefined(value) {
   return value === undefined || value === null;

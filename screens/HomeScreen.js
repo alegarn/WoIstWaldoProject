@@ -52,7 +52,7 @@ export default function HomeScreen({ navigation, route }) {
     return null;
   };
 
-  const checkSecureStoreOk = async () => {
+/*   const checkSecureStoreOk = async () => {
     const isSecureStoreOk = await SecureStore.isAvailableAsync()
       .then((promiseResult) => {
         if (promiseResult) {
@@ -64,7 +64,7 @@ export default function HomeScreen({ navigation, route }) {
     Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${isSecureStoreOk}`);
     return null;
   };
-
+ */
   const handleTutorialModalToShow = (isTutorial, guessPathDone, hidePathDone) => {
 
     // Not doing the tutorial yet
@@ -149,7 +149,7 @@ export default function HomeScreen({ navigation, route }) {
     When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
     /*  */
 
-    checkSecureStoreOk();
+    // checkSecureStoreOk();
 
     //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
   }, []);
