@@ -69,7 +69,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       case "HidingPathScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
         break;
-      case "HideScreen" && "SetInstructionScreen" && "GuessScreen":
+      case "HideScreen" || "SetInstructionScreen" || "GuessScreen":
         setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
         break;
       case "GuessPathScreen":
