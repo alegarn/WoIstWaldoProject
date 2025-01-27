@@ -91,7 +91,7 @@ function AuthenticatedStack({ authContext }) {
 
   const disconnecting = async () => {
     setShowOverlay(true); // Show the overlay when logout is initiated
-    await logout({ context: authContext});
+    // await logout({ context: authContext});
     authContext.logout();
   };
 
