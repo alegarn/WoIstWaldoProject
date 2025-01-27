@@ -31,9 +31,10 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
 const styles = StyleSheet.create({
   descriptionArea: {
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
   },
   cardDescriptionStyle: {
-    color: GlobalStyle.color.primaryColor300,
+    color: GlobalStyle.color.secondaryColor,
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',
