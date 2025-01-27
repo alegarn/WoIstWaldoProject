@@ -60,7 +60,8 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function authenticate({token, client, expiry, access_token, userId, uid, email, username, isTutorialFinished, scoreId}) {
-      
+    await emptyImageList();
+
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('client', client);
