@@ -104,11 +104,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(localImageList);
-      return null;
+    } else {
+      // new images are loaded
+      await handleImagesLoading();
     };
-
-    // new images are loaded
-    await handleImagesLoading();
   };
 
 
