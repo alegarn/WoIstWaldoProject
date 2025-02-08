@@ -2,9 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as FileSystem from "expo-file-system";
 
 export async function getLocalImages() {
-  console.log("getLocalImages");
+  //console.log("getLocalImages");
   const imageList = await AsyncStorage.getItem("imageList");
-  console.log("getLocalImages localImageList", imageList);
   return imageList ? JSON.parse(imageList) : null;
 };
 
@@ -19,27 +18,21 @@ function getLastListId(list) {
 export async function getLastImageId() {
   console.log("getLastImageId");
   const localImageList = await AsyncStorage.getItem("imageList");
+  //console.log("getLastImageId localImageList", localImageList);
 
   if ((localImageList !== null) && (localImageList !== "[]")) {
     const imageListObject = JSON.parse(localImageList);
     const lastListId = getLastListId(imageListObject);
+    //console.log("getLastImageId lastListId", lastListId);
     return lastListId;
   };
 
   return 0;
 };
 
-export async function saveLastImageUuid() {
-  const imageList = await AsyncStorage.getItem("imageList");
-  if ((imageList !== null) && (imageList !== "[]")) {
-    const imageListObject = JSON.parse(imageList);
-    const lastListId = getLastListId(imageListObject);
-    const lastImage = imageListObject.find(image => image.listId === lastListId);
-    const lastPictureId = lastImage.pictureId;
-    await AsyncStorage.setItem("lastImageUuid", lastPictureId);
-    return true
-  };
-  return false;
+export async function saveLastImageUuid(imageUuid) {
+  await AsyncStorage.setItem("lastImageUuid", imageUuid);
+  return null;
 };
 
 export async function getLastImageUuid() {
@@ -94,7 +87,6 @@ export async function removeImageFromList(listId) {
   const jsonImageList = JSON.parse(imageList);
   const updatedImageList = removeObjectById(jsonImageList, listId);
   await AsyncStorage.setItem("imageList", JSON.stringify(updatedImageList));
-  // {status: ok}
   return null;
 };
 

@@ -34,7 +34,7 @@ export default function RankingScreen() {
 
   const showSpecificDatum = async (username) => {
     const response = await getUserScores({username, context: context});
-    console.log("response", response);
+    //console.log("response", response);
     const scores = response?.data;
     let infoString = '';
 
