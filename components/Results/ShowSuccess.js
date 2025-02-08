@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
-import { removeImageFromList } from '../../utils/storageDatum';
+import { deleteImageFromStorage, removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
 import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
@@ -16,9 +16,12 @@ export default function ShowSuccess({ navigation, route }) {
   const pictureId = route.params?.pictureId;
 
   const listId = route.params?.listId;
+  const imageFilePath = route.params?.imageFile;
   const isTutorial = route.params?.isTutorial;
 
   const context = useContext(AuthContext);
+
+  /* Functions ________________________________________________ */
 
   // used to point the users earning points
   const handleScore = async () => {
@@ -29,18 +32,21 @@ export default function ShowSuccess({ navigation, route }) {
     });
   };
 
+  async function handleRemoveImageFromList(listId, imageFilePath) {
+    await removeImageFromList(listId);
+    await deleteImageFromStorage(imageFilePath);
+  };
+
 /* useEffect________________________________________________ */
 
   useEffect(() => {
     // stop the animation
     const timeout = setTimeout(() => {
-      console.log("showSuccessImageAnimated", showSuccessImageAnimated);
+      //console.log("showSuccessImageAnimated", showSuccessImageAnimated);
       setshowSuccessImageAnimated(false);
     }, 1000);
     
-    // remove image from list (from the mobile storage)
-    removeImageFromList(listId);
-    // update score
+    handleRemoveImageFromList(listId, imageFilePath);
     handleScore();
 
     return () => clearTimeout(timeout);
