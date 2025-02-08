@@ -1,13 +1,12 @@
 import { useContext, useLayoutEffect, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
-import * as FileSystem from 'expo-file-system';
 
 import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/imagesRequests';
-import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid } from '../../utils/storageDatum';
+import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
@@ -74,7 +73,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       return null;
     };
     if (response.isError === false) {
-      console.log("response.images", response.isError);
+      //console.log("response.images", response.isError);
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
@@ -87,7 +86,6 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     setAsyncImagesAreLoading(true);
     const isCardLeft = await loadNewImages(context);
     isCardLeft ? null : setNoMoreCard(true);
-    await saveLastImageUuid();
     setAsyncImagesAreLoading(false);
   };
 
@@ -105,14 +103,19 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(localImageList);
-      return null;
+    } else {
+      // new images are loaded
+      await handleImagesLoading();
     };
-
-    // new images are loaded
-    await handleImagesLoading();
   };
 
 
+  const deleteImage = async (id, image) => {
+    // delete image
+    await removeImageFromList(id);
+    await deleteImageFromStorage(image);
+    return null;
+  };
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -124,16 +127,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
 
-    // delete image
-    await removeImageFromList(id);
-    await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
-    const fileName = image.imageFile.substring(image.imageFile.lastIndexOf("/") + 1);
-    const imagePickerUrl = FileSystem.cacheDirectory + `ImagePicker/${fileName}`;
-    [imagePickerUrl, image.imageFile].map(async (item) => {
-      console.log("removeCard item", item);
-      await FileSystem.deleteAsync(item, { idempotent: true });
-    });
-
+    await deleteImage(id, image);
     setImageList(updatedImageList);
 
     if ((updatedImageList?.length < 4) && (!asyncImagesAreLoading)) {

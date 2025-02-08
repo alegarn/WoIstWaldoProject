@@ -97,3 +97,14 @@ export async function removeImageFromList(listId) {
   // {status: ok}
   return null;
 };
+
+export async function deleteImageFromStorage(image) {
+  await FileSystem.deleteAsync(image.imageFile, { idempotent: true });
+  const fileName = image.imageFile.substring(image.imageFile.lastIndexOf("/") + 1);
+  const imagePickerUrl = FileSystem.cacheDirectory + `ImagePicker/${fileName}`;
+  [imagePickerUrl, image.imageFile].map(async (item) => {
+    console.log("removeCard item", item);
+    await FileSystem.deleteAsync(item, { idempotent: true });
+  });
+  return null;
+};

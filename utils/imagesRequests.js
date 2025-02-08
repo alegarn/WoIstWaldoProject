@@ -2,6 +2,7 @@ import axios from "axios";
 import * as FileSystem from 'expo-file-system';
 import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
+import { saveLastImageUuid } from "./storageDatum";
 
 function setAWSHeaders(fileExtension, contentLength) {
 
@@ -49,7 +50,7 @@ export async function getUploadUrl(context) {
 
 
 async function getImagesInfos({ config, userId }) {
-  console.log("getImagesInfos");
+  //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
   const response = await axios.get(url, config).then((response) => {
     //console.log("response getImagesInfos", response);
@@ -65,6 +66,7 @@ async function getImagesInfos({ config, userId }) {
 };
 
 async function getNextImagesInfos({ config, userId, pictureId }){
+  //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
   const imageData = {
     image: {
@@ -89,7 +91,7 @@ async function getImageFromStorage({ storageUrl }) {
     //console.log("imageData response, getImageFromStorage");
     return response.data;
   }).catch((error) => console.log("error getImageFromStorage", error.request));
-
+  // if "The specified key does not exist" -> send server image is not in aws -> error
   return imageData;
 };
 
@@ -107,33 +109,34 @@ function verifyItsBase64(imageData) {
 };
 
 async function ensureDirExists() {
-  console.log("ensureDirExists");
+  //console.log("ensureDirExists");
   const dirPath = FileSystem.cacheDirectory //+ "/images-v1";
   const dirInfo = await FileSystem.getInfoAsync(dirPath);
   if (!dirInfo.exists) {
     console.log("Image directory doesn't exist, creating...");
     await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
   };
-  console.log("ensureDirExists end");
+  //console.log("ensureDirExists end");
 };
 
 async function extractBase64(imageData, filename) {
-  console.log("extract base64");
+  console.log("extract base64 filename", filename);
 
   const base64Data = verifyItsBase64(imageData);
   if (!base64Data) {
     console.log(`${filename}: imageData is not base64`);
+    // send server error
     return false;
   };
 
   const extension_matche = imageData.match(/^data:image\/(\w+);base64,/);
   const fileExtension = extension_matche[1];
-  console.log("fileExtension", fileExtension);
+  //console.log("fileExtension", fileExtension);
 
   // Create a new file path
   const filePath = FileSystem.cacheDirectory + `${filename}.${fileExtension}`; // images-v1/ .${fetchedType} ?
 
-  console.log("filePath", filePath);
+  //console.log("filePath", filePath);
 
   await ensureDirExists();
 
@@ -166,6 +169,8 @@ export async function getImages(pictureId, context) {
     headers: headers,
   };
 
+  // let imagesInfos = handleGetImagesInfos(pictureId, config, userId )
+  // return { images: imagesInfos, isError: false, title: "", message: "" };
   let imagesInfos = {};
 
   if (pictureId === null) {
@@ -191,6 +196,8 @@ export async function getImages(pictureId, context) {
   const images = [];
 
   const isError = await Promise.allSettled(
+    // create an array [Image object, ] 
+    // the Image object contains the path, with the informations, to the image 
     imagesInfos?.data?.data?.map( async image => {
       const filePath = await handleImagesDownload(image);
       if (filePath !== false) {
@@ -219,6 +226,9 @@ export async function getImages(pictureId, context) {
     console.log("isError catch error", error.request);
     return { isError: true, error: error.request };
   });
+
+  const imagesInfosData = imagesInfos?.data?.data;
+  await saveLastImageUuid(imagesInfosData[imagesInfosData.length - 1].name);
 
   if (isError.isError === true ) {
     console.log("isError.isError", isError);
@@ -254,11 +264,11 @@ export async function saveImageToAws({ url, filename, fileUrl, fileExtension, co
     headers: headers,
   };
 
-  console.log("fileUrl", fileUrl);
+  //console.log("fileUrl", fileUrl);
 
   try {
 
-    console.log("saveImageToAws2", url);
+    //console.log("saveImageToAws2", url);
     const base64 = await FileSystem.readAsStringAsync(fileUrl, { encoding: 'base64' });
     /* error */
     const response = await axios
@@ -290,7 +300,6 @@ export async function saveImageToAws({ url, filename, fileUrl, fileExtension, co
 };
 
 
-
 export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, access_token, client }) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/images`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
@@ -317,21 +326,3 @@ export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, 
   const title = errorType(response.status);
 return { status: response.status, title: title, message: response.message };
 };
-
-
-/* https://stackoverflow.com/questions/72020052/upload-image-with-expo-fetch */
-/* const createFormData = (uri) => {
-  const fileName = uri.split('/').pop();
-  const fileType = fileName.split('.').pop();
-  const formData = new FormData();
-  formData.append('file', {
-    uri,
-    name: fileName,
-    type: `image/${fileType}`
-  });
-
-  return formData;
-} */
-
-
-/* https://nickjones.tech/buffer-blob-managed-expo/ */
