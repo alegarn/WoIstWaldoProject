@@ -73,7 +73,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       return null;
     };
     if (response.isError === false) {
-      console.log("response.images", response.isError);
+      //console.log("response.images", response.isError);
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
@@ -86,7 +86,6 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     setAsyncImagesAreLoading(true);
     const isCardLeft = await loadNewImages(context);
     isCardLeft ? null : setNoMoreCard(true);
-    await saveLastImageUuid();
     setAsyncImagesAreLoading(false);
   };
 
