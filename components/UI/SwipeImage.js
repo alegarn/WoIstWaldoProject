@@ -110,10 +110,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   };
 
 
-  const deleteImage = async (id, image) => {
+  const deleteImage = async (id, imageFilePath) => {
     // delete image
     await removeImageFromList(id);
-    await deleteImageFromStorage(image);
+    await deleteImageFromStorage(imageFilePath);
     return null;
   };
 
@@ -127,7 +127,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     const updatedImageList = imageList.filter((item) => item.listId !== id);
     const image = imageList.filter((item) => item.listId === id)[0];
 
-    await deleteImage(id, image);
+    await deleteImage(id, image.imageFile);
     setImageList(updatedImageList);
 
     if ((updatedImageList?.length < 4) && (!asyncImagesAreLoading)) {
