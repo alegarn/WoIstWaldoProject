@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
@@ -32,9 +32,26 @@ export default function RankingScreen() {
     return data;
   };
 
-  const showSpecificDatum = async (username) => {
+  function convertInitialToRanking(tableHeaders, rows) {
+    const data = {
+      tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
+      tableScores: (rows || []).map((row) => ({
+        rank: Number(row.rank),
+        name: row.username,
+        score: row.total_score,
+        others: ""
+      }))
+    };
+    return data;
+  };
+
+  const showSpecificDatum = useCallback(async (username) => {
     const response = await getUserScores({username, context: context});
-    //console.log("response", response);
+    if (response?.status !== 200) {
+      handleError(response?.message, response?.status);
+      return
+    }
+
     const scores = response?.data;
     let infoString = '';
 
@@ -45,9 +62,9 @@ export default function RankingScreen() {
     infoString += `Guessed Images Count: ${scores.guess_info.guess_count}\n`;
 
     Alert.alert("Complementary Scores of " + username, infoString);
-  };
+  }, [context]);
 
-  const handleError = (message, status) => {
+  function handleError(message, status) {
     if (status === 401) {
       Alert.alert("There is a problem with the server", `${message}. Your authentication failed. Try to reconnect. You canno't get a ranking.`);
       return
@@ -62,23 +79,31 @@ export default function RankingScreen() {
 
   const handleRankingData = async () => {
     const tableHeaders = RANKING?.tableHeaders;
-    const rankingData = await getRankingData(context);
+    const rankingData = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
 
     if (rankingData?.status !== 200) {
       handleError(rankingData?.message, rankingData?.status);
       return
     };
 
-    const data =  rankingData?.data?.data;
-    const pagyData = rankingData?.data?.pagy;
-    const finalDatum = convertToRanking(tableHeaders, data, pagyData);
+    const payload = rankingData?.data?.data;
+
+    let finalDatum = null;
+    if (payload && Array.isArray(payload.rows)) {
+      finalDatum = convertInitialToRanking(tableHeaders, payload.rows);
+    } else {
+      const data = payload;
+      const pagyData = rankingData?.data?.pagy;
+      finalDatum = convertToRanking(tableHeaders, data, pagyData);
+    }
+
     setRankingDatum(finalDatum);
     return rankingData;
   };
 
   useEffect(() => {
     handleRankingData();
-  }, [])
+  }, [context])
 
   return (
     <>

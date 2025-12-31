@@ -1,5 +1,5 @@
-import { StyleSheet, View, Dimensions } from 'react-native';
-import { Table, TableWrapper, Row, Cell } from 'react-native-reanimated-table';
+import React, { useCallback } from 'react';
+import { FlatList, StyleSheet, Text, View, Dimensions } from 'react-native';
 
 import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
@@ -7,74 +7,78 @@ import { GlobalStyle } from '../../constants/theme';
 const windowWidth = Dimensions.get('window').width;
 const windowHeight = Dimensions.get('window').height;
 
-export default function TableComponent({ data, onPress }) {
-  const cellStyles = (cellData, cellIndex, rowData) => {
-    switch (cellIndex) {
-      case 0:
-        return(
-        <Cell
-          key={cellIndex}
-          data={cellData}
-          textStyle={[styles.text, styles.big]}
-          style={styles.cell}
+const RowItem = React.memo(function RowItem({ row, onPressMore }) {
+  return (
+    <View style={styles.row}>
+      <View style={styles.cell}>
+        <Text style={[styles.text, styles.big]} numberOfLines={1}>
+          {row.rank}
+        </Text>
+      </View>
+      <View style={styles.cell}>
+        <Text style={[styles.text, styles.name]} numberOfLines={1}>
+          {row.name}
+        </Text>
+      </View>
+      <View style={styles.cell}>
+        <Text style={[styles.text, styles.big]} numberOfLines={1}>
+          {row.score}
+        </Text>
+      </View>
+      <View style={styles.cell}>
+        <TableButton
+          onPress={() => onPressMore(row.name)}
+          windowHeight={windowHeight}
+          windowWidth={windowWidth}
         />
-        );
-      case 1:
-        return(
-          <Cell
-            key={cellIndex}
-            data={cellData}
-            textStyle={[styles.text, styles.name]}
-            style={styles.cell}
-          />
-          );
-      case 2:
-        return(
-          <Cell
-            key={cellIndex}
-            data={cellData}
-            textStyle={[styles.text, styles.big]}
-            style={styles.cell}
-          />
-          );
-      case 3:
-        return(
-          <Cell
-            key={cellIndex}
-            data={
-              <TableButton
-                cellData={cellData}
-                onPress={() => onPress(rowData.name)}
-                windowHeight={windowHeight}
-                windowWidth={windowWidth}
-              />
-            }
-            textStyle={[styles.text]}
-            style={styles.cell}
-          />
-        );
-      default:
-        break;
-    };
-  };
+      </View>
+    </View>
+  );
+});
+
+export default function TableComponent({ data, onPress }) {
+  const headers = data?.tableHeaders || [];
+  const rows = data?.tableScores || [];
+
+  const onPressMore = useCallback(
+    (username) => {
+      onPress?.(username);
+    },
+    [onPress]
+  );
+
+  const renderHeader = useCallback(() => {
+    return (
+      <View style={styles.head}>
+        {headers.map((header, index) => (
+          <View key={`${header}-${index}`} style={styles.cell}>
+            <Text style={[styles.text, styles.headText]} numberOfLines={1}>
+              {header}
+            </Text>
+          </View>
+        ))}
+      </View>
+    );
+  }, [headers]);
+
+  const renderItem = useCallback(
+    ({ item }) => {
+      return <RowItem row={item} onPressMore={onPressMore} />;
+    },
+    [onPressMore]
+  );
 
   return (
     <View style={styles.container}>
-      <Table borderStyle={styles.borderStyle}>
-        <Row
-          data={data.tableHeaders}
-          style={styles.head}
-          textStyle={[styles.text, styles.headText]}
-        />
-        {data?.tableScores?.map((rowData, index) => (
-          <TableWrapper key={index} style={styles.row}>
-            {Object.values(rowData).map((cellData, cellIndex) => (
-              cellStyles(cellData, cellIndex, rowData)
-            ))}
-          </TableWrapper>
-          ))
-        }
-      </Table>
+      <FlatList
+        data={rows}
+        keyExtractor={(item) => String(item.rank)}
+        ListHeaderComponent={renderHeader}
+        renderItem={renderItem}
+        initialNumToRender={12}
+        windowSize={10}
+        removeClippedSubviews
+      />
     </View>
   );
 };
@@ -93,6 +97,7 @@ const styles = StyleSheet.create({
   head: {
     height: windowHeight * 0.07,
     backgroundColor: GlobalStyle.color.primaryColor300,
+    flexDirection: 'row',
     alignSelf: "center",
     overflow: "hidden",
     borderTopLeftRadius: windowHeight * 0.01,
