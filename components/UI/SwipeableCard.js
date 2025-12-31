@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
@@ -7,25 +7,33 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
   // States _________________________________________________________________
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [xPosition, setXPosition] = useState(new Animated.Value(0));
-  const [yPosition, setYPosition] = useState(new Animated.Value(0)); // Add yPosition
   const [imageChoice, setImageChoice] = useState(require('../../assets/icons/tears.png'));
+  const xPosition = useRef(new Animated.Value(0)).current;
+  const yPosition = useRef(new Animated.Value(0)).current; // Add yPosition
   
   // Variables _______________________________________________________________
-  let cardOpacity = new Animated.Value(1);
-  const position = new Animated.Value(0); // Initialize position as an Animated.Value
+  const cardOpacity = useRef(new Animated.Value(1)).current;
+  const position = useRef(new Animated.Value(0)).current; // Initialize position as an Animated.Value
 
   // Functions _______________________________________________________________
 
-  let rotateCard = xPosition.interpolate({
-    inputRange: [-200, 0, 200],
-    outputRange: ['-20deg', '0deg', '20deg'],
-  });
+  const rotateCard = useMemo(
+    () =>
+      xPosition.interpolate({
+        inputRange: [-200, 0, 200],
+        outputRange: ['-20deg', '0deg', '20deg'],
+      }),
+    [xPosition]
+  );
 
-  let yPositionLimits = yPosition.interpolate({
-    inputRange: [-screenHeight + 30, 0, screenHeight - 30],
-    outputRange: [-30, 0, 30],
-  });
+  const yPositionLimits = useMemo(
+    () =>
+      yPosition.interpolate({
+        inputRange: [-screenHeight + 30, 0, screenHeight - 30],
+        outputRange: [-30, 0, 30],
+      }),
+    [screenHeight, yPosition]
+  );
 
 
   // Function to update overlay color based on position
@@ -35,13 +43,17 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
   }); */
 
   // Function to update overlay opacity based on overlayPosition
-  const overlayOpacity = position.interpolate({
-    inputRange: [-150, 0, 150],
-    outputRange: [0.5, 0, 0.5],
-  });
+  const overlayOpacity = useMemo(
+    () =>
+      position.interpolate({
+        inputRange: [-150, 0, 150],
+        outputRange: [0.5, 0, 0.5],
+      }),
+    [position]
+  );
 
 
-  const showChoiceImage = () => {
+  const showChoiceImage = useCallback(() => {
 
     let imageSource;
     if (xPosition._value >= 0) {
@@ -52,132 +64,148 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       imageSource = require("../../assets/icons/bin.png");
     };
     setImageChoice(imageSource); // Update imageSource;
-  };
+  }, [xPosition]);
+
+  const toggleDescription = useCallback(() => {
+    setShowFullDescription((prev) => !prev);
+  }, []);
 
   /* overlay on long press ? */
-  let panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: (evt, gestureState) => false,
-    onMoveShouldSetPanResponder: (evt, gestureState) => true,
-    onStartShouldSetPanResponderCapture: (evt, gestureState) => false,
-    onMoveShouldSetPanResponderCapture: (evt, gestureState) => true,
-    onPanResponderMove: (evt, gestureState) => {
-      xPosition.setValue(gestureState.dx);
-      yPosition.setValue(gestureState.dy);
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => false,
+        onMoveShouldSetPanResponderCapture: () => true,
+        onPanResponderMove: (evt, gestureState) => {
+          xPosition.setValue(gestureState.dx);
+          yPosition.setValue(gestureState.dy);
 
-      const { moveX, x0 } = gestureState;
-      const distanceFromMiddle = moveX - x0;
+          const { moveX, x0 } = gestureState;
+          const distanceFromMiddle = moveX - x0;
 
-      // change position value based on distance from middle
-      Animated.timing(position, {
-        toValue: distanceFromMiddle,
-        duration: 100, // No animation duration
-        useNativeDriver: false, // Use native driver for performance
-      }).start();
-
-      showChoiceImage();
-
-    },
-    onPanResponderRelease: (evt, gestureState) => {
-      const { moveX, x0 } = gestureState;
-      const distanceFromMiddle = moveX - x0;
-
-      if (
-        gestureState.dx < screenWidth - 150 &&
-        gestureState.dx > -screenWidth + 150 &&
-        gestureState.dy > -screenHeight / 3 &&
-        gestureState.dy < screenHeight / 3
-      ) {
-        /* swipedDirection('--'); */
-        Animated.parallel([
-          Animated.spring(xPosition, {
-            toValue: 0,
-            speed: 5,
-            bounciness: 10,
-            useNativeDriver: false,
-          }),
-          Animated.spring(yPosition, { // Reset yPosition
-            toValue: 0,
-            speed: 5,
-            bounciness: 10,
-            useNativeDriver: false,
-          }),
-           Animated.timing(position, {
-            toValue: 0,
-            duration: 100, // No animation duration
-            useNativeDriver: false, // Use native driver for performance
-          }), 
-        ]).start();
-      } else if (gestureState.dx > screenWidth - 150) {
-        Animated.parallel([
-          Animated.timing(xPosition, {
-            toValue: screenWidth,
-            duration: 200,
-            useNativeDriver: false,
-          }),
-          Animated.timing(cardOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: false,
-          }),
-        ]).start(() => {
-          /* swipedDirection(swipeDirection); */
-          onSwipe({ item });
-        });
-      } else if (gestureState.dx < -screenWidth + 150) {
-        Animated.parallel([
-          Animated.timing(xPosition, {
-            toValue: -screenWidth,
-            duration: 200,
-            useNativeDriver: false,
-          }),
-          Animated.timing(cardOpacity, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: false,
-          }),
-        ]).start(() => {
-          /* swipedDirection(swipeDirection); */
-          removeCard();
-        });
-      } else if (gestureState.dy < -screenHeight / 3 && (gestureState.dx < screenWidth - 150 && gestureState.dx > -screenWidth - 150) ) {
-        Animated.parallel([
-          Animated.timing(yPosition, {
-            toValue: 0, /* screenHeight */
-            duration: 200,
-            useNativeDriver: false,
-          }),
-          Animated.timing(xPosition, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: false,
-          })
-        ]).start(() => {
-          /* swipedDirection(swipeDirection); */
-          toggleDescription();
-        });
-      } else if (gestureState.dy > screenHeight / 3 && (gestureState.dx < screenWidth - 150 && gestureState.dx > -screenWidth - 150 )) {
-        Animated.parallel([
-          Animated.timing(yPosition, {
-            toValue: 0, /* screenHeight */
-            duration: 200,
-            useNativeDriver: false,
-          }),
-          Animated.timing(xPosition, {
-            toValue: 0,
-            duration: 200,
-            useNativeDriver: false,
-          })
-        ]).start(() => {
-          /* swipedDirection(swipeDirection); */
-          toggleDescription();
-        });
-      }
-    },
-  });
-
-  const toggleDescription = () => {
-    setShowFullDescription(!showFullDescription);
-  };
+          // Keep this a direct setValue to avoid creating a new animation each move.
+          position.setValue(distanceFromMiddle);
+          showChoiceImage();
+        },
+        onPanResponderRelease: (evt, gestureState) => {
+          if (
+            gestureState.dx < screenWidth - 150 &&
+            gestureState.dx > -screenWidth + 150 &&
+            gestureState.dy > -screenHeight / 3 &&
+            gestureState.dy < screenHeight / 3
+          ) {
+            /* swipedDirection('--'); */
+            Animated.parallel([
+              Animated.spring(xPosition, {
+                toValue: 0,
+                speed: 5,
+                bounciness: 10,
+                useNativeDriver: false,
+              }),
+              Animated.spring(yPosition, {
+                // Reset yPosition
+                toValue: 0,
+                speed: 5,
+                bounciness: 10,
+                useNativeDriver: false,
+              }),
+              Animated.timing(position, {
+                toValue: 0,
+                duration: 100,
+                useNativeDriver: false,
+              }),
+            ]).start();
+          } else if (gestureState.dx > screenWidth - 150) {
+            Animated.parallel([
+              Animated.timing(xPosition, {
+                toValue: screenWidth,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(cardOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              /* swipedDirection(swipeDirection); */
+              onSwipe({ item });
+            });
+          } else if (gestureState.dx < -screenWidth + 150) {
+            Animated.parallel([
+              Animated.timing(xPosition, {
+                toValue: -screenWidth,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(cardOpacity, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              /* swipedDirection(swipeDirection); */
+              removeCard(item.listId);
+            });
+          } else if (
+            gestureState.dy < -screenHeight / 3 &&
+            gestureState.dx < screenWidth - 150 &&
+            gestureState.dx > -screenWidth - 150
+          ) {
+            Animated.parallel([
+              Animated.timing(yPosition, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(xPosition, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              /* swipedDirection(swipeDirection); */
+              toggleDescription();
+            });
+          } else if (
+            gestureState.dy > screenHeight / 3 &&
+            gestureState.dx < screenWidth - 150 &&
+            gestureState.dx > -screenWidth - 150
+          ) {
+            Animated.parallel([
+              Animated.timing(yPosition, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+              Animated.timing(xPosition, {
+                toValue: 0,
+                duration: 200,
+                useNativeDriver: false,
+              }),
+            ]).start(() => {
+              /* swipedDirection(swipeDirection); */
+              toggleDescription();
+            });
+          }
+        },
+      }),
+    [
+      cardOpacity,
+      item,
+      onSwipe,
+      position,
+      removeCard,
+      screenHeight,
+      screenWidth,
+      showChoiceImage,
+      toggleDescription,
+      xPosition,
+      yPosition,
+    ]
+  );
 
 
   return (

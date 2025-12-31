@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, PanResponder, StyleSheet, Pressable } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
@@ -6,43 +6,51 @@ export default function MoveableTextBox({description, screenWidth, screenHeight}
   const [position, setPosition] = useState({ x: 50, y: 50 });
   const [isWide, setIsWide] = useState(false);
 
+  const positionRef = useRef(position);
+  positionRef.current = position;
+  const dragStartRef = useRef(position);
+
   const textBoxWidth = isWide ? screenWidth : 30;
   const textBoxHeight = isWide ? screenHeight : 30;
 
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => true,
-    onPanResponderStart: () => {
-      handleClick();
-    },
-    onPanResponderMove: (event, gesture) => {
-      let newX = position.x + gesture.dx;
-      let newY = position.y + gesture.dy;
+  const handleClick = useCallback(() => {
+    setIsWide((prev) => !prev);
+  }, []);
 
-      // Ensure the new position stays within the screen boundaries
-      if (newX < 0) newX = 0;
-      if (newX >= screenWidth) newX = screenWidth ; // Adjust the screenWidth of the text box here
-      if (newY < 0) newY = 0;
-      if (newY >= screenHeight) newY = screenHeight; // Adjust the height of the text box here
+  const panResponder = useMemo(
+    () =>
+      PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onPanResponderGrant: () => {
+          dragStartRef.current = positionRef.current;
+          handleClick();
+        },
+        onPanResponderMove: (event, gesture) => {
+          let newX = dragStartRef.current.x + gesture.dx;
+          let newY = dragStartRef.current.y + gesture.dy;
 
-      setPosition({
-        x: newX,
-        y: newY,
-      });
-    },
-    onPanResponderRelease: () => {
-    }
-  });
+          // Ensure the new position stays within the screen boundaries
+          if (newX < 0) newX = 0;
+          if (newX >= screenWidth) newX = screenWidth;
+          if (newY < 0) newY = 0;
+          if (newY >= screenHeight) newY = screenHeight;
 
-  const handleClick = () => {
-    setIsWide(!isWide);
-  };
+          setPosition({ x: newX, y: newY });
+        },
+        onPanResponderRelease: () => {},
+      }),
+    [handleClick, screenHeight, screenWidth]
+  );
 
-  const textStyle = {
-    left: position.x,
-    top: position.y,
-    maxWidth: textBoxWidth * 0.75,
-    maxHeight: textBoxHeight * 0.75
-  };
+  const textStyle = useMemo(
+    () => ({
+      left: position.x,
+      top: position.y,
+      maxWidth: textBoxWidth * 0.75,
+      maxHeight: textBoxHeight * 0.75,
+    }),
+    [position.x, position.y, textBoxHeight, textBoxWidth]
+  );
 
   return (
     <View style={styles.textBox}>

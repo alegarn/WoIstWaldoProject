@@ -1,4 +1,4 @@
-import { useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { StyleSheet, Animated, Easing } from 'react-native';
 
 export default function ImageAnimated({ success }) {
@@ -23,11 +23,17 @@ export default function ImageAnimated({ success }) {
     }).start();
   };
 
-  success ? startSuccessAnimation() : startFailureAnimation();
+  useEffect(() => {
+    success ? startSuccessAnimation() : startFailureAnimation();
+  }, [success]);
 
-  const animationStyle =  success ?
-    ({ opacity: imageAnimationValue, width: 300, height: 300 })  :
-    ({ transform: [{ translateY: imageAnimationValue }] });
+  const animationStyle = useMemo(
+    () =>
+      success
+        ? { opacity: imageAnimationValue, width: 300, height: 300 }
+        : { transform: [{ translateY: imageAnimationValue }] },
+    [imageAnimationValue, success]
+  );
 
   return (
     <>
