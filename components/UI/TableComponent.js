@@ -36,7 +36,7 @@ const RowItem = React.memo(function RowItem({ row, onPressMore }) {
   );
 });
 
-export default function TableComponent({ data, onPress }) {
+export default function TableComponent({ data, onPress, onEndReached }) {
   const headers = data?.tableHeaders || [];
   const rows = data?.tableScores || [];
 
@@ -78,6 +78,8 @@ export default function TableComponent({ data, onPress }) {
         initialNumToRender={12}
         windowSize={10}
         removeClippedSubviews
+        onEndReached={onEndReached}
+        onEndReachedThreshold={0.5}
       />
     </View>
   );
