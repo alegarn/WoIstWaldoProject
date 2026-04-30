@@ -2,13 +2,28 @@ jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
 }));
 
+jest.mock('axios', () => ({
+  get: jest.fn(),
+  post: jest.fn(),
+  put: jest.fn(),
+  delete: jest.fn(),
+}));
+
+import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 import {
   bootstrapStoredAuthSession,
   checkSecureStoreItem,
+  createUser,
+  deleteAccount,
   getBackendHeaders,
+  getScoreId,
   getStoredAuthState,
+  hasCompleteAuthState,
+  isPersistedBearerToken,
+  login,
+  updateUser,
 } from '../utils/auth';
 
 const storedSession = {
@@ -35,6 +50,37 @@ function mockStoredValues(values = {}) {
 describe('auth utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
+  });
+
+  it('detects whether auth state is complete enough to build backend headers', () => {
+    expect(
+      hasCompleteAuthState({
+        token: 'Bearer token',
+        uid: 'user@example.com',
+        expiry: '123',
+        access_token: 'access',
+        client: 'client',
+        userId: '42',
+      })
+    ).toBe(true);
+
+    expect(
+      hasCompleteAuthState({
+        token: 'Bearer token',
+        uid: 'user@example.com',
+        expiry: '',
+        access_token: 'access',
+        client: 'client',
+        userId: '42',
+      })
+    ).toBe(false);
+  });
+
+  it('only treats persisted bearer tokens with the expected prefix and shape as valid', () => {
+    expect(isPersistedBearerToken('Bearer persisted-token._+/=')).toBe(true);
+    expect(isPersistedBearerToken('persisted-token')).toBe(false);
+    expect(isPersistedBearerToken(null)).toBe(false);
   });
 
   it('falls back to context when SecureStore does not have the requested item', async () => {
@@ -68,6 +114,27 @@ describe('auth utilities', () => {
       client: storedSession.client,
       userId: storedSession.userId,
     });
+  });
+
+  it('keeps fully populated context headers instead of re-reading SecureStore', async () => {
+    const headers = await getBackendHeaders({
+      token: 'Bearer in-memory-token',
+      uid: 'memory@example.com',
+      expiry: '321',
+      access_token: 'memory-access',
+      client: 'memory-client',
+      userId: '55',
+    });
+
+    expect(headers).toEqual({
+      token: 'Bearer in-memory-token',
+      uid: 'memory@example.com',
+      expiry: '321',
+      access_token: 'memory-access',
+      client: 'memory-client',
+      userId: '55',
+    });
+    expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
   });
 
   it('parses the persisted tutorial state during session reads', async () => {
@@ -118,5 +185,126 @@ describe('auth utilities', () => {
 
     expect(didRestoreSession).toBe(false);
     expect(restoreSession).not.toHaveBeenCalled();
+  });
+
+  it('logs in against the backend auth endpoint and returns the raw response on success', async () => {
+    const response = {
+      status: 200,
+      headers: { authorization: 'Bearer new-token' },
+      data: { data: { id: '7' } },
+    };
+    axios.post.mockResolvedValue(response);
+
+    const loginResponse = await login({ email: 'waldo@example.com', password: 'secret' });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://backend.example/auth/sign_in',
+      { email: 'waldo@example.com', password: 'secret' },
+      {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        uid: 'waldo@example.com',
+      }
+    );
+    expect(loginResponse).toBe(response);
+  });
+
+  it('maps createUser success payload into auth token metadata', async () => {
+    axios.post.mockResolvedValue({
+      status: 200,
+      headers: {
+        authorization: 'Bearer signup-token',
+        expiry: '999',
+        'access-token': 'signup-access',
+      },
+      data: { data: { id: '12' } },
+    });
+
+    const response = await createUser({
+      email: 'new@example.com',
+      password: 'hunter2',
+      confirmPassword: 'hunter2',
+      username: 'new-user',
+    });
+
+    expect(response).toMatchObject({
+      status: 200,
+      token: 'Bearer signup-token',
+      expiry: '999',
+      access_token: 'signup-access',
+    });
+  });
+
+  it('loads the current score id with backend headers from context', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { score_id: 'score-42' },
+    });
+
+    const response = await getScoreId({
+      token: 'Bearer token',
+      uid: 'waldo@example.com',
+      expiry: '123',
+      access_token: 'access',
+      client: 'client',
+      userId: '42',
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_score_id',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer token',
+          uid: 'waldo@example.com',
+        }),
+      })
+    );
+    expect(response).toEqual({ status: 200, data: { score_id: 'score-42' } });
+  });
+
+  it('maps updateUser failures into a status and error payload', async () => {
+    axios.put.mockRejectedValue({
+      request: { status: 500 },
+      message: 'Request failed',
+    });
+
+    const response = await updateUser({
+      context: {
+        token: 'Bearer token',
+        uid: 'waldo@example.com',
+        expiry: '123',
+        access_token: 'access',
+        client: 'client',
+      },
+      data: { email: 'new@example.com' },
+    });
+
+    expect(response).toEqual({
+      status: 500,
+      data: expect.objectContaining({ message: 'Request failed' }),
+    });
+  });
+
+  it('maps deleteAccount failures without throwing when the request metadata exists', async () => {
+    axios.delete.mockRejectedValue({
+      request: { status: 401 },
+      message: 'Unauthorized',
+    });
+
+    const response = await deleteAccount({
+      context: {
+        token: 'Bearer token',
+        uid: 'waldo@example.com',
+        expiry: '123',
+        access_token: 'access',
+        client: 'client',
+        userId: '42',
+      },
+    });
+
+    expect(response).toEqual({
+      status: 401,
+      data: expect.objectContaining({ message: 'Unauthorized' }),
+    });
   });
 });
