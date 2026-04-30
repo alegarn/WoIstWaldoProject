@@ -1,0 +1,45 @@
+appId: com.alegarn.WoIstWaldoProject
+env:
+  LOGIN_EMAIL: your.test.user@example.com
+  LOGIN_PASSWORD: replace-me
+---
+# Scope: boot on a clean app state, switch between auth modes, then perform a real login
+# using stable in-app selectors.
+#
+# Preconditions for reliable execution:
+# - provide a non-production account via LOGIN_EMAIL and LOGIN_PASSWORD
+# - backend/API is reachable and returns a successful login response
+
+- launchApp:
+  clearState: true
+- waitForAnimationToEnd
+- assertVisible:
+  id: auth.input.email
+- assertVisible:
+  id: auth.input.password
+- assertVisible:
+  id: auth.button.login-submit
+- tapOn:
+  id: auth.button.switch-to-signup
+- assertVisible:
+  id: auth.input.confirm-email
+- assertVisible:
+  id: auth.input.confirm-password
+- assertVisible:
+  id: auth.input.username
+- assertVisible:
+  id: auth.button.signup-submit
+- tapOn:
+  id: auth.button.switch-to-login
+- tapOn:
+  id: auth.input.email
+- inputText: ${LOGIN_EMAIL}
+- tapOn:
+  id: auth.input.password
+- inputText: ${LOGIN_PASSWORD}
+- tapOn:
+  id: auth.button.login-submit
+- assertVisible:
+  id: home.button.hide
+- assertVisible:
+  id: home.button.guess

@@ -1,7 +1,7 @@
 import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function Button({ children, style, onPress, mode, thin, cancel }) {
+export default function Button({ children, style, onPress, mode, thin, cancel, testID, accessibilityLabel }) {
 
 
   return (
@@ -11,7 +11,13 @@ export default function Button({ children, style, onPress, mode, thin, cancel })
       mode === "flat" && { backgroundColor: "transparent" },
       cancel && mode !== "flat" && { backgroundColor: "red" }]}
     >
-      <Pressable onPress={onPress} style={({pressed}) => pressed && styles.pressed} >
+      <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
+        onPress={onPress}
+        style={({pressed}) => pressed && styles.pressed}
+        testID={testID}
+      >
         <View style={[mode === "flat" && styles.flat]}>
           <Text style={[
             styles.buttonText,

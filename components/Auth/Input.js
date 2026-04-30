@@ -9,6 +9,8 @@ export default function Input({
   onUpdateValue,
   value,
   isInvalid,
+  testID,
+  accessibilityLabel,
 }) {
   return (
     <View style={styles.inputContainer}>
@@ -16,11 +18,13 @@ export default function Input({
         {label}
       </Text>
       <TextInput
+        accessibilityLabel={accessibilityLabel ?? label}
         style={[styles.input, isInvalid && styles.inputInvalid]}
         autoCapitalize="none"
         keyboardType={keyboardType}
         secureTextEntry={secure}
         onChangeText={onUpdateValue}
+        testID={testID}
         value={value}
       />
     </View>

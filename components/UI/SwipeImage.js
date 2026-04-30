@@ -183,7 +183,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   }, [imageList]);
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={{ flex: 1 }} testID="guess-path.swipe-stack">
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
         showIsLoading()
       ) : ((noMoreCard === true) && (imageList?.length === 0) && (!asyncImagesAreLoading)) ? (

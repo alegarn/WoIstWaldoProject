@@ -82,8 +82,10 @@ const AuthContent = ({ isLogin, onAuthenticate }) => {
         />
         <View style={styles.buttons}>
           <Button
+            accessibilityLabel={isLogin ? 'Switch to signup' : 'Switch to login'}
             onPress={switchAuthModeHandler}
             mode={Platform.OS === "ios" ? "flat" : null}
+            testID={isLogin ? 'auth.button.switch-to-signup' : 'auth.button.switch-to-login'}
             thin={true}
           >
             {isLogin ? 'Create a new user' : 'Log in instead'}

@@ -211,6 +211,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
   return (
     <Animated.View
       {...panResponder.panHandlers}
+      accessibilityLabel={`Swipeable card ${item.listId}`}
+      testID={`guess-path.card.${item.listId}`}
       style={[
         styles.cardStyle,
         styles.expanded,
@@ -224,9 +226,11 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       ]}>
 
         <ImageBackground
+          accessibilityLabel={`Guess path image ${item.listId}`}
           source={{ uri: item.imageFile}}
           resizeMode='contain'
-          style={[styles.imageStyle, styles.expanded]} >
+          style={[styles.imageStyle, styles.expanded]}
+          testID={`guess-path.card-image.${item.listId}`} >
           
           <GuessDescription
             item={item}

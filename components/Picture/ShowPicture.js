@@ -38,15 +38,17 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
 
   return (
     <View style={styles.container} >
-      <Pressable onPress={handlePress}  style={styles.pressable} >
+      <Pressable accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'} onPress={handlePress}  style={styles.pressable} testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'} >
         <ImageBackground
+          accessibilityLabel={guess ? 'Guess picture image' : 'Hide picture image'}
           source={{uri : uri}}
           resizeMode='stretch'
           style={[styles.image, imageDimensionStyle ]}
+          testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
           >
 {/* no cross, when guess, if null  */}
           {touchLocation && (
-            <IconButton icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle}/>
+            <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
           )}
 {/* target not showing for guessscreen */}
           { guess ? (
@@ -70,6 +72,7 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
             onPress={handleConfirm} 
             onCancel={onCancel} 
             isModalVisible={showModal}
+            testIDPrefix={guess ? 'game.picture.guess-modal' : 'game.picture.hide-modal'}
           >
             {"Do you want to validate this ?"}
           </CenteredModal>
