@@ -123,17 +123,21 @@ function AuthenticatedStack({ authContext }) {
             headerRight: ({ tintColor }) => (
               <>
                 <IconButton
+                  accessibilityLabel="Open settings"
                   icon="settings"
                   color={tintColor}
                   size={24}
                   onPress={() => navigation.navigate("SettingsScreen")}
+                  testID="home.header.settings"
                   style={{ marginRight: 20 }}
                 />
                 <IconButton
+                  accessibilityLabel="Log out"
                   icon="exit"
                   color={tintColor}
                   size={24}
                   onPress={() => disconnecting()}
+                  testID="home.header.logout"
                 />
               </>
             )

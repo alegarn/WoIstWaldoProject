@@ -171,7 +171,7 @@ export default function RankingScreen() {
   return (
     <>
       {rankingDatum ? (
-        <View>
+        <View testID="ranking.screen">
           <TableComponent data={rankingDatum}  onPress={showSpecificDatum}  />
         </View>
       ) : (

@@ -118,7 +118,7 @@ export default function AdScreen({navigation, route}){
 
 
   return(
-     <View style={{flex: 1}}>
+     <View style={{flex: 1}} testID="ad.screen">
       {__DEV__ ? (
         isLoaded ? (
           show()

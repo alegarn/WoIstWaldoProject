@@ -148,11 +148,13 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="set-instructions.screen">
       <ImageBackground
+        accessibilityLabel="Set instructions image"
         source={{uri : uri}}
         resizeMode='stretch'
         style={imageDimensionStyle}
+        testID="set-instructions.image"
       >
         <HideDescription
           onSubmit={handlePressDescription}
@@ -168,6 +170,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
             onPress={handleConfirmModal} 
             onCancel={onCancelModal} 
             isModalVisible={showModal}
+            testIDPrefix="set-instructions.confirm-modal"
           >
             <ModalContent
               description={description}
