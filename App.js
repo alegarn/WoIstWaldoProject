@@ -41,7 +41,7 @@ import { getUserConsent } from './utils/adHandling';
 
 import * as NavigationBar from "expo-navigation-bar";
 import { setStatusBarHidden } from "expo-status-bar";
-import { logout } from './utils/auth';
+import { bootstrapStoredAuthSession } from './utils/auth';
 
 NavigationBar.setPositionAsync("relative");
 NavigationBar.setVisibilityAsync("hidden");
@@ -228,27 +228,32 @@ function Navigation({ authContext }) {
   );
 };
 
-function Root() {
-  //const [isTryingLogging, setIsTryingLogging] = useState(false);
+export function Root() {
+  const [isTryingLogging, setIsTryingLogging] = useState(true);
   const authContext = useContext(AuthContext);
 
-  /* useEffect(() => {
-    async function fetchToken() {
-      const storedToken = await SecureStore.getItemAsync('token');
-      const bearerTokenRegex = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
-      if (storedToken !== null && bearerTokenRegex.test(storedToken) ) {
-        authContext.tokenAuthentication(storedToken);
-      };
-      setIsTryingLogging(false);
-    };
-    fetchToken();
+  useEffect(() => {
+    let isMounted = true;
 
-  }, [authContext.access_token]);
- */
-/*   if (isTryingLogging) {
+    async function fetchStoredSession() {
+      await bootstrapStoredAuthSession(authContext.restoreSession);
+
+      if (isMounted) {
+        setIsTryingLogging(false);
+      };
+    };
+
+    fetchStoredSession();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  if (isTryingLogging) {
     const message = 'Logging in...';
     return <LoadingOverlay message={message} />
-  }; */
+  };
 
   return <Navigation  authContext={authContext}/>
 

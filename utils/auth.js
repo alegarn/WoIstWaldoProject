@@ -1,14 +1,71 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
+const AUTH_STORAGE_KEYS = ['token', 'uid', 'expiry', 'access_token', 'client', 'userId'];
+const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished'];
+const BEARER_TOKEN_REGEX = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
+
+
+function isNullOrUndefined(value) {
+  return value === undefined || value === null;
+};
+
+function isNullUndefinedOrEmpty(value) {
+  return isNullOrUndefined(value) || value === '';
+};
+
+function parseStoredJsonValue(value) {
+  if (isNullUndefinedOrEmpty(value)) {
+    return null;
+  };
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  };
+};
+
+async function getStoredValues(keys) {
+  const values = await Promise.all(keys.map((key) => SecureStore.getItemAsync(key)));
+
+  return keys.reduce((accumulator, key, index) => {
+    accumulator[key] = values[index];
+    return accumulator;
+  }, {});
+};
+
+export function hasCompleteAuthState(authState) {
+  return AUTH_STORAGE_KEYS.every((key) => !isNullUndefinedOrEmpty(authState?.[key]));
+};
+
+export function isPersistedBearerToken(token) {
+  return typeof token === 'string' && BEARER_TOKEN_REGEX.test(token);
+};
+
+export async function getStoredAuthState() {
+  const storedState = await getStoredValues(PERSISTED_SESSION_KEYS);
+
+  return {
+    ...storedState,
+    isTutorialFinished: parseStoredJsonValue(storedState.isTutorialFinished),
+  };
+};
+
+export async function bootstrapStoredAuthSession(restoreSession) {
+  const storedAuthState = await getStoredAuthState();
+
+  if (!hasCompleteAuthState(storedAuthState) || !isPersistedBearerToken(storedAuthState.token)) {
+    return false;
+  };
+
+  restoreSession(storedAuthState);
+  return true;
+};
+
 
 export async function getBackendHeadersFromStorage() {
-  const token = await SecureStore?.getItemAsync("token");
-  const uid = await SecureStore?.getItemAsync("uid");
-  const expiry = await SecureStore?.getItemAsync("expiry");
-  const access_token = await SecureStore?.getItemAsync("access_token");
-  const client = await SecureStore?.getItemAsync("client");
-  const userId = await SecureStore?.getItemAsync("userId");
+  const { token, uid, expiry, access_token, client, userId } = await getStoredAuthState();
   return { token, uid, expiry, access_token, client, userId };
 };
 
@@ -18,14 +75,13 @@ export async function getBackendHeadersFromContext(context) {
 };
 
 export async function getBackendHeaders(context) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeadersFromContext(context);
-  if (token) { 
-    return { token, uid, expiry, access_token, client, userId };
-  } else {
-    const { token, uid, expiry, access_token, client, userId } = await getBackendHeadersFromStorage();
-    /* if valid token */
-    return { token, uid, expiry, access_token, client, userId };
+  const contextHeaders = await getBackendHeadersFromContext(context);
+
+  if (hasCompleteAuthState(contextHeaders)) {
+    return contextHeaders;
   };
+
+  return await getBackendHeadersFromStorage();
 };
 
 export function setHeaders({ token, uid, expiry, access_token, client }) {
@@ -155,31 +211,14 @@ export async function login({email, password}) {
   return response;
 }; */
 
-function isNullOrUndefined(value) {
-  return value === undefined || value === null;
-};
-
-function contextEquivalent(value, context) {
-  const contextKeys = Object.keys(context);
-  
-  for (let key of contextKeys) {
-    if (key === value) {
-      return context[key];
-    };
-  };
-  
-  return null;
-};
-
 export async function checkSecureStoreItem({ secureStoreValue, context }) {
-  let item = await SecureStore.getItemAsync(secureStoreValue);
-  const result = isNullOrUndefined(item);
-  if (result) {
-    return contextEquivalent(item, context);
-  }; 
-  if (!result) {
+  const item = await SecureStore.getItemAsync(secureStoreValue);
+
+  if (!isNullOrUndefined(item)) {
     return item;
   };
+
+  return context?.[secureStoreValue] ?? null;
 };
 
 export async function getUserName({ context }) {

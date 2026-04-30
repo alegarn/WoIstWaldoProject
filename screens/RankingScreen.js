@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
@@ -10,14 +10,16 @@ import { AuthContext } from '../store/auth-context';
 export default function RankingScreen() {
 
   const [rankingDatum, setRankingDatum] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [pagy, setPagy] = useState(null);
+  const [mode, setMode] = useState('initial');
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
 
   const context = useContext(AuthContext);
 
   function convertToRanking(tableHeaders, rankingData, pagyData) {
-    const totalPages = pagyData.pages;
     const currentPage = pagyData.page;
     const itemsPerPage = pagyData.items;
-    const totalItems = pagyData.count;
 
     const data = {
       tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
@@ -32,22 +34,51 @@ export default function RankingScreen() {
     return data;
   };
 
-  const showSpecificDatum = async (username) => {
-    const response = await getUserScores({username, context: context});
-    //console.log("response", response);
-    const scores = response?.data;
-    let infoString = '';
-
-    infoString += `Total Score: ${scores.total.total_score}\n`;
-    infoString += `Total Hide Score: ${scores.total.total_hide_score}\n`;
-    infoString += `Total Guess Score: ${scores.total.total_guess_score}\n`;
-    infoString += `Hidden Images Count: ${scores.hide_info.hide_count}\n`;
-    infoString += `Guessed Images Count: ${scores.guess_info.guess_count}\n`;
-
-    Alert.alert("Complementary Scores of " + username, infoString);
+  function convertInitialToRanking(tableHeaders, rows) {
+    const data = {
+      tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
+      tableScores: (rows || []).map((row) => ({
+        rank: Number(row.rank),
+        name: row.username,
+        score: row.total_score,
+        others: ""
+      }))
+    };
+    return data;
   };
 
-  const handleError = (message, status) => {
+  const showSpecificDatum = useCallback(async (username) => {
+    const response = await getUserScores({username, context: context});
+    if (response?.status !== 200) {
+      if (response?.status === 404) {
+        Alert.alert("User not found", `No scores found for ${username}.`);
+        return
+      }
+      handleError(response?.message, response?.status);
+      return
+    }
+
+    const scores = response?.data;
+    const total = scores?.total;
+    const hideInfo = scores?.hide_info;
+    const guessInfo = scores?.guess_info;
+
+    if (!total || !hideInfo || !guessInfo) {
+      Alert.alert("Scores unavailable", `Couldn't load detailed scores for ${username}.`);
+      return
+    }
+    let infoString = '';
+
+    infoString += `Total Score: ${total.total_score}\n`;
+    infoString += `Total Hide Score: ${total.total_hide_score}\n`;
+    infoString += `Total Guess Score: ${total.total_guess_score}\n`;
+    infoString += `Hidden Images Count: ${hideInfo.hide_count}\n`;
+    infoString += `Guessed Images Count: ${guessInfo.guess_count}\n`;
+
+    Alert.alert("Complementary Scores of " + username, infoString);
+  }, [context]);
+
+  function handleError(message, status) {
     if (status === 401) {
       Alert.alert("There is a problem with the server", `${message}. Your authentication failed. Try to reconnect. You canno't get a ranking.`);
       return
@@ -60,25 +91,82 @@ export default function RankingScreen() {
 
 
 
-  const handleRankingData = async () => {
+  const handleRankingData = useCallback(async () => {
     const tableHeaders = RANKING?.tableHeaders;
-    const rankingData = await getRankingData(context);
+    const rankingData = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
 
     if (rankingData?.status !== 200) {
       handleError(rankingData?.message, rankingData?.status);
       return
     };
 
-    const data =  rankingData?.data?.data;
-    const pagyData = rankingData?.data?.pagy;
-    const finalDatum = convertToRanking(tableHeaders, data, pagyData);
-    setRankingDatum(finalDatum);
+    const payload = rankingData?.data?.data;
+
+    let finalDatum = null;
+    if (payload && Array.isArray(payload.rows)) {
+      const init = convertInitialToRanking(tableHeaders, payload.rows);
+      setRows(init.tableScores);
+      setRankingDatum(init);
+      setMode('initial');
+    } else {
+      const data = payload;
+      const pagyData = rankingData?.data?.pagy;
+      const final = convertToRanking(tableHeaders, data, pagyData);
+      setRows(final.tableScores);
+      setRankingDatum(final);
+      setPagy(pagyData);
+      setMode('paged');
+    }
     return rankingData;
+  }, [context]);
+
+  async function fetchPage(page) {
+    if (isLoadingMore) return;
+    setIsLoadingMore(true);
+    const tableHeaders = RANKING?.tableHeaders;
+    const response = await getRankingData(context, { page });
+    if (response?.status !== 200) {
+      setIsLoadingMore(false);
+      handleError(response?.message, response?.status);
+      return;
+    }
+
+    const data = response.data.data;
+    const pagyData = response.data.pagy;
+    const pageRows = (data || []).map((rec, index) => ({
+      rank: ((pagyData.page - 1) * pagyData.items) + index + 1,
+      username: rec.username,
+      name: rec.username,
+      score: rec.total_score || rec.totalScore,
+    }));
+
+    // dedupe by username (avoid exposing user_id on client)
+    const existingNames = new Set(rows.map(r => String(r.name)));
+    const deduped = pageRows.filter(r => !existingNames.has(String(r.name)));
+
+    const nextRows = rows.concat(deduped.map(r => ({ rank: r.rank, name: r.name, score: r.score })));
+    setRows(nextRows);
+    setRankingDatum({ tableHeaders: tableHeaders.slice(0,3).concat(["Others"]), tableScores: nextRows });
+    setPagy(pagyData);
+    setMode('paged');
+    setIsLoadingMore(false);
+  }
+
+  const handleEndReached = async () => {
+    if (isLoadingMore) return;
+    if (mode === 'initial') {
+      // switch to paged mode: load page 1 then allow more
+      await fetchPage(1);
+      return;
+    }
+    if (pagy && pagy.page < pagy.pages) {
+      await fetchPage(pagy.page + 1);
+    }
   };
 
   useEffect(() => {
     handleRankingData();
-  }, [])
+  }, [handleRankingData])
 
   return (
     <>

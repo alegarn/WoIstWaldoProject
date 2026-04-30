@@ -1,11 +1,11 @@
 import { Pressable, Text, View , StyleSheet} from "react-native";
 import { GlobalStyle } from "../../constants/theme";
 
-  export default function TableButton({cellData, rowData, onPress, windowHeight, windowWidth}) {
+  export default function TableButton({ onPress, windowHeight, windowWidth }) {
     return(
       <View style={[styles.btn, { width: windowWidth * 0.18, height: windowHeight * 0.03, borderRadius: 5,}]}>
         <Pressable
-          onPress={() => onPress(cellData, rowData)}
+          onPress={onPress}
           style={ ({pressed}) => pressed && styles.pressed}>
             <Text style={styles.btnText}>More</Text>
         </Pressable>
