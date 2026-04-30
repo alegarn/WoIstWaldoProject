@@ -28,10 +28,6 @@ import {
 
 const storedSession = {
   token: 'Bearer persisted-token',
-  uid: 'user@example.com',
-  expiry: '1712345678',
-  access_token: 'persisted-access-token',
-  client: 'persisted-client',
   userId: '42',
   email: 'user@example.com',
   username: 'waldo',
@@ -45,7 +41,7 @@ const storedSession = {
 
 function mockStoredValues(values = {}) {
   SecureStore.getItemAsync.mockImplementation(async (key) => values[key] ?? null);
-};
+}
 
 describe('auth utilities', () => {
   beforeEach(() => {
@@ -57,10 +53,6 @@ describe('auth utilities', () => {
     expect(
       hasCompleteAuthState({
         token: 'Bearer token',
-        uid: 'user@example.com',
-        expiry: '123',
-        access_token: 'access',
-        client: 'client',
         userId: '42',
       })
     ).toBe(true);
@@ -68,11 +60,7 @@ describe('auth utilities', () => {
     expect(
       hasCompleteAuthState({
         token: 'Bearer token',
-        uid: 'user@example.com',
-        expiry: '',
-        access_token: 'access',
-        client: 'client',
-        userId: '42',
+        userId: '',
       })
     ).toBe(false);
   });
@@ -99,42 +87,46 @@ describe('auth utilities', () => {
 
     const headers = await getBackendHeaders({
       token: storedSession.token,
-      uid: '',
-      expiry: '',
-      access_token: '',
-      client: '',
       userId: '',
+      scoreId: '',
     });
 
     expect(headers).toEqual({
       token: storedSession.token,
-      uid: storedSession.uid,
-      expiry: storedSession.expiry,
-      access_token: storedSession.access_token,
-      client: storedSession.client,
       userId: storedSession.userId,
+      scoreId: storedSession.scoreId,
     });
   });
 
   it('keeps fully populated context headers instead of re-reading SecureStore', async () => {
     const headers = await getBackendHeaders({
       token: 'Bearer in-memory-token',
-      uid: 'memory@example.com',
-      expiry: '321',
-      access_token: 'memory-access',
-      client: 'memory-client',
       userId: '55',
+      scoreId: 'score-55',
     });
 
     expect(headers).toEqual({
       token: 'Bearer in-memory-token',
-      uid: 'memory@example.com',
-      expiry: '321',
-      access_token: 'memory-access',
-      client: 'memory-client',
       userId: '55',
+      scoreId: 'score-55',
     });
     expect(SecureStore.getItemAsync).not.toHaveBeenCalled();
+  });
+
+  it('fills a missing score id from persisted storage when the context already has token and user id', async () => {
+    mockStoredValues(storedSession);
+
+    const headers = await getBackendHeaders({
+      token: 'Bearer in-memory-token',
+      userId: '55',
+      scoreId: '',
+    });
+
+    expect(headers).toEqual({
+      token: 'Bearer in-memory-token',
+      userId: '55',
+      scoreId: storedSession.scoreId,
+    });
   });
 
   it('parses the persisted tutorial state during session reads', async () => {
@@ -158,10 +150,6 @@ describe('auth utilities', () => {
     expect(didRestoreSession).toBe(true);
     expect(restoreSession).toHaveBeenCalledWith({
       token: storedSession.token,
-      uid: storedSession.uid,
-      expiry: storedSession.expiry,
-      access_token: storedSession.access_token,
-      client: storedSession.client,
       userId: storedSession.userId,
       email: storedSession.email,
       username: storedSession.username,
@@ -201,38 +189,56 @@ describe('auth utilities', () => {
       'https://backend.example/auth/sign_in',
       { email: 'waldo@example.com', password: 'secret' },
       {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        uid: 'waldo@example.com',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
       }
     );
     expect(loginResponse).toBe(response);
   });
 
-  it('maps createUser success payload into auth token metadata', async () => {
-    axios.post.mockResolvedValue({
+  it('posts signup payloads to the backend and returns the raw response on success', async () => {
+    const response = {
       status: 200,
       headers: {
         authorization: 'Bearer signup-token',
-        expiry: '999',
-        'access-token': 'signup-access',
       },
-      data: { data: { id: '12' } },
-    });
+      data: {
+        data: {
+          id: '12',
+          email: 'new@example.com',
+          username: 'new-user',
+          score_id: 'score-12',
+          finished_tutorial: false,
+        },
+      },
+    };
+    axios.post.mockResolvedValue(response);
 
-    const response = await createUser({
+    const signupResponse = await createUser({
       email: 'new@example.com',
       password: 'hunter2',
       confirmPassword: 'hunter2',
       username: 'new-user',
     });
 
-    expect(response).toMatchObject({
-      status: 200,
-      token: 'Bearer signup-token',
-      expiry: '999',
-      access_token: 'signup-access',
-    });
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://backend.example/auth',
+      {
+        username: 'new-user',
+        email: 'new@example.com',
+        password: 'hunter2',
+        password_confirmation: 'hunter2',
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+      }
+    );
+    expect(signupResponse).toBe(response);
   });
 
   it('loads the current score id with backend headers from context', async () => {
@@ -243,10 +249,6 @@ describe('auth utilities', () => {
 
     const response = await getScoreId({
       token: 'Bearer token',
-      uid: 'waldo@example.com',
-      expiry: '123',
-      access_token: 'access',
-      client: 'client',
       userId: '42',
     });
 
@@ -255,7 +257,6 @@ describe('auth utilities', () => {
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer token',
-          uid: 'waldo@example.com',
         }),
       })
     );
@@ -271,10 +272,7 @@ describe('auth utilities', () => {
     const response = await updateUser({
       context: {
         token: 'Bearer token',
-        uid: 'waldo@example.com',
-        expiry: '123',
-        access_token: 'access',
-        client: 'client',
+        userId: '42',
       },
       data: { email: 'new@example.com' },
     });
@@ -294,10 +292,6 @@ describe('auth utilities', () => {
     const response = await deleteAccount({
       context: {
         token: 'Bearer token',
-        uid: 'waldo@example.com',
-        expiry: '123',
-        access_token: 'access',
-        client: 'client',
         userId: '42',
       },
     });

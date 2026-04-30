@@ -27,13 +27,19 @@ function AuthContextProbe({ onValue }) {
 
 describe('AuthContextProvider', () => {
   let latestContext;
+  let consoleSpy;
 
   beforeEach(() => {
     jest.clearAllMocks();
     latestContext = undefined;
+    consoleSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
     SecureStore.getItemAsync.mockResolvedValue(null);
     SecureStore.setItemAsync.mockResolvedValue(undefined);
     SecureStore.deleteItemAsync.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    consoleSpy.mockRestore();
   });
 
   async function renderProvider() {
@@ -58,10 +64,6 @@ describe('AuthContextProvider', () => {
     await act(async () => {
       await latestContext.authenticate({
         token: 'Bearer token-123',
-        client: 'mobile-client',
-        expiry: '12345',
-        access_token: 'access-token',
-        uid: 'waldo@example.com',
         userId: 'user-1',
         email: 'waldo@example.com',
         username: 'waldo',
@@ -72,10 +74,6 @@ describe('AuthContextProvider', () => {
 
     expect(emptyImageList).toHaveBeenCalledTimes(1);
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('token', 'Bearer token-123');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('client', 'mobile-client');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('expiry', '12345');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('access_token', 'access-token');
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('uid', 'waldo@example.com');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('userId', 'user-1');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('email', 'waldo@example.com');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('username', 'waldo');
@@ -88,12 +86,10 @@ describe('AuthContextProvider', () => {
     expect(latestContext.token).toBe('Bearer token-123');
     expect(latestContext.headers).toEqual({
       token: 'Bearer token-123',
-      client: 'mobile-client',
-      expiry: '12345',
-      access_token: 'access-token',
       userId: 'user-1',
-      uid: 'waldo@example.com',
       email: 'waldo@example.com',
+      scoreId: 'score-9',
+      username: 'waldo',
     });
     expect(latestContext.isTutorialFinished).toEqual({
       isTutorial: false,
@@ -108,10 +104,6 @@ describe('AuthContextProvider', () => {
     await act(async () => {
       latestContext.restoreSession({
         token: 'Bearer restored-token',
-        client: 'restored-client',
-        expiry: '999',
-        access_token: 'restored-access',
-        uid: 'restored@example.com',
         userId: 'user-2',
         email: 'restored@example.com',
         username: 'restored-user',
@@ -148,7 +140,6 @@ describe('AuthContextProvider', () => {
     expect(isLoggedIn).toBe(true);
     expect(latestContext.scoreId).toBe('score-10');
     expect(latestContext.email).toBe('new@example.com');
-    expect(latestContext.uid).toBe('new@example.com');
     expect(latestContext.username).toBe('new-user');
     expect(latestContext.isTutorialFinished).toEqual({
       isTutorial: false,
@@ -170,10 +161,6 @@ describe('AuthContextProvider', () => {
     await act(async () => {
       await latestContext.authenticate({
         token: 'Bearer token-123',
-        client: 'mobile-client',
-        expiry: '12345',
-        access_token: 'access-token',
-        uid: 'waldo@example.com',
         userId: 'user-1',
         email: 'waldo@example.com',
         username: 'waldo',
@@ -193,10 +180,6 @@ describe('AuthContextProvider', () => {
     expect(latestContext.headers).toEqual({});
     expect(latestContext.isTutorialFinished).toEqual({});
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('token');
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('client');
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('expiry');
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('access_token');
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('uid');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('userId');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('email');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('username');

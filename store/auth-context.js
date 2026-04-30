@@ -30,11 +30,6 @@ export const AuthContext = createContext({
 export default function AuthContextProvider({ children }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [authToken, setAuthToken] = useState(null);
-  const [client, setClient] = useState('');
-  const [uid, setUid] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [access_token, setAccess_token] = useState('');
-  
   const [userId, setUserId] = useState('');
   const [scoreId, setScoreId] = useState('');
   const [username, setUsername] = useState('');
@@ -49,17 +44,17 @@ export default function AuthContextProvider({ children }) {
     setIsAuthenticated(!!token);
   };
 
-  function restoreSession({ token, client, expiry, access_token, userId, uid, email, username, scoreId, isTutorialFinished }) {
+  function buildHeaders({ token, userId, scoreId, email, username }) {
+    return { token, userId, scoreId, email, username };
+  };
+
+  function restoreSession({ token, userId, email, username, scoreId, isTutorialFinished }) {
     setAuthToken(token);
-    setClient(client ?? '');
-    setUid(uid ?? '');
-    setExpiry(expiry ?? '');
-    setAccess_token(access_token ?? '');
     setUserId(userId ?? '');
     setScoreId(scoreId ?? '');
     setUsername(username ?? '');
     setEmail(email ?? '');
-    setHeaders({ token, client, expiry, access_token, userId, uid, email });
+    setHeaders(buildHeaders({ token, userId, scoreId, email, username }));
 
     if (isTutorialFinished) {
       setIsTutorialFinished(isTutorialFinished);
@@ -80,43 +75,29 @@ export default function AuthContextProvider({ children }) {
     };
   };
 
-  async function authenticate({token, client, expiry, access_token, userId, uid, email, username, isTutorialFinished, scoreId}) {
+  async function authenticate({token, userId, email, username, isTutorialFinished, scoreId}) {
     await emptyImageList();
 
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
-    await SecureStore.setItemAsync('client', client);
-    await SecureStore.setItemAsync('expiry', expiry);
-    await SecureStore.setItemAsync('access_token', access_token);
-    await SecureStore.setItemAsync('uid', uid);
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username);
     await SecureStore.setItemAsync('scoreId', scoreId);
 
-    setClient(client);
-    setUid(uid);
-    setExpiry(expiry);
-    setAccess_token(access_token);
     setUserId(userId);
     setScoreId(scoreId);
     setUsername(username);
     setEmail(email);
-    setHeaders({ token, client, expiry, access_token, userId, uid, email });
+    setHeaders(buildHeaders({ token, userId, scoreId, email, username }));
     
     await saveIsTutorialFinished(isTutorialFinished);    
 
     setIsAuthenticated(true);
-
-    //console.log("context", token, expiry, access_token, userId, client, uid, email, isTutorialFinished);
   };
 
   async function logout() {
     setAuthToken(null);
-    setClient('');
-    setUid('');
-    setExpiry('');
-    setAccess_token('');
     setUserId('');
     setScoreId('');
     setUsername('');
@@ -125,10 +106,6 @@ export default function AuthContextProvider({ children }) {
     setIsTutorialFinished({});
 
     await SecureStore.deleteItemAsync('token');
-    await SecureStore.deleteItemAsync('client');
-    await SecureStore.deleteItemAsync('expiry');
-    await SecureStore.deleteItemAsync('access_token');
-    await SecureStore.deleteItemAsync('uid');
     await SecureStore.deleteItemAsync('userId');
     await SecureStore.deleteItemAsync('email');
     await SecureStore.deleteItemAsync('username');
@@ -146,7 +123,6 @@ export default function AuthContextProvider({ children }) {
 
   async function changeUserEmail(email) {
     setEmail(email);
-    setUid(email);
     await SecureStore.setItemAsync('email', email);
   };
 
@@ -183,10 +159,10 @@ export default function AuthContextProvider({ children }) {
 
   const value = {
     token: authToken,
-    client: client,
-    uid: uid,
-    access_token: access_token,
-    expiry: expiry,
+    client: '',
+    uid: '',
+    access_token: '',
+    expiry: '',
     userId: userId,
     scoreId: scoreId,
     headers: headers,

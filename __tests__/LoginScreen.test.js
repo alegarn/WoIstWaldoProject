@@ -65,14 +65,11 @@ describe('LoginScreen', () => {
 			status: 200,
 			headers: {
 				authorization: 'Bearer token',
-				expiry: '123',
-				'access-token': 'access',
-				uid: 'waldo@example.com',
-				client: 'client',
 			},
 			data: {
 				data: {
 					id: '42',
+					email: 'waldo@example.com',
 					username: 'waldo',
 					finished_tutorial: true,
 					score_id: 'score-1',
@@ -95,10 +92,6 @@ describe('LoginScreen', () => {
 		});
 		expect(authenticate).toHaveBeenCalledWith({
 			token: 'Bearer token',
-			expiry: '123',
-			access_token: 'access',
-			uid: 'waldo@example.com',
-			client: 'client',
 			userId: '42',
 			email: 'waldo@example.com',
 			username: 'waldo',

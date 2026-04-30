@@ -1,7 +1,7 @@
 import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
-const AUTH_STORAGE_KEYS = ['token', 'uid', 'expiry', 'access_token', 'client', 'userId'];
+const AUTH_STORAGE_KEYS = ['token', 'userId'];
 const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished'];
 const BEARER_TOKEN_REGEX = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
 
@@ -65,71 +65,80 @@ export async function bootstrapStoredAuthSession(restoreSession) {
 
 
 export async function getBackendHeadersFromStorage() {
-  const { token, uid, expiry, access_token, client, userId } = await getStoredAuthState();
-  return { token, uid, expiry, access_token, client, userId };
+  const { token, userId, scoreId } = await getStoredAuthState();
+  return { token, userId, scoreId };
 };
 
 export async function getBackendHeadersFromContext(context) {
-  const { token, uid, expiry, access_token, client, userId } = context;
-  return { token, uid, expiry, access_token, client, userId };
+  const { token, userId, scoreId } = context ?? {};
+  return { token, userId, scoreId };
 };
 
 export async function getBackendHeaders(context) {
   const contextHeaders = await getBackendHeadersFromContext(context);
 
-  if (hasCompleteAuthState(contextHeaders)) {
+  if (hasCompleteAuthState(contextHeaders) && !isNullUndefinedOrEmpty(contextHeaders.scoreId)) {
     return contextHeaders;
   };
 
-  return await getBackendHeadersFromStorage();
+  const storedHeaders = await getBackendHeadersFromStorage();
+
+  if (hasCompleteAuthState(contextHeaders)) {
+    return {
+      ...storedHeaders,
+      ...contextHeaders,
+      scoreId: contextHeaders.scoreId || storedHeaders.scoreId,
+    };
+  };
+
+  return storedHeaders;
 };
 
-export function setHeaders({ token, uid, expiry, access_token, client }) {
+export function setHeaders({ token }) {
   const headers = {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
-    "access-token": access_token,
-    client: client,
-    expiry: expiry,
-    uid: uid,
-    "token-type": "Bearer",
     "Content-Type": "application/json;charset=UTF-8",
     Accept: "*/*",
   };
   return headers;
 };
 
+function mapRequestError(error) {
+  return {
+    status: error?.response?.status ?? error?.request?.status,
+    data: error?.response?.data ?? error,
+  };
+};
+
 
 async function authenticateUser({ email, password }) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_in`;
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-    "uid": email,
+  const config = {
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
   };
   const data = {
-    'email': email,
-    'password': password,
+    email: email,
+    password: password,
   };
   
-  const response = await axios.post(url, data, headers)
+  const response = await axios.post(url, data, config)
     .then((response) => {
       return response;
     }).catch((error) => {
-      console.log("error authenticateUser", error.request);
-      console.log("error", error);
-      return error;
+      return error.response ?? mapRequestError(error);
     });
-  
-  console.log("response authenticateUser", response);
   
   return response;
 };
 
 export async function getScoreId(context) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const { token, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_score_id`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
@@ -137,8 +146,8 @@ export async function getScoreId(context) {
   const response = await axios.get(url, config).then((response) => {
     return {status: response.status, data: response.data };
   }).catch((error) => {
-    console.log("error getScoreId", error.request);
-    return { status: error.request.status, data: error};
+    const mappedError = mapRequestError(error);
+    return { status: mappedError.status, data: mappedError.data };
   });
 
   return response;
@@ -147,46 +156,26 @@ export async function getScoreId(context) {
 export async function createUser({ email, password, confirmPassword, username }) {
 
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth`
-  const headers = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
+  const config = {
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
   };
-
-  console.log("email", email, password, confirmPassword);
 
   const data = {
-    'username': username,
-    'email': email,
-    'password': password,
-    'password_confirmation': confirmPassword,
-    'confirm_success_url': "exp://192.168.1.18:8081",
+    username: username,
+    email: email,
+    password: password,
+    password_confirmation: confirmPassword,
   };
-
-  let token = "";
-  let status = 0;
-  let expiry = '';
-  let access_token = "";
-
-  const response = await axios.post(url, data, headers).then((response) => {
-
-    token = response.headers.authorization;
-    status = response.status;
-    expiry = response.headers.expiry;
-    access_token = response.headers['access-token'];
-
-    console.log("token", token);
-    console.log("expiry", expiry);
-    console.log("access_token", access_token);
-
-    return {response, status, token, expiry, access_token};
+  
+  const response = await axios.post(url, data, config).then((response) => {
+    return response;
   }).catch((error) => {
-    console.log(error);
-    status = error.response.status;
-    return {response, status, token, expiry, access_token};
+    return error.response ?? mapRequestError(error);
   });
-
-  console.log("response create_user", response);
-
+  
   return response;
 };
 
@@ -196,9 +185,9 @@ export async function login({email, password}) {
 
 
 /* export async function logout({ context }) {
-  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const { token } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/sign_out`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
@@ -222,57 +211,55 @@ export async function checkSecureStoreItem({ secureStoreValue, context }) {
 };
 
 export async function getUserName({ context }) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const { token, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_name`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
 
   const response = await axios.get(url, config).then((response) => {
-    console.log("response getUserName", response.data);
     return { status: response.status, data: response.data };
   }).catch((error) => {
-    console.log("error getUsername", error.request);
-    return { status: error.request.status, data: error};
+    const mappedError = mapRequestError(error);
+    return { status: mappedError.status, data: mappedError.data};
   });
 
   return response;
 };
 
 export async function updateUser({ context, data }) {
-  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
+  const { token } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
 
   const response = await axios.put(url, data, config).then((response) => {
-    console.log("response updateUser", response.data);
-    return { status: response.status, data: response.data.data };
+    return { status: response.status, data: response.data.data ?? response.data };
   }).catch((error) => {
-    console.log("error updateUser", error.request);
-    return { status: error.request.status, data: error };
+    const mappedError = mapRequestError(error);
+    return { status: mappedError.status, data: mappedError.data };
   });
   return response;
 };
 
 export async function deleteAccount({ context }) {
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
+  const { token } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}auth/`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
 
   const response = await axios.delete(url, config)
     .then((response) => {
-      console.log("response deleteAccount", response?.data);
       return { status: response?.status, data: response?.data };
     }).catch((error) => {
-      console.log("error deleteAccount", error?.request);
-      return { status: error?.request?.status, data: error };
+      const mappedError = mapRequestError(error);
+      return { status: mappedError.status, data: mappedError.data };
     });
+
   return response;
 };
