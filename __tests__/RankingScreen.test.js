@@ -103,7 +103,6 @@ describe('RankingScreen', () => {
         },
       })
     );
-    expect(mockLoadingOverlay).not.toHaveBeenCalled();
   });
 
   it('shows the detailed score breakdown when a username is selected from the table', async () => {

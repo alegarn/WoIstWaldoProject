@@ -94,7 +94,8 @@ describe('SettingsScreen', () => {
   }
 
   function getButtonProps(testID) {
-    return mockButton.mock.calls.find(([props]) => props.testID === testID)[0];
+    const matchingCalls = mockButton.mock.calls.filter(([props]) => props.testID === testID);
+    return matchingCalls[matchingCalls.length - 1][0];
   }
 
   function getModalProps() {

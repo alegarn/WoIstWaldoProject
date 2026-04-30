@@ -77,10 +77,15 @@ export default SettingsScreen = () => {
     const response = await updateUser({ context, data });
     console.log("handleChangeEmail setting response", response?.status);
     console.log("email", response?.data?.email);
-    response?.status === 200
-      && context.changeUserEmail(response?.data?.email) 
-      && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
+
+    if (response?.status === 200) {
+      await context.changeUserEmail(response?.data?.email);
+      Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
+      console.log("setting response", response?.status);
+      return;
+    }
+
+    Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
     console.log("setting response", response?.status);
   };
 
@@ -91,10 +96,14 @@ export default SettingsScreen = () => {
 
     const response = await updateUser({ context, data });
     console.log("handleChangeUsername setting response", response);
-    response?.status === 200
-      && context.changeUsername(username)
-      && Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
+
+    if (response?.status === 200) {
+      await context.changeUsername(response?.data?.username ?? username);
+      Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
+      return;
+    }
+
+    Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
 
   };
 

@@ -38,7 +38,7 @@ describe('AdScreen', () => {
 
   afterEach(() => {
     global.__DEV__ = originalDev;
-    jest.runOnlyPendingTimers();
+    jest.clearAllTimers();
     jest.useRealTimers();
   });
 
@@ -61,13 +61,19 @@ describe('AdScreen', () => {
 
   it('shows the loading overlay immediately in development mode while no ad is loaded', async () => {
     global.__DEV__ = true;
+    let renderer;
 
     await act(async () => {
-      create(<AdScreen navigation={{ replace: jest.fn() }} route={route} />);
+      renderer = create(<AdScreen navigation={{ replace: jest.fn() }} route={route} />);
     });
 
     expect(mockLoadingOverlay).toHaveBeenCalledWith({
       message: 'Loading Ads... Are you a test user? Sorry, just wait 5 seconds :3 ',
+    });
+
+    await act(async () => {
+      renderer.unmount();
+      jest.clearAllTimers();
     });
   });
 });

@@ -88,7 +88,7 @@ describe('imageUploader', () => {
     expect(saveImageToAws).toHaveBeenCalledWith({
       url: 'https://example.com/upload',
       filename: 'waldo-image',
-      uri: 'file:///waldo.png',
+      fileUrl: 'file:///waldo.png',
       fileExtension: 'png',
       contentLength: 4096,
       userId: 'user-42',

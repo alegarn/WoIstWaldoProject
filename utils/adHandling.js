@@ -9,9 +9,9 @@ Error: Publisher misconfiguration: Failed to read publisher's account configurat
 
 */
 
-async function adConfig() {
+async function adConfig(adsClient = mobileAds) {
 
-  const config = await mobileAds()
+  const config = await adsClient()
     .setRequestConfiguration({
       // Update all future requests suitable for parental guidance
       maxAdContentRating: MaxAdContentRating.PG,
@@ -28,7 +28,7 @@ async function adConfig() {
     })
     .then(() => {
       console.log("Request config successfully set!");
-      const adapterStatusesResult = mobileAds()
+      const adapterStatusesResult = adsClient()
       .initialize()
       .then(adapterStatuses => {
         console.log("Initialization complete!");
@@ -48,8 +48,8 @@ export async function loadAds() {
   __DEV__ && !isLoaded ? load() : null;
 };
 
-export async function getUserConsent() {
-  const config = await adConfig();
+export async function getUserConsent({ adsClient = mobileAds, consentApi = AdsConsent } = {}) {
+  const config = await adConfig(adsClient);
   console.log("config", config);
 
   /*
@@ -59,12 +59,12 @@ export async function getUserConsent() {
   const iosId = await syncUniqueId();
    */
 
-  const consentInfo = await AdsConsent.requestInfoUpdate({
+  const consentInfo = await consentApi.requestInfoUpdate({
     debugGeography: AdsConsentDebugGeography.EEA,
     testDeviceIdentifiers: ['TEST-DEVICE-HASHED-ID'],
   });
 
-  const { status } = await AdsConsent.loadAndShowConsentFormIfRequired();
+  const { status } = await consentApi.loadAndShowConsentFormIfRequired();
   /* put it in context */
 
   return { status };

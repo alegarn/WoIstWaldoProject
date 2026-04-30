@@ -10,8 +10,6 @@ jest.mock('../components/Picture/Descriptions/GuessDescription', () => {
 });
 
 jest.mock('react-native', () => {
-  const actual = jest.requireActual('react-native');
-
   class MockAnimatedValue {
     constructor(value) {
       this._value = value;
@@ -37,7 +35,12 @@ jest.mock('react-native', () => {
   }
 
   return {
-    ...actual,
+    View: 'View',
+    ImageBackground: 'ImageBackground',
+    StyleSheet: {
+      absoluteFill: {},
+      create: (styles) => styles,
+    },
     PanResponder: {
       create: jest.fn((config) => {
         capturedPanResponder = config;
@@ -45,7 +48,6 @@ jest.mock('react-native', () => {
       }),
     },
     Animated: {
-      ...actual.Animated,
       Value: MockAnimatedValue,
       spring: jest.fn((value, config) => buildAnimation(value, config)),
       timing: jest.fn((value, config) => buildAnimation(value, config)),
@@ -55,8 +57,8 @@ jest.mock('react-native', () => {
           callback?.();
         },
       })),
-      View: actual.View,
-      Image: actual.Image,
+      View: 'AnimatedView',
+      Image: 'AnimatedImage',
     },
   };
 });
@@ -78,25 +80,31 @@ describe('SwipeableCard', () => {
     capturedPanResponder = undefined;
   });
 
-  function renderCard(overrides = {}) {
-    return create(
-      <SwipeableCard
-        item={item}
-        removeCard={jest.fn()}
-        swipedDirection={jest.fn()}
-        screenWidth={320}
-        screenHeight={300}
-        onSwipe={jest.fn()}
-        {...overrides}
-      />
-    );
+  async function renderCard(overrides = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <SwipeableCard
+          item={item}
+          removeCard={jest.fn()}
+          swipedDirection={jest.fn()}
+          screenWidth={320}
+          screenHeight={300}
+          onSwipe={jest.fn()}
+          {...overrides}
+        />
+      );
+    });
+
+    return renderer;
   }
 
   it('does not trigger a card action for a swipe below the release thresholds', async () => {
     const removeCard = jest.fn();
     const onSwipe = jest.fn();
 
-    renderCard({ removeCard, onSwipe });
+    await renderCard({ removeCard, onSwipe });
 
     await act(async () => {
       capturedPanResponder.onPanResponderRelease(null, { dx: 40, dy: 20 });
@@ -112,7 +120,7 @@ describe('SwipeableCard', () => {
   it('calls onSwipe when the card is released past the right swipe threshold', async () => {
     const onSwipe = jest.fn();
 
-    renderCard({ onSwipe });
+    await renderCard({ onSwipe });
 
     await act(async () => {
       capturedPanResponder.onPanResponderMove(null, { dx: 180, dy: 0, moveX: 240, x0: 0 });
@@ -125,7 +133,7 @@ describe('SwipeableCard', () => {
   it('calls removeCard when the card is released past the left swipe threshold', async () => {
     const removeCard = jest.fn();
 
-    renderCard({ removeCard });
+    await renderCard({ removeCard });
 
     await act(async () => {
       capturedPanResponder.onPanResponderMove(null, { dx: -181, dy: 0, moveX: 0, x0: 240 });
@@ -136,7 +144,7 @@ describe('SwipeableCard', () => {
   });
 
   it('toggles the full description when the card is swiped vertically far enough', async () => {
-    renderCard();
+    await renderCard();
 
     await act(async () => {
       capturedPanResponder.onPanResponderRelease(null, { dx: 0, dy: -150 });
