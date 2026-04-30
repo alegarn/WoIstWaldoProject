@@ -7,7 +7,7 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/"
+        "EXPO_PUBLIC_APP_BACKEND_URL": "https://winning-bear-up.ngrok-free.app/"
       }
     },
     "preview": {
