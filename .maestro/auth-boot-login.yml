@@ -1,0 +1,37 @@
+appId: com.alegarn.WoIstWaldoProject
+env:
+  LOGIN_EMAIL: your.test.user@example.com
+  LOGIN_PASSWORD: replace-me
+---
+# Scope: verify boot lands on auth when no session is restored, then outline the login steps.
+# Non-destructive by default: this flow does not clear app state or submit credentials.
+#
+# Blocker:
+# `components/Auth/Input.js` renders unlabeled `TextInput` controls from a Maestro perspective.
+# The visible labels are separate `Text` nodes, but the underlying inputs have no `testID`,
+# `accessibilityLabel`, or placeholder. Until that changes, focusing the email/password fields
+# would require brittle screen-coordinate taps.
+#
+# Intended continuation once selectors exist:
+# - tapOn:
+#     id: auth-email-input
+# - inputText: ${LOGIN_EMAIL}
+# - tapOn:
+#     id: auth-password-input
+# - inputText: ${LOGIN_PASSWORD}
+# - tapOn: Log In
+# - assertVisible: Hide Waldo
+
+- launchApp
+- waitForAnimationToEnd
+- assertVisible: "Email Address"
+- assertVisible: "Password"
+- assertVisible: "Log In"
+- assertVisible: "Create a new user"
+- tapOn: "Create a new user"
+- assertVisible: "Confirm Email Address"
+- assertVisible: "Confirm Password"
+- assertVisible: "Username"
+- assertVisible: "Sign Up"
+- tapOn: "Log in instead"
+- assertVisible: "Log In"

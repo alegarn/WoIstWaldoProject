@@ -1,0 +1,47 @@
+appId: com.alegarn.WoIstWaldoProject
+env:
+  HIDE_DESCRIPTION: Hidden near the left side of the tree.
+---
+# Scope: scaffold the highest-value gameplay journey from the authenticated home screen.
+# This flow intentionally stops at each unstable boundary and documents the missing seam.
+#
+# Preconditions for later execution:
+# - The app is already on `HomeScreen` with a valid authenticated session.
+# - A deterministic image fixture or dev-only shortcut exists for both hide and guess flows.
+#
+# Blockers in the current app:
+# 1. `LogicalImagePicker` opens camera or gallery UI owned by the OS.
+# 2. `ShowPicture` requires coordinate-based taps on the image and dynamically positioned icon.
+# 3. `SwipeImage` depends on storage/API-loaded cards without stable text or ids.
+# 4. Reaching `ResultScreen` requires a deterministic guess outcome and then the `AdScreen` delay.
+#
+# Intended continuation once selectors and test seams exist:
+# - tapOn: Select an Image
+# - handle permission dialogs and pick a known fixture image
+# - tapOn image surface at a stable coordinate or selector
+# - tapOn target confirmation icon
+# - tapOn: Confirm
+# - inputText: ${HIDE_DESCRIPTION}
+# - tapOn: Confirm ?
+# - tapOn: Confirm
+# - tapOn: Find Waldo
+# - tapOn: Let's go!
+# - select a seeded guess card
+# - tap on the known target area
+# - tapOn: Confirm
+# - wait for the ad handoff
+# - assertVisible: You Found It! or You didn't find it :(
+
+- launchApp
+- waitForAnimationToEnd
+- assertVisible: "Hide Waldo"
+- assertVisible: "Find Waldo"
+- tapOn: "Hide Waldo"
+- assertVisible: "Take a Picture"
+- assertVisible: "Select an Image"
+- back
+- assertVisible: "Hide Waldo"
+- tapOn: "Find Waldo"
+- assertVisible: "Swipe !"
+- assertVisible: "Let's go!"
+- tapOn: "Let's go!"
