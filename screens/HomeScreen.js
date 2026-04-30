@@ -40,7 +40,7 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const verifyLoginInfos = async () => {
-    const isToken = context.verifyIsLoggedIn();
+    const isToken = await context.verifyIsLoggedIn();
     if (!isToken) {
       const response = await verifyTokenIsValid(context.token);
       response ? 
@@ -163,7 +163,7 @@ export default function HomeScreen({ navigation, route }) {
   useFocusEffect(() => {
     handleOrientation("portrait");
     // when leaving the app 
-    verifyLoginInfos();
+    void verifyLoginInfos();
   });
 
   return (
