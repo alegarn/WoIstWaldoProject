@@ -19,6 +19,7 @@ export const AuthContext = createContext({
   authenticate: () => {},
   logout: () => {},
   tokenAuthentication: () => {},
+  restoreSession: () => {},
   saveScoreId: () => {},
   saveIsTutorialFinished: () => {},
   verifyIsLoggedIn: () => {},
@@ -45,6 +46,26 @@ export default function AuthContextProvider({ children }) {
 
   function tokenAuthentication(token) {
     setAuthToken(token);
+    setIsAuthenticated(!!token);
+  };
+
+  function restoreSession({ token, client, expiry, access_token, userId, uid, email, username, scoreId, isTutorialFinished }) {
+    setAuthToken(token);
+    setClient(client ?? '');
+    setUid(uid ?? '');
+    setExpiry(expiry ?? '');
+    setAccess_token(access_token ?? '');
+    setUserId(userId ?? '');
+    setScoreId(scoreId ?? '');
+    setUsername(username ?? '');
+    setEmail(email ?? '');
+    setHeaders({ token, client, expiry, access_token, userId, uid, email });
+
+    if (isTutorialFinished) {
+      setIsTutorialFinished(isTutorialFinished);
+    };
+
+    setIsAuthenticated(!!token);
   };
 
   async function saveIsTutorialFinished(isTutorialFinishedBool) {
@@ -176,6 +197,7 @@ export default function AuthContextProvider({ children }) {
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
+    restoreSession: restoreSession,
     saveScoreId: saveScoreId,
     saveIsTutorialFinished: saveIsTutorialFinished,
     verifyIsLoggedIn: verifyIsLoggedIn,
