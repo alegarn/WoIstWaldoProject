@@ -54,7 +54,13 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
           </View>
 
           <View style={styles.marginTop}>
-            <BigButton text="Play!" onPress={handleFilterClick} buttonStyle="ranking" />
+            <BigButton
+              accessibilityLabel={`Start ${game} instructions`}
+              testID={`game.instructions.${game}.start`}
+              text="Play!"
+              onPress={handleFilterClick}
+              buttonStyle="ranking"
+            />
           </View>
 
           <View style={[styles.filterIconContainer, styles.marginTop, portraitStyles]}>

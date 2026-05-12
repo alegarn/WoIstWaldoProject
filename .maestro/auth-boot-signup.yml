@@ -1,7 +1,7 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Smoke: boot on a clean app state, verify the auth selectors, and complete a real
-# login with a non-production account.
+# Smoke: boot on a clean app state, verify the auth selectors, and create a fresh
+# account that lands on the home screen.
 
 - launchApp:
     appId: com.alegarn.WoIstWaldoProject
@@ -55,27 +55,28 @@ appId: com.alegarn.WoIstWaldoProject
     id: auth.input.confirm-password
 - assertVisible:
     id: auth.input.username
-- assertVisible:
-    id: auth.button.signup-submit
-- tapOn:
-    id: auth.button.switch-to-login
-- extendedWaitUntil:
-    visible:
-      id: auth.button.login-submit
-    timeout: 5000
 - tapOn:
     id: auth.input.email
-- inputText: ${LOGIN_EMAIL}
+- inputText: ${SIGNUP_EMAIL}
+- tapOn:
+    id: auth.input.confirm-email
+- inputText: ${SIGNUP_EMAIL}
 - tapOn:
     id: auth.input.password
-- inputText: ${LOGIN_PASSWORD}
+- inputText: ${SIGNUP_PASSWORD}
+- tapOn:
+    id: auth.input.confirm-password
+- inputText: ${SIGNUP_PASSWORD}
+- tapOn:
+    id: auth.input.username
+- inputText: ${SIGNUP_USERNAME}
 - hideKeyboard
 - tapOn:
-    id: auth.button.login-submit
+    id: auth.button.signup-submit
 - extendedWaitUntil:
     visible:
-      id: home.button.tutorial
-    timeout: 10000
+      id: home.tutorial-modal.close
+    timeout: 20000
 - tapOn:
     id: home.tutorial-modal.close
     optional: true

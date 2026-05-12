@@ -6,6 +6,7 @@ import { handlePicturePress, determineImageCorners } from "../../utils/targetLoc
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 import { setImageDimensions } from '../../utils/imageDimensions';
+import { buildE2EPictureSelection, getE2EHideLocation, isE2EMode } from '../../utils/e2eMode';
 
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen }) {
@@ -46,11 +47,20 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   const handlePress = (event) => {
+    const selection = isE2EMode()
+      ? buildE2EPictureSelection({
+          screenWidth,
+          screenHeight,
+          imageDimensionStyle,
+          relativeLocation: hiddenLocation ?? getE2EHideLocation(),
+        })
+      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+
     // still needed?
     //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
 
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+    let { location, target } = selection;
     if (location && target) {
     setTouchLocation(location)
     setTarget(target);

@@ -9,25 +9,27 @@ const windowHeight = Dimensions.get('window').height;
 
 const RowItem = React.memo(function RowItem({ row, onPressMore }) {
   return (
-    <View style={styles.row}>
+    <View style={styles.row} testID={`ranking.row.${row.rank}`}>
       <View style={styles.cell}>
-        <Text style={[styles.text, styles.big]} numberOfLines={1}>
+        <Text style={[styles.text, styles.big]} numberOfLines={1} testID={`ranking.row.${row.rank}.rank`}>
           {row.rank}
         </Text>
       </View>
       <View style={styles.cell}>
-        <Text style={[styles.text, styles.name]} numberOfLines={1}>
+        <Text style={[styles.text, styles.name]} numberOfLines={1} testID={`ranking.row.${row.rank}.name`}>
           {row.name}
         </Text>
       </View>
       <View style={styles.cell}>
-        <Text style={[styles.text, styles.big]} numberOfLines={1}>
+        <Text style={[styles.text, styles.big]} numberOfLines={1} testID={`ranking.row.${row.rank}.score`}>
           {row.score}
         </Text>
       </View>
       <View style={styles.cell}>
         <TableButton
+          accessibilityLabel={`Show more scores for ${row.name}`}
           onPress={() => onPressMore(row.name)}
+          testID={`ranking.row.${row.rank}.more`}
           windowHeight={windowHeight}
           windowWidth={windowWidth}
         />
@@ -49,10 +51,10 @@ export default function TableComponent({ data, onPress, onEndReached }) {
 
   const renderHeader = useCallback(() => {
     return (
-      <View style={styles.head}>
+      <View style={styles.head} testID="ranking.header">
         {headers.map((header, index) => (
           <View key={`${header}-${index}`} style={styles.cell}>
-            <Text style={[styles.text, styles.headText]} numberOfLines={1}>
+            <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
               {header}
             </Text>
           </View>
@@ -69,7 +71,7 @@ export default function TableComponent({ data, onPress, onEndReached }) {
   );
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="ranking.table">
       <FlatList
         data={rows}
         keyExtractor={(item) => String(item.rank)}

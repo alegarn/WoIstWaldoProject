@@ -7,10 +7,15 @@ jest.mock('../components/UI/LoadingOverlay', () => {
   };
 });
 
+jest.mock('../utils/e2eMode', () => ({
+  getE2EAdDelayMs: jest.fn(),
+}));
+
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import AdScreen from '../screens/GuessScreens/AdScreen';
+import { getE2EAdDelayMs } from '../utils/e2eMode';
 
 describe('AdScreen', () => {
   const originalDev = global.__DEV__;
@@ -34,6 +39,7 @@ describe('AdScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.useFakeTimers();
+    getE2EAdDelayMs.mockReturnValue(5000);
   });
 
   afterEach(() => {
@@ -75,5 +81,24 @@ describe('AdScreen', () => {
       renderer.unmount();
       jest.clearAllTimers();
     });
+  });
+
+  it('skips the ad wait in e2e mode', async () => {
+    global.__DEV__ = false;
+    getE2EAdDelayMs.mockReturnValue(0);
+
+    const navigation = {
+      replace: jest.fn(),
+    };
+
+    await act(async () => {
+      create(<AdScreen navigation={navigation} route={route} />);
+    });
+
+    await act(async () => {
+      jest.runOnlyPendingTimers();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', route.params);
   });
 });

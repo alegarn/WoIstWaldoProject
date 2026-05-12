@@ -14,7 +14,16 @@ jest.mock('expo-status-bar', () => ({
   setStatusBarHidden: jest.fn(),
 }));
 
+jest.mock('expo-system-ui', () => ({
+  setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('@react-navigation/native', () => ({
+  DefaultTheme: {
+    colors: {
+      background: '#fff',
+    },
+  },
   NavigationContainer: ({ children }) => children,
 }));
 
@@ -108,7 +117,7 @@ describe('App Root', () => {
     return renderer;
   }
 
-  it('shows the login loading gate and then renders the auth stack when no session is restored', async () => {
+  it('renders the auth stack immediately while session restore is pending', async () => {
     let resolveBootstrap;
 
     bootstrapStoredAuthSession.mockReturnValue(
@@ -126,7 +135,7 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(mockLoadingOverlay).toHaveBeenCalledWith({ message: 'Logging in...' });
+    expect(recordedScreens.map(({ name }) => name)).toEqual(expect.arrayContaining(['Login', 'Signup']));
 
     await act(async () => {
       resolveBootstrap(false);
@@ -134,7 +143,6 @@ describe('App Root', () => {
     });
 
     expect(bootstrapStoredAuthSession).toHaveBeenCalledWith(contextValue.restoreSession);
-    expect(recordedScreens.map(({ name }) => name)).toEqual(expect.arrayContaining(['Login', 'Signup']));
   });
 
   it('renders the authenticated stack and wires the header actions for settings and logout', async () => {

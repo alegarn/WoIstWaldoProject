@@ -7,9 +7,9 @@ jest.mock('../utils/imageInfos', () => ({
 }));
 
 jest.mock('../utils/imagesRequests', () => ({
-  getUploadUrl: jest.fn(),
+  prepareImageUpload: jest.fn(),
   saveImageInfos: jest.fn(),
-  saveImageToAws: jest.fn(),
+  performImageUpload: jest.fn(),
 }));
 
 jest.mock('../utils/auth', () => ({
@@ -21,7 +21,7 @@ import * as FileSystem from 'expo-file-system';
 import { imageUploader } from '../utils/fileUploader';
 import { checkSecureStoreItem } from '../utils/auth';
 import { handleContentLength } from '../utils/imageInfos';
-import { getUploadUrl, saveImageInfos, saveImageToAws } from '../utils/imagesRequests';
+import { performImageUpload, prepareImageUpload, saveImageInfos } from '../utils/imagesRequests';
 
 describe('imageUploader', () => {
   const context = {
@@ -51,7 +51,7 @@ describe('imageUploader', () => {
   });
 
   it('returns the presign failure without attempting the upload pipeline', async () => {
-    getUploadUrl.mockResolvedValue({
+    prepareImageUpload.mockResolvedValue({
       status: 500,
       title: 'Internal server error',
       message: 'Presign failed',
@@ -64,20 +64,23 @@ describe('imageUploader', () => {
       title: 'Internal server error',
       message: 'Presign failed',
     });
-    expect(saveImageToAws).not.toHaveBeenCalled();
+    expect(performImageUpload).not.toHaveBeenCalled();
     expect(saveImageInfos).not.toHaveBeenCalled();
     expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
   });
 
-  it('returns the AWS upload failure and skips metadata persistence', async () => {
-    getUploadUrl.mockResolvedValue({
+  it('returns the upload failure and skips metadata persistence', async () => {
+    prepareImageUpload.mockResolvedValue({
       status: 200,
       data: {
+        provider: 'local_disk',
+        method: 'PUT',
         url: 'https://example.com/upload',
-        filename: 'waldo-image',
+        headers: {},
+        image_key: 'waldo-image',
       },
     });
-    saveImageToAws.mockResolvedValue({
+    performImageUpload.mockResolvedValue({
       status: 422,
       title: 'Something went wrong, please try again later',
       message: 'Upload failed',
@@ -85,13 +88,18 @@ describe('imageUploader', () => {
 
     const result = await imageUploader({ imageInfos, context });
 
-    expect(saveImageToAws).toHaveBeenCalledWith({
-      url: 'https://example.com/upload',
-      filename: 'waldo-image',
+    expect(performImageUpload).toHaveBeenCalledWith({
+      plan: {
+        provider: 'local_disk',
+        method: 'PUT',
+        url: 'https://example.com/upload',
+        headers: {},
+        image_key: 'waldo-image',
+      },
       fileUrl: 'file:///waldo.png',
       fileExtension: 'png',
       contentLength: 4096,
-      userId: 'user-42',
+      context,
     });
     expect(result).toEqual({
       status: 422,
@@ -103,14 +111,17 @@ describe('imageUploader', () => {
   });
 
   it('persists the uploaded metadata and deletes the local file after a successful upload', async () => {
-    getUploadUrl.mockResolvedValue({
+    prepareImageUpload.mockResolvedValue({
       status: 200,
       data: {
+        provider: 'local_disk',
+        method: 'PUT',
         url: 'https://example.com/upload',
-        filename: 'waldo-image',
+        headers: {},
+        image_key: 'waldo-image',
       },
     });
-    saveImageToAws.mockResolvedValue({ status: 200 });
+    performImageUpload.mockResolvedValue({ status: 200 });
     saveImageInfos.mockResolvedValue({ status: 200 });
 
     const result = await imageUploader({ imageInfos, context });
@@ -118,7 +129,6 @@ describe('imageUploader', () => {
     expect(saveImageInfos).toHaveBeenCalledWith({
       userId: 'user-42',
       imagesInfos: {
-        user_id: 'user-42',
         name: 'waldo-image',
         file_extension: 'png',
         image_height: 768,
@@ -129,27 +139,25 @@ describe('imageUploader', () => {
         is_portrait: true,
         x_location: 0.4,
         y_location: 0.6,
-        storage_url: '',
       },
-      token: 'token',
-      uid: 'waldo@example.com',
-      expiry: '123',
-      access_token: 'access-token',
-      client: 'client-id',
+      context,
     });
     expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///waldo.png');
     expect(result).toEqual({ status: 200 });
   });
 
   it('returns the metadata persistence failure and keeps the local file intact', async () => {
-    getUploadUrl.mockResolvedValue({
+    prepareImageUpload.mockResolvedValue({
       status: 200,
       data: {
+        provider: 'local_disk',
+        method: 'PUT',
         url: 'https://example.com/upload',
-        filename: 'waldo-image',
+        headers: {},
+        image_key: 'waldo-image',
       },
     });
-    saveImageToAws.mockResolvedValue({ status: 200 });
+    performImageUpload.mockResolvedValue({ status: 200 });
     saveImageInfos.mockResolvedValue({
       status: 409,
       title: 'Something went wrong, please try again later',

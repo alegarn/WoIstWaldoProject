@@ -5,6 +5,7 @@ import { launchCameraAsync, useCameraPermissions, PermissionStatus } from 'expo-
 import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
+import { buildE2EHideRouteParams, isE2EMode } from '../../utils/e2eMode';
 
 export default function LogicalImagePicker({ navigation, isTutorial }) {
   // Request camera permissions
@@ -21,6 +22,20 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
   useEffect(() => {
     showImage();
   }, [image])
+
+  const navigateToHideScreen = ({ uri, width, height }) => {
+    const isPortrait = height > width;
+
+    navigation.navigate('HideScreen', {
+      uri,
+      imageWidth: width,
+      imageHeight: height,
+      screenHeight: isPortrait ? screenWidth : screenHeight,
+      screenWidth: isPortrait ? screenHeight : screenWidth,
+      isPortrait,
+      isTutorial,
+    });
+  };
 
 
   async function grantPermission(requestPermission) {
@@ -75,27 +90,30 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
       quality: 0.5,
     });
 
+    if (image?.canceled || !image?.assets?.length) {
+      return null;
+    }
+
     //
     //const fileInfo = await FileSystem.getInfoAsync(image.assets[0].uri);
     //const imageLength = fileInfo.size;
     //
 
-    const isPortrait = image.assets[0].height > image.assets[0].width;
-
-    navigation.navigate('HideScreen', {
+    navigateToHideScreen({
       uri: image.assets[0].uri,
-      imageWidth: image.assets[0].width,
-      imageHeight: image.assets[0].height,
-      screenHeight:isPortrait ? screenWidth : screenHeight,
-      screenWidth:isPortrait ? screenHeight : screenWidth,
-      isPortrait:isPortrait,
-      isTutorial: isTutorial,
+      width: image.assets[0].width,
+      height: image.assets[0].height,
     });
 
     return null
   };
 
   const pickImage = async () => {
+    if (isE2EMode()) {
+      navigation.navigate('HideScreen', buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial }));
+      return null;
+    }
+
     // No permissions request is necessary for launching the image library
     let pickedImage = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
@@ -103,24 +121,21 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
       quality: 0.5,
     });
 
-    if (!pickedImage.canceled) {
-      setImage(pickedImage.assets[0].uri);
-      console.log(pickedImage);
-    };
+    if (pickedImage?.canceled || !pickedImage?.assets?.length) {
+      return null;
+    }
+
+    setImage(pickedImage.assets[0].uri);
+    console.log(pickedImage);
 
 
-    const isPortrait = pickedImage.assets[0].height > pickedImage.assets[0].width;
-
-    navigation.navigate('HideScreen', {
+    navigateToHideScreen({
       uri: pickedImage.assets[0].uri,
-      imageWidth: pickedImage.assets[0].width,
-      imageHeight: pickedImage.assets[0].height,
-      screenHeight: isPortrait ? screenWidth : screenHeight,
-      screenWidth: isPortrait ? screenHeight : screenWidth,
-      isPortrait: isPortrait,
-      isTutorial: isTutorial,
+      width: pickedImage.assets[0].width,
+      height: pickedImage.assets[0].height,
     });
 
+    return null;
   };
 
 

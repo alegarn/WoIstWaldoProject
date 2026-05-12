@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { View } from "react-native";
 
 import LoadingOverlay from "../../components/UI/LoadingOverlay";
+import { getE2EAdDelayMs } from '../../utils/e2eMode';
 
 //import { TestIds, useInterstitialAd } from 'react-native-google-mobile-ads';
 
@@ -76,10 +77,12 @@ export default function AdScreen({navigation, route}){
 
 
   const showProdLoadingOverlay = () => {
+    const delayMs = getE2EAdDelayMs();
+
     setTimeout(() => {
       setShowOverlay(false);
       toResultScreen();
-    }, 5000);
+    }, delayMs);
   };
 
  useEffect(() => {

@@ -48,12 +48,18 @@ jest.mock('../store/auth-context', () => {
   };
 });
 
+jest.mock('../utils/e2eMode', () => ({
+  buildE2EGuessCards: jest.fn(),
+  isE2EMode: jest.fn(),
+}));
+
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import SwipeImage from '../components/UI/SwipeImage';
 import { AuthContext } from '../store/auth-context';
+import { buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
 import {
   deleteImageFromStorage,
@@ -77,6 +83,8 @@ describe('SwipeImage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     getLastImageId.mockResolvedValue(0);
     getLastImageUuid.mockResolvedValue(null);
@@ -213,5 +221,16 @@ describe('SwipeImage', () => {
     expect(updateImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
     ]);
+  });
+
+  it('uses the seeded guess cards in e2e mode instead of cache or network state', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    await renderSwipeImage();
+
+    expect(buildE2EGuessCards).toHaveBeenCalledTimes(1);
+    expect(getLocalImages).not.toHaveBeenCalled();
+    expect(getImages).not.toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-guess-card']);
   });
 });
