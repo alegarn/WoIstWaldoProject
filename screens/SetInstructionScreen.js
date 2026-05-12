@@ -81,12 +81,21 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     setIsLoading(true);
 
-    const uploadState = await imageUploader({ imageInfos, context });
+    try {
+      const uploadState = await imageUploader({ imageInfos, context });
 
-    if (uploadState.status !== 200) {
-      Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
-      return;
-    };
+      if (uploadState.status !== 200) {
+        setIsLoading(false);
+        Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
+        return uploadState;
+      };
+
+      return uploadState;
+    } catch (error) {
+      setIsLoading(false);
+      Alert.alert("Uploading error", `${error?.message || "Unexpected error"}\nPlease try again later`);
+      return { status: 500 };
+    }
   };
 
   const handleScreenUi = () => {
@@ -120,7 +129,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
     const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
-    await handleImage({userId, fileExtension});
+    const uploadState = await handleImage({userId, fileExtension});
+
+    if (uploadState?.status !== 200) {
+      return;
+    };
+
     handleScreenUi();
     isTutorial && await handleTutorialUpdate();
 

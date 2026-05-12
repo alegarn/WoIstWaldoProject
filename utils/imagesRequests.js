@@ -4,13 +4,33 @@ import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
 import { saveLastImageUuid } from "./storageDatum";
 
-function setAWSHeaders(fileExtension, contentLength) {
+function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
 
   const headers = {
     "Content-Type": "image/" + fileExtension,
-    "Content-Length": contentLength
+    "Content-Length": contentLength,
+    ...plan?.headers,
   };
+
+  if (plan?.provider === "local_disk") {
+    headers.Authorization = token;
+    headers.HTTP_AUTHORIZATION = token;
+  };
+
   return headers;
+};
+
+function setStorageDownloadHeaders(token) {
+  return {
+    Authorization: token,
+    HTTP_AUTHORIZATION: token,
+  };
+};
+
+function usesBackendStorage(storageUrl) {
+  const backendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
+
+  return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
 };
 
 function errorType(status) {
@@ -26,11 +46,19 @@ function errorType(status) {
 
 
 export async function getUploadUrl(context) {
+  return prepareImageUpload(context);
+};
+
+export async function prepareImageUpload(context, { contentType, contentLength } = {}) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/aws_requests/get_secure_upload_url`;
-  const { token, uid, expiry, access_token, client } = await getBackendHeaders(context);
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const { token } = await getBackendHeaders(context);
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
+    params: {
+      content_type: contentType,
+      content_length: contentLength,
+    },
   };
 
   const response = await axios
@@ -39,10 +67,10 @@ export async function getUploadUrl(context) {
       return response;
     }).catch((error) => {
       console.log("error getUploadUrl", error);
-      return { status: error.request.status, message: error.message};
+      return { status: error?.response?.status ?? error?.request?.status, message: error.message, data: error?.response?.data };
     });
 
-  const title = errorType(response.status);
+  const title = response.status === 200 ? "" : errorType(response.status);
 
   return { status: response.status, title: title, message: response.message, data: response.data};
 };
@@ -84,9 +112,10 @@ async function getNextImagesInfos({ config, userId, pictureId }){
   return response;
 };
 
-async function getImageFromStorage({ storageUrl }) {
+async function getImageFromStorage({ storageUrl, token }) {
   console.log("getImageFromStorage");
-  const imageData = await axios.get(storageUrl, {})
+  const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token) } : {};
+  const imageData = await axios.get(storageUrl, config)
   .then((response) => {
     //console.log("imageData response, getImageFromStorage");
     return response.data;
@@ -149,10 +178,10 @@ async function extractBase64(imageData, filename) {
 
 };
 
-async function handleImagesDownload(image) {
+async function handleImagesDownload(image, token) {
   console.log("handleImagesDownload");
   console.log("image location", image.storage_url);
-  const imageData = await getImageFromStorage({ storageUrl: image.storage_url });
+  const imageData = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
   const filePath = await extractBase64(imageData, image.name);
   return filePath;
 };
@@ -162,8 +191,8 @@ export async function getImages(pictureId, context) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
 
-  const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const { token, userId } = await getBackendHeaders(context);
+  const headers = setHeaders({ token });
 
   const config = {
     headers: headers,
@@ -199,7 +228,7 @@ export async function getImages(pictureId, context) {
     // create an array [Image object, ] 
     // the Image object contains the path, with the informations, to the image 
     imagesInfos?.data?.data?.map( async image => {
-      const filePath = await handleImagesDownload(image);
+      const filePath = await handleImagesDownload(image, token);
       if (filePath !== false) {
         const imageObject = new Image(
           filePath,
@@ -254,10 +283,27 @@ export async function getImages(pictureId, context) {
 https://www.youtube.com/watch?v=eM1-YTBUFj4 */
 
 
-export async function saveImageToAws({ url, filename, fileUrl, fileExtension, contentLength}) {
+export async function saveImageToAws({ plan, fileUrl, fileExtension, contentLength, context }) {
+  return performImageUpload({ plan, fileUrl, fileExtension, contentLength, context });
+};
 
-  const headers = setAWSHeaders(fileExtension, contentLength);
-  console.log("saveImageToAws", filename);
+export async function performImageUpload({ plan, fileUrl, fileExtension, contentLength, context }) {
+  const { token } = await getBackendHeaders(context);
+  const requestMethod = (plan?.method || 'PUT').toLowerCase();
+  const requestWithMethod = axios[requestMethod];
+
+  if (typeof requestWithMethod !== 'function') {
+    const title = errorType(500);
+
+    return {
+      status: 500,
+      title: title,
+      message: `Unsupported upload method: ${plan?.method}`,
+    };
+  };
+
+  const headers = setUploadHeaders({ plan, fileExtension, contentLength, token });
+  console.log("performImageUpload", plan?.image_key);
 
 
   const config = {
@@ -268,11 +314,8 @@ export async function saveImageToAws({ url, filename, fileUrl, fileExtension, co
 
   try {
 
-    //console.log("saveImageToAws2", url);
     const base64 = await FileSystem.readAsStringAsync(fileUrl, { encoding: 'base64' });
-    /* error */
-    const response = await axios
-      .put(url, `data:image/${fileExtension};base64,` + base64 , config )
+    const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
       .then((response) => {
         if (response.status === 200) {
           console.log("post img base64 ok", response);
@@ -282,10 +325,14 @@ export async function saveImageToAws({ url, filename, fileUrl, fileExtension, co
       .catch((error) => {
         console.log("error axios img base64 upload", error);
         console.log("message", error.message);
-        return error;
+          return {
+            status: error?.response?.status ?? error?.request?.status,
+            message: error.message,
+            data: error?.response?.data,
+          };
       });
 
-      const title = errorType(response.status);
+        const title = response.status === 200 ? "" : errorType(response.status);
 
     return { status: response.status, title: title, message: response.message };
 
@@ -300,9 +347,10 @@ export async function saveImageToAws({ url, filename, fileUrl, fileExtension, co
 };
 
 
-export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, access_token, client }) {
+export async function saveImageInfos({ userId, imagesInfos, context }) {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/images`;
-  const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const { token } = await getBackendHeaders(context);
+  const headers = setHeaders({ token });
   const config = {
     headers: headers,
   };
@@ -319,10 +367,10 @@ export async function saveImageInfos({ userId, imagesInfos, token, uid, expiry, 
   .catch((error) => {
     console.log("saveImageInfos error", error);
     return {
-      status: error.request.status,
+      status: error?.response?.status ?? error?.request?.status,
       message: error.message
     };
   });
-  const title = errorType(response.status);
+  const title = response.status === 200 ? "" : errorType(response.status);
 return { status: response.status, title: title, message: response.message };
 };

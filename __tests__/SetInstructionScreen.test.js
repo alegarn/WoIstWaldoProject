@@ -286,4 +286,52 @@ describe('SetInstructionScreen', () => {
       ],
     });
   });
+
+  it('does not reset navigation after an upload failure', async () => {
+    imageUploader.mockResolvedValue({
+      status: 500,
+      title: 'Internal server error',
+      message: 'Upload failed',
+    });
+
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Uploading error: Internal server error',
+      'Upload failed\nPlease try again later'
+    );
+    expect(handleOrientation).not.toHaveBeenCalled();
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('stops loading and alerts when the upload helper throws', async () => {
+    imageUploader.mockRejectedValue(new Error('Upload exploded'));
+
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Uploading error',
+      'Upload exploded\nPlease try again later'
+    );
+    expect(handleOrientation).not.toHaveBeenCalled();
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
 });
