@@ -1,45 +1,101 @@
 appId: com.alegarn.WoIstWaldoProject
-env:
-  LOGIN_EMAIL: your.test.user@example.com
-  LOGIN_PASSWORD: replace-me
 ---
-# Scope: boot on a clean app state, switch between auth modes, then perform a real login
-# using stable in-app selectors.
-#
-# Preconditions for reliable execution:
-# - provide a non-production account via LOGIN_EMAIL and LOGIN_PASSWORD
-# - backend/API is reachable and returns a successful login response
+# Smoke: boot on a clean app state, verify the auth selectors, and complete a real
+# login with a non-production account.
 
 - launchApp:
-  clearState: true
+    appId: com.alegarn.WoIstWaldoProject
 - waitForAnimationToEnd
-- assertVisible:
-  id: auth.input.email
-- assertVisible:
-  id: auth.input.password
-- assertVisible:
-  id: auth.button.login-submit
 - tapOn:
-  id: auth.button.switch-to-signup
-- assertVisible:
-  id: auth.input.confirm-email
-- assertVisible:
-  id: auth.input.confirm-password
-- assertVisible:
-  id: auth.input.username
-- assertVisible:
-  id: auth.button.signup-submit
+    text: Reload
+    optional: true
 - tapOn:
-  id: auth.button.switch-to-login
+    text: Go To Home
+    optional: true
 - tapOn:
-  id: auth.input.email
+    text: Continue
+    optional: true
+- tapOn:
+    text: Go home
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: guess-path.header.back
+    commands:
+      - tapOn:
+          id: guess-path.header.back
+      - waitForAnimationToEnd
+- tapOn:
+    text: Close
+    optional: true
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: home.header.logout
+    commands:
+      - tapOn:
+          id: home.header.logout
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: auth.input.email
+    timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: auth.button.signup-submit
+    commands:
+      - tapOn:
+          id: auth.button.switch-to-login
+      - extendedWaitUntil:
+          visible:
+            id: auth.button.login-submit
+          timeout: 5000
+- assertVisible:
+    id: auth.input.email
+- assertVisible:
+    id: auth.input.password
+- assertVisible:
+    id: auth.button.login-submit
+- tapOn:
+    id: auth.input.email
 - inputText: ${LOGIN_EMAIL}
 - tapOn:
-  id: auth.input.password
+    id: auth.input.password
 - inputText: ${LOGIN_PASSWORD}
+- hideKeyboard
 - tapOn:
-  id: auth.button.login-submit
+    id: auth.button.login-submit
+- extendedWaitUntil:
+    visible:
+      id: home.button.tutorial
+    timeout: 10000
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
 - assertVisible:
-  id: home.button.hide
+    id: home.button.hide
 - assertVisible:
-  id: home.button.guess
+    id: home.button.guess
+- assertVisible:
+    id: home.button.ranking

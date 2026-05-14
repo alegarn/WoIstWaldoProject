@@ -2,14 +2,17 @@
 /* https://docs.expo.dev/versions/latest/sdk/imagepicker/ */
 /* https://github.com/expo/examples/tree/master/with-aws-storage-upload */
 
-import * as FileSystem from "expo-file-system";
+import { File } from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
-import { getUploadUrl, saveImageInfos, saveImageToAws } from "./imagesRequests";
+import { prepareImageUpload, performImageUpload, saveImageInfos } from "./imagesRequests";
 import { checkSecureStoreItem } from "./auth";
 
-async function handleGetUploadUrl({context}) {
+async function handlePrepareImageUpload({ context, contentLength, fileExtension }) {
 
-  const response = await getUploadUrl(context);
+  const response = await prepareImageUpload(context, {
+    contentType: `image/${fileExtension}`,
+    contentLength: contentLength,
+  });
 
   return { status: response.status, title: response.title, message: response.message, data: response.data };
 };
@@ -17,15 +20,14 @@ async function handleGetUploadUrl({context}) {
 
 
 
-const exportImage = async ({url, filename, uri, fileExtension, contentLength, userId}) => {
+const exportImage = async ({ uploadPlan, uri, fileExtension, contentLength, context }) => {
   console.log("exportImage");
-  const isSaved = await saveImageToAws({
-    url: url,
-    filename: filename,
-    userId: userId,
+  const isSaved = await performImageUpload({
+    plan: uploadPlan,
     fileUrl: uri,
     fileExtension: fileExtension,
-    contentLength: contentLength
+    contentLength: contentLength,
+    context: context,
   });
   return isSaved;
 };
@@ -36,7 +38,6 @@ const exportPictureData = async ({ imagesInfos, context }) => {
   const saveImageResponse = saveImageInfos({
     userId: userId,
     imagesInfos: {
-      user_id: imagesInfos.userId,
       name: imagesInfos.name,
       file_extension: imagesInfos.fileExtension,
       image_height: imagesInfos.imageHeight,
@@ -47,15 +48,10 @@ const exportPictureData = async ({ imagesInfos, context }) => {
       is_portrait: imagesInfos.isPortrait,
       x_location: imagesInfos.xLocation,
       y_location: imagesInfos.yLocation,
-      storage_url: imagesInfos.storageUrl,
 
       /* file_type, file_size */
     },
-    token: context.token,
-    uid: context.uid,
-    expiry: context.expiry,
-    access_token: context.access_token,
-    client: context.client
+    context: context,
   });
 
   return saveImageResponse
@@ -65,7 +61,11 @@ const exportPictureData = async ({ imagesInfos, context }) => {
 export async function imageUploader({ imageInfos, context }) {
   const imageLocalUri = imageInfos.uri;
   const contentLength = await handleContentLength(imageLocalUri);
-  const uploadUrlData = await handleGetUploadUrl({ context });
+  const uploadUrlData = await handlePrepareImageUpload({
+    context,
+    contentLength,
+    fileExtension: imageInfos.fileExtension,
+  });
 
   if (uploadUrlData.status !== 200) {
     return uploadUrlData;
@@ -74,12 +74,11 @@ export async function imageUploader({ imageInfos, context }) {
   const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
   const exportImageData = await exportImage({
-    url: uploadUrlData.data.url,
-    filename: uploadUrlData.data.filename,
+    uploadPlan: uploadUrlData.data,
     uri: imageInfos.uri,
     fileExtension: imageInfos.fileExtension,
     contentLength,
-    userId: userId,
+    context,
   });
 
   if (exportImageData.status !== 200) {
@@ -89,7 +88,7 @@ export async function imageUploader({ imageInfos, context }) {
   const imageInfosSaved = await exportPictureData({
     imagesInfos: {
       userId: userId,
-      name: uploadUrlData.data.filename,
+      name: uploadUrlData.data.image_key,
       fileExtension: imageInfos.fileExtension,
       imageHeight: imageInfos.imageHeight,
       imageWidth: imageInfos.imageWidth,
@@ -99,7 +98,6 @@ export async function imageUploader({ imageInfos, context }) {
       isPortrait: imageInfos.isPortrait,
       xLocation: imageInfos.xLocation,
       yLocation: imageInfos.yLocation,
-      storageUrl: "",
     },
     context: context
   });
@@ -108,7 +106,8 @@ export async function imageUploader({ imageInfos, context }) {
     return imageInfosSaved;
   };
 
-  FileSystem.deleteAsync(imageLocalUri);
+  const imageFile = new File(imageLocalUri);
+  imageFile.delete();
 
   /* delete */
 

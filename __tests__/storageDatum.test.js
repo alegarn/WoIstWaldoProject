@@ -4,21 +4,41 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   removeItem: jest.fn(),
 }));
 
-jest.mock('expo-file-system', () => ({
-  cacheDirectory: 'file:///cache/',
-  deleteAsync: jest.fn(),
-}));
+const mockDelete = jest.fn();
+let mockFileExists = true;
+
+jest.mock('expo-file-system', () => {
+  const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
+    const baseUri = typeof firstArg === 'string' ? firstArg : firstArg?.uri;
+
+    this.uri = secondArg ? `${baseUri}${secondArg}` : baseUri;
+    this.exists = mockFileExists;
+    this.delete = mockDelete;
+  });
+
+  return {
+    File,
+    Paths: class MockPaths {
+      static get cache() {
+        return { uri: 'file:///cache/' };
+      }
+    },
+  };
+});
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 
 import {
+  clearE2EHiddenGuessCard,
   deleteImageFromStorage,
   emptyImageList,
+  getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
   removeImageFromList,
+  saveE2EHiddenGuessCard,
   saveLastImageUuid,
   storeImageList,
   updateImageList,
@@ -27,9 +47,10 @@ import {
 describe('storageDatum utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDelete.mockReset();
+    mockFileExists = true;
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
-    FileSystem.deleteAsync.mockResolvedValue(undefined);
   });
 
   it('reads the local image list and returns null when none is stored', async () => {
@@ -61,6 +82,19 @@ describe('storageDatum utilities', () => {
     expect(await getLastImageUuid()).toBe('uuid-1');
   });
 
+  it('stores, reads, and clears the saved e2e hidden guess payload', async () => {
+    const payload = { uri: 'file:///guess.jpg', hiddenLocation: { x: 0.3, y: 0.7 } };
+
+    await saveE2EHiddenGuessCard(payload);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('e2eHiddenGuessCard', JSON.stringify(payload));
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(payload));
+    expect(await getE2EHiddenGuessCard()).toEqual(payload);
+
+    await clearE2EHiddenGuessCard();
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('e2eHiddenGuessCard');
+  });
+
   it('empties the stored image list, clears cache files, and removes tracking keys', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
       { imageFile: 'file:///cache/a.jpg' },
@@ -69,8 +103,9 @@ describe('storageDatum utilities', () => {
 
     await emptyImageList();
 
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/a.jpg', { idempotent: true });
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/b.jpg', { idempotent: true });
+    expect(File).toHaveBeenCalledWith('file:///cache/a.jpg');
+    expect(File).toHaveBeenCalledWith('file:///cache/b.jpg');
+    expect(mockDelete).toHaveBeenCalledTimes(2);
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid');
   });
@@ -95,7 +130,8 @@ describe('storageDatum utilities', () => {
 
     await deleteImageFromStorage('file:///cache/abc.jpg');
 
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/abc.jpg', { idempotent: true });
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///cache/ImagePicker/abc.jpg', { idempotent: true });
+    expect(File).toHaveBeenNthCalledWith(1, 'file:///cache/abc.jpg');
+    expect(File).toHaveBeenNthCalledWith(2, expect.objectContaining({ uri: 'file:///cache/' }), 'ImagePicker/abc.jpg');
+    expect(mockDelete).toHaveBeenCalledTimes(2);
   });
 });

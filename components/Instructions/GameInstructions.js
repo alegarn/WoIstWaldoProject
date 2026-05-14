@@ -1,12 +1,22 @@
-import { View, Text, ImageBackground, StyleSheet } from "react-native";
+import { Pressable, View, Text, ImageBackground, StyleSheet } from "react-native";
 
 import { Ionicons } from '@expo/vector-icons';
 
 import BigButton from '../UI/BigButton';
+import { isE2EMode } from '../../utils/e2eMode';
 
 export default function GameInstructions({ uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick, imageDimensionStyle }) {
 
   console.log("imageDimensionStyle", imageDimensionStyle);
+  const isGuess = game === 'guess';
+  const FilterContainer = isE2EMode() ? Pressable : View;
+  const filterContainerProps = isE2EMode()
+    ? {
+        accessibilityLabel: `Dismiss ${game} instructions overlay`,
+        onPress: handleFilterClick,
+        testID: `game.instructions.${game}.overlay`,
+      }
+    : {};
 
   const portraitUpperInstructions = ({ guess, imageIsPortrait }) => {
 
@@ -33,7 +43,7 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
   };
 
   let instructionsSupplement = "";
-  game === "guess" ? instructionsSupplement = ("or show the description"): null;
+  isGuess ? instructionsSupplement = ("or show the description"): null;
 
   let portraitStyles = {
     flexDirection: 'column',
@@ -47,14 +57,20 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
         source={{uri : uri}}
         resizeMode="stretch"
         style={imageDimensionStyle}>
-        <View style={styles.filter}>
+        <FilterContainer style={styles.filter} {...filterContainerProps}>
 
           <View style={styles.marginTop}>
-            {portraitUpperInstructions({ imageIsPortrait })}
+            {portraitUpperInstructions({ guess: isGuess, imageIsPortrait })}
           </View>
 
           <View style={styles.marginTop}>
-            <BigButton text="Play!" onPress={handleFilterClick} buttonStyle="ranking" />
+            <BigButton
+              accessibilityLabel={`Start ${game} instructions`}
+              testID={`game.instructions.${game}.start`}
+              text="Play!"
+              onPress={handleFilterClick}
+              buttonStyle="ranking"
+            />
           </View>
 
           <View style={[styles.filterIconContainer, styles.marginTop, portraitStyles]}>
@@ -66,7 +82,7 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
             <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>{instructionsSupplement}</Text>
           </View>
 
-        </View>
+        </FilterContainer>
       </ImageBackground>
     </View>
   )

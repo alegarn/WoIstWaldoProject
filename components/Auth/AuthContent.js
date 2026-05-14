@@ -100,10 +100,11 @@ export default AuthContent;
 
 const styles = StyleSheet.create({
   authContent: {
+    flex: 1,
     marginHorizontal: width * 0.1,
     padding: width * 0.04,
     borderRadius: width * 0.02,
-    backgroundColor: GlobalStyle.color.primary800,
+    backgroundColor: GlobalStyle.color.primaryColor800,
     elevation: 2,
     shadowColor: 'black',
     shadowOffset: { width: 1, height: 1 },

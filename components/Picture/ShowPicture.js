@@ -1,4 +1,4 @@
-import { View, Pressable, StyleSheet, ImageBackground, Alert } from 'react-native';
+import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
@@ -8,7 +8,7 @@ import MoveableTextBox from '../UI/MovableTextBox';
 //import { useEffect, useLayoutEffect, useState } from 'react';
 //import ClipboardModal from '../UI/ClipboardModal';
 
-export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
+export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
 
 /* mode debug */
 /*  const [debugText, setDebugText] = useState("");
@@ -38,16 +38,22 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
 
   return (
     <View style={styles.container} >
-      <Pressable accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'} onPress={handlePress}  style={styles.pressable} testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'} >
+      <Pressable
+        accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'}
+        onPress={handlePress}
+        onLongPress={handleLongPress}
+        style={[styles.pressable, imageDimensionStyle]}
+        testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
+      >
         <ImageBackground
           accessibilityLabel={guess ? 'Guess picture image' : 'Hide picture image'}
           source={{uri : uri}}
           resizeMode='stretch'
-          style={[styles.image, imageDimensionStyle ]}
+          style={styles.image}
           testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
           >
 {/* no cross, when guess, if null  */}
-          {touchLocation && (
+          {touchLocation && target?.targetStyle && (
             <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
           )}
 {/* target not showing for guessscreen */}
@@ -102,9 +108,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   pressable: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  image: {
+    width: '100%',
+    height: '100%',
   },
   locationText: {
     position: 'absolute',

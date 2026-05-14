@@ -17,8 +17,6 @@ jest.mock('../components/UI/LoadingOverlay', () => {
 
 jest.mock('../utils/auth', () => ({
   createUser: jest.fn(),
-  getScoreId: jest.fn(),
-  login: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -35,7 +33,7 @@ import { act, create } from 'react-test-renderer';
 
 import SignupScreen from '../screens/AuthScreens/SignupScreen';
 import { AuthContext } from '../store/auth-context';
-import { createUser, getScoreId, login } from '../utils/auth';
+import { createUser } from '../utils/auth';
 
 describe('SignupScreen', () => {
   beforeEach(() => {
@@ -61,31 +59,26 @@ describe('SignupScreen', () => {
     return mockAuthContent.mock.calls[mockAuthContent.mock.calls.length - 1][0];
   }
 
-  it('creates the user, logs them in, and stores the returned score id', async () => {
+  it('creates the user and authenticates from the signup response', async () => {
     const authenticate = jest.fn();
-    const saveScoreId = jest.fn();
 
-    createUser.mockResolvedValue({ status: 200 });
-    login.mockResolvedValue({
+    createUser.mockResolvedValue({
       status: 200,
       headers: {
         authorization: 'Bearer token',
-        expiry: '123',
-        'access-token': 'access',
-        uid: 'new@example.com',
-        client: 'client',
       },
       data: {
         data: {
           id: '42',
           email: 'new@example.com',
           username: 'new-user',
+          score_id: 'score-1',
+          finished_tutorial: false,
         },
       },
     });
-    getScoreId.mockResolvedValue({ status: 200, data: { score_id: 'score-1' } });
 
-    await renderScreen({ authenticate, saveScoreId });
+    await renderScreen({ authenticate });
 
     await act(async () => {
       await getAuthContentProps().onAuthenticate({
@@ -102,27 +95,20 @@ describe('SignupScreen', () => {
       confirmPassword: 'secret',
       username: 'new-user',
     });
-    expect(login).toHaveBeenCalledWith({
-      email: 'new@example.com',
-      password: 'secret',
-    });
     expect(authenticate).toHaveBeenCalledWith({
       token: 'Bearer token',
-      expiry: '123',
-      access_token: 'access',
-      uid: 'new@example.com',
-      client: 'client',
       userId: '42',
       email: 'new@example.com',
       username: 'new-user',
+      isTutorialFinished: false,
+      scoreId: 'score-1',
     });
-    expect(saveScoreId).toHaveBeenCalledWith('score-1');
   });
 
   it('shows a duplicate-user alert when signup fails with 422', async () => {
     createUser.mockResolvedValue({ status: 422 });
 
-    await renderScreen({ authenticate: jest.fn(), saveScoreId: jest.fn() });
+    await renderScreen({ authenticate: jest.fn() });
 
     await act(async () => {
       await getAuthContentProps().onAuthenticate({
@@ -148,7 +134,7 @@ describe('SignupScreen', () => {
       })
     );
 
-    await renderScreen({ authenticate: jest.fn(), saveScoreId: jest.fn() });
+    await renderScreen({ authenticate: jest.fn() });
 
     await act(async () => {
       getAuthContentProps().onAuthenticate({

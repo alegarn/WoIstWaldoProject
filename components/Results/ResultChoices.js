@@ -42,15 +42,17 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
 
   return(
     <View style={styles.buttonContainer}>
-      <BigButton text="Go to Home" onPress={returnHome} />
+      <BigButton accessibilityLabel="Go to home" testID="result.button.home" text="Go to Home" onPress={returnHome} />
       {
         success === false && 
           <BigButton 
+            accessibilityLabel="Retry current guess"
+            testID="result.button.retry"
             text="Retry this one" 
             onPress={handleRetry} 
           />
       }
-      <BigButton text="Another one" onPress={backToSwipe} />
+      <BigButton accessibilityLabel="Guess another image" testID="result.button.another" text="Another one" onPress={backToSwipe} />
     </View>
   )
 };

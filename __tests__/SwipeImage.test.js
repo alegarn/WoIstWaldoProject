@@ -29,6 +29,7 @@ jest.mock('../utils/imagesRequests', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  getE2EHiddenGuessCard: jest.fn(),
   getLocalImages: jest.fn(),
   storeImageList: jest.fn(),
   getLastImageId: jest.fn(),
@@ -48,15 +49,24 @@ jest.mock('../store/auth-context', () => {
   };
 });
 
+jest.mock('../utils/e2eMode', () => ({
+  buildE2EGuessCardFromPayload: jest.fn(),
+  buildE2EGuessCards: jest.fn(),
+  isE2EMode: jest.fn(),
+}));
+
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import SwipeImage from '../components/UI/SwipeImage';
+import { GlobalStyle } from '../constants/theme';
 import { AuthContext } from '../store/auth-context';
+import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
 import {
   deleteImageFromStorage,
+  getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
@@ -77,6 +87,12 @@ describe('SwipeImage', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     getLastImageId.mockResolvedValue(0);
     getLastImageUuid.mockResolvedValue(null);
@@ -145,6 +161,24 @@ describe('SwipeImage', () => {
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.listId)).toEqual([6, 5]);
   });
 
+  it('ignores a stale last image uuid when the local cache is missing and fetches a fresh batch', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('stale-image-uuid');
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'img-1', imageFile: 'file:///one.jpg' },
+      ],
+    });
+
+    await renderSwipeImage();
+
+    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(storeImageList).toHaveBeenCalledWith([
+      expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
+    ]);
+  });
+
   it('shows the empty-state guidance when the backend returns no playable images', async () => {
     getLocalImages.mockResolvedValue(null);
     getImages.mockResolvedValue({
@@ -162,6 +196,18 @@ describe('SwipeImage', () => {
 
     expect(renderedText).toContain('To play you can:');
     expect(renderedText).toContain('Upload new images');
+
+    const guidanceNode = renderer.root.findAll((node) => {
+      const content = Array.isArray(node.props.children)
+        ? node.props.children.join('')
+        : node.props.children;
+
+      return node.type === 'Text' && content === 'To play you can:';
+    })[0];
+
+    expect(StyleSheet.flatten(guidanceNode.props.style)).toEqual(
+      expect.objectContaining({ color: GlobalStyle.color.quaternaryColor })
+    );
   });
 
   it('alerts the user when loading fresh images fails', async () => {
@@ -213,5 +259,36 @@ describe('SwipeImage', () => {
     expect(updateImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
     ]);
+  });
+
+  it('uses the seeded guess cards in e2e mode instead of cache or network state', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    await renderSwipeImage();
+
+    expect(getE2EHiddenGuessCard).toHaveBeenCalledTimes(1);
+    expect(buildE2EGuessCardFromPayload).toHaveBeenCalledWith(null);
+    expect(buildE2EGuessCards).toHaveBeenCalledTimes(1);
+    expect(getLocalImages).not.toHaveBeenCalled();
+    expect(getImages).not.toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-guess-card']);
+  });
+
+  it('prefers a saved hidden guess payload in e2e mode before falling back to the seeded card', async () => {
+    isE2EMode.mockReturnValue(true);
+    getE2EHiddenGuessCard.mockResolvedValue({
+      uri: 'file:///saved-hide.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+    });
+
+    await renderSwipeImage();
+
+    expect(getE2EHiddenGuessCard).toHaveBeenCalledTimes(1);
+    expect(buildE2EGuessCardFromPayload).toHaveBeenCalledWith({
+      uri: 'file:///saved-hide.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+    });
+    expect(buildE2EGuessCards).not.toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-hidden-guess-card']);
   });
 });
