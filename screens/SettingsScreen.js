@@ -8,7 +8,7 @@ import { checkSecureStoreItem } from '../utils/auth';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 
-export default SettingsScreen = () => {
+const SettingsScreen = () => {
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -293,6 +293,8 @@ export default SettingsScreen = () => {
   };
   
 };
+
+export default SettingsScreen;
 
 const styles = StyleSheet.create({
   container: {

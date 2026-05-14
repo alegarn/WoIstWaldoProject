@@ -2,6 +2,10 @@ const mockGuessDescription = jest.fn(() => null);
 
 let capturedPanResponder;
 
+jest.mock('../utils/e2eMode', () => ({
+  isE2EMode: jest.fn(),
+}));
+
 jest.mock('../components/Picture/Descriptions/GuessDescription', () => {
   return function MockGuessDescription(props) {
     mockGuessDescription(props);
@@ -36,6 +40,8 @@ jest.mock('react-native', () => {
 
   return {
     View: 'View',
+    Pressable: 'Pressable',
+    Text: 'Text',
     ImageBackground: 'ImageBackground',
     StyleSheet: {
       absoluteFill: {},
@@ -67,6 +73,7 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import SwipeableCard from '../components/UI/SwipeableCard';
+import { isE2EMode } from '../utils/e2eMode';
 
 describe('SwipeableCard', () => {
   const item = {
@@ -78,6 +85,7 @@ describe('SwipeableCard', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     capturedPanResponder = undefined;
+    isE2EMode.mockReturnValue(false);
   });
 
   async function renderCard(overrides = {}) {
@@ -130,6 +138,20 @@ describe('SwipeableCard', () => {
     expect(onSwipe).toHaveBeenCalledWith({ item });
   });
 
+  it('uses a lower right swipe threshold in e2e mode', async () => {
+    const onSwipe = jest.fn();
+    isE2EMode.mockReturnValue(true);
+
+    await renderCard({ onSwipe });
+
+    await act(async () => {
+      capturedPanResponder.onPanResponderMove(null, { dx: 100, dy: 0, moveX: 160, x0: 0 });
+      capturedPanResponder.onPanResponderRelease(null, { dx: 100, dy: 0 });
+    });
+
+    expect(onSwipe).toHaveBeenCalledWith({ item });
+  });
+
   it('calls removeCard when the card is released past the left swipe threshold', async () => {
     const removeCard = jest.fn();
 
@@ -153,5 +175,53 @@ describe('SwipeableCard', () => {
     expect(mockGuessDescription.mock.calls[mockGuessDescription.mock.calls.length - 1][0]).toEqual(
       expect.objectContaining({ showFullDescription: true })
     );
+  });
+
+  it('renders a saved-bridge marker for the e2e hidden card', async () => {
+    const renderer = await renderCard({
+      item: {
+        ...item,
+        pictureId: 'e2e-hidden-guess-card',
+      },
+    });
+
+    expect(renderer.root.findByProps({ testID: 'guess-path.card.saved' })).toBeTruthy();
+  });
+
+  it('renders a fallback marker for the seeded e2e card', async () => {
+    const renderer = await renderCard({
+      item: {
+        ...item,
+        pictureId: 'e2e-guess-card',
+      },
+    });
+
+    expect(renderer.root.findByProps({ testID: 'guess-path.card.fallback' })).toBeTruthy();
+  });
+
+  it('exposes a deterministic e2e open button that starts guessing without a swipe gesture', async () => {
+    const onSwipe = jest.fn();
+    isE2EMode.mockReturnValue(true);
+
+    const renderer = await renderCard({
+      onSwipe,
+      item: {
+        ...item,
+        pictureId: 'e2e-hidden-guess-card',
+      },
+    });
+
+    const openButton = renderer.root.findByProps({ testID: 'guess-path.card.open.7' });
+
+    await act(async () => {
+      openButton.props.onPress();
+    });
+
+    expect(onSwipe).toHaveBeenCalledWith({
+      item: expect.objectContaining({
+        listId: 7,
+        pictureId: 'e2e-hidden-guess-card',
+      }),
+    });
   });
 });

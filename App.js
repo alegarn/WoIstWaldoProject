@@ -1,9 +1,11 @@
-import { useContext, useEffect, useState/* , useEffect, useLayoutEffect */ } from 'react';
+import { useContext, useEffect, useRef, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
-import { StatusBar } from 'react-native';
-import { NavigationContainer } from '@react-navigation/native';
+import { AppState } from 'react-native';
+
+import { CommonActions, DefaultTheme, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 //import * as SecureStore from 'expo-secure-store';
+import * as SystemUI from 'expo-system-ui';
 
 import { GlobalStyle } from './constants/theme';
 import IconButton from './components/UI/IconButton';
@@ -39,17 +41,18 @@ import 'expo-dev-client';
 import { getUserConsent } from './utils/adHandling';
  */
 
-import * as NavigationBar from "expo-navigation-bar";
-import { setStatusBarHidden } from "expo-status-bar";
 import { bootstrapStoredAuthSession } from './utils/auth';
-
-NavigationBar.setPositionAsync("relative");
-NavigationBar.setVisibilityAsync("hidden");
-NavigationBar.setBehaviorAsync("inset-swipe");
-setStatusBarHidden(true, "none");
+import { isE2EMode } from './utils/e2eMode';
 
 
 const Stack = createNativeStackNavigator();
+const navigationTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    background: GlobalStyle.color.primaryColor900,
+  },
+};
 
 function AuthStack() {
   return (
@@ -97,10 +100,10 @@ function AuthenticatedStack({ authContext }) {
 
   // useEffect ___________________________________________________________
   useEffect(() => {
-    if (!authContext.isAuthenticated) {
+    if (!authContext.IsAuthenticated) {
       setShowOverlay(false); // Stop the overlay when logout is completed
     };
-  }, [authContext.isAuthenticated]);
+  }, [authContext.IsAuthenticated]);
 
   // && scoreId !== ""
   if (showOverlay) {
@@ -178,11 +181,13 @@ function AuthenticatedStack({ authContext }) {
             title:"Guess Path Screen",
             headerLeft: () => (
               <IconButton
-                icon="ios-arrow-back"
+                accessibilityLabel="Go back"
+                icon="arrow-back"
                 color={"white"}
                 size={24}
                 style={{ marginRight: 20 }}
-                onPress={() => navigation.goBack()} />)
+                onPress={() => navigation.goBack()}
+                testID="guess-path.header.back" />)
           })} />
         <Stack.Screen
           name="GuessScreen"
@@ -220,8 +225,75 @@ function AuthenticatedStack({ authContext }) {
 
 
 function Navigation({ authContext }) {
+  const navigationRef = useNavigationContainerRef();
+  const e2eHomeResetTimerRef = useRef(null);
+
+  const scheduleHomeResetForE2E = () => {
+    if (!isE2EMode() || !authContext.IsAuthenticated || !navigationRef.isReady()) {
+      return;
+    }
+
+    const currentRouteName = navigationRef.getCurrentRoute()?.name;
+
+    if (!currentRouteName || currentRouteName === 'HomeScreen') {
+      return;
+    }
+
+    if (e2eHomeResetTimerRef.current) {
+      clearTimeout(e2eHomeResetTimerRef.current);
+    }
+
+    e2eHomeResetTimerRef.current = setTimeout(() => {
+      e2eHomeResetTimerRef.current = null;
+
+      if (!navigationRef.isReady() || navigationRef.getCurrentRoute()?.name === 'HomeScreen') {
+        return;
+      }
+
+      navigationRef.dispatch(
+        CommonActions.reset({
+          index: 0,
+          routes: [{ name: 'HomeScreen' }],
+        })
+      );
+    }, 2500);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (e2eHomeResetTimerRef.current) {
+        clearTimeout(e2eHomeResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authContext.IsAuthenticated) {
+      return;
+    }
+
+    if (e2eHomeResetTimerRef.current) {
+      clearTimeout(e2eHomeResetTimerRef.current);
+      e2eHomeResetTimerRef.current = null;
+    }
+  }, [authContext.IsAuthenticated]);
+
+  useEffect(() => {
+    if (!isE2EMode() || !authContext.IsAuthenticated) {
+      return undefined;
+    }
+
+    const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'active') {
+        scheduleHomeResetForE2E();
+      }
+    });
+
+    return () => subscription.remove();
+  }, [authContext.IsAuthenticated]);
+
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={scheduleHomeResetForE2E}>
       {
         authContext.IsAuthenticated ? 
           <AuthenticatedStack authContext={authContext} /> 
@@ -233,31 +305,19 @@ function Navigation({ authContext }) {
 };
 
 export function Root() {
-  const [isTryingLogging, setIsTryingLogging] = useState(true);
   const authContext = useContext(AuthContext);
 
   useEffect(() => {
-    let isMounted = true;
-
     async function fetchStoredSession() {
-      await bootstrapStoredAuthSession(authContext.restoreSession);
-
-      if (isMounted) {
-        setIsTryingLogging(false);
-      };
+      try {
+        await bootstrapStoredAuthSession(authContext.restoreSession);
+      } catch (error) {
+        console.warn('Failed to restore stored auth session', error);
+      }
     };
 
     fetchStoredSession();
-
-    return () => {
-      isMounted = false;
-    };
   }, []);
-
-  if (isTryingLogging) {
-    const message = 'Logging in...';
-    return <LoadingOverlay message={message} />
-  };
 
   return <Navigation  authContext={authContext}/>
 
@@ -265,13 +325,13 @@ export function Root() {
 
 
 export default function App() {
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(GlobalStyle.color.primaryColor900).catch(() => undefined);
+  }, []);
 
   return (
-    <>
-      <StatusBar style="dark" />
-      <AuthContextProvider>
-        <Root />
-      </AuthContextProvider>
-    </>
+    <AuthContextProvider>
+      <Root />
+    </AuthContextProvider>
   );
 };

@@ -3,6 +3,8 @@ import Button from './Button';
 
 
 export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal'}) {
+  const shouldRenderTextChild = typeof children === 'string' || typeof children === 'number';
+
   return (
     <Modal
       visible={isModalVisible}
@@ -12,7 +14,11 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
       <View style={styles.modalContainer} testID={`${testIDPrefix}.backdrop`}>
         <View accessibilityLabel={`${testIDPrefix} content`} style={styles.modalContent} testID={`${testIDPrefix}.content`}>
 
-          <Text style={styles.modalText}>{children}</Text>
+          {
+            shouldRenderTextChild
+              ? <Text style={styles.modalText}>{children}</Text>
+              : <View style={styles.modalBody}>{children}</View>
+          }
 
           <View style={styles.buttonContainer}>
           <View style={styles.space}>
@@ -60,6 +66,10 @@ const styles = StyleSheet.create({
   },
   modalText: {
     fontSize: 18,
+    marginBottom: 10,
+    textAlign: 'center',
+  },
+  modalBody: {
     marginBottom: 10,
   },
   buttonContainer: {

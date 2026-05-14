@@ -1,5 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import { File, Paths } from "expo-file-system";
+
+const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 
 export async function getLocalImages() {
   //console.log("getLocalImages");
@@ -40,8 +42,45 @@ export async function getLastImageUuid() {
   return lastImageUuid;
 };
 
+function parseStoredValue(value) {
+  if (!value) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function saveE2EHiddenGuessCard(payload) {
+  await AsyncStorage.setItem(E2E_HIDDEN_GUESS_CARD_KEY, JSON.stringify(payload));
+  return null;
+}
+
+export async function getE2EHiddenGuessCard() {
+  const storedPayload = await AsyncStorage.getItem(E2E_HIDDEN_GUESS_CARD_KEY);
+  return parseStoredValue(storedPayload);
+}
+
+export async function clearE2EHiddenGuessCard() {
+  await AsyncStorage.removeItem(E2E_HIDDEN_GUESS_CARD_KEY);
+  return null;
+}
+
+function deleteFileIfPresent(file) {
+  if (file?.exists) {
+    file.delete();
+  }
+}
+
 async function removeFromCache(localUri) {
-  await FileSystem.deleteAsync(localUri, { idempotent: true });
+  if (!localUri) {
+    return;
+  }
+
+  deleteFileIfPresent(new File(localUri));
 };
 
 export async function emptyImageList() {
@@ -91,12 +130,12 @@ export async function removeImageFromList(listId) {
 };
 
 export async function deleteImageFromStorage(imageFilePath) {
-  await FileSystem.deleteAsync(imageFilePath, { idempotent: true });
+  if (!imageFilePath) {
+    return null;
+  }
+
+  deleteFileIfPresent(new File(imageFilePath));
   const fileName = imageFilePath.substring(imageFilePath.lastIndexOf("/") + 1);
-  const imagePickerUrl = FileSystem.cacheDirectory + `ImagePicker/${fileName}`;
-  [imagePickerUrl, imageFilePath].map(async (item) => {
-    console.log("removeCard item", item);
-    await FileSystem.deleteAsync(item, { idempotent: true });
-  });
+  deleteFileIfPresent(new File(Paths.cache, `ImagePicker/${fileName}`));
   return null;
 };

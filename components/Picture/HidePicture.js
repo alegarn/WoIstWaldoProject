@@ -8,6 +8,7 @@ import GameInstructions from '../Instructions/GameInstructions';
 
 import { setImageDimensions } from '../../utils/imageDimensions';
 import TutorialOverlay from '../UI/TutorialOverlay';
+import { buildE2EPictureSelection, getE2EHideLocation, isE2EMode } from '../../utils/e2eMode';
 
 
 export default function HidePicture({ 
@@ -20,8 +21,8 @@ export default function HidePicture({
   isTutorial }) {
 
   const [showFilter, setShowFilter] = useState(true);
-  const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
-  const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
+  const [touchLocation, setTouchLocation] = useState(null);
+  const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   const screenWidth = screenDimensions.width;
@@ -55,11 +56,19 @@ const toggleDebugModal = () => {
   };
 
   const handlePress = (event) => {
+    const selection = isE2EMode()
+      ? buildE2EPictureSelection({
+          screenWidth,
+          screenHeight,
+          imageDimensionStyle,
+          relativeLocation: getE2EHideLocation(),
+        })
+      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
 
     //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
 
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+    let { location, target } = selection;
     if (location && target) {
     setTouchLocation(location)
     setTarget(target);

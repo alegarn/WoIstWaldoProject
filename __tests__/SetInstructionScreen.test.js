@@ -67,6 +67,11 @@ jest.mock('../utils/fileUploader', () => ({
   imageUploader: jest.fn(),
 }));
 
+jest.mock('../utils/e2eMode', () => ({
+  buildE2EHiddenGuessPayload: jest.fn((payload) => payload),
+  isE2EMode: jest.fn(),
+}));
+
 jest.mock('../utils/orientation', () => ({
   handleOrientation: jest.fn(),
 }));
@@ -80,6 +85,10 @@ jest.mock('../utils/auth', () => ({
   checkSecureStoreItem: jest.fn(),
 }));
 
+jest.mock('../utils/storageDatum', () => ({
+  saveE2EHiddenGuessCard: jest.fn(),
+}));
+
 import React from 'react';
 import { Alert } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -87,9 +96,11 @@ import { act, create } from 'react-test-renderer';
 import SetInstructionsScreen from '../screens/SetInstructionScreen';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
+import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
 import { imageUploader } from '../utils/fileUploader';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
 import { handleOrientation } from '../utils/orientation';
+import { saveE2EHiddenGuessCard } from '../utils/storageDatum';
 
 describe('SetInstructionScreen', () => {
   const navigation = {
@@ -121,6 +132,7 @@ describe('SetInstructionScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    isE2EMode.mockReturnValue(false);
     mockUsePermissions.mockReturnValue([
       {
         status: 'granted',
@@ -333,5 +345,85 @@ describe('SetInstructionScreen', () => {
     );
     expect(handleOrientation).not.toHaveBeenCalled();
     expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('ignores repeated confirms while an upload is already in flight', async () => {
+    let resolveUpload;
+
+    imageUploader.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveUpload = resolve;
+      })
+    );
+
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    const onConfirm = getModalProps().onPress;
+
+    await act(async () => {
+      const firstSubmission = onConfirm();
+      const secondSubmission = onConfirm();
+
+      await flushEffects();
+
+      resolveUpload({ status: 200 });
+
+      await firstSubmission;
+      await secondSubmission;
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledTimes(1);
+  });
+
+  it('stores the saved hide payload in e2e mode after a successful upload', async () => {
+    isE2EMode.mockReturnValue(true);
+    handleImageType.mockReturnValue('gif');
+    isTypeValid.mockReturnValue(false);
+
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(buildE2EHiddenGuessPayload).toHaveBeenCalledWith({
+      uri: 'file:///waldo.png',
+      description: 'Look near the river',
+      imageHeight: 768,
+      imageWidth: 1024,
+      isPortrait: true,
+      hiddenLocation: { x: 0.3, y: 0.7 },
+      screenHeight: 640,
+      screenWidth: 320,
+    });
+    expect(saveE2EHiddenGuessCard).toHaveBeenCalledWith(expect.objectContaining({
+      uri: 'file:///waldo.png',
+      hiddenLocation: { x: 0.3, y: 0.7 },
+    }));
+    expect(handleImageType).not.toHaveBeenCalled();
+    expect(isTypeValid).not.toHaveBeenCalled();
+    expect(imageUploader).not.toHaveBeenCalled();
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 0,
+      routes: [
+        {
+          name: 'HomeScreen',
+          params: {
+            isTutorial: false,
+            hidePathDone: true,
+          },
+        },
+      ],
+    });
   });
 });

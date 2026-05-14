@@ -2,11 +2,10 @@
 /* https://docs.expo.dev/versions/latest/sdk/imagepicker/ */
 /* https://github.com/expo/examples/tree/master/with-aws-storage-upload */
 
-import * as FileSystem from "expo-file-system";
+import { File } from "expo-file-system";
 import { handleContentLength } from "./imageInfos";
 import { prepareImageUpload, performImageUpload, saveImageInfos } from "./imagesRequests";
 import { checkSecureStoreItem } from "./auth";
-import { isE2EMode } from './e2eMode';
 
 async function handlePrepareImageUpload({ context, contentLength, fileExtension }) {
 
@@ -60,10 +59,6 @@ const exportPictureData = async ({ imagesInfos, context }) => {
 
 
 export async function imageUploader({ imageInfos, context }) {
-  if (isE2EMode()) {
-    return { status: 200 };
-  }
-
   const imageLocalUri = imageInfos.uri;
   const contentLength = await handleContentLength(imageLocalUri);
   const uploadUrlData = await handlePrepareImageUpload({
@@ -111,7 +106,8 @@ export async function imageUploader({ imageInfos, context }) {
     return imageInfosSaved;
   };
 
-  await FileSystem.deleteAsync(imageLocalUri);
+  const imageFile = new File(imageLocalUri);
+  imageFile.delete();
 
   /* delete */
 

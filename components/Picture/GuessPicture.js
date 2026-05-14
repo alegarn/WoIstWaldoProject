@@ -6,13 +6,19 @@ import { handlePicturePress, determineImageCorners } from "../../utils/targetLoc
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
 import { setImageDimensions } from '../../utils/imageDimensions';
+import {
+  buildE2EPictureSelection,
+  getE2EHideLocation,
+  getE2EIncorrectHideLocation,
+  isE2EMode,
+} from '../../utils/e2eMode';
 
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen }) {
 
   const [showFilter, setShowFilter] = useState(true); 
-  const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
-  const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
+  const [touchLocation, setTouchLocation] = useState(null);
+  const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
 /* debug */
@@ -45,16 +51,42 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     setShowFilter(false);
   };
 
-  const handlePress = (event) => {
+  const selectPictureLocation = ({ event, relativeLocation }) => {
+    const selection = isE2EMode()
+      ? buildE2EPictureSelection({
+          screenWidth,
+          screenHeight,
+          imageDimensionStyle,
+          relativeLocation,
+        })
+      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+
     // still needed?
     //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
 
     /* from '../../utils/targetLocation' */
-    let { location, target } = handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+    let { location, target } = selection;
     if (location && target) {
     setTouchLocation(location)
     setTarget(target);
     };
+  };
+
+  const handlePress = (event) => {
+    selectPictureLocation({
+      event,
+      relativeLocation: hiddenLocation ?? getE2EHideLocation(),
+    });
+  };
+
+  const handleLongPress = () => {
+    if (!isE2EMode()) {
+      return;
+    }
+
+    selectPictureLocation({
+      relativeLocation: getE2EIncorrectHideLocation(),
+    });
   };
 
   const handleIconPress = () => {
@@ -80,6 +112,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         screenHeight={screenHeight}
         touchLocation={touchLocation}
         handlePress={handlePress}
+        handleLongPress={handleLongPress}
         target={target}
         handleIconPress={handleIconPress}
         showModal={showModal}

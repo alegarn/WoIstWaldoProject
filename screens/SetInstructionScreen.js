@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useRef, useState, useContext } from 'react';
 import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
@@ -10,8 +10,10 @@ import HideDescription from '../components/Picture/Descriptions/HideDescription'
 import CenteredModal from "../components/UI/CenteredModal";
 import ModalContent from '../components/UI/ModalContent';
 import { imageUploader } from "../utils/fileUploader";
+import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
 import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
+import { saveE2EHiddenGuessCard } from '../utils/storageDatum';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
@@ -23,6 +25,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [description, setDescription] = useState("");
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const { 
     uri, 
@@ -112,29 +115,29 @@ export default function SetInstructionsScreen({ navigation, route }) {
     });
   };
 
-  const handleConfirmModal = async () => {
-
-    let permissionStatus = await getPermissions();
-    if (!permissionStatus) {
+  const saveE2EGuessBridge = async () => {
+    if (!isE2EMode()) {
       return;
-    };
- 
-    const fileExtension = handleImageType(uri);
-    const validType = isTypeValid(fileExtension);
+    }
 
-    if (!validType) {
-      Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
-      return;
-    };
+    await saveE2EHiddenGuessCard(
+      buildE2EHiddenGuessPayload({
+        uri,
+        description,
+        imageHeight,
+        imageWidth,
+        isPortrait,
+        hiddenLocation: {
+          x: touchLocation.x,
+          y: touchLocation.y,
+        },
+        screenHeight,
+        screenWidth,
+      })
+    );
+  };
 
-    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
-
-    const uploadState = await handleImage({userId, fileExtension});
-
-    if (uploadState?.status !== 200) {
-      return;
-    };
-
+  const resetToHome = async () => {
     handleScreenUi();
     isTutorial && await handleTutorialUpdate();
 
@@ -148,6 +151,51 @@ export default function SetInstructionsScreen({ navigation, route }) {
         } 
       }],
     });
+  };
+
+  const handleConfirmModal = async () => {
+    if (isSubmittingRef.current) {
+      return;
+    }
+
+    isSubmittingRef.current = true;
+    setShowModal(false);
+
+    try {
+
+      if (isE2EMode()) {
+        await saveE2EGuessBridge();
+        await resetToHome();
+        return;
+      }
+
+      let permissionStatus = await getPermissions();
+      if (!permissionStatus) {
+        return;
+      };
+ 
+      const fileExtension = handleImageType(uri);
+      const validType = isTypeValid(fileExtension);
+
+      if (!validType) {
+        Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
+        return;
+      };
+
+      const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
+
+      const uploadState = await handleImage({userId, fileExtension});
+
+      if (uploadState?.status !== 200) {
+        return;
+      };
+
+      await saveE2EGuessBridge();
+
+      await resetToHome();
+    } finally {
+      isSubmittingRef.current = false;
+    }
 
   };
 

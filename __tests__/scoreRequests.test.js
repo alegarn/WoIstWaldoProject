@@ -8,14 +8,28 @@ jest.mock('../utils/auth', () => ({
   setHeaders: jest.fn(),
 }));
 
+jest.mock('../utils/e2eMode', () => ({
+  buildE2ERankingRows: jest.fn(),
+  buildE2EUserScores: jest.fn(),
+  isE2EMode: jest.fn(),
+}));
+
 import axios from 'axios';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
+import { buildE2ERankingRows, buildE2EUserScores, isE2EMode } from '../utils/e2eMode';
 import { getRankingData, getUserScores, updateUserScore } from '../utils/scoreRequests';
 
 describe('scoreRequests utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    buildE2ERankingRows.mockReturnValue([{ rank: '1', username: 'John', total_score: 100 }]);
+    buildE2EUserScores.mockReturnValue({
+      total: { total_score: 100, total_hide_score: 30, total_guess_score: 70 },
+      hide_info: { hide_count: 2 },
+      guess_info: { guess_count: 5 },
+    });
     process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
     getBackendHeaders.mockResolvedValue({
       token: 'Bearer token',
@@ -84,5 +98,37 @@ describe('scoreRequests utilities', () => {
     });
 
     expect(response).toEqual({ status: 401, message: 'Unauthorized' });
+  });
+
+  it('returns seeded leaderboard rows in e2e mode without calling axios', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    const response = await getRankingData({ token: 'Bearer token' }, { scope: 'global' });
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '1', username: 'John', total_score: 100 }],
+        },
+      },
+    });
+    expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('returns seeded user-score details in e2e mode without calling axios', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    const response = await getUserScores({ username: 'John', context: { token: 'Bearer token' } });
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        total: { total_score: 100, total_hide_score: 30, total_guess_score: 70 },
+        hide_info: { hide_count: 2 },
+        guess_info: { guess_count: 5 },
+      },
+    });
+    expect(axios.get).not.toHaveBeenCalled();
   });
 });

@@ -29,12 +29,13 @@ jest.mock('../store/auth-context', () => {
 });
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import RankingScreen from '../screens/RankingScreen';
 import { AuthContext } from '../store/auth-context';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
+import { GlobalStyle } from '../constants/theme';
 
 describe('RankingScreen', () => {
   const contextValue = {
@@ -61,8 +62,10 @@ describe('RankingScreen', () => {
   }
 
   async function renderScreen() {
+    let renderer;
+
     await act(async () => {
-      create(
+      renderer = create(
         <AuthContext.Provider value={contextValue}>
           <RankingScreen />
         </AuthContext.Provider>
@@ -70,11 +73,34 @@ describe('RankingScreen', () => {
 
       await flushEffects();
     });
+
+    return renderer;
   }
 
   function getTableProps() {
     return mockTableComponent.mock.calls[mockTableComponent.mock.calls.length - 1][0];
   }
+
+  it('fills the available screen height so the table can render into a real viewport', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '1', username: 'waldo', total_score: 25 }],
+        },
+      },
+    });
+
+    const renderer = await renderScreen();
+    const screen = renderer.root.findByProps({ testID: 'ranking.screen' });
+
+    expect(StyleSheet.flatten(screen.props.style)).toEqual(
+      expect.objectContaining({
+        flex: 1,
+        backgroundColor: GlobalStyle.color.primaryColor500,
+      })
+    );
+  });
 
   it('loads the initial ranking window and converts the rows for the table component', async () => {
     getRankingData.mockResolvedValue({

@@ -14,8 +14,25 @@ jest.mock('expo-status-bar', () => ({
   setStatusBarHidden: jest.fn(),
 }));
 
+jest.mock('expo-system-ui', () => ({
+  setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('@react-navigation/native', () => ({
+  CommonActions: {
+    reset: jest.fn((payload) => ({ type: 'RESET', payload })),
+  },
+  DefaultTheme: {
+    colors: {
+      background: '#fff',
+    },
+  },
   NavigationContainer: ({ children }) => children,
+  useNavigationContainerRef: jest.fn(() => ({
+    isReady: jest.fn(() => false),
+    getCurrentRoute: jest.fn(() => ({ name: 'Login' })),
+    dispatch: jest.fn(),
+  })),
 }));
 
 jest.mock('@react-navigation/native-stack', () => {
@@ -108,7 +125,7 @@ describe('App Root', () => {
     return renderer;
   }
 
-  it('shows the login loading gate and then renders the auth stack when no session is restored', async () => {
+  it('renders the auth stack immediately while session restore is pending', async () => {
     let resolveBootstrap;
 
     bootstrapStoredAuthSession.mockReturnValue(
@@ -126,7 +143,7 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(mockLoadingOverlay).toHaveBeenCalledWith({ message: 'Logging in...' });
+    expect(recordedScreens.map(({ name }) => name)).toEqual(expect.arrayContaining(['Login', 'Signup']));
 
     await act(async () => {
       resolveBootstrap(false);
@@ -134,7 +151,6 @@ describe('App Root', () => {
     });
 
     expect(bootstrapStoredAuthSession).toHaveBeenCalledWith(contextValue.restoreSession);
-    expect(recordedScreens.map(({ name }) => name)).toEqual(expect.arrayContaining(['Login', 'Signup']));
   });
 
   it('renders the authenticated stack and wires the header actions for settings and logout', async () => {
@@ -188,5 +204,22 @@ describe('App Root', () => {
 
     expect(contextValue.logout).toHaveBeenCalledTimes(1);
     expect(mockLoadingOverlay).toHaveBeenCalledWith({ message: 'Disconnecting...' });
+
+    const guessPathScreen = recordedScreens.find(({ name }) => name === 'GuessPathScreen');
+
+    await act(async () => {
+      const headerLeft = guessPathScreen.options({ navigation }).headerLeft;
+      create(headerLeft());
+    });
+
+    const guessBackButton = mockIconButton.mock.calls.find(([props]) => props.testID === 'guess-path.header.back')[0];
+
+    expect(guessBackButton.icon).toBe('arrow-back');
+
+    await act(async () => {
+      guessBackButton.onPress();
+    });
+
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
   });
 });

@@ -19,6 +19,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
+    backgroundColor: GlobalStyle.color.primaryColor900,
   },
   vertical: {
     flexDirection: "column",
@@ -27,7 +28,8 @@ const styles = StyleSheet.create({
   },
   message: {
     fontSize: 30,
-    color: GlobalStyle.color.secondaryColor100,
+    color: 'white',
     flexWrap: "wrap",
+    textAlign: "center",
   },
 });

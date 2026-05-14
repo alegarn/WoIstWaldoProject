@@ -1,0 +1,88 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Smoke: boot on a clean app state, verify the auth selectors, and create a fresh
+# account that lands on the home screen.
+
+- launchApp:
+    appId: com.alegarn.WoIstWaldoProject
+- waitForAnimationToEnd
+- tapOn:
+    text: Reload
+    optional: true
+- tapOn:
+    text: Go To Home
+    optional: true
+- tapOn:
+    text: Continue
+    optional: true
+- tapOn:
+    text: Go home
+    optional: true
+- tapOn:
+    id: guess-path.header.back
+    optional: true
+- tapOn:
+    id: guess-path.button.home
+    optional: true
+- tapOn:
+    text: Close
+    optional: true
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+- tapOn:
+    id: home.header.logout
+    optional: true
+- extendedWaitUntil:
+    visible:
+      id: auth.input.email
+    timeout: 10000
+- assertVisible:
+    id: auth.input.email
+- assertVisible:
+    id: auth.input.password
+- assertVisible:
+    id: auth.button.login-submit
+- tapOn:
+    id: auth.button.switch-to-signup
+- extendedWaitUntil:
+    visible:
+      id: auth.button.signup-submit
+    timeout: 5000
+- assertVisible:
+    id: auth.input.confirm-email
+- assertVisible:
+    id: auth.input.confirm-password
+- assertVisible:
+    id: auth.input.username
+- tapOn:
+    id: auth.input.email
+- inputText: ${SIGNUP_EMAIL}
+- tapOn:
+    id: auth.input.confirm-email
+- inputText: ${SIGNUP_EMAIL}
+- tapOn:
+    id: auth.input.password
+- inputText: ${SIGNUP_PASSWORD}
+- tapOn:
+    id: auth.input.confirm-password
+- inputText: ${SIGNUP_PASSWORD}
+- tapOn:
+    id: auth.input.username
+- inputText: ${SIGNUP_USERNAME}
+- hideKeyboard
+- tapOn:
+    id: auth.button.signup-submit
+- extendedWaitUntil:
+    visible:
+      id: home.tutorial-modal.close
+    timeout: 20000
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.ranking
