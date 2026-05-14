@@ -347,6 +347,39 @@ describe('SetInstructionScreen', () => {
     expect(navigation.reset).not.toHaveBeenCalled();
   });
 
+  it('ignores repeated confirms while an upload is already in flight', async () => {
+    let resolveUpload;
+
+    imageUploader.mockImplementation(
+      () => new Promise((resolve) => {
+        resolveUpload = resolve;
+      })
+    );
+
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    const onConfirm = getModalProps().onPress;
+
+    await act(async () => {
+      const firstSubmission = onConfirm();
+      const secondSubmission = onConfirm();
+
+      await flushEffects();
+
+      resolveUpload({ status: 200 });
+
+      await firstSubmission;
+      await secondSubmission;
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledTimes(1);
+  });
+
   it('stores the saved hide payload in e2e mode after a successful upload', async () => {
     isE2EMode.mockReturnValue(true);
     handleImageType.mockReturnValue('gif');

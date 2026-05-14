@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { Alert, StyleSheet, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
+import { GlobalStyle } from '../constants/theme';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 
 import TableComponent from '../components/UI/TableComponent';
@@ -171,7 +172,7 @@ export default function RankingScreen() {
   return (
     <>
       {rankingDatum ? (
-        <View testID="ranking.screen">
+        <View style={styles.screen} testID="ranking.screen">
           <TableComponent data={rankingDatum}  onPress={showSpecificDatum}  />
         </View>
       ) : (
@@ -180,3 +181,10 @@ export default function RankingScreen() {
     </>
   );
 };
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor500,
+  },
+});

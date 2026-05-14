@@ -1,4 +1,4 @@
-import { useState, useContext } from 'react';
+import { useRef, useState, useContext } from 'react';
 import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
@@ -25,6 +25,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [description, setDescription] = useState("");
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
+  const isSubmittingRef = useRef(false);
 
   const { 
     uri, 
@@ -153,37 +154,48 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const handleConfirmModal = async () => {
-
-    if (isE2EMode()) {
-      await saveE2EGuessBridge();
-      await resetToHome();
+    if (isSubmittingRef.current) {
       return;
     }
 
-    let permissionStatus = await getPermissions();
-    if (!permissionStatus) {
-      return;
-    };
+    isSubmittingRef.current = true;
+    setShowModal(false);
+
+    try {
+
+      if (isE2EMode()) {
+        await saveE2EGuessBridge();
+        await resetToHome();
+        return;
+      }
+
+      let permissionStatus = await getPermissions();
+      if (!permissionStatus) {
+        return;
+      };
  
-    const fileExtension = handleImageType(uri);
-    const validType = isTypeValid(fileExtension);
+      const fileExtension = handleImageType(uri);
+      const validType = isTypeValid(fileExtension);
 
-    if (!validType) {
-      Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
-      return;
-    };
+      if (!validType) {
+        Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
+        return;
+      };
 
-    const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
+      const userId = await checkSecureStoreItem({ secureStoreValue: "userId", context });
 
-    const uploadState = await handleImage({userId, fileExtension});
+      const uploadState = await handleImage({userId, fileExtension});
 
-    if (uploadState?.status !== 200) {
-      return;
-    };
+      if (uploadState?.status !== 200) {
+        return;
+      };
 
-    await saveE2EGuessBridge();
+      await saveE2EGuessBridge();
 
-    await resetToHome();
+      await resetToHome();
+    } finally {
+      isSubmittingRef.current = false;
+    }
 
   };
 

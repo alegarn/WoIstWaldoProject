@@ -1,4 +1,4 @@
-import * as FileSystem from 'expo-file-system';
+import { File } from 'expo-file-system';
 
 export function handleImageType(uri) {
   const normalizedUri = String(uri ?? '').split('?')[0].split('#')[0];
@@ -16,6 +16,6 @@ export function isTypeValid(fileExtension) {
 };
 
 export const handleContentLength = async (uri) => {
-  const infos = await FileSystem.getInfoAsync(uri);
-  return infos.size;
+  const file = new File(uri);
+  return file.size;
 };

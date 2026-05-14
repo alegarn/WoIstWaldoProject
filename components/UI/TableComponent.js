@@ -115,7 +115,10 @@ const styles = StyleSheet.create({
   text: {
     margin: windowWidth * 0.02,
     alignSelf: "center",
-    color: GlobalStyle.color.primaryColor,
+    color: "#fff",
+  },
+  name: {
+    fontWeight: '600',
   },
   row: {
     height: windowHeight * 0.07,

@@ -9,6 +9,7 @@ import { getImages } from '../../utils/imagesRequests';
 import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
+import { GlobalStyle } from '../../constants/theme';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
@@ -72,10 +73,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     };
   }, []);
 
-  const loadNewImages = useCallback(async () => {
+  const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
     const lastImageUuid = await getLastImageUuid();
-    const response = await getImages(lastImageUuid, context);
+    const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
+    const response = await getImages(pictureId, context);
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
@@ -89,11 +91,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   }, [context, handleData]);
 
   /* centralized function for loading images / set when imgs are loading */
-  const handleImagesLoading = useCallback(async () => {
+  const handleImagesLoading = useCallback(async (pictureIdOverride) => {
     console.log("handleImagesLoading");
 
     setAsyncImagesAreLoading(true);
-    const isCardLeft = await loadNewImages();
+    const isCardLeft = await loadNewImages(pictureIdOverride);
     isCardLeft ? null : setNoMoreCard(true);
     setAsyncImagesAreLoading(false);
   }, [loadNewImages]);
@@ -126,6 +128,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(localImageList);
+    } else if (localImageList === null) {
+      await handleImagesLoading(null);
     } else {
       // new images are loaded
       await handleImagesLoading();
@@ -180,12 +184,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const showNoMoreCard = () => {
     return(
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>The list is not there, there is a problem... No new images? :O</Text>
-        <View style={{ paddingTop: 10 }}>
-          <Text>To play you can:</Text>
-          <Text> - Upload new images</Text>
-          <Text> - Wait until someone else upload new images</Text>
+      <View style={styles.emptyStateContainer}>
+        <Text style={styles.emptyStateText}>The list is not there, there is a problem... No new images? :O</Text>
+        <View style={styles.emptyStateActions}>
+          <Text style={styles.emptyStateText}>To play you can:</Text>
+          <Text style={styles.emptyStateText}> - Upload new images</Text>
+          <Text style={styles.emptyStateText}> - Wait until someone else upload new images</Text>
         </View>
       </View>
     );
@@ -198,7 +202,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   }, [imageList]);
 
   return (
-    <SafeAreaView style={{ flex: 1 }} testID="guess-path.swipe-stack">
+    <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
         showIsLoading()
       ) : ((noMoreCard === true) && (imageList?.length === 0) && (!asyncImagesAreLoading)) ? (
@@ -237,10 +241,27 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+  },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyStateActions: {
+    paddingTop: 10,
+  },
+  emptyStateText: {
+    color: GlobalStyle.color.quaternaryColor,
+    textAlign: 'center',
   },
   titleText: {
     fontSize: 22,

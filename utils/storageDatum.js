@@ -1,5 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import * as FileSystem from "expo-file-system";
+import { File, Paths } from "expo-file-system";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 
@@ -69,8 +69,18 @@ export async function clearE2EHiddenGuessCard() {
   return null;
 }
 
+function deleteFileIfPresent(file) {
+  if (file?.exists) {
+    file.delete();
+  }
+}
+
 async function removeFromCache(localUri) {
-  await FileSystem.deleteAsync(localUri, { idempotent: true });
+  if (!localUri) {
+    return;
+  }
+
+  deleteFileIfPresent(new File(localUri));
 };
 
 export async function emptyImageList() {
@@ -120,12 +130,12 @@ export async function removeImageFromList(listId) {
 };
 
 export async function deleteImageFromStorage(imageFilePath) {
-  await FileSystem.deleteAsync(imageFilePath, { idempotent: true });
+  if (!imageFilePath) {
+    return null;
+  }
+
+  deleteFileIfPresent(new File(imageFilePath));
   const fileName = imageFilePath.substring(imageFilePath.lastIndexOf("/") + 1);
-  const imagePickerUrl = FileSystem.cacheDirectory + `ImagePicker/${fileName}`;
-  [imagePickerUrl, imageFilePath].map(async (item) => {
-    console.log("removeCard item", item);
-    await FileSystem.deleteAsync(item, { idempotent: true });
-  });
+  deleteFileIfPresent(new File(Paths.cache, `ImagePicker/${fileName}`));
   return null;
 };

@@ -56,10 +56,11 @@ jest.mock('../utils/e2eMode', () => ({
 }));
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import SwipeImage from '../components/UI/SwipeImage';
+import { GlobalStyle } from '../constants/theme';
 import { AuthContext } from '../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
@@ -160,6 +161,24 @@ describe('SwipeImage', () => {
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.listId)).toEqual([6, 5]);
   });
 
+  it('ignores a stale last image uuid when the local cache is missing and fetches a fresh batch', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('stale-image-uuid');
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'img-1', imageFile: 'file:///one.jpg' },
+      ],
+    });
+
+    await renderSwipeImage();
+
+    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(storeImageList).toHaveBeenCalledWith([
+      expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
+    ]);
+  });
+
   it('shows the empty-state guidance when the backend returns no playable images', async () => {
     getLocalImages.mockResolvedValue(null);
     getImages.mockResolvedValue({
@@ -177,6 +196,18 @@ describe('SwipeImage', () => {
 
     expect(renderedText).toContain('To play you can:');
     expect(renderedText).toContain('Upload new images');
+
+    const guidanceNode = renderer.root.findAll((node) => {
+      const content = Array.isArray(node.props.children)
+        ? node.props.children.join('')
+        : node.props.children;
+
+      return node.type === 'Text' && content === 'To play you can:';
+    })[0];
+
+    expect(StyleSheet.flatten(guidanceNode.props.style)).toEqual(
+      expect.objectContaining({ color: GlobalStyle.color.quaternaryColor })
+    );
   });
 
   it('alerts the user when loading fresh images fails', async () => {
