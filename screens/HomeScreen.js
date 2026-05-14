@@ -40,7 +40,7 @@ export default function HomeScreen({ navigation, route }) {
   };
 
   const verifyLoginInfos = async () => {
-    const isToken = context.verifyIsLoggedIn();
+    const isToken = await context.verifyIsLoggedIn();
     if (!isToken) {
       const response = await verifyTokenIsValid(context.token);
       response ? 
@@ -163,25 +163,31 @@ export default function HomeScreen({ navigation, route }) {
   useFocusEffect(() => {
     handleOrientation("portrait");
     // when leaving the app 
-    verifyLoginInfos();
+    void verifyLoginInfos();
   });
 
   return (
     <>
       <View style={styles.homeContainer}>
         <BigButton
+          accessibilityLabel="Hide Waldo"
           text="Hide Waldo"
           onPress={toHidingPathScreen}
           buttonStyle="big"
+          testID="home.button.hide"
           />
         <BigButton
+          accessibilityLabel="Find Waldo"
           text="Find Waldo"
           onPress={toGuessPathScreen}
           buttonStyle="big" 
+          testID="home.button.guess"
           />
         <BigButton
+          accessibilityLabel="Open Ranking"
           text="Ranking"
-          onPress={toRankingScreen} />
+          onPress={toRankingScreen}
+          testID="home.button.ranking" />
         {
           showModal && 
           <CenteredModal 
@@ -189,6 +195,7 @@ export default function HomeScreen({ navigation, route }) {
             children={"Welcome, do you want to do the tutorial? \n\n It will help you to learn how to play the game in 5 minutes. \n\n Later it is possible to do it again."} 
             onCancel={() => cancelTutorial()} 
             onPress={() => startTutorial()}
+            testIDPrefix="home.tutorial-modal"
             />
         }
         {
@@ -205,11 +212,13 @@ export default function HomeScreen({ navigation, route }) {
 
       </View>
       <IconButton
+        accessibilityLabel="Open tutorial"
         icon={"book"}
         color={"white"}
         size={24}
         style={styles.tutorialButton}
         onPress={() => setIsTutorial(true)}
+        testID="home.button.tutorial"
       />
   </>
     

@@ -12,14 +12,10 @@ function LoginScreen() {
   const authContext = useContext(AuthContext);
 
   const handleAuthDataSaving = async (response, email) => {
-    authContext.authenticate({
+    await authContext.authenticate({
       token: response.headers.authorization,
-      expiry: response.headers.expiry,
-      access_token: response.headers['access-token'],
-      uid: response.headers.uid,
-      client: response.headers.client,
       userId: response.data.data.id,
-      email: email,
+      email: response.data.data.email ?? email,
       username: response.data.data.username,
       isTutorialFinished: response.data.data.finished_tutorial,
       scoreId: response.data.data.score_id
@@ -65,7 +61,6 @@ function LoginScreen() {
     setIsAuthenticating(true);
     try {
       const response = await login({email, password});
-      //console.log("response login screen", response);
       if (response.status === 200) {
         const authConfirmed = await handleAuthDataSaving(response, email);
         if (!authConfirmed) {    

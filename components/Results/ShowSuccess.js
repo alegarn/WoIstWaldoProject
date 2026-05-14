@@ -54,9 +54,9 @@ export default function ShowSuccess({ navigation, route }) {
 
   const ShowResult = ({ navigation, isTutorial }) => {
     return (
-      <>
-        <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
-        <Text style={[styles.subtitle, styles.marginBottom]}>
+      <View testID="result.screen.success" style={styles.result}>
+        <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>You Found It!</Text>
+        <Text testID="result.screen.success.subtitle" style={[styles.subtitle, styles.marginBottom]}>
           <Text style={styles.title}>1</Text> point earned!
         </Text>
         <ResultChoices 
@@ -70,12 +70,12 @@ export default function ShowSuccess({ navigation, route }) {
               screen={"ShowSuccess"}
             />
         }
-      </>
+      </View>
     );
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} testID="result.screen.success.container">
       {
         showSuccessImageAnimated ?
           <ImageAnimated success={true} />
@@ -92,16 +92,25 @@ export default function ShowSuccess({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  result: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
   },
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-
+    color: 'black',
+    textAlign: 'center',
   },
   subtitle: {
     fontSize: 18,
+    color: 'black',
+    textAlign: 'center',
   },
   marginBottom: {
     marginBottom: 16,

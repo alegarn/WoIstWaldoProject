@@ -12,6 +12,8 @@ function handleSmallPortraitDimensions({ imageHeight, screenHeight, ratios }) {
 function handleLargePortraitDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios }) {
   const widthRatio = screenWidth / imageWidth;
   const heightRatio = screenHeight / imageHeight;
+  let maxWidth = 0;
+  let maxHeight = 0;
 
   let scaleFactor = Math.min(widthRatio, heightRatio);
   if (scaleFactor > ratios.screenRatio) {

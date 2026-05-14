@@ -1,4 +1,4 @@
-import { useContext, useLayoutEffect, useState } from 'react';
+import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
 
@@ -6,8 +6,10 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/imagesRequests';
-import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
+import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
+import { GlobalStyle } from '../../constants/theme';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
@@ -18,6 +20,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const context = useContext(AuthContext);
 
+  const imageListRef = useRef(null);
+  imageListRef.current = imageList;
+
+  const asyncImagesAreLoadingRef = useRef(false);
+  asyncImagesAreLoadingRef.current = asyncImagesAreLoading;
+
   // Functions __________________________________________________________________
 
   /*
@@ -26,7 +34,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
    * @param {Array} data - The data to be handled.
    * @return {Promise<boolean>} A promise that resolves to true if the updated image list has elements, false otherwise.
    */
-  const handleData = async (data) => {
+  const handleData = useCallback(async (data) => {
     console.log("handleData");
 
     const lastId = await getLastImageId();
@@ -36,7 +44,9 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
      listId: lastId + 1 + index,
     }));
    
-    if (imageList === null) {
+    const currentImageList = imageListRef.current;
+
+    if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
       await storeImageList(updatedImageList);
       setImageList(updatedImageList);
@@ -50,7 +60,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       };
     };
 
-    if (imageList !== null) {
+    if (currentImageList !== null) {
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
@@ -61,12 +71,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
       return false
     };
-  };
+  }, []);
 
-  async function loadNewImages(context) {
+  const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
     const lastImageUuid = await getLastImageUuid();
-    const response = await getImages(lastImageUuid, context);
+    const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
+    const response = await getImages(pictureId, context);
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
@@ -77,25 +88,39 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  };
+  }, [context, handleData]);
 
   /* centralized function for loading images / set when imgs are loading */
-  const handleImagesLoading = async () => {
+  const handleImagesLoading = useCallback(async (pictureIdOverride) => {
     console.log("handleImagesLoading");
 
     setAsyncImagesAreLoading(true);
-    const isCardLeft = await loadNewImages(context);
+    const isCardLeft = await loadNewImages(pictureIdOverride);
     isCardLeft ? null : setNoMoreCard(true);
     setAsyncImagesAreLoading(false);
-  };
+  }, [loadNewImages]);
 
   /*
   * Handles the retrieval of the list of images.
   *
   * @return {null} Returns null if the localImageList is not null and has a length of at least 4.
   */
-  const handleGetImagesList = async () => {
+  const handleGetImagesList = useCallback(async () => {
     console.log("handleGetImagesList");
+
+    if (isE2EMode()) {
+      setNoMoreCard(false);
+      const savedGuessPayload = await getE2EHiddenGuessCard();
+      const savedGuessCard = buildE2EGuessCardFromPayload(savedGuessPayload);
+
+      if (savedGuessCard) {
+        setImageList([savedGuessCard]);
+        return;
+      }
+
+      setImageList(buildE2EGuessCards());
+      return;
+    }
 
     //await emptyImageList();
     const localImageList = await getLocalImages();
@@ -103,19 +128,21 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(localImageList);
+    } else if (localImageList === null) {
+      await handleImagesLoading(null);
     } else {
       // new images are loaded
       await handleImagesLoading();
     };
-  };
+  }, [handleImagesLoading]);
 
 
-  const deleteImage = async (id, imageFilePath) => {
+  const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
     await removeImageFromList(id);
     await deleteImageFromStorage(imageFilePath);
     return null;
-  };
+  }, []);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -123,24 +150,30 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
    * @param {string} id - The id of the card to be removed.
    * @return {null}
    */
-  const removeCard = async (id) => {
-    const updatedImageList = imageList.filter((item) => item.listId !== id);
-    const image = imageList.filter((item) => item.listId === id)[0];
+  const removeCard = useCallback(
+    async (id) => {
+      const currentList = imageListRef.current ?? [];
+      const updatedImageList = currentList.filter((item) => item.listId !== id);
+      const image = currentList.find((item) => item.listId === id);
 
-    await deleteImage(id, image.imageFile);
-    setImageList(updatedImageList);
+      if (image?.imageFile) {
+        await deleteImage(id, image.imageFile);
+      }
+      setImageList(updatedImageList);
 
-    if ((updatedImageList?.length < 4) && (!asyncImagesAreLoading)) {
-      await handleImagesLoading();
-    };
-    return null;
-  };
+      if (updatedImageList?.length < 4 && !asyncImagesAreLoadingRef.current) {
+        await handleImagesLoading();
+      }
+      return null;
+    },
+    [deleteImage, handleImagesLoading]
+  );
 
   // Effects __________________________________________________________________
   useLayoutEffect(() => {
-    if (!asyncImagesAreLoading) {
-      handleGetImagesList();
-    };
+    // Intentional: initial load on mount only.
+    handleGetImagesList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
   // Components functions ________________________________________________________
@@ -151,36 +184,25 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const showNoMoreCard = () => {
     return(
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <Text>The list is not there, there is a problem... No new images? :O</Text>
-        <View style={{ paddingTop: 10 }}>
-          <Text>To play you can:</Text>
-          <Text> - Upload new images</Text>
-          <Text> - Wait until someone else upload new images</Text>
+      <View style={styles.emptyStateContainer}>
+        <Text style={styles.emptyStateText}>The list is not there, there is a problem... No new images? :O</Text>
+        <View style={styles.emptyStateActions}>
+          <Text style={styles.emptyStateText}>To play you can:</Text>
+          <Text style={styles.emptyStateText}> - Upload new images</Text>
+          <Text style={styles.emptyStateText}> - Wait until someone else upload new images</Text>
         </View>
       </View>
     );
   };
 
 
-  const GestureCard = ({ item/* , gesture */ }) => {
-    return(
-      /* <GestureDetector  gesture={gesture} > */
-    
-        <SwipeableCard
-          item={item}
-          removeCard={() => removeCard(item.listId)}
-          screenWidth={screenWidth}
-          screenHeight={screenHeight}
-          onSwipe={startGuessing}
-        />
-   
-      /* </GestureDetector> */
-    );
-  };
+  const reversedImageList = useMemo(() => {
+    if (!imageList) return [];
+    return [...imageList].reverse();
+  }, [imageList]);
 
   return (
-    <SafeAreaView style={{ flex: 1 }}>
+    <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
         showIsLoading()
       ) : ((noMoreCard === true) && (imageList?.length === 0) && (!asyncImagesAreLoading)) ? (
@@ -196,9 +218,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
                   :
                 (
                   <>
-                    {[...imageList].reverse().map((item, id) => (
-                    //{imageList?.map((item, id) => (
-                      <GestureCard item={item} /* gesture={gesture} */ key={id}/>
+                    {reversedImageList.map((item) => (
+                      <SwipeableCard
+                        key={item.listId}
+                        item={item}
+                        removeCard={removeCard}
+                        screenWidth={screenWidth}
+                        screenHeight={screenHeight}
+                        onSwipe={startGuessing}
+                      />
                     ))}
                   </>
                 )
@@ -213,10 +241,27 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 };
 
 const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+  },
   container: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyStateActions: {
+    paddingTop: 10,
+  },
+  emptyStateText: {
+    color: GlobalStyle.color.quaternaryColor,
+    textAlign: 'center',
   },
   titleText: {
     fontSize: 22,

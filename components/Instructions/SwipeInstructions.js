@@ -24,7 +24,7 @@ export default function SwipeInstructions({ screenWidth, handleFilterClick }) {
           </View>
 
           <View style={styles.marginTop}>
-            <BigButton text="Let's go!" onPress={handleFilterClick} buttonStyle="ranking" />
+            <BigButton accessibilityLabel="Start guessing" testID="guess-path.button.start" text="Let's go!" onPress={handleFilterClick} buttonStyle="ranking" />
           </View>
 
 

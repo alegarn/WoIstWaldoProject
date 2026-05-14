@@ -8,10 +8,13 @@ const screenWidth = Dimensions.get('window').width;
 const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
-const BigButton = (({ text, onPress, buttonStyle }) => {
+const BigButton = (({ text, onPress, buttonStyle, testID, accessibilityLabel }) => {
   return (
     <View>
         <Pressable
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole='button'
+        testID={testID}
         style={({ pressed }) =>
           [
             styles.homeButton,

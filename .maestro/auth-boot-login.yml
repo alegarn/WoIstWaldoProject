@@ -1,0 +1,101 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Smoke: boot on a clean app state, verify the auth selectors, and complete a real
+# login with a non-production account.
+
+- launchApp:
+    appId: com.alegarn.WoIstWaldoProject
+- waitForAnimationToEnd
+- tapOn:
+    text: Reload
+    optional: true
+- tapOn:
+    text: Go To Home
+    optional: true
+- tapOn:
+    text: Continue
+    optional: true
+- tapOn:
+    text: Go home
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: guess-path.header.back
+    commands:
+      - tapOn:
+          id: guess-path.header.back
+      - waitForAnimationToEnd
+- tapOn:
+    text: Close
+    optional: true
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: home.header.logout
+    commands:
+      - tapOn:
+          id: home.header.logout
+      - waitForAnimationToEnd
+- extendedWaitUntil:
+    visible:
+      id: auth.input.email
+    timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: auth.button.signup-submit
+    commands:
+      - tapOn:
+          id: auth.button.switch-to-login
+      - extendedWaitUntil:
+          visible:
+            id: auth.button.login-submit
+          timeout: 5000
+- assertVisible:
+    id: auth.input.email
+- assertVisible:
+    id: auth.input.password
+- assertVisible:
+    id: auth.button.login-submit
+- tapOn:
+    id: auth.input.email
+- inputText: ${LOGIN_EMAIL}
+- tapOn:
+    id: auth.input.password
+- inputText: ${LOGIN_PASSWORD}
+- hideKeyboard
+- tapOn:
+    id: auth.button.login-submit
+- extendedWaitUntil:
+    visible:
+      id: home.button.tutorial
+    timeout: 10000
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.ranking

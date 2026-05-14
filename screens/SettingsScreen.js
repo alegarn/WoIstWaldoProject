@@ -8,7 +8,7 @@ import { checkSecureStoreItem } from '../utils/auth';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 
-export default SettingsScreen = () => {
+const SettingsScreen = () => {
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -77,10 +77,15 @@ export default SettingsScreen = () => {
     const response = await updateUser({ context, data });
     console.log("handleChangeEmail setting response", response?.status);
     console.log("email", response?.data?.email);
-    response?.status === 200
-      && context.changeUserEmail(response?.data?.email) 
-      && Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
+
+    if (response?.status === 200) {
+      await context.changeUserEmail(response?.data?.email);
+      Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
+      console.log("setting response", response?.status);
+      return;
+    }
+
+    Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
     console.log("setting response", response?.status);
   };
 
@@ -91,10 +96,14 @@ export default SettingsScreen = () => {
 
     const response = await updateUser({ context, data });
     console.log("handleChangeUsername setting response", response);
-    response?.status === 200
-      && context.changeUsername(username)
-      && Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
-    response?.status !== 200 && Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
+
+    if (response?.status === 200) {
+      await context.changeUsername(response?.data?.username ?? username);
+      Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
+      return;
+    }
+
+    Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
 
   };
 
@@ -199,22 +208,26 @@ export default SettingsScreen = () => {
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.boxContainer}>
+          <View style={styles.boxContainer} testID="settings.screen">
             <Text style={styles.title}>Change Email:</Text>
             <TextInput
+              accessibilityLabel="Settings email"
+              testID="settings.input.email"
               value={email}
               onChangeText={setEmail}
               style={styles.textInput}
             />
-            <Button children="Save" onPress={() => handleButtonClick('email')} style={styles.button} />
+            <Button accessibilityLabel="Save email" children="Save" onPress={() => handleButtonClick('email')} style={styles.button} testID="settings.button.save-email" />
   
             <Text style={styles.title}>Change Username:</Text>
             <TextInput
+              accessibilityLabel="Settings username"
+              testID="settings.input.username"
               value={username}
               onChangeText={setUsername}
               style={styles.textInput}
             />
-            <Button children="Save" onPress={() => handleButtonClick('username')} style={styles.button} />
+            <Button accessibilityLabel="Save username" children="Save" onPress={() => handleButtonClick('username')} style={styles.button} testID="settings.button.save-username" />
   
           </View>
   
@@ -222,6 +235,8 @@ export default SettingsScreen = () => {
             
             <Text style={styles.title}>Change Password:</Text>
             <TextInput
+              accessibilityLabel="Current password"
+              testID="settings.input.current-password"
               value={oldPassword}
               onChangeText={setOldPassword}
               placeholder="Enter your current password"
@@ -229,6 +244,8 @@ export default SettingsScreen = () => {
               style={styles.textInput}
             />
             <TextInput
+              accessibilityLabel="New password"
+              testID="settings.input.new-password"
               value={password}
               onChangeText={setPassword}
               placeholder="Enter new password"
@@ -236,6 +253,8 @@ export default SettingsScreen = () => {
               style={styles.textInput}
             />
             <TextInput
+              accessibilityLabel="Confirm new password"
+              testID="settings.input.confirm-password"
               value={confirmPassword}
               onChangeText={setConfirmPassword}
               placeholder="Confirm new password"
@@ -243,24 +262,29 @@ export default SettingsScreen = () => {
               style={styles.textInput}
             />
             <Button 
+              accessibilityLabel="Save password"
               children="Save" 
               onPress={() => handleButtonClick('password')} 
               style={styles.button} 
+              testID="settings.button.save-password"
             />
           </View>
   
           <View style={styles.dangerZoneContainer}>
             <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
             <Button 
+              accessibilityLabel="Delete account"
               children="Delete Account" 
               onPress={() => handleButtonClick('delete')} 
               cancel={true} 
-              style={styles.button} /* add flat */ />
+              style={styles.button}
+              testID="settings.button.delete-account" /* add flat */ />
           </View>
           <CenteredModal 
             isModalVisible={isModalVisible} 
             onPress={handleConfirm} 
             onCancel={handleCancel} 
+            testIDPrefix="settings.confirm-modal"
             children={confirmMessage}
           />
         </ScrollView>
@@ -269,6 +293,8 @@ export default SettingsScreen = () => {
   };
   
 };
+
+export default SettingsScreen;
 
 const styles = StyleSheet.create({
   container: {

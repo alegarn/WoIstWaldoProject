@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated } from 'react-native';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
@@ -26,74 +26,85 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
       
   const scrollIndicator = useRef(new Animated.Value(0)).current;
   
-  const scrollIndicatorPosition = Animated.multiply(
-    scrollIndicator,
-    visibleScrollBarHeight / completeScrollBarHeight
-  ).interpolate({
-    inputRange: [0, difference],
-    outputRange: [0, difference],
-    extrapolate: "clamp",
-  });
+  const scrollIndicatorPosition = useMemo(
+    () =>
+      Animated.multiply(
+        scrollIndicator,
+        visibleScrollBarHeight / completeScrollBarHeight
+      ).interpolate({
+        inputRange: [0, difference],
+        outputRange: [0, difference],
+        extrapolate: 'clamp',
+      }),
+    [completeScrollBarHeight, difference, scrollIndicator, visibleScrollBarHeight]
+  );
 
-  const handleScroll = (event) => {
-    // Call the animated event handler
-    Animated.event(
-      [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
-      { useNativeDriver: false }
-    )(event);
+  const onScrollAnimatedEvent = useMemo(
+    () =>
+      Animated.event(
+        [{ nativeEvent: { contentOffset: { y: scrollIndicator } } }],
+        { useNativeDriver: false }
+      ),
+    [scrollIndicator]
+  );
 
-    const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+  const handleScroll = useCallback(
+    (event) => {
+      onScrollAnimatedEvent(event);
 
-    // Check if the scroll is at the bottom
-    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 1) {
-      // Call your function here when scrolled to the bottom
-      setButtonIsVisible(true);
-    }
-  };
+      const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
+      if (layoutMeasurement.height + contentOffset.y >= contentSize.height - 1) {
+        setButtonIsVisible(true);
+      }
+    },
+    [onScrollAnimatedEvent]
+  );
 
   // Scrollbar end 
 
   // UseEffect ________________________________________________________________
-  useEffect(() => {
-    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]); 
-    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);  
-    updateImageUrl(screen);
-  }, [screen]);
-
-  // Functions ________________________________________________________________
-  const updateImageUrl = (screen) => {
+  const updateImageUrl = useCallback((screen) => {
     switch (screen) {
-      case "HomeScreen":
-        setImageUrl(require("../../assets/tutorial/farm_pict_home_320.jpg"));
-        break;  
-      case "HidingPathScreen":
-        setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
+      case 'HomeScreen':
+        setImageUrl(require('../../assets/tutorial/farm_pict_home_320.jpg'));
         break;
-      case "HideScreen" || "SetInstructionScreen" || "GuessScreen":
-        setImageUrl(require("../../assets/tutorial/farm_pict_hide_320.jpg"));
+      case 'HidingPathScreen':
+        setImageUrl(require('../../assets/tutorial/farm_pict_320.jpg'));
         break;
-      case "GuessPathScreen":
-        setImageUrl(require("../../assets/tutorial/farm_pict_guess_320.jpg"));
+      case 'HideScreen':
+      case 'SetInstructionScreen':
+      case 'GuessScreen':
+        setImageUrl(require('../../assets/tutorial/farm_pict_hide_320.jpg'));
         break;
-      case "ShowSuccess":
-        setImageUrl(require("../../assets/tutorial/farm_pict_success_320.jpg"));
+      case 'GuessPathScreen':
+        setImageUrl(require('../../assets/tutorial/farm_pict_guess_320.jpg'));
         break;
-      case "ShowFailure":
-        setImageUrl(require("../../assets/tutorial/farm_pict_failure_320.jpg"));
+      case 'ShowSuccess':
+        setImageUrl(require('../../assets/tutorial/farm_pict_success_320.jpg'));
+        break;
+      case 'ShowFailure':
+        setImageUrl(require('../../assets/tutorial/farm_pict_failure_320.jpg'));
         break;
 
       default:
-        setImageUrl(require("../../assets/tutorial/farm_pict_320.jpg"));
+        setImageUrl(require('../../assets/tutorial/farm_pict_320.jpg'));
         break;
-      };
-      return null;
-  };
+    }
+    return null;
+  }, []);
 
-  const closeModal = () => {
+  useEffect(() => {
+    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]);
+    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);
+    updateImageUrl(screen);
+  }, [screen, updateImageUrl]);
+
+  // Functions ________________________________________________________________
+  const closeModal = useCallback(() => {
     setIsVisible(false);
-  };
+  }, []);
 
-  const onPressAction = () => {
+  const onPressAction = useCallback(() => {
     if (onPress !== undefined) {
       closeModal();
       onPress();
@@ -101,7 +112,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     if (onPress === undefined) {
       closeModal();
     };
-  };
+  }, [closeModal, onPress]);
 
   return (
     <Modal transparent={true} animationType="fade" visible={isVisible}>

@@ -12,15 +12,17 @@ export default function ShowHideDescription({ inputChangeHandler, submitHandler,
           invalid={false}
           style={styles.input}
           textInputConfig={{
+            accessibilityLabel: "Hidden point description",
             placeholder: "How is your hiding location?",
             placeholderTextColor: "white",
             keyboardType: "default",
             onChangeText: inputChangeHandler,
             maxLength: 800,
-            multiline: true }}/>
+            multiline: true,
+            testID: 'set-instructions.input.description' }}/>
         <View style={styles.buttonContainer}>
-          <Button style={styles.button} thin={true} onPress={submitHandler}>Confirm ?</Button>
-          <Button style={styles.button} thin={true} onPress={onCancel}>Cancel</Button>
+          <Button accessibilityLabel="Confirm hidden point description" style={styles.button} thin={true} onPress={submitHandler} testID="set-instructions.button.confirm-description">Confirm ?</Button>
+          <Button accessibilityLabel="Cancel hidden point description" style={styles.button} thin={true} onPress={onCancel} testID="set-instructions.button.cancel-description">Cancel</Button>
         </View>
       </View>
     </View>
