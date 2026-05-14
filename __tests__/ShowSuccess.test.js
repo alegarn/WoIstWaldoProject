@@ -41,6 +41,7 @@ jest.mock('../store/auth-context', () => {
 });
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import ShowSuccess from '../components/Results/ShowSuccess';
@@ -95,7 +96,30 @@ describe('ShowSuccess', () => {
       jest.advanceTimersByTime(1000);
     });
 
-    expect(renderer.root.findByProps({ testID: 'result.screen.success' })).toBeTruthy();
+    const successContainer = renderer.root.findByProps({ testID: 'result.screen.success.container' });
+    const successScreen = renderer.root.findByProps({ testID: 'result.screen.success' });
+    const title = renderer.root.findByProps({ testID: 'result.screen.success.title' });
+
+    expect(successScreen).toBeTruthy();
+    expect(StyleSheet.flatten(successContainer.props.style)).toEqual(
+      expect.objectContaining({
+        backgroundColor: 'white',
+        alignItems: 'center',
+        justifyContent: 'center',
+      })
+    );
+    expect(StyleSheet.flatten(successScreen.props.style)).toEqual(
+      expect.objectContaining({
+        width: '100%',
+        alignItems: 'center',
+      })
+    );
+    expect(StyleSheet.flatten(title.props.style)).toEqual(
+      expect.objectContaining({
+        textAlign: 'center',
+        color: 'black',
+      })
+    );
 
     expect(mockResultChoices).toHaveBeenCalledWith(
       expect.objectContaining({

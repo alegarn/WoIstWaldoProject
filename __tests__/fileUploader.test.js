@@ -1,6 +1,13 @@
-jest.mock('expo-file-system', () => ({
-  deleteAsync: jest.fn(),
-}));
+const mockDelete = jest.fn();
+
+jest.mock('expo-file-system', () => {
+  const File = jest.fn().mockImplementation(function MockFile(uri) {
+    this.uri = uri;
+    this.delete = mockDelete;
+  });
+
+  return { File };
+});
 
 jest.mock('../utils/imageInfos', () => ({
   handleContentLength: jest.fn(),
@@ -16,9 +23,8 @@ jest.mock('../utils/auth', () => ({
   checkSecureStoreItem: jest.fn(),
 }));
 
-import * as FileSystem from 'expo-file-system';
-
 import { imageUploader } from '../utils/fileUploader';
+import { File } from 'expo-file-system';
 import { checkSecureStoreItem } from '../utils/auth';
 import { handleContentLength } from '../utils/imageInfos';
 import { performImageUpload, prepareImageUpload, saveImageInfos } from '../utils/imagesRequests';
@@ -46,6 +52,7 @@ describe('imageUploader', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockDelete.mockClear();
     handleContentLength.mockResolvedValue(4096);
     checkSecureStoreItem.mockResolvedValue('user-42');
   });
@@ -66,7 +73,7 @@ describe('imageUploader', () => {
     });
     expect(performImageUpload).not.toHaveBeenCalled();
     expect(saveImageInfos).not.toHaveBeenCalled();
-    expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
+    expect(File).not.toHaveBeenCalled();
   });
 
   it('returns the upload failure and skips metadata persistence', async () => {
@@ -107,7 +114,7 @@ describe('imageUploader', () => {
       message: 'Upload failed',
     });
     expect(saveImageInfos).not.toHaveBeenCalled();
-    expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 
   it('persists the uploaded metadata and deletes the local file after a successful upload', async () => {
@@ -142,7 +149,8 @@ describe('imageUploader', () => {
       },
       context,
     });
-    expect(FileSystem.deleteAsync).toHaveBeenCalledWith('file:///waldo.png');
+    expect(File).toHaveBeenCalledWith('file:///waldo.png');
+    expect(mockDelete).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ status: 200 });
   });
 
@@ -171,6 +179,6 @@ describe('imageUploader', () => {
       title: 'Something went wrong, please try again later',
       message: 'Metadata save failed',
     });
-    expect(FileSystem.deleteAsync).not.toHaveBeenCalled();
+    expect(mockDelete).not.toHaveBeenCalled();
   });
 });

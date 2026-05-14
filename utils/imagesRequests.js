@@ -1,8 +1,10 @@
 import axios from "axios";
-import * as FileSystem from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
 import { saveLastImageUuid } from "./storageDatum";
+
+const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
 
 function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
 
@@ -125,6 +127,10 @@ async function getImageFromStorage({ storageUrl, token }) {
 };
 
 function verifyItsBase64(imageData) {
+  if (typeof imageData !== 'string') {
+    return false;
+  }
+
   const base64Regex = /^data:image\/(png|jpeg|jpg|gif);base64,/;
 
   if (base64Regex.test(imageData)) {
@@ -138,14 +144,7 @@ function verifyItsBase64(imageData) {
 };
 
 async function ensureDirExists() {
-  //console.log("ensureDirExists");
-  const dirPath = FileSystem.cacheDirectory //+ "/images-v1";
-  const dirInfo = await FileSystem.getInfoAsync(dirPath);
-  if (!dirInfo.exists) {
-    console.log("Image directory doesn't exist, creating...");
-    await FileSystem.makeDirectoryAsync(dirPath, { intermediates: true });
-  };
-  //console.log("ensureDirExists end");
+  Paths.cache.create({ idempotent: true, intermediates: true });
 };
 
 async function extractBase64(imageData, filename) {
@@ -163,18 +162,11 @@ async function extractBase64(imageData, filename) {
   //console.log("fileExtension", fileExtension);
 
   // Create a new file path
-  const filePath = FileSystem.cacheDirectory + `${filename}.${fileExtension}`; // images-v1/ .${fetchedType} ?
-
-  //console.log("filePath", filePath);
-
   await ensureDirExists();
+  const imageFile = new File(Paths.cache, `${filename}.${fileExtension}`);
+  imageFile.write(base64Data, { encoding: 'base64' });
 
-  // Write the base64 data to the file
-  await FileSystem.writeAsStringAsync(filePath, base64Data, {
-    encoding: FileSystem.EncodingType.Base64,
-  });
-
-  return filePath;
+  return imageFile.uri;
 
 };
 
@@ -185,6 +177,37 @@ async function handleImagesDownload(image, token) {
   const filePath = await extractBase64(imageData, image.name);
   return filePath;
 };
+
+function buildImageObject(image, filePath) {
+  return new Image(
+    filePath,
+    image.name,
+    image.description,
+    image.image_height,
+    image.image_width,
+    image.is_portrait,
+    {x: image.x_location, y: image.y_location},
+    image.screen_height,
+    image.screen_width,
+    null
+  );
+}
+
+async function downloadImageBatch(imagesInfosData, token) {
+  const downloadedImages = await Promise.all(
+    imagesInfosData.map(async (image) => {
+      const filePath = await handleImagesDownload(image, token);
+
+      if (!filePath) {
+        return null;
+      }
+
+      return buildImageObject(image, filePath);
+    })
+  );
+
+  return downloadedImages.filter(Boolean);
+}
 
 
 export async function getImages(pictureId, context) {
@@ -198,75 +221,47 @@ export async function getImages(pictureId, context) {
     headers: headers,
   };
 
-  // let imagesInfos = handleGetImagesInfos(pictureId, config, userId )
-  // return { images: imagesInfos, isError: false, title: "", message: "" };
-  let imagesInfos = {};
+  let nextPictureId = pictureId;
+  let skippedBrokenBatches = 0;
+  let lastSkippedPictureId = null;
 
-  if (pictureId === null) {
-    imagesInfos = await getImagesInfos({ config, userId });
-  };
+  while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES) {
+    const imagesInfos = nextPictureId === null
+      ? await getImagesInfos({ config, userId })
+      : await getNextImagesInfos({ config, userId, pictureId: nextPictureId });
 
-  if (pictureId !== null) {
-    imagesInfos = await getNextImagesInfos({ config, userId, pictureId })
-  };
+    if (imagesInfos?.data === null) {
+      return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
+    };
 
-  if (imagesInfos?.data === null) {
-    return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
-  };
+    if (imagesInfos?.data === 401) {
+      return { isError: true, title: "There is an authentication error.", message: "Please reconnect" };
+    };
 
-  if (imagesInfos?.data === 401) {
-    return { isError: true, title: "There is an authentication error.", message: "Please reconnect" };
-  };
+    const imagesInfosData = imagesInfos?.data?.data ?? [];
 
-  if (imagesInfos.data?.data?.length === 0) {
-    return { isError: false, images: [] };
-  };
+    if (imagesInfosData.length === 0) {
+      if (lastSkippedPictureId !== null) {
+        await saveLastImageUuid(lastSkippedPictureId);
+      }
 
-  const images = [];
+      return { isError: false, images: [] };
+    };
 
-  const isError = await Promise.allSettled(
-    // create an array [Image object, ] 
-    // the Image object contains the path, with the informations, to the image 
-    imagesInfos?.data?.data?.map( async image => {
-      const filePath = await handleImagesDownload(image, token);
-      if (filePath !== false) {
-        const imageObject = new Image(
-          filePath,
-          image.name,
-          image.description,
-          image.image_height,
-          image.image_width,
-          image.is_portrait,
-          {x: image.x_location, y: image.y_location},
-          image.screen_height,
-          image.screen_width,
-          null
-        );
-        images.push(imageObject);
-      };
-      if (filePath === false) {
-        throw new Error({request: "Their is an error downloading user's images."});
-      };
+    const lastBatchPictureId = imagesInfosData[imagesInfosData.length - 1].name;
+    const images = await downloadImageBatch(imagesInfosData, token);
+
+    if (images.length > 0) {
+      await saveLastImageUuid(lastBatchPictureId);
+      return { isError: false, images: images };
     }
-  )).then(() => {
-    //console.log("Files downloaded successfully");
-    return { isError: false };
-  }).catch((error) => {
-    console.log("isError catch error", error.request);
-    return { isError: true, error: error.request };
-  });
 
-  const imagesInfosData = imagesInfos?.data?.data;
-  await saveLastImageUuid(imagesInfosData[imagesInfosData.length - 1].name);
+    skippedBrokenBatches += 1;
+    lastSkippedPictureId = lastBatchPictureId;
+    nextPictureId = lastBatchPictureId;
+  }
 
-  if (isError.isError === true ) {
-    console.log("isError.isError", isError);
-    return { isError: true, title: "There is an error, please retry later", message: isError?.error };
-  };
-
-  // Now you can use the file path to display the image
-  //console.log('File saved to', images[0].imageFile);
-  return { isError: false, images: images };
+  return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
 };
 
 
@@ -313,8 +308,13 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
   //console.log("fileUrl", fileUrl);
 
   try {
+    const uploadFile = new File(fileUrl);
 
-    const base64 = await FileSystem.readAsStringAsync(fileUrl, { encoding: 'base64' });
+    if (!uploadFile.exists) {
+      throw new Error('Selected image file is no longer available.');
+    }
+
+    const base64 = await uploadFile.base64();
     const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
       .then((response) => {
         if (response.status === 200) {
