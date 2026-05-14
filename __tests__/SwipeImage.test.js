@@ -29,6 +29,7 @@ jest.mock('../utils/imagesRequests', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  getE2EHiddenGuessCard: jest.fn(),
   getLocalImages: jest.fn(),
   storeImageList: jest.fn(),
   getLastImageId: jest.fn(),
@@ -49,6 +50,7 @@ jest.mock('../store/auth-context', () => {
 });
 
 jest.mock('../utils/e2eMode', () => ({
+  buildE2EGuessCardFromPayload: jest.fn(),
   buildE2EGuessCards: jest.fn(),
   isE2EMode: jest.fn(),
 }));
@@ -59,10 +61,11 @@ import { act, create } from 'react-test-renderer';
 
 import SwipeImage from '../components/UI/SwipeImage';
 import { AuthContext } from '../store/auth-context';
-import { buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
+import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
 import {
   deleteImageFromStorage,
+  getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
@@ -84,6 +87,10 @@ describe('SwipeImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     isE2EMode.mockReturnValue(false);
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
     buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     getLastImageId.mockResolvedValue(0);
@@ -228,9 +235,29 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
+    expect(getE2EHiddenGuessCard).toHaveBeenCalledTimes(1);
+    expect(buildE2EGuessCardFromPayload).toHaveBeenCalledWith(null);
     expect(buildE2EGuessCards).toHaveBeenCalledTimes(1);
     expect(getLocalImages).not.toHaveBeenCalled();
     expect(getImages).not.toHaveBeenCalled();
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-guess-card']);
+  });
+
+  it('prefers a saved hidden guess payload in e2e mode before falling back to the seeded card', async () => {
+    isE2EMode.mockReturnValue(true);
+    getE2EHiddenGuessCard.mockResolvedValue({
+      uri: 'file:///saved-hide.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+    });
+
+    await renderSwipeImage();
+
+    expect(getE2EHiddenGuessCard).toHaveBeenCalledTimes(1);
+    expect(buildE2EGuessCardFromPayload).toHaveBeenCalledWith({
+      uri: 'file:///saved-hide.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+    });
+    expect(buildE2EGuessCards).not.toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-hidden-guess-card']);
   });
 });

@@ -182,7 +182,7 @@ function AuthenticatedStack({ authContext }) {
             headerLeft: () => (
               <IconButton
                 accessibilityLabel="Go back"
-                icon="ios-arrow-back"
+                icon="arrow-back"
                 color={"white"}
                 size={24}
                 style={{ marginRight: 20 }}
@@ -233,6 +233,12 @@ function Navigation({ authContext }) {
       return;
     }
 
+    const currentRouteName = navigationRef.getCurrentRoute()?.name;
+
+    if (!currentRouteName || currentRouteName === 'HomeScreen') {
+      return;
+    }
+
     if (e2eHomeResetTimerRef.current) {
       clearTimeout(e2eHomeResetTimerRef.current);
     }
@@ -260,6 +266,17 @@ function Navigation({ authContext }) {
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (authContext.IsAuthenticated) {
+      return;
+    }
+
+    if (e2eHomeResetTimerRef.current) {
+      clearTimeout(e2eHomeResetTimerRef.current);
+      e2eHomeResetTimerRef.current = null;
+    }
+  }, [authContext.IsAuthenticated]);
 
   useEffect(() => {
     if (!isE2EMode() || !authContext.IsAuthenticated) {

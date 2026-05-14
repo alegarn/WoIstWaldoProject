@@ -10,8 +10,10 @@ import HideDescription from '../components/Picture/Descriptions/HideDescription'
 import CenteredModal from "../components/UI/CenteredModal";
 import ModalContent from '../components/UI/ModalContent';
 import { imageUploader } from "../utils/fileUploader";
+import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
 import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
+import { saveE2EHiddenGuessCard } from '../utils/storageDatum';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
@@ -112,7 +114,51 @@ export default function SetInstructionsScreen({ navigation, route }) {
     });
   };
 
+  const saveE2EGuessBridge = async () => {
+    if (!isE2EMode()) {
+      return;
+    }
+
+    await saveE2EHiddenGuessCard(
+      buildE2EHiddenGuessPayload({
+        uri,
+        description,
+        imageHeight,
+        imageWidth,
+        isPortrait,
+        hiddenLocation: {
+          x: touchLocation.x,
+          y: touchLocation.y,
+        },
+        screenHeight,
+        screenWidth,
+      })
+    );
+  };
+
+  const resetToHome = async () => {
+    handleScreenUi();
+    isTutorial && await handleTutorialUpdate();
+
+    navigation.reset({
+      index: 0,
+      routes: [{ 
+        name: 'HomeScreen', 
+        params: { 
+          isTutorial: isTutorial,
+          hidePathDone: true
+        } 
+      }],
+    });
+  };
+
   const handleConfirmModal = async () => {
+
+    if (isE2EMode()) {
+      await saveE2EGuessBridge();
+      await resetToHome();
+      return;
+    }
 
     let permissionStatus = await getPermissions();
     if (!permissionStatus) {
@@ -135,19 +181,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
       return;
     };
 
-    handleScreenUi();
-    isTutorial && await handleTutorialUpdate();
+    await saveE2EGuessBridge();
 
-    navigation.reset({
-      index: 0,
-      routes: [{ 
-        name: 'HomeScreen', 
-        params: { 
-          isTutorial: isTutorial,
-          hidePathDone: true
-        } 
-      }],
-    });
+    await resetToHome();
 
   };
 

@@ -54,7 +54,7 @@ export default function ShowSuccess({ navigation, route }) {
 
   const ShowResult = ({ navigation, isTutorial }) => {
     return (
-      <>
+      <View testID="result.screen.success">
         <Text style={[styles.title, styles.marginBottom]}>You Found It!</Text>
         <Text style={[styles.subtitle, styles.marginBottom]}>
           <Text style={styles.title}>1</Text> point earned!
@@ -70,7 +70,7 @@ export default function ShowSuccess({ navigation, route }) {
               screen={"ShowSuccess"}
             />
         }
-      </>
+      </View>
     );
   };
 

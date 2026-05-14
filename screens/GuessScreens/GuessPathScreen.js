@@ -34,7 +34,7 @@ export default function GuessPathScreen({ navigation, route }) {
   return (
     <>
       {
-        isE2EMode() && (
+        isE2EMode() && showOverlay && (
           <Pressable
             accessibilityLabel="Return to home"
             accessibilityRole="button"

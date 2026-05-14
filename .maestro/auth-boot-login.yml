@@ -18,51 +18,65 @@ appId: com.alegarn.WoIstWaldoProject
 - tapOn:
     text: Go home
     optional: true
-- tapOn:
-    id: guess-path.header.back
-    optional: true
-- tapOn:
-    id: guess-path.button.home
-    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: guess-path.header.back
+    commands:
+      - tapOn:
+          id: guess-path.header.back
+      - waitForAnimationToEnd
 - tapOn:
     text: Close
     optional: true
 - tapOn:
     id: home.tutorial-modal.close
     optional: true
-- tapOn:
-    id: home.header.logout
-    optional: true
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+- runFlow:
+    when:
+      visible:
+        id: home.header.logout
+    commands:
+      - tapOn:
+          id: home.header.logout
+      - waitForAnimationToEnd
 - extendedWaitUntil:
     visible:
       id: auth.input.email
     timeout: 10000
+- runFlow:
+    when:
+      visible:
+        id: auth.button.signup-submit
+    commands:
+      - tapOn:
+          id: auth.button.switch-to-login
+      - extendedWaitUntil:
+          visible:
+            id: auth.button.login-submit
+          timeout: 5000
 - assertVisible:
     id: auth.input.email
 - assertVisible:
     id: auth.input.password
 - assertVisible:
     id: auth.button.login-submit
-- tapOn:
-    id: auth.button.switch-to-signup
-- extendedWaitUntil:
-    visible:
-      id: auth.button.signup-submit
-    timeout: 5000
-- assertVisible:
-    id: auth.input.confirm-email
-- assertVisible:
-    id: auth.input.confirm-password
-- assertVisible:
-    id: auth.input.username
-- assertVisible:
-    id: auth.button.signup-submit
-- tapOn:
-    id: auth.button.switch-to-login
-- extendedWaitUntil:
-    visible:
-      id: auth.button.login-submit
-    timeout: 5000
 - tapOn:
     id: auth.input.email
 - inputText: ${LOGIN_EMAIL}

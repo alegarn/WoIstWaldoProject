@@ -1,9 +1,11 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ImageBackground, StyleSheet, PanResponder, Animated, View } from 'react-native';
+import { ImageBackground, StyleSheet, PanResponder, Animated, Pressable, Text, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
+import { isE2EMode } from '../../utils/e2eMode';
 
 export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
+  const e2eMode = isE2EMode();
 
   // States _________________________________________________________________
   const [showFullDescription, setShowFullDescription] = useState(false);
@@ -52,6 +54,11 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     [position]
   );
 
+  const horizontalSwipeThreshold = useMemo(
+    () => (e2eMode ? Math.min(screenWidth - 150, 90) : screenWidth - 150),
+    [e2eMode, screenWidth]
+  );
+
 
   const showChoiceImage = useCallback(() => {
 
@@ -91,8 +98,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         },
         onPanResponderRelease: (evt, gestureState) => {
           if (
-            gestureState.dx < screenWidth - 150 &&
-            gestureState.dx > -screenWidth + 150 &&
+            gestureState.dx < horizontalSwipeThreshold &&
+            gestureState.dx > -horizontalSwipeThreshold &&
             gestureState.dy > -screenHeight / 3 &&
             gestureState.dy < screenHeight / 3
           ) {
@@ -117,7 +124,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
                 useNativeDriver: false,
               }),
             ]).start();
-          } else if (gestureState.dx > screenWidth - 150) {
+          } else if (gestureState.dx > horizontalSwipeThreshold) {
             Animated.parallel([
               Animated.timing(xPosition, {
                 toValue: screenWidth,
@@ -133,7 +140,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               /* swipedDirection(swipeDirection); */
               onSwipe({ item });
             });
-          } else if (gestureState.dx < -screenWidth + 150) {
+          } else if (gestureState.dx < -horizontalSwipeThreshold) {
             Animated.parallel([
               Animated.timing(xPosition, {
                 toValue: -screenWidth,
@@ -151,8 +158,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             });
           } else if (
             gestureState.dy < -screenHeight / 3 &&
-            gestureState.dx < screenWidth - 150 &&
-            gestureState.dx > -screenWidth - 150
+            gestureState.dx < horizontalSwipeThreshold &&
+            gestureState.dx > -horizontalSwipeThreshold
           ) {
             Animated.parallel([
               Animated.timing(yPosition, {
@@ -171,8 +178,8 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             });
           } else if (
             gestureState.dy > screenHeight / 3 &&
-            gestureState.dx < screenWidth - 150 &&
-            gestureState.dx > -screenWidth - 150
+            gestureState.dx < horizontalSwipeThreshold &&
+            gestureState.dx > -horizontalSwipeThreshold
           ) {
             Animated.parallel([
               Animated.timing(yPosition, {
@@ -198,6 +205,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
       onSwipe,
       position,
       removeCard,
+      horizontalSwipeThreshold,
       screenHeight,
       screenWidth,
       showChoiceImage,
@@ -224,6 +232,29 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
             { translateY: yPositionLimits }],
         },
       ]}>
+
+        {
+          item.pictureId === 'e2e-hidden-guess-card' ?
+            <View style={styles.e2eMarker} testID="guess-path.card.saved" />
+          :
+          item.pictureId === 'e2e-guess-card' ?
+            <View style={styles.e2eMarker} testID="guess-path.card.fallback" />
+          : null
+        }
+
+        {
+          e2eMode ?
+            <Pressable
+              accessibilityLabel={`Open guess card ${item.listId}`}
+              accessibilityRole="button"
+              onPress={() => onSwipe({ item })}
+              style={styles.e2eOpenButton}
+              testID={`guess-path.card.open.${item.listId}`}
+            >
+              <Text style={styles.e2eOpenButtonText}>Open</Text>
+            </Pressable>
+          : null
+        }
 
         <ImageBackground
           accessibilityLabel={`Guess path image ${item.listId}`}
@@ -274,6 +305,28 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     position: 'absolute',
+  },
+  e2eMarker: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    width: 1,
+    height: 1,
+  },
+  e2eOpenButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    zIndex: 2,
+    backgroundColor: 'rgba(29, 19, 61, 0.92)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+  },
+  e2eOpenButtonText: {
+    color: 'white',
+    fontSize: 14,
+    fontWeight: '700',
   },
   cardTitleStyle: {
     color: '#000',

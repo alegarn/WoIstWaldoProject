@@ -19,12 +19,20 @@ jest.mock('expo-system-ui', () => ({
 }));
 
 jest.mock('@react-navigation/native', () => ({
+  CommonActions: {
+    reset: jest.fn((payload) => ({ type: 'RESET', payload })),
+  },
   DefaultTheme: {
     colors: {
       background: '#fff',
     },
   },
   NavigationContainer: ({ children }) => children,
+  useNavigationContainerRef: jest.fn(() => ({
+    isReady: jest.fn(() => false),
+    getCurrentRoute: jest.fn(() => ({ name: 'Login' })),
+    dispatch: jest.fn(),
+  })),
 }));
 
 jest.mock('@react-navigation/native-stack', () => {
@@ -196,5 +204,22 @@ describe('App Root', () => {
 
     expect(contextValue.logout).toHaveBeenCalledTimes(1);
     expect(mockLoadingOverlay).toHaveBeenCalledWith({ message: 'Disconnecting...' });
+
+    const guessPathScreen = recordedScreens.find(({ name }) => name === 'GuessPathScreen');
+
+    await act(async () => {
+      const headerLeft = guessPathScreen.options({ navigation }).headerLeft;
+      create(headerLeft());
+    });
+
+    const guessBackButton = mockIconButton.mock.calls.find(([props]) => props.testID === 'guess-path.header.back')[0];
+
+    expect(guessBackButton.icon).toBe('arrow-back');
+
+    await act(async () => {
+      guessBackButton.onPress();
+    });
+
+    expect(navigation.goBack).toHaveBeenCalledTimes(1);
   });
 });

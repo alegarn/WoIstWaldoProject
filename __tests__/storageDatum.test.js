@@ -13,12 +13,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 
 import {
+  clearE2EHiddenGuessCard,
   deleteImageFromStorage,
   emptyImageList,
+  getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
   removeImageFromList,
+  saveE2EHiddenGuessCard,
   saveLastImageUuid,
   storeImageList,
   updateImageList,
@@ -59,6 +62,19 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce('uuid-1');
     expect(await getLastImageUuid()).toBe('uuid-1');
+  });
+
+  it('stores, reads, and clears the saved e2e hidden guess payload', async () => {
+    const payload = { uri: 'file:///guess.jpg', hiddenLocation: { x: 0.3, y: 0.7 } };
+
+    await saveE2EHiddenGuessCard(payload);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('e2eHiddenGuessCard', JSON.stringify(payload));
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(payload));
+    expect(await getE2EHiddenGuessCard()).toEqual(payload);
+
+    await clearE2EHiddenGuessCard();
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('e2eHiddenGuessCard');
   });
 
   it('empties the stored image list, clears cache files, and removes tracking keys', async () => {

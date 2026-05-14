@@ -1,8 +1,14 @@
 import * as FileSystem from 'expo-file-system';
 
 export function handleImageType(uri) {
-  const fileExtension = uri.substring(uri.lastIndexOf(".") + 1)
-  return fileExtension
+  const normalizedUri = String(uri ?? '').split('?')[0].split('#')[0];
+  const extensionStartIndex = normalizedUri.lastIndexOf('.');
+
+  if (extensionStartIndex === -1 || extensionStartIndex === normalizedUri.length - 1) {
+    return '';
+  }
+
+  return normalizedUri.substring(extensionStartIndex + 1).toLowerCase();
 };
 
 export function isTypeValid(fileExtension) {

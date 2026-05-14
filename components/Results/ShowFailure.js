@@ -62,7 +62,7 @@ export default function ShowFailure({ navigation, route }) {
           showFailureImageAnimated ?
             <ImageAnimated success={false} />
           :
-            <>
+            <View testID="result.screen.failure">
               <Text style={styles.title}>You didn't find it :(</Text>
               <ResultChoices 
                 navigation={navigation} 
@@ -70,7 +70,7 @@ export default function ShowFailure({ navigation, route }) {
                 success={false} 
                 isTutorial={isTutorial} 
               />
-            </>
+            </View>
         }
       </View>
       {

@@ -21,8 +21,8 @@ export default function HidePicture({
   isTutorial }) {
 
   const [showFilter, setShowFilter] = useState(true);
-  const [touchLocation, setTouchLocation] = useState({ x: 0, y: 0, targetSize: 0 });
-  const [target, setTarget] = useState({ locationX: 0, locationY: 0, targetSize: 0 });
+  const [touchLocation, setTouchLocation] = useState(null);
+  const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);
 
   const screenWidth = screenDimensions.width;

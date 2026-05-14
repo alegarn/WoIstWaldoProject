@@ -6,9 +6,9 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 
 import { getImages } from '../../utils/imagesRequests';
-import { getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
-import { buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
+import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
@@ -108,6 +108,14 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
     if (isE2EMode()) {
       setNoMoreCard(false);
+      const savedGuessPayload = await getE2EHiddenGuessCard();
+      const savedGuessCard = buildE2EGuessCardFromPayload(savedGuessPayload);
+
+      if (savedGuessCard) {
+        setImageList([savedGuessCard]);
+        return;
+      }
+
       setImageList(buildE2EGuessCards());
       return;
     }

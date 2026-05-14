@@ -72,8 +72,10 @@ describe('ShowSuccess', () => {
       },
     };
 
+    let renderer;
+
     await act(async () => {
-      create(
+      renderer = create(
         <AuthContext.Provider value={{ userId: '42' }}>
           <ShowSuccess navigation={navigation} route={route} />
         </AuthContext.Provider>
@@ -92,6 +94,8 @@ describe('ShowSuccess', () => {
     await act(async () => {
       jest.advanceTimersByTime(1000);
     });
+
+    expect(renderer.root.findByProps({ testID: 'result.screen.success' })).toBeTruthy();
 
     expect(mockResultChoices).toHaveBeenCalledWith(
       expect.objectContaining({

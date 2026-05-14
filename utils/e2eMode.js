@@ -7,6 +7,7 @@ import { handlePicturePress } from './targetLocation';
 const E2E_HIDE_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_GUESS_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_HIDE_LOCATION = { x: 0.58, y: 0.46 };
+const E2E_INCORRECT_HIDE_LOCATION = { x: 0.18, y: 0.18 };
 
 function resolveLocalAsset(assetSource) {
   const resolvedAsset = ReactNativeImage.resolveAssetSource(assetSource);
@@ -28,6 +29,10 @@ export function getE2EAdDelayMs() {
 
 export function getE2EHideLocation() {
   return E2E_HIDE_LOCATION;
+}
+
+export function getE2EIncorrectHideLocation() {
+  return E2E_INCORRECT_HIDE_LOCATION;
 }
 
 export function buildE2EPictureSelection({ screenWidth, screenHeight, imageDimensionStyle, relativeLocation }) {
@@ -77,6 +82,48 @@ export function buildE2EGuessCards() {
       1,
     ),
   ];
+}
+
+export function buildE2EHiddenGuessPayload({
+  uri,
+  description,
+  imageHeight,
+  imageWidth,
+  isPortrait,
+  hiddenLocation,
+  screenHeight,
+  screenWidth,
+}) {
+  return {
+    uri,
+    pictureId: 'e2e-hidden-guess-card',
+    description,
+    imageHeight,
+    imageWidth,
+    isPortrait,
+    hiddenLocation,
+    screenHeight,
+    screenWidth,
+  };
+}
+
+export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
+  if (!payload?.uri) {
+    return null;
+  }
+
+  return new ImageModel(
+    payload.uri,
+    payload.pictureId ?? 'e2e-hidden-guess-card',
+    payload.description,
+    payload.imageHeight,
+    payload.imageWidth,
+    payload.isPortrait,
+    payload.hiddenLocation,
+    payload.screenHeight,
+    payload.screenWidth,
+    listId,
+  );
 }
 
 export function buildE2ERankingRows() {

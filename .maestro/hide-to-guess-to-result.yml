@@ -1,66 +1,81 @@
 appId: com.alegarn.WoIstWaldoProject
-env:
-  HIDE_DESCRIPTION: Hidden near the left side of the tree.
 ---
-# Scope: scaffold the highest-value gameplay journey from the authenticated home screen.
-# This flow now uses the stable selectors added in the app and stops only at the still-unstable seams.
-#
-# Preconditions for later execution:
-# - The app is already on `HomeScreen` with a valid authenticated session.
-# - A deterministic image fixture or dev-only shortcut exists for both hide and guess flows.
-#
-# Blockers in the current app:
-# 1. `LogicalImagePicker` still opens camera or gallery UI owned by the OS.
-# 2. `ShowPicture` now has a stable surface selector, but choosing the hidden point still depends on image coordinates.
-# 3. `SwipeImage` and `SwipeableCard` now have stable ids, but the card content still depends on cached/API-provided data.
-# 4. Reaching `ResultScreen` still requires a deterministic guess outcome and then the `AdScreen` delay.
-#
-# Intended continuation once deterministic fixtures/test seams exist:
-# - tapOn:
-#     id: image-picker.button.select-image
-# - handle permission dialogs and pick a known fixture image
-# - tapOn image surface at a known coordinate on:
-#     id: game.picture.hide-surface
-# - tapOn:
-#     id: game.picture.hide-modal.confirm
-# - inputText: ${HIDE_DESCRIPTION} into:
-#     id: set-instructions.input.description
-# - tapOn:
-#     id: set-instructions.button.confirm-description
-# - tapOn:
-#     id: set-instructions.confirm-modal.confirm
-# - tapOn:
-#     id: home.button.guess
-# - tapOn:
-#     id: guess-path.button.start
-# - select a seeded guess card using `guess-path.card.*`
-# - tap on the known target area
-# - tapOn:
-#     id: game.picture.guess-modal.confirm
-# - wait for the ad handoff
-# - assertVisible: You Found It! or You didn't find it :(
+# Full login-first deterministic E2E journey using the saved hide payload bridge.
+# The app itself must already have been started or built with EXPO_PUBLIC_E2E_MODE=true.
 
-- launchApp
-- waitForAnimationToEnd
+- runFlow: hide-login-save-picture.yml
 - assertVisible:
-  id: home.button.hide
+    id: home.button.hide
 - assertVisible:
-  id: home.button.guess
+    id: home.button.guess
 - tapOn:
-  id: home.button.hide
-- assertVisible:
-  id: image-picker.button.take-picture
-- assertVisible:
-  id: image-picker.button.select-image
-- back
-- assertVisible:
-  id: home.button.hide
+    id: home.button.guess
+- extendedWaitUntil:
+    visible:
+      id: guess-path.button.start
+    timeout: 10000
 - tapOn:
-  id: home.button.guess
-- assertVisible: "Swipe !"
+    id: guess-path.button.start
+- extendedWaitUntil:
+    visible:
+      id: guess-path.card.1
+    timeout: 10000
 - assertVisible:
-  id: guess-path.button.start
+    id: guess-path.card.1
+- assertVisible:
+    id: guess-path.card.saved
 - tapOn:
-  id: guess-path.button.start
+    id: guess-path.card.open.1
+- extendedWaitUntil:
+    visible:
+            id: game.instructions.guess.overlay
+    timeout: 10000
+- tapOn:
+        id: game.instructions.guess.overlay
+- extendedWaitUntil:
+    visible:
+      id: game.picture.guess-surface
+    timeout: 10000
 - assertVisible:
-  id: guess-path.swipe-stack
+    id: game.picture.guess-surface
+- tapOn:
+    id: game.picture.guess-surface
+- extendedWaitUntil:
+    visible:
+      id: game.picture.clear-guess
+    timeout: 5000
+- tapOn:
+    id: game.picture.clear-guess
+- extendedWaitUntil:
+    visible:
+      id: game.picture.guess-modal.confirm
+    timeout: 5000
+- tapOn:
+    id: game.picture.guess-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: result.screen.success
+    timeout: 10000
+- assertVisible:
+    id: result.screen.success
+- assertVisible:
+    id: result.button.home
+- tapOn:
+    id: result.button.home
+- extendedWaitUntil:
+    visible:
+      id: home.button.ranking
+    timeout: 10000
+- tapOn:
+    id: home.button.ranking
+- extendedWaitUntil:
+    visible:
+      id: ranking.table
+    timeout: 10000
+- assertVisible:
+    id: ranking.screen
+- assertVisible:
+    id: ranking.table
+- assertVisible:
+    id: ranking.row.1.name
+- assertVisible: ${RANKING_ROW_1_NAME}

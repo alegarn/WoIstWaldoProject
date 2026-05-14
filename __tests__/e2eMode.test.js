@@ -9,10 +9,13 @@ jest.mock('react-native', () => ({
 }));
 
 import {
+  buildE2EGuessCardFromPayload,
   buildE2EGuessCards,
+  buildE2EHiddenGuessPayload,
   buildE2EHideRouteParams,
   buildE2EPictureSelection,
   getE2EAdDelayMs,
+  getE2EIncorrectHideLocation,
   isE2EMode,
 } from '../utils/e2eMode';
 
@@ -70,6 +73,45 @@ describe('e2eMode helpers', () => {
         listId: 1,
       }),
     ]);
+  });
+
+  it('builds and restores an e2e hidden guess payload for the saved hide bridge', () => {
+    const payload = buildE2EHiddenGuessPayload({
+      uri: 'file:///saved-hide.jpg',
+      description: 'Look near the barn',
+      imageHeight: 240,
+      imageWidth: 320,
+      isPortrait: false,
+      hiddenLocation: { x: 0.58, y: 0.46 },
+      screenHeight: 640,
+      screenWidth: 320,
+    });
+
+    expect(payload).toEqual({
+      uri: 'file:///saved-hide.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+      description: 'Look near the barn',
+      imageHeight: 240,
+      imageWidth: 320,
+      isPortrait: false,
+      hiddenLocation: { x: 0.58, y: 0.46 },
+      screenHeight: 640,
+      screenWidth: 320,
+    });
+
+    expect(buildE2EGuessCardFromPayload(payload)).toEqual(
+      expect.objectContaining({
+        imageFile: 'file:///saved-hide.jpg',
+        pictureId: 'e2e-hidden-guess-card',
+        description: 'Look near the barn',
+        touchLocation: { x: 0.58, y: 0.46 },
+        listId: 1,
+      })
+    );
+  });
+
+  it('exposes a deterministic incorrect guess location away from the hidden point', () => {
+    expect(getE2EIncorrectHideLocation()).toEqual({ x: 0.18, y: 0.18 });
   });
 
   it('switches ad delay to zero only when e2e mode is enabled', () => {
