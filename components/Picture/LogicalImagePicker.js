@@ -86,7 +86,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
     // Launch the camera and capture an image
     const image = await launchCameraAsync({
       allowsEditing: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.5,
     });
 
@@ -117,7 +117,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
     // No permissions request is necessary for launching the image library
     let pickedImage = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: true,
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'],
       quality: 0.5,
     });
 
