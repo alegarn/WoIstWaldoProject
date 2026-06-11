@@ -9,7 +9,7 @@ This directory contains login-first Maestro flows for the deterministic app runt
 - `guess-login-saved-picture-success.yml`: logs in, opens the guess path, reuses the saved hide payload, and verifies the success result.
 - `guess-login-saved-picture-failure.yml`: logs in, opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, and verifies the failure result.
 - `hide-to-guess-to-result.yml`: full deterministic login -> hide -> guess -> ranking journey using the saved hide payload bridge.
-- `auth-boot-signup.yml`: legacy signup smoke flow retained for manual use only; it is not part of the recommended coverage because it creates backend rows every run.
+- `auth-boot-signup.yml`: signup smoke flow that generates unique credentials at runtime so it can be rerun without email or username collisions.
 - `e2e.env.example.yaml`: sample Maestro flow variables only.
 
 ## Runtime Requirement

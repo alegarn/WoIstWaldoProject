@@ -1,7 +1,7 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Smoke: boot on a clean app state, verify the auth selectors, and create a fresh
-# account that lands on the home screen.
+# Smoke: boot on a clean app state, generate unique signup credentials, and
+# verify the account can be created without colliding with existing rows.
 
 - launchApp:
     appId: com.alegarn.WoIstWaldoProject
@@ -55,21 +55,22 @@ appId: com.alegarn.WoIstWaldoProject
     id: auth.input.confirm-password
 - assertVisible:
     id: auth.input.username
+- runScript: scripts/generate-signup-credentials.js
 - tapOn:
     id: auth.input.email
-- inputText: ${SIGNUP_EMAIL}
+- inputText: ${output.signup.email}
 - tapOn:
     id: auth.input.confirm-email
-- inputText: ${SIGNUP_EMAIL}
+- inputText: ${output.signup.email}
 - tapOn:
     id: auth.input.password
-- inputText: ${SIGNUP_PASSWORD}
+- inputText: ${output.signup.password}
 - tapOn:
     id: auth.input.confirm-password
-- inputText: ${SIGNUP_PASSWORD}
+- inputText: ${output.signup.password}
 - tapOn:
     id: auth.input.username
-- inputText: ${SIGNUP_USERNAME}
+- inputText: ${output.signup.username}
 - hideKeyboard
 - tapOn:
     id: auth.button.signup-submit
