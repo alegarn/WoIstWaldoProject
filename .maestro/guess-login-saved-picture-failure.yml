@@ -1,15 +1,11 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Full login-first deterministic E2E journey using the saved hide payload bridge.
-# The app itself must already have been started or built with EXPO_PUBLIC_E2E_MODE=true.
+# Login-first incorrect-guess flow. In E2E mode, long-pressing the existing
+# guess surface selects a deterministic wrong location away from the saved point.
 # Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
-# Example: maestro test .maestro/hide-to-guess-to-result.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+# Example: maestro test .maestro/guess-login-saved-picture-failure.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
 
-- runFlow: hide-login-save-picture.yml
-- assertVisible:
-    id: home.button.hide
-- assertVisible:
-    id: home.button.guess
+- runFlow: auth-boot-login.yml
 - tapOn:
     id: home.button.guess
 - extendedWaitUntil:
@@ -38,9 +34,7 @@ appId: com.alegarn.WoIstWaldoProject
     visible:
       id: game.picture.guess-surface
     timeout: 10000
-- assertVisible:
-    id: game.picture.guess-surface
-- tapOn:
+- longPressOn:
     id: game.picture.guess-surface
 - extendedWaitUntil:
     visible:
@@ -56,28 +50,14 @@ appId: com.alegarn.WoIstWaldoProject
     id: game.picture.guess-modal.confirm
 - extendedWaitUntil:
     visible:
-      id: result.screen.success
+      id: result.screen.failure
     timeout: 10000
 - assertVisible:
-    id: result.screen.success
+    id: result.screen.failure
 - assertVisible:
     id: result.button.home
-- tapOn:
-    id: result.button.home
-- extendedWaitUntil:
-    visible:
-      id: home.button.ranking
-    timeout: 10000
-- tapOn:
-    id: home.button.ranking
-- extendedWaitUntil:
-    visible:
-      id: ranking.table
-    timeout: 10000
 - assertVisible:
-    id: ranking.screen
+    id: result.button.retry
 - assertVisible:
-    id: ranking.table
-- assertVisible:
-    id: ranking.row.1.name
+    id: result.button.another
 - runFlow: "_shared/return_home.yaml"

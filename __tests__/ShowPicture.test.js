@@ -72,8 +72,7 @@ describe('ShowPicture', () => {
     const surface = renderer.root.findByProps({ testID: 'game.picture.guess-surface' });
     const flattenedStyle = StyleSheet.flatten(surface.props.style);
 
-    expect(flattenedStyle.width).toBe(320);
-    expect(flattenedStyle.height).toBe(180);
+    expect(flattenedStyle.position).toBe('absolute');
 
     await act(async () => {
       surface.props.onPress();

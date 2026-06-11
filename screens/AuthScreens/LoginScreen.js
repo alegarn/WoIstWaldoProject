@@ -16,7 +16,7 @@ function LoginScreen() {
       token: response.headers.authorization,
       userId: response.data.data.id,
       email: response.data.data.email ?? email,
-      username: response.data.data.username,
+      username: response.data.data.username ?? '',
       isTutorialFinished: response.data.data.finished_tutorial,
       scoreId: response.data.data.score_id
     });

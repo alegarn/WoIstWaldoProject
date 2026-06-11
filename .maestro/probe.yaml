@@ -1,0 +1,14 @@
+appId: com.woistwaldo
+---
+# Env vars passed inline below. On CLI, use -e KEY=VALUE per var (Maestro 2.3.0).
+# Example: maestro test .maestro/probe.yaml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+- runFlow:
+    file: auth-boot-login.yml
+    env:
+      LOGIN_EMAIL: a@a.com
+      LOGIN_PASSWORD: aaaaaa
+- tapOn:
+    id: "home.button.guess"
+- waitForAnimationEnd
+- assertVisible:
+    id: "guess-path.button.start"

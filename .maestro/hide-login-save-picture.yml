@@ -1,0 +1,66 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Login-first hide flow. A successful save also persists the E2E hidden-guess
+# payload so later guess flows can reuse the same picture deterministically.
+# Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
+# Example: maestro test .maestro/hide-login-save-picture.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+
+- runFlow: auth-boot-login.yml
+- setPermissions:
+    permissions:
+      all: allow
+- tapOn:
+    id: home.button.hide
+- extendedWaitUntil:
+    visible:
+      id: image-picker.button.select-image
+    timeout: 10000
+- tapOn:
+    id: image-picker.button.select-image
+- extendedWaitUntil:
+    visible:
+      id: game.instructions.hide.overlay
+    timeout: 10000
+- tapOn:
+    id: game.instructions.hide.overlay
+- extendedWaitUntil:
+    visible:
+      id: game.picture.hide-surface
+    timeout: 10000
+- tapOn:
+    id: game.picture.hide-surface
+- extendedWaitUntil:
+    visible:
+      id: game.picture.clear-hide
+    timeout: 5000
+- tapOn:
+    id: game.picture.clear-hide
+- extendedWaitUntil:
+    visible:
+      id: game.picture.hide-modal.confirm
+    timeout: 5000
+- tapOn:
+    id: game.picture.hide-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.input.description
+    timeout: 10000
+- tapOn:
+    id: set-instructions.button.confirm-description
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.confirm-modal.confirm
+    timeout: 5000
+- tapOn:
+    id: set-instructions.confirm-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.ranking
+- runFlow: "_shared/return_home.yaml"
