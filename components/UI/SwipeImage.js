@@ -16,7 +16,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
-  const [noMoreCard, setNoMoreCard] = useState(false);
+  const [noMoreCard, setNoMoreCard] = useState(null);
 
   const context = useContext(AuthContext);
 
@@ -81,7 +81,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
-      return null;
+      return 'error';
     };
     if (response.isError === false) {
       //console.log("response.images", response.isError);
@@ -95,8 +95,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     console.log("handleImagesLoading");
 
     setAsyncImagesAreLoading(true);
-    const isCardLeft = await loadNewImages(pictureIdOverride);
-    isCardLeft ? null : setNoMoreCard(true);
+    const result = await loadNewImages(pictureIdOverride);
+    if (result === 'error') {
+      setNoMoreCard('error');
+    } else if (result === false) {
+      setNoMoreCard('exhausted');
+    }
     setAsyncImagesAreLoading(false);
   }, [loadNewImages]);
 
@@ -109,7 +113,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     console.log("handleGetImagesList");
 
     if (isE2EMode()) {
-      setNoMoreCard(false);
+      setNoMoreCard(null);
       const savedGuessPayload = await getE2EHiddenGuessCard();
       const savedGuessCard = buildE2EGuessCardFromPayload(savedGuessPayload);
 
@@ -128,10 +132,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(localImageList);
-    } else if (localImageList === null) {
+    } else if (localImageList === null || localImageList?.length === 0) {
       await handleImagesLoading(null);
     } else {
-      // new images are loaded
+      setImageList(localImageList);
       await handleImagesLoading();
     };
   }, [handleImagesLoading]);
@@ -195,6 +199,19 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     );
   };
 
+  const showNoMoreImages = () => {
+    return(
+      <View style={styles.emptyStateContainer}>
+        <Text style={styles.emptyStateText}>No more images to guess right now!</Text>
+        <View style={styles.emptyStateActions}>
+          <Text style={styles.emptyStateText}>To play you can:</Text>
+          <Text style={styles.emptyStateText}> - Upload new images</Text>
+          <Text style={styles.emptyStateText}> - Wait until someone else uploads new images</Text>
+        </View>
+      </View>
+    );
+  };
+
 
   const reversedImageList = useMemo(() => {
     if (!imageList) return [];
@@ -205,32 +222,35 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
         showIsLoading()
-      ) : ((noMoreCard === true) && (imageList?.length === 0) && (!asyncImagesAreLoading)) ? (
+      ) : (noMoreCard === 'error') && (imageList?.length === 0) && (!asyncImagesAreLoading) ? (
         showNoMoreCard()
+      ) : (noMoreCard === 'exhausted') && (imageList?.length === 0) && (!asyncImagesAreLoading) ? (
+        showNoMoreImages()
       ) : (
         <>
           {/* <Text style={styles.titleText}>Double Tap or Swipe</Text> */}
           <GestureHandlerRootView style={styles.container}>
             {(imageList?.length === 0) && (asyncImagesAreLoading) ?
               showIsLoading() :
-              ((imageList.length === 0 && noMoreCard && !asyncImagesAreLoading) ?
-                showNoMoreCard()
-                  :
-                (
-                  <>
-                    {reversedImageList.map((item) => (
-                      <SwipeableCard
-                        key={item.listId}
-                        item={item}
-                        removeCard={removeCard}
-                        screenWidth={screenWidth}
-                        screenHeight={screenHeight}
-                        onSwipe={startGuessing}
-                      />
-                    ))}
-                  </>
-                )
+              ((imageList.length === 0 && noMoreCard === 'error' && !asyncImagesAreLoading) ?
+                showNoMoreCard() :
+              (imageList.length === 0 && noMoreCard === 'exhausted' && !asyncImagesAreLoading) ?
+                showNoMoreImages() :
+              (
+                <>
+                  {reversedImageList.map((item) => (
+                    <SwipeableCard
+                      key={item.listId}
+                      item={item}
+                      removeCard={removeCard}
+                      screenWidth={screenWidth}
+                      screenHeight={screenHeight}
+                      onSwipe={startGuessing}
+                    />
+                  ))}
+                </>
               )
+            )
             }
           </GestureHandlerRootView>
         </>

@@ -109,7 +109,10 @@ async function getNextImagesInfos({ config, userId, pictureId }){
       return response;
     }).catch((error) => {
       console.log("error getNextImagesInfos", error.request);
-      return error;
+      if (error?.request?.status === 401) {
+        return { data: 401 };
+      }
+      return { data: null };
     });
   return response;
 };
