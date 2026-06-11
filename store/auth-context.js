@@ -53,7 +53,7 @@ export default function AuthContextProvider({ children }) {
     setAuthToken(token);
     setUserId(userId ?? '');
     setScoreId(scoreId ?? '');
-    setUsername(username ?? '');
+    setUsername((username && username !== 'undefined') ? username : '');
     setEmail(email ?? '');
     setHeaders(buildHeaders({ token, userId, scoreId, email, username }));
 
@@ -83,7 +83,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('token', token);
     await SecureStore.setItemAsync('userId', userId);
     await SecureStore.setItemAsync('email', email);
-    await SecureStore.setItemAsync('username', username);
+    await SecureStore.setItemAsync('username', username ?? '');
     await SecureStore.setItemAsync('scoreId', scoreId);
 
     setUserId(userId);
@@ -129,7 +129,7 @@ export default function AuthContextProvider({ children }) {
 
   async function changeUsername(username) {
     setUsername(username);
-    await SecureStore.setItemAsync('username', username);
+    await SecureStore.setItemAsync('username', username ?? '');
   };
 
   async function verifyIsLoggedIn() {

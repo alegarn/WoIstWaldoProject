@@ -1,0 +1,58 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Return to HomeScreen from any authenticated screen.
+# Handles: ResultScreen, RankingScreen, GuessPathScreen, and any modal.
+# Ends with the home screen ready for the next flow.
+
+# Result screen → tap "Go to Home"
+- runFlow:
+    when:
+      visible:
+        id: result.button.home
+    commands:
+      - tapOn:
+          id: result.button.home
+      - extendedWaitUntil:
+          visible:
+            id: home.button.ranking
+          timeout: 10000
+
+# Ranking screen → system back
+- runFlow:
+    when:
+      visible:
+        id: ranking.screen
+    commands:
+      - back
+      - waitForAnimationToEnd
+
+# GuessPathScreen → E2E home button
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+      - waitForAnimationToEnd
+
+# GuessPathScreen → native header back
+- runFlow:
+    when:
+      visible:
+        id: guess-path.header.back
+    commands:
+      - tapOn:
+          id: guess-path.header.back
+      - waitForAnimationToEnd
+
+# Dismiss tutorial modal on home
+- tapOn:
+    id: home.tutorial-modal.close
+    optional: true
+
+# Confirm home screen ready
+- extendedWaitUntil:
+    visible:
+      id: home.button.ranking
+    timeout: 10000

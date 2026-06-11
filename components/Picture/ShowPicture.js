@@ -38,37 +38,40 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
 
   return (
     <View style={styles.container} >
-      <Pressable
-        accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'}
-        onPress={handlePress}
-        onLongPress={handleLongPress}
-        style={[styles.pressable, imageDimensionStyle]}
-        testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
-      >
-        <ImageBackground
-          accessibilityLabel={guess ? 'Guess picture image' : 'Hide picture image'}
-          source={{uri : uri}}
-          resizeMode='stretch'
-          style={styles.image}
-          testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
+      <View style={[styles.pressable, imageDimensionStyle]}>
+        <Pressable
+          accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'}
+          onPress={handlePress}
+          onLongPress={handleLongPress}
+          style={StyleSheet.absoluteFill}
+          testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
+        >
+          <ImageBackground
+            accessibilityLabel={guess ? 'Guess picture image' : 'Hide picture image'}
+            source={{uri : uri}}
+            resizeMode='stretch'
+            style={styles.image}
+            testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
           >
-{/* no cross, when guess, if null  */}
-          {touchLocation && target?.targetStyle && (
-            <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
-          )}
 {/* target not showing for guessscreen */}
-          { guess ? (
-            <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
-          ) : null }
+            { guess ? (
+              <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
+            ) : null }
 
-          {/* {hiddenLocation && (
-            <IconButton icon={"close-circle-outline"} color={"green"} size={target.targetSize} style={hiddenTargetStyle}/>
-          )} */}
+            {/* {hiddenLocation && (
+              <IconButton icon={"close-circle-outline"} color={"green"} size={target.targetSize} style={hiddenTargetStyle}/>
+            )} */}
 
-          {}
-        </ImageBackground>
+            {}
+          </ImageBackground>
 
-    </Pressable>
+        </Pressable>
+
+{/* no cross, when guess, if null  */}
+        {touchLocation && target?.targetStyle && (
+          <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
+        )}
+      </View>
 
 
 

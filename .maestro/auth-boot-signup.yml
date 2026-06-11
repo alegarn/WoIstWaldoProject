@@ -2,6 +2,10 @@ appId: com.alegarn.WoIstWaldoProject
 ---
 # Smoke: boot on a clean app state, generate unique signup credentials, and
 # verify the account can be created without colliding with existing rows.
+# Signup credentials are generated at runtime by scripts/generate-signup-credentials.js
+# which reads SIGNUP_EMAIL_PREFIX, SIGNUP_EMAIL_DOMAIN, SIGNUP_PASSWORD, SIGNUP_USERNAME_PREFIX.
+# Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
+# Example: maestro test .maestro/auth-boot-signup.yml -e SIGNUP_EMAIL_PREFIX=e2e.signup -e SIGNUP_EMAIL_DOMAIN=woistwaldo.test -e SIGNUP_PASSWORD=E2eSignup123! -e SIGNUP_USERNAME_PREFIX=e2e_signup
 
 - launchApp:
     appId: com.alegarn.WoIstWaldoProject

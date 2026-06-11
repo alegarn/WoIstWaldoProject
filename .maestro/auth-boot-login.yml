@@ -2,6 +2,8 @@ appId: com.alegarn.WoIstWaldoProject
 ---
 # Smoke: boot on a clean app state, verify the auth selectors, and complete a real
 # login with a non-production account.
+# Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
+# Example: maestro test .maestro/auth-boot-login.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
 
 - launchApp:
     appId: com.alegarn.WoIstWaldoProject

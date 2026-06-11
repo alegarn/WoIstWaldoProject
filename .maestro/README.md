@@ -53,13 +53,17 @@ The checked-in sample file is `.maestro/e2e.env.example.yaml`. Copy it to `.maes
 
 ## Running The Flows
 
+Maestro 2.3.0 does not support `--env-file`. Each environment variable must be passed individually via `-e KEY=VALUE` on the CLI. The files `e2e.env.example.yaml` and `e2e.env.yaml` serve as a reference for which variables each flow expects; they are not loaded by Maestro itself.
+
 ```bash
+# Optional: copy the example env file as a reference for available variables.
 cp .maestro/e2e.env.example.yaml .maestro/e2e.env.yaml
-maestro test .maestro/auth-boot-login.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/hide-login-save-picture.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/guess-login-saved-picture-success.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/guess-login-saved-picture-failure.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/hide-to-guess-to-result.yml --env-file .maestro/e2e.env.yaml
+
+maestro test .maestro/auth-boot-login.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+maestro test .maestro/hide-login-save-picture.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+maestro test .maestro/guess-login-saved-picture-success.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+maestro test .maestro/guess-login-saved-picture-failure.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+maestro test .maestro/hide-to-guess-to-result.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
 ```
 
 Run `hide-login-save-picture.yml` before either guess-only flow. Those guess-only flows now assert `guess-path.card.saved`, so they fail early if the saved payload bridge was never created.
