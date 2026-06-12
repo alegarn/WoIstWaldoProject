@@ -2,7 +2,7 @@ import { useContext, useEffect, useState } from 'react';
 import { View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
-import BigButton from '../components/UI/BigButton';
+import HomeCard from '../components/UI/HomeCard';
 import { GlobalStyle } from '../constants/theme';
 import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
@@ -13,6 +13,10 @@ import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
+
+const HideImage = require('../assets/home/WoIstWaldo-character-hide.png');
+const MainImage = require('../assets/home/WoIstWaldo-character-main.png');
+const RankingImage = require('../assets/tutorial/farm_pict_home_320.jpg');
 
 export default function HomeScreen({ navigation, route }) {
   // States __________________________________________________________________
@@ -169,25 +173,27 @@ export default function HomeScreen({ navigation, route }) {
   return (
     <>
       <View style={styles.homeContainer}>
-        <BigButton
-          accessibilityLabel="Hide Waldo"
+        <HomeCard
           text="Hide Waldo"
           onPress={toHidingPathScreen}
-          buttonStyle="big"
+          backgroundImage={HideImage}
+          heightPercent={40}
           testID="home.button.hide"
-          />
-        <BigButton
-          accessibilityLabel="Find Waldo"
+        />
+        <HomeCard
           text="Find Waldo"
           onPress={toGuessPathScreen}
-          buttonStyle="big" 
+          backgroundImage={MainImage}
+          heightPercent={40}
           testID="home.button.guess"
-          />
-        <BigButton
-          accessibilityLabel="Open Ranking"
+        />
+        <HomeCard
           text="Ranking"
           onPress={toRankingScreen}
-          testID="home.button.ranking" />
+          backgroundImage={RankingImage}
+          heightPercent={20}
+          testID="home.button.ranking"
+        />
         {
           showModal && 
           <CenteredModal 
@@ -228,9 +234,9 @@ export default function HomeScreen({ navigation, route }) {
 const styles = StyleSheet.create({
   homeContainer: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: GlobalStyle.color.primaryColor500,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+    padding: 10,
+    gap: 10, // Use gap for spacing between cards
   },
   tutorialButton: {
     position: "absolute",

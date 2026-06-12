@@ -1,4 +1,4 @@
-const mockBigButton = jest.fn(() => null);
+const mockHomeCard = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
@@ -33,9 +33,9 @@ jest.mock('../store/auth-context', () => {
   };
 });
 
-jest.mock('../components/UI/BigButton', () => {
-  return function MockBigButton(props) {
-    mockBigButton(props);
+jest.mock('../components/UI/HomeCard', () => {
+  return function MockHomeCard(props) {
+    mockHomeCard(props);
     return null;
   };
 });
@@ -102,9 +102,9 @@ describe('HomeScreen post-launch session validation', () => {
     return navigation;
   }
 
-  function getBigButtonProps(text) {
-    const buttonCall = mockBigButton.mock.calls.find(([props]) => props.text === text);
-    return buttonCall?.[0];
+  function getHomeCardProps(text) {
+    const cardCall = mockHomeCard.mock.calls.find(([props]) => props.text === text);
+    return cardCall?.[0];
   }
 
   it('validates the persisted session on focus when verifyIsLoggedIn resolves false', async () => {
@@ -146,9 +146,9 @@ describe('HomeScreen post-launch session validation', () => {
     };
     const navigation = await renderScreen(contextValue);
 
-    getBigButtonProps('Hide Waldo').onPress();
-    getBigButtonProps('Find Waldo').onPress();
-    getBigButtonProps('Ranking').onPress();
+    getHomeCardProps('Hide Waldo').onPress();
+    getHomeCardProps('Find Waldo').onPress();
+    getHomeCardProps('Ranking').onPress();
 
     expect(navigation.navigate).toHaveBeenNthCalledWith(1, 'HidingPathScreen');
     expect(navigation.navigate).toHaveBeenNthCalledWith(2, 'GuessPathScreen');
