@@ -1,11 +1,11 @@
-const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-const emailPrefix = (typeof env !== "undefined" && env.SIGNUP_EMAIL_PREFIX) || "e2e.signup";
-const emailDomain = (typeof env !== "undefined" && env.SIGNUP_EMAIL_DOMAIN) || "woistwaldo.test";
-const usernamePrefix = (typeof env !== "undefined" && env.SIGNUP_USERNAME_PREFIX) || "e2e_signup";
-const password = (typeof env !== "undefined" && env.SIGNUP_PASSWORD) || "E2eSignup123!";
+const randomSuffix = `${Date.now()}-${faker.number().digits(6)}`;
+const emailPrefix = typeof SIGNUP_EMAIL_PREFIX === 'string' ? SIGNUP_EMAIL_PREFIX : 'e2e.signup';
+const emailDomain = typeof SIGNUP_EMAIL_DOMAIN === 'string' ? SIGNUP_EMAIL_DOMAIN : 'woistwaldo.test';
+const usernamePrefix = typeof SIGNUP_USERNAME_PREFIX === 'string' ? SIGNUP_USERNAME_PREFIX : 'e2e_signup';
+const password = typeof SIGNUP_PASSWORD === 'string' ? SIGNUP_PASSWORD : 'E2eSignup123!';
 
 output.signup = {
-  email: `${emailPrefix}.${suffix}@${emailDomain}`,
+  email: `${emailPrefix}.${randomSuffix}@${emailDomain}`,
   password,
-  username: `${usernamePrefix}_${suffix}`,
+  username: `${usernamePrefix}_${randomSuffix}`,
 };

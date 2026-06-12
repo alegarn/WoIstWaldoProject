@@ -1,7 +1,7 @@
 import axios from "axios";
 import { getBackendHeaders } from "./auth";
 import { setHeaders } from "./auth";
-import { buildE2ERankingRows, buildE2EUserScores, isE2EMode } from './e2eMode';
+import { buildE2ERankingResponse, buildE2EUserScores, isE2EMode } from './e2eMode';
 
 export async function updateUserScore({ score, pictureId, context }) {
   if (isE2EMode()) {
@@ -35,16 +35,10 @@ export async function updateUserScore({ score, pictureId, context }) {
   return response;
 };
 
-export async function getRankingData(context, { scope, top, window, page } = {}) {
+export async function getRankingData(context, { scope, top, window, page, after, limit } = {}) {
   if (isE2EMode()) {
-    return {
-      status: 200,
-      data: {
-        data: {
-          rows: buildE2ERankingRows(),
-        },
-      },
-    };
+    const e2eData = buildE2ERankingResponse({ after, limit, scope, page });
+    return { status: 200, data: e2eData };
   }
 
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
@@ -56,6 +50,8 @@ export async function getRankingData(context, { scope, top, window, page } = {})
   if (top) params.top = top;
   if (window) params.window = window;
   if (page) params.page = page;
+  if (after) params.after = after;
+  if (limit) params.limit = limit;
 
   const config = {
     headers: headers,
@@ -65,7 +61,48 @@ export async function getRankingData(context, { scope, top, window, page } = {})
   const response = await axios
     .get(url, config)
     .then((response) => {
-      return { status: response.status, data: response.data };
+      const payload = response.data;
+      let normalized;
+
+      if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) && payload.data.rows) {
+        normalized = {
+          rows: payload.data.rows,
+          nextCursor: null,
+          hasMore: false,
+          me: payload.data.me || null,
+          meta: payload.data.meta || null,
+          pagy: null,
+        };
+      } else if (payload.next_cursor !== undefined) {
+        normalized = {
+          rows: Array.isArray(payload.data) ? payload.data : [],
+          nextCursor: payload.next_cursor || null,
+          hasMore: !!payload.has_more,
+          me: null,
+          meta: null,
+          pagy: null,
+        };
+      } else if (payload.pagy) {
+        normalized = {
+          rows: Array.isArray(payload.data) ? payload.data : [],
+          nextCursor: null,
+          hasMore: payload.pagy.next != null,
+          me: null,
+          meta: null,
+          pagy: payload.pagy,
+        };
+      } else {
+        normalized = {
+          rows: Array.isArray(payload.data) ? payload.data : [],
+          nextCursor: null,
+          hasMore: false,
+          me: null,
+          meta: null,
+          pagy: null,
+        };
+      }
+
+      return { status: response.status, data: normalized };
     })
     .catch((error) => {
       return { status: error?.request?.status, message: error.message };

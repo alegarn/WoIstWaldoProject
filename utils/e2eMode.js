@@ -134,6 +134,41 @@ export function buildE2ERankingRows() {
   }));
 }
 
+export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
+  const allRows = buildE2ERankingRows();
+
+  if (page) {
+    return {
+      rows: allRows,
+      nextCursor: null,
+      hasMore: false,
+      me: null,
+      meta: null,
+      pagy: { count: allRows.length, pages: 1, page: 1 },
+    };
+  }
+
+  if (after) {
+    return {
+      rows: allRows.slice(5),
+      nextCursor: 'e2e-cursor-next',
+      hasMore: false,
+      me: null,
+      meta: null,
+      pagy: null,
+    };
+  }
+
+  return {
+    rows: allRows.slice(0, 5),
+    me: { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 },
+    meta: { top: 3, window: 2 },
+    nextCursor: null,
+    hasMore: false,
+    pagy: null,
+  };
+}
+
 export function buildE2EUserScores(username) {
   const fallbackRow = DUMMY_RANKING.scoresDatum[0];
   const selectedRow = DUMMY_RANKING.scoresDatum.find((row) => row.name === username) ?? fallbackRow;
