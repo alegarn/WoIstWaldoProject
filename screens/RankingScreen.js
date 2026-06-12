@@ -173,7 +173,7 @@ export default function RankingScreen() {
     <>
       {rankingDatum ? (
         <View style={styles.screen} testID="ranking.screen">
-          <TableComponent data={rankingDatum}  onPress={showSpecificDatum}  />
+          <TableComponent data={rankingDatum} onPress={showSpecificDatum} onEndReached={handleEndReached} />
         </View>
       ) : (
         <LoadingOverlay message={"Loading ranking table..."}/>
