@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
 import { RANKING } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
@@ -8,45 +8,30 @@ import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
 
+// Bounded resident window: 150 rows ≈ 7–8 cursor pages of 20 rows.
+// Keeps memory stable on low-end devices while allowing deep browsing.
+// Old slices are evicted when the cap is exceeded (see fetchCursorPage).
+const RANKING_RESIDENT_ROW_CAP = 150;
+
 export default function RankingScreen() {
 
-  const [rankingDatum, setRankingDatum] = useState(null);
-  const [rows, setRows] = useState([]);
-  const [pagy, setPagy] = useState(null);
+  const [slices, setSlices] = useState([]);
+  const [nextCursor, setNextCursor] = useState(null);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [mode, setMode] = useState('initial');
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const fetchingRef = useRef(false);
 
   const context = useContext(AuthContext);
 
-  function convertToRanking(tableHeaders, rankingData, pagyData) {
-    const currentPage = pagyData.page;
-    const itemsPerPage = pagyData.items;
+  const tableHeaders = RANKING?.tableHeaders;
 
-    const data = {
-      tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
-      tableScores: rankingData.map(({ total_score, username, ...rest }, index) => ({
-        rank: ((currentPage - 1) * itemsPerPage) + index + 1,
-        name: username ,
-        score: total_score,
-        others: ""
-      }))
-    };
+  const displayRows = slices.flat();
 
-    return data;
-  };
-
-  function convertInitialToRanking(tableHeaders, rows) {
-    const data = {
-      tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
-      tableScores: (rows || []).map((row) => ({
-        rank: Number(row.rank),
-        name: row.username,
-        score: row.total_score,
-        others: ""
-      }))
-    };
-    return data;
-  };
+  const rankingDatum = displayRows.length > 0 ? {
+    tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
+    tableScores: displayRows,
+  } : null;
 
   const showSpecificDatum = useCallback(async (username) => {
     const response = await getUserScores({username, context: context});
@@ -93,77 +78,86 @@ export default function RankingScreen() {
 
 
   const handleRankingData = useCallback(async () => {
-    const tableHeaders = RANKING?.tableHeaders;
-    const rankingData = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
+    const response = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
 
-    if (rankingData?.status !== 200) {
-      handleError(rankingData?.message, rankingData?.status);
-      return
-    };
-
-    const payload = rankingData?.data?.data;
-
-    let finalDatum = null;
-    if (payload && Array.isArray(payload.rows)) {
-      const init = convertInitialToRanking(tableHeaders, payload.rows);
-      setRows(init.tableScores);
-      setRankingDatum(init);
-      setMode('initial');
-    } else {
-      const data = payload;
-      const pagyData = rankingData?.data?.pagy;
-      const final = convertToRanking(tableHeaders, data, pagyData);
-      setRows(final.tableScores);
-      setRankingDatum(final);
-      setPagy(pagyData);
-      setMode('paged');
-    }
-    return rankingData;
-  }, [context]);
-
-  async function fetchPage(page) {
-    if (isLoadingMore) return;
-    setIsLoadingMore(true);
-    const tableHeaders = RANKING?.tableHeaders;
-    const response = await getRankingData(context, { page });
     if (response?.status !== 200) {
-      setIsLoadingMore(false);
       handleError(response?.message, response?.status);
       return;
     }
 
-    const data = response.data.data;
-    const pagyData = response.data.pagy;
-    const pageRows = (data || []).map((rec, index) => ({
-      rank: ((pagyData.page - 1) * pagyData.items) + index + 1,
-      username: rec.username,
-      name: rec.username,
-      score: rec.total_score || rec.totalScore,
+    const { rows, nextCursor: cursor, hasMore: more } = response.data;
+    const converted = (rows || []).map((row) => ({
+      rank: Number(row.rank),
+      name: row.username,
+      score: row.total_score,
+      others: "",
+      userId: row.user_id,
     }));
 
-    // dedupe by username (avoid exposing user_id on client)
-    const existingNames = new Set(rows.map(r => String(r.name)));
-    const deduped = pageRows.filter(r => !existingNames.has(String(r.name)));
+    setSlices([converted]);
+    setNextCursor(cursor);
+    // Initial response always enables cursor browsing; the first cursor
+    // fetch (null cursor = start from top) provides the first browse page.
+    setHasMore(true);
+    setMode('initial');
+    return response;
+  }, [context]);
 
-    const nextRows = rows.concat(deduped.map(r => ({ rank: r.rank, name: r.name, score: r.score })));
-    setRows(nextRows);
-    setRankingDatum({ tableHeaders: tableHeaders.slice(0,3).concat(["Others"]), tableScores: nextRows });
-    setPagy(pagyData);
-    setMode('paged');
-    setIsLoadingMore(false);
-  }
+  const fetchCursorPage = useCallback(async () => {
+    if (fetchingRef.current || !hasMore) return;
+    fetchingRef.current = true;
+    setIsLoading(true);
 
-  const handleEndReached = async () => {
-    if (isLoadingMore) return;
-    if (mode === 'initial') {
-      // switch to paged mode: load page 1 then allow more
-      await fetchPage(1);
+    const response = await getRankingData(context, { after: nextCursor });
+
+    if (response?.status !== 200) {
+      fetchingRef.current = false;
+      setIsLoading(false);
+      handleError(response?.message, response?.status);
       return;
     }
-    if (pagy && pagy.page < pagy.pages) {
-      await fetchPage(pagy.page + 1);
-    }
-  };
+
+    const { rows, nextCursor: cursor, hasMore: more } = response.data;
+    const baseRank = displayRows.length;
+    const converted = (rows || []).map((row, index) => ({
+      rank: baseRank + index + 1,
+      name: row.username,
+      score: row.total_score || row.totalScore,
+      others: "",
+      userId: row.user_id,
+    }));
+
+    const finalConverted = mode === 'initial'
+      ? (() => {
+          const existingIds = new Set(displayRows.map(r => r.userId));
+          return converted.filter(r => !existingIds.has(r.userId));
+        })()
+      : converted;
+
+    setSlices(prev => {
+      const next = [...prev, finalConverted];
+      const totalRows = next.reduce((sum, s) => sum + s.length, 0);
+      if (totalRows <= RANKING_RESIDENT_ROW_CAP) return next;
+      let kept = [];
+      let count = 0;
+      for (let i = next.length - 1; i >= 0; i--) {
+        if (count + next[i].length > RANKING_RESIDENT_ROW_CAP && kept.length > 0) break;
+        kept.unshift(next[i]);
+        count += next[i].length;
+      }
+      return kept;
+    });
+    setNextCursor(cursor);
+    setHasMore(more !== false);
+    setMode('browse');
+    fetchingRef.current = false;
+    setIsLoading(false);
+  }, [context, hasMore, nextCursor, displayRows.length, mode]);
+
+  const handleEndReached = useCallback(async () => {
+    if (fetchingRef.current || !hasMore) return;
+    await fetchCursorPage();
+  }, [hasMore, fetchCursorPage]);
 
   useEffect(() => {
     handleRankingData();

@@ -1,13 +1,35 @@
-import React, { useCallback } from 'react';
-import { FlatList, StyleSheet, Text, View, Dimensions } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 
 import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
 
-const windowWidth = Dimensions.get('window').width;
-const windowHeight = Dimensions.get('window').height;
+function buildRankingMetrics(width, height) {
+  return {
+    containerPaddingHorizontal: width * 0.04,
+    containerPaddingTop: height * 0.04,
+    containerPaddingBottom: height * 0.1,
 
-const RowItem = React.memo(function RowItem({ row, onPressMore }) {
+    headerHeight: height * 0.07,
+    headerBorderRadius: height * 0.01,
+    headerMarginBottom: height * 0.03,
+    headerFontSize: height * 0.03,
+
+    rowHeight: height * 0.07,
+
+    cellWidth: width * 0.23,
+    cellHeight: height * 0.07,
+
+    textMargin: width * 0.02,
+    textFontSize: height * 0.03,
+
+    buttonWidth: width * 0.18,
+    buttonHeight: height * 0.03,
+    buttonBorderRadius: 5,
+  };
+}
+
+const RowItem = React.memo(function RowItem({ row, onPressMore, metrics, styles }) {
   return (
     <View style={styles.row} testID={`ranking.row.${row.rank}`}>
       <View style={styles.cell}>
@@ -30,8 +52,9 @@ const RowItem = React.memo(function RowItem({ row, onPressMore }) {
           accessibilityLabel={`Show more scores for ${row.name}`}
           onPress={() => onPressMore(row.name)}
           testID={`ranking.row.${row.rank}.more`}
-          windowHeight={windowHeight}
-          windowWidth={windowWidth}
+          buttonWidth={metrics.buttonWidth}
+          buttonHeight={metrics.buttonHeight}
+          buttonBorderRadius={metrics.buttonBorderRadius}
         />
       </View>
     </View>
@@ -39,6 +62,56 @@ const RowItem = React.memo(function RowItem({ row, onPressMore }) {
 });
 
 export default function TableComponent({ data, onPress, onEndReached }) {
+  const { width, height } = useWindowDimensions();
+  const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
+
+  const styles = useMemo(() => StyleSheet.create({
+    container: {
+      flex: 1,
+      padding: metrics.containerPaddingHorizontal,
+      paddingTop: metrics.containerPaddingTop,
+      paddingBottom: metrics.containerPaddingBottom,
+      backgroundColor: GlobalStyle.color.primaryColor,
+    },
+    head: {
+      height: metrics.headerHeight,
+      backgroundColor: GlobalStyle.color.primaryColor300,
+      flexDirection: 'row',
+      alignSelf: "center",
+      overflow: "hidden",
+      borderTopLeftRadius: metrics.headerBorderRadius,
+      borderTopRightRadius: metrics.headerBorderRadius,
+      marginBottom: metrics.headerMarginBottom,
+    },
+    headText: {
+      color: "#fff",
+      fontSize: metrics.headerFontSize,
+    },
+    text: {
+      margin: metrics.textMargin,
+      alignSelf: "center",
+      color: "#fff",
+    },
+    name: {
+      fontWeight: '600',
+    },
+    row: {
+      height: metrics.rowHeight,
+      flexDirection: 'row',
+    },
+    cell: {
+      width: metrics.cellWidth,
+      height: metrics.cellHeight,
+      borderBottomWidth: 0.5,
+      borderBottomColor: GlobalStyle.color.primaryColor900,
+      textAlign: 'center',
+      textAlignVertical: 'center',
+    },
+    big: {
+      fontSize: metrics.textFontSize,
+    },
+  }), [metrics]);
+
   const headers = data?.tableHeaders || [];
   const rows = data?.tableScores || [];
 
@@ -61,78 +134,36 @@ export default function TableComponent({ data, onPress, onEndReached }) {
         ))}
       </View>
     );
-  }, [headers]);
+  }, [headers, styles]);
 
   const renderItem = useCallback(
     ({ item }) => {
-      return <RowItem row={item} onPressMore={onPressMore} />;
+      return <RowItem row={item} onPressMore={onPressMore} metrics={metrics} styles={styles} />;
     },
-    [onPressMore]
+    [onPressMore, metrics, styles]
   );
 
   return (
     <View style={styles.container} testID="ranking.table">
       <FlatList
+        key={`${width}x${height}`}
         data={rows}
         keyExtractor={(item) => String(item.rank)}
         ListHeaderComponent={renderHeader}
         renderItem={renderItem}
+        getItemLayout={(data, index) => ({
+          length: metrics.rowHeight,
+          offset: metrics.rowHeight * index,
+          index,
+        })}
         initialNumToRender={12}
-        windowSize={10}
-        removeClippedSubviews
+        windowSize={5}
+        removeClippedSubviews // optional; remove if blank rows appear on low-end Android
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={100}
       />
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: windowWidth * 0.04,
-    paddingTop: windowHeight * 0.04,
-    paddingBottom: windowHeight * 0.1,
-    backgroundColor: GlobalStyle.color.primaryColor,
-  },
-  borderStyle: {
-    borderColor: 'transparent',
-  },
-  head: {
-    height: windowHeight * 0.07,
-    backgroundColor: GlobalStyle.color.primaryColor300,
-    flexDirection: 'row',
-    alignSelf: "center",
-    overflow: "hidden",
-    borderTopLeftRadius: windowHeight * 0.01,
-    borderTopRightRadius: windowHeight * 0.01,
-    marginBottom: windowHeight * 0.03,
-  },
-  headText: {
-    color: "#fff",
-    fontSize: windowHeight * 0.03,
-  },
-  text: {
-    margin: windowWidth * 0.02,
-    alignSelf: "center",
-    color: "#fff",
-  },
-  name: {
-    fontWeight: '600',
-  },
-  row: {
-    height: windowHeight * 0.07,
-    flexDirection: 'row',
-  },
-  cell: {
-    width: windowWidth * 0.23,
-    height: windowHeight * 0.07,
-    borderBottomWidth: 0.5,
-    borderBottomColor: GlobalStyle.color.primaryColor900,
-    textAlign: 'center',
-    textAlignVertical: 'center',
-  },
-  big: {
-    fontSize: windowHeight * 0.03,
-  }
-});
