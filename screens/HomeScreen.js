@@ -15,8 +15,8 @@ import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
 
 const HideImage = require('../assets/home/WoIstWaldo-character-hide.png');
-const MainImage = require('../assets/home/WoIstWaldo-character-main.png');
-const RankingImage = require('../assets/tutorial/farm_pict_home_320.jpg');
+const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.png');
+const RankingImage = require('../assets/home/WoIstWaldo-character-stats.png');
 
 export default function HomeScreen({ navigation, route }) {
   // States __________________________________________________________________
