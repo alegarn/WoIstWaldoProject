@@ -87,4 +87,36 @@ describe('ResultChoices', () => {
       routes: [{ name: 'GuessPathScreen', params: { isTutorial: false } }],
     });
   });
+
+  it('deep-links back to GuessFeedScreen with category and language when present', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+
+    await act(async () => {
+      create(
+        <AuthContext.Provider value={{ updateTutorialStatus: jest.fn(), isTutorialFinished: {} }}>
+          <ResultChoices
+            navigation={navigation}
+            route={{ params: { category, language: 'fr' } }}
+            success={true}
+            isTutorial={false}
+          />
+        </AuthContext.Provider>
+      );
+    });
+
+    await act(async () => {
+      await getButtonProps('Another one').onPress();
+    });
+
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 3,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: false } },
+        { name: 'GuessFeedScreen', params: { category, language: 'fr' } },
+        { name: 'ResultScreen' },
+      ],
+    });
+  });
 });

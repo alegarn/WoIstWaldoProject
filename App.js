@@ -26,6 +26,7 @@ import GuessScreen from './screens/GuessScreens/GuessScreen';
 import AdScreen from './screens/GuessScreens/AdScreen';
 import ResultScreen from './screens/GuessScreens/ResultScreen';
 
+import LanguageOnboardingScreen from './screens/LanguageOnboardingScreen';
 import SetInstructionsScreen from './screens/SetInstructionScreen';
 import RankingScreen from './screens/RankingScreen';
 import SettingsScreen from './screens/SettingsScreen';
@@ -45,7 +46,8 @@ import { getUserConsent } from './utils/adHandling';
  */
 
 import { bootstrapStoredAuthSession } from './utils/auth';
-import { isE2EMode } from './utils/e2eMode';
+import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
+import { getOnboardingCompleted } from './utils/storageDatum';
 
 
 const Stack = createNativeStackNavigator();
@@ -71,6 +73,21 @@ function AuthStack() {
     </Stack.Navigator>
   );
 };
+
+function LanguageOnboardingStack({ onDone }) {
+  return (
+    <Stack.Navigator
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: GlobalStyle.color.primaryColor900 },
+      }}
+    >
+      <Stack.Screen name="LanguageOnboarding">
+        {() => <LanguageOnboardingScreen onDone={onDone} />}
+      </Stack.Screen>
+    </Stack.Navigator>
+  );
+}
 
 
 function AuthenticatedStack({ authContext }) {
@@ -253,9 +270,16 @@ function AuthenticatedStack({ authContext }) {
 function Navigation({ authContext }) {
   const navigationRef = useNavigationContainerRef();
   const e2eHomeResetTimerRef = useRef(null);
+  const [isOnboardingResolved, setIsOnboardingResolved] = useState(!authContext.IsAuthenticated);
+  const [showLanguageOnboarding, setShowLanguageOnboarding] = useState(false);
 
   const scheduleHomeResetForE2E = () => {
-    if (!isE2EMode() || !authContext.IsAuthenticated || !navigationRef.isReady()) {
+    if (
+      !isE2EMode() ||
+      !authContext.IsAuthenticated ||
+      showLanguageOnboarding ||
+      !navigationRef.isReady()
+    ) {
       return;
     }
 
@@ -284,6 +308,61 @@ function Navigation({ authContext }) {
       );
     }, 2500);
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    const syncOnboardingState = async () => {
+      if (!authContext.IsAuthenticated) {
+        if (!mounted) {
+          return;
+        }
+
+        setShowLanguageOnboarding(false);
+        setIsOnboardingResolved(true);
+        return;
+      }
+
+      setIsOnboardingResolved(false);
+
+      try {
+        if (isE2EMode()) {
+          await ensureE2EOnboardingBypass();
+
+          if (!mounted) {
+            return;
+          }
+
+          setShowLanguageOnboarding(false);
+          return;
+        }
+
+        const onboardingCompleted = await getOnboardingCompleted();
+
+        if (!mounted) {
+          return;
+        }
+
+        setShowLanguageOnboarding(!onboardingCompleted);
+      } catch (error) {
+        if (!mounted) {
+          return;
+        }
+
+        setShowLanguageOnboarding(true);
+      } finally {
+        if (mounted) {
+          setIsOnboardingResolved(true);
+        }
+      }
+    };
+
+    syncOnboardingState();
+
+    return () => {
+      mounted = false;
+    };
+  }, [authContext.IsAuthenticated]);
 
   useEffect(() => {
     return () => {
@@ -316,14 +395,21 @@ function Navigation({ authContext }) {
     });
 
     return () => subscription.remove();
-  }, [authContext.IsAuthenticated]);
+  }, [authContext.IsAuthenticated, showLanguageOnboarding]);
+
+  if (!isOnboardingResolved) {
+    return <LoadingOverlay message="Loading preferences..." />;
+  }
 
   return (
     <NavigationContainer ref={navigationRef} theme={navigationTheme} onReady={scheduleHomeResetForE2E}>
       {
-        authContext.IsAuthenticated ? 
-          <AuthenticatedStack authContext={authContext} /> 
-          : 
+        authContext.IsAuthenticated ?
+          showLanguageOnboarding ?
+            <LanguageOnboardingStack onDone={() => setShowLanguageOnboarding(false)} />
+            :
+            <AuthenticatedStack authContext={authContext} />
+          :
           <AuthStack />
       }
     </NavigationContainer>

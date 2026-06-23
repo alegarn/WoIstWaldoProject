@@ -70,6 +70,8 @@ describe('ShowSuccess', () => {
         listId: 7,
         imageFile: 'file:///waldo.jpg',
         isTutorial: true,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
       },
     };
 
@@ -84,7 +86,7 @@ describe('ShowSuccess', () => {
     });
 
     expect(mockImageAnimated).toHaveBeenCalledWith({ success: true });
-    expect(removeImageFromList).toHaveBeenCalledWith(7);
+    expect(removeImageFromList).toHaveBeenCalledWith(7, 'nature', 'fr');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///waldo.jpg');
     expect(updateUserScore).toHaveBeenCalledWith({
       score: 1,

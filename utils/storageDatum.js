@@ -4,6 +4,8 @@ import { File, Paths } from "expo-file-system";
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
 const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
+const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
+const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
 
 function imageListKey(categoryKey, language) {
@@ -65,13 +67,27 @@ export async function saveSessionLanguageFilter(code) {
 
 export async function getPreferredLanguage() {
   const stored = await AsyncStorage.getItem(PREFERRED_LANGUAGE_KEY);
-  return stored || DEFAULT_LANGUAGE;
+  return stored || null;
 };
 
 export async function savePreferredLanguage(code) {
   await AsyncStorage.setItem(PREFERRED_LANGUAGE_KEY, code);
   return null;
 };
+
+export async function getOnboardingCompleted() {
+  const stored = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
+  return stored === 'true';
+}
+
+export async function setOnboardingCompleted(value) {
+  await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+function normalizeTagName(name) {
+  return String(name || '').trim().toLowerCase();
+}
 
 function parseStoredValue(value) {
   if (!value) {
@@ -83,6 +99,35 @@ function parseStoredValue(value) {
   } catch (error) {
     return null;
   }
+}
+
+function normalizeStoredTags(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return [...new Set(value.map(normalizeTagName).filter(Boolean))];
+}
+
+export async function getUserTags() {
+  const storedTags = await AsyncStorage.getItem(USER_TAGS_KEY);
+  return normalizeStoredTags(parseStoredValue(storedTags));
+}
+
+export async function saveUserTag(name) {
+  const normalizedName = normalizeTagName(name);
+  const currentTags = await getUserTags();
+
+  if (!normalizedName) {
+    return currentTags;
+  }
+
+  const nextTags = currentTags.includes(normalizedName)
+    ? currentTags
+    : [...currentTags, normalizedName];
+
+  await AsyncStorage.setItem(USER_TAGS_KEY, JSON.stringify(nextTags));
+  return nextTags;
 }
 
 export async function saveE2EHiddenGuessCard(payload) {

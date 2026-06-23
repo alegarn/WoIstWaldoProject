@@ -37,13 +37,17 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  getOnboardingCompleted,
   getPreferredLanguage,
   getSessionLanguageFilter,
+  getUserTags,
   removeImageFromList,
   saveE2EHiddenGuessCard,
   saveLastImageUuid,
   savePreferredLanguage,
   saveSessionLanguageFilter,
+  saveUserTag,
+  setOnboardingCompleted,
   storeImageList,
   updateImageList,
 } from '../utils/storageDatum';
@@ -97,7 +101,7 @@ describe('storageDatum utilities', () => {
     expect(await getSessionLanguageFilter()).toBe('en');
   });
 
-  it('round-trips the preferred language and defaults to en when unset', async () => {
+  it('round-trips the preferred language and returns null when unset', async () => {
     await savePreferredLanguage('de');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('preferredLanguage', 'de');
 
@@ -105,7 +109,45 @@ describe('storageDatum utilities', () => {
     expect(await getPreferredLanguage()).toBe('de');
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
-    expect(await getPreferredLanguage()).toBe('en');
+    expect(await getPreferredLanguage()).toBeNull();
+  });
+
+  it('stores onboarding completion as string booleans and treats missing values as false', async () => {
+    await setOnboardingCompleted(true);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('onboardingCompleted', 'true');
+
+    await setOnboardingCompleted(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('onboardingCompleted', 'false');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('true');
+    expect(await getOnboardingCompleted()).toBe(true);
+
+    AsyncStorage.getItem.mockResolvedValueOnce('false');
+    expect(await getOnboardingCompleted()).toBe(false);
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getOnboardingCompleted()).toBe(false);
+  });
+
+  it('reads saved user tags and falls back to an empty list when unset or invalid', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['city', 'museum']));
+    expect(await getUserTags()).toEqual(['city', 'museum']);
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getUserTags()).toEqual([]);
+
+    AsyncStorage.getItem.mockResolvedValueOnce('{bad json');
+    expect(await getUserTags()).toEqual([]);
+  });
+
+  it('appends unique lowercase user tags', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['city']));
+    expect(await saveUserTag('  Museum  ')).toEqual(['city', 'museum']);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('userTags', JSON.stringify(['city', 'museum']));
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['city']));
+    expect(await saveUserTag('CITY')).toEqual(['city']);
+    expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('userTags', JSON.stringify(['city']));
   });
 
   it('stores, reads, and clears the saved e2e hidden guess payload', async () => {

@@ -1,6 +1,46 @@
-import { Modal, View, Text, ScrollView, Pressable, StyleSheet, TouchableOpacity } from 'react-native';
+import { Modal, View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+
+function normalizeTags(tags) {
+  if (Array.isArray(tags)) {
+    return tags
+      .map((tag) => (typeof tag === 'string' ? tag : tag?.name))
+      .filter(Boolean);
+  }
+
+  if (typeof tags === 'string' && tags.trim()) {
+    return [tags.trim()];
+  }
+
+  return [];
+}
+
+function formatCreatedAt(value) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    timeZone: 'UTC',
+  });
+}
 
 export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDPrefix }) {
+  const tags = normalizeTags(image?.tags);
+  const category = image?.category?.name ?? image?.category;
+  const language = image?.language;
+  const creator = image?.creatorUsername ?? image?.creator_username;
+  const createdAt = formatCreatedAt(image?.createdAt ?? image?.created_at);
+  const fullDescription = image?.fullDescription ?? image?.full_description;
+
   return (
     <Modal visible={!!image} animationType="slide" transparent={false} onRequestClose={onClose}>
       <View testID={`${testIDPrefix}.modal`} style={styles.container}>
@@ -16,49 +56,47 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}>
           <View style={styles.separator} />
 
-          {image?.tags !== undefined && (
+          {tags.length > 0 && (
             <View style={styles.row} testID={`${testIDPrefix}.row.tags`}>
               <Text style={styles.label}>Tags</Text>
-              <Text style={styles.value}>
-                {Array.isArray(image.tags) ? image.tags.join(', ') : ''}
-              </Text>
+              <Text style={styles.value}>{tags.join(', ')}</Text>
             </View>
           )}
 
-          {image?.category !== undefined && (
+          {category ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.category`}>
               <Text style={styles.label}>Category</Text>
-              <Text style={styles.value}>{image?.category?.name}</Text>
+              <Text style={styles.value}>{category}</Text>
             </View>
-          )}
+          ) : null}
 
-          {image?.language !== undefined && (
+          {language ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.language`}>
               <Text style={styles.label}>Language</Text>
-              <Text style={styles.value}>{image?.language}</Text>
+              <Text style={styles.value}>{language}</Text>
             </View>
-          )}
+          ) : null}
 
-          {image?.creator_username !== undefined && (
+          {creator ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.creator`}>
               <Text style={styles.label}>Creator</Text>
-              <Text style={styles.value}>{image?.creator_username}</Text>
+              <Text style={styles.value}>{creator}</Text>
             </View>
-          )}
+          ) : null}
 
-          {image?.created_at !== undefined && (
+          {createdAt ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.date`}>
               <Text style={styles.label}>Created</Text>
-              <Text style={styles.value}>{image?.created_at}</Text>
+              <Text style={styles.value}>{createdAt}</Text>
             </View>
-          )}
+          ) : null}
 
-          {image?.full_description !== undefined && (
+          {fullDescription ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.enigma`}>
               <Text style={styles.label}>Enigma</Text>
-              <Text style={styles.value}>{image?.full_description}</Text>
+              <Text style={styles.value}>{fullDescription}</Text>
             </View>
-          )}
+          ) : null}
         </ScrollView>
       </View>
     </Modal>

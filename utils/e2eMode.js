@@ -2,6 +2,7 @@ import { Image as ReactNativeImage } from 'react-native';
 
 import { RANKING as DUMMY_RANKING } from '../data/dummy-data';
 import ImageModel from '../models/image';
+import { savePreferredLanguage, setOnboardingCompleted } from './storageDatum';
 import { handlePicturePress } from './targetLocation';
 
 const E2E_HIDE_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
@@ -43,6 +44,32 @@ const E2E_CATEGORIES = [
   },
 ];
 
+const E2E_IMAGE_RATING = {
+  global_rating: 4,
+  quality_rating: 3,
+  enigma_rating: 4,
+  fun_rating: 3,
+  difficulty_rating: 4,
+};
+
+const E2E_IMAGE_TAGS = [
+  { id: 'e2e-tag-1', name: 'hard', user_id: 'e2e-user', username: 'e2e-user' },
+  { id: 'e2e-tag-2', name: 'night', user_id: 'e2e-user', username: 'e2e-user' },
+];
+
+const E2E_IMAGE_DETAIL_CATEGORY = {
+  id: 'e2e-cat-nature',
+  key: 'nature',
+  name: 'Nature',
+  thumbnailUrl: null,
+  sortOrder: 0,
+};
+
+const E2E_IMAGE_DETAIL_CREATED_AT = '2026-01-15T10:30:00Z';
+const E2E_IMAGE_DETAIL_FULL_DESCRIPTION = 'e2e full description';
+const E2E_IMAGE_DETAIL_AVERAGE_RATING = 4;
+const E2E_IMAGE_DETAIL_RATINGS_COUNT = 5;
+
 function attachE2EGuessCardMetadata(card, overrides = {}) {
   card.category = overrides.category ?? E2E_GUESS_CARD_CATEGORY;
   card.language = overrides.language ?? E2E_GUESS_CARD_LANGUAGE;
@@ -68,6 +95,19 @@ function resolveLocalAsset(assetSource) {
 
 export function isE2EMode() {
   return process.env.EXPO_PUBLIC_E2E_MODE === 'true';
+}
+
+export async function ensureE2EOnboardingBypass() {
+  if (!isE2EMode()) {
+    return false;
+  }
+
+  await Promise.all([
+    savePreferredLanguage('en'),
+    setOnboardingCompleted(true),
+  ]);
+
+  return true;
 }
 
 export function buildE2ECategories() {
@@ -250,5 +290,26 @@ export function buildE2EUserScores(username) {
     guess_info: {
       guess_count: selectedRow.guessTotalCount,
     },
+  };
+}
+
+export function buildE2EImageRating() {
+  return { ...E2E_IMAGE_RATING };
+}
+
+export function buildE2EImageTags() {
+  return E2E_IMAGE_TAGS.map((tag) => ({ ...tag }));
+}
+
+export function buildE2EImageDetail() {
+  return {
+    category: { ...E2E_IMAGE_DETAIL_CATEGORY },
+    language: E2E_GUESS_CARD_LANGUAGE,
+    tags: buildE2EImageTags(),
+    creatorUsername: 'e2e-creator',
+    createdAt: E2E_IMAGE_DETAIL_CREATED_AT,
+    fullDescription: E2E_IMAGE_DETAIL_FULL_DESCRIPTION,
+    averageRating: E2E_IMAGE_DETAIL_AVERAGE_RATING,
+    ratingsCount: E2E_IMAGE_DETAIL_RATINGS_COUNT,
   };
 }

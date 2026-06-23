@@ -21,7 +21,7 @@ export default function StarRatingBadge({ value, ratingsCount, size = 30, onPres
     animatedValue.setValue(value || 0);
   }, [animatedValue, value]);
 
-  const isUnrated = ratingsCount === 0;
+  const isUnrated = ratingsCount === 0 || typeof ratingsCount === 'undefined';
 
   return (
     <Pressable

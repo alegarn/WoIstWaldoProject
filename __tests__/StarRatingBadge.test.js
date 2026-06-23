@@ -54,6 +54,12 @@ describe('StarRatingBadge', () => {
     expect(renderer.root.findByProps({ testID: 'rating.badge.unknown' }).props.children).toBe('?');
   });
 
+  it('renders an unrated question mark when ratings count is undefined', async () => {
+    const renderer = await renderBadge({ value: 0, ratingsCount: undefined });
+
+    expect(renderer.root.findByProps({ testID: 'rating.badge.unknown' }).props.children).toBe('?');
+  });
+
   it('renders the hidden numeric value test id when the badge is rated', async () => {
     const renderer = await renderBadge({ value: 4.5, ratingsCount: 12 });
 

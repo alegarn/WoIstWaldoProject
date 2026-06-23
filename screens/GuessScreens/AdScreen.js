@@ -40,7 +40,7 @@ export default function AdScreen({navigation, route}){
   const [showOverlay, setShowOverlay] = useState(true);
 
 
-  const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId, isTutorial } = route.params;
+  const { onTarget, imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, screenHeight, screenWidth, listId, isTutorial, category, language } = route.params;
 
   const showLoadingOverlay = () => {
     const message = "Loading Ads";
@@ -60,7 +60,9 @@ export default function AdScreen({navigation, route}){
       screenHeight: screenHeight,
       screenWidth: screenWidth,
       listId: listId,
-      isTutorial: isTutorial
+      isTutorial: isTutorial,
+      category,
+      language,
     });
   };
 

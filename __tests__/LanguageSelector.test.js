@@ -69,4 +69,18 @@ describe('LanguageSelector', () => {
     expect(onChange).toHaveBeenCalledWith('fr');
     expect(onChange).toHaveBeenCalledTimes(1);
   });
+
+  it('forwards accessibility metadata to the trigger button', async () => {
+    const renderer = await renderSelector({
+      accessibilityLabel: 'Choose onboarding language',
+      accessibilityHint: 'Opens language choices',
+    });
+
+    expect(renderer.root.findByProps({ testID: 'language.button' }).props.accessibilityLabel).toBe(
+      'Choose onboarding language'
+    );
+    expect(renderer.root.findByProps({ testID: 'language.button' }).props.accessibilityHint).toBe(
+      'Opens language choices'
+    );
+  });
 });

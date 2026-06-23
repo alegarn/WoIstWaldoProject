@@ -1,4 +1,6 @@
 const mockGuessDescription = jest.fn(() => null);
+const mockStarRatingBadge = jest.fn(() => null);
+const mockBadgeDetailModal = jest.fn(() => null);
 
 let capturedPanResponder;
 
@@ -6,9 +8,27 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
 }));
 
+jest.mock('../utils/ratingRequests', () => ({
+  getImageTags: jest.fn(),
+}));
+
 jest.mock('../components/Picture/Descriptions/GuessDescription', () => {
   return function MockGuessDescription(props) {
     mockGuessDescription(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/StarRatingBadge', () => {
+  return function MockStarRatingBadge(props) {
+    mockStarRatingBadge(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/BadgeDetailModal', () => {
+  return function MockBadgeDetailModal(props) {
+    mockBadgeDetailModal(props);
     return null;
   };
 });
@@ -74,12 +94,16 @@ import { act, create } from 'react-test-renderer';
 
 import SwipeableCard from '../components/UI/SwipeableCard';
 import { isE2EMode } from '../utils/e2eMode';
+import { getImageTags } from '../utils/ratingRequests';
 
 describe('SwipeableCard', () => {
   const item = {
     listId: 7,
+    pictureId: 'picture-7',
     imageFile: 'file:///waldo.jpg',
     description: 'Find Waldo behind the tree.',
+    averageRating: 4.4,
+    ratingsCount: 12,
   };
 
   beforeEach(() => {
@@ -223,5 +247,29 @@ describe('SwipeableCard', () => {
         pictureId: 'e2e-hidden-guess-card',
       }),
     });
+  });
+
+  it('renders StarRatingBadge from the item and forwards badge presses without local modal state', async () => {
+    const onBadgePress = jest.fn();
+
+    await renderCard({ onBadgePress });
+
+    expect(mockStarRatingBadge).toHaveBeenCalledTimes(1);
+    expect(mockStarRatingBadge.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        value: item.averageRating,
+        ratingsCount: item.ratingsCount,
+        testIDPrefix: 'guess-path.card.7',
+      })
+    );
+    expect(mockBadgeDetailModal).not.toHaveBeenCalled();
+    expect(getImageTags).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockStarRatingBadge.mock.calls[0][0].onPress();
+    });
+
+    expect(onBadgePress).toHaveBeenCalledWith(item);
+    expect(getImageTags).not.toHaveBeenCalled();
   });
 });

@@ -3,7 +3,13 @@ import { Pressable, View, Text, Modal, ScrollView, StyleSheet } from 'react-nati
 
 import { LANGUAGES } from '../../constants/languages';
 
-export default function LanguageSelector({ value, onChange, testIDPrefix }) {
+export default function LanguageSelector({
+  value,
+  onChange,
+  testIDPrefix,
+  accessibilityLabel,
+  accessibilityHint,
+}) {
   const [visible, setVisible] = useState(false);
 
   const selectedName =
@@ -17,6 +23,9 @@ export default function LanguageSelector({ value, onChange, testIDPrefix }) {
   return (
     <View>
       <Pressable
+        accessibilityHint={accessibilityHint}
+        accessibilityLabel={accessibilityLabel}
+        accessibilityRole="button"
         onPress={() => setVisible(true)}
         testID={`${testIDPrefix}.button`}
         style={styles.button}>

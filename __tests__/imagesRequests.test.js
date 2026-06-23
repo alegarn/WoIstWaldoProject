@@ -200,7 +200,7 @@ describe('imagesRequests utilities', () => {
       { encoding: 'base64' }
     );
     expect(response.isError).toBe(false);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined);
   });
 
   it('skips a fully broken batch and continues to the next batch of playable images', async () => {
@@ -261,7 +261,7 @@ describe('imagesRequests utilities', () => {
         }),
       ],
     });
-    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img', undefined, undefined);
   });
 
   it('threads category and language filters into the initial image batch query params', async () => {
@@ -288,6 +288,37 @@ describe('imagesRequests utilities', () => {
       { image: { name: 'first-img', category_id: 'X', language: 'fr' } },
       { headers: { Authorization: 'Bearer token' } }
     );
+  });
+
+  it('threads category_key and language into saveLastImageUuid when a batch resolves', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              name: 'img-1',
+              description: 'Find Waldo',
+              image_height: 100,
+              image_width: 200,
+              is_portrait: true,
+              x_location: 0.3,
+              y_location: 0.7,
+              screen_height: 400,
+              screen_width: 300,
+              storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+
+    await getImages(
+      null,
+      { token: 'Bearer token' },
+      { category_id: 'uuid-123', category_key: 'nature', language: 'fr' }
+    );
+
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', 'nature', 'fr');
   });
 
   it('leaves the request unchanged when no filters are provided (legacy full feed)', async () => {
@@ -344,6 +375,7 @@ describe('buildImageObject', () => {
       creator_username: 'waldo',
       created_at: '2024-01-02T00:00:00Z',
       full_description: 'Find Waldo in the crowd',
+      language: 'fr',
       category: {
         id: 7,
         name: 'Crowd',
@@ -368,6 +400,7 @@ describe('buildImageObject', () => {
     expect(mapped.creatorUsername).toBe('waldo');
     expect(mapped.createdAt).toBe('2024-01-02T00:00:00Z');
     expect(mapped.fullDescription).toBe('Find Waldo in the crowd');
+    expect(mapped.language).toBe('fr');
     expect(mapped.category).toEqual({
       id: 7,
       name: 'Crowd',
@@ -401,6 +434,7 @@ describe('buildImageObject', () => {
     expect(mapped.creatorUsername).toBeUndefined();
     expect(mapped.createdAt).toBeUndefined();
     expect(mapped.fullDescription).toBeUndefined();
+    expect(mapped.language).toBeUndefined();
     expect(mapped.category).toBeUndefined();
   });
 

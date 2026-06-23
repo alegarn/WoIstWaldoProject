@@ -1,4 +1,4 @@
-import { useRef, useState, useContext } from 'react';
+import { useRef, useState, useContext, useEffect } from 'react';
 import { View, Text, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as MediaLibrary from 'expo-media-library';
@@ -16,48 +16,94 @@ import { imageUploader } from "../utils/fileUploader";
 import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
 import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
-import { saveE2EHiddenGuessCard } from '../utils/storageDatum';
-import { MOCK_CATEGORIES } from '../data/mock-categories';
+import { getPreferredLanguage, saveE2EHiddenGuessCard } from '../utils/storageDatum';
+import { getCategories } from '../utils/categoryRequests';
+import { resolveDefaultLanguage } from '../utils/languageDefaults';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
+
+const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
+
+function isUploadableCategoryKey(categoryKey) {
+  return typeof categoryKey === 'string' && !NON_UPLOAD_CATEGORY_KEYS.has(categoryKey);
+}
+
+function normalizeUploadCategoryKey(categoryKey) {
+  return isUploadableCategoryKey(categoryKey) ? categoryKey : null;
+}
 
 export default function SetInstructionsScreen({ navigation, route }) {
 
   const [showModal, setShowModal] = useState(false);
   const [description, setDescription] = useState("");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState(null);
+  const [languageError, setLanguageError] = useState(false);
+  const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
+  const languageTouchedRef = useRef(false);
 
-  const { 
-    uri, 
-    imageWidth, 
-    imageHeight, 
-    screenHeight, 
-    screenWidth, 
-    isPortrait, 
-    touchLocation, 
-    target, 
-    imageDimensionStyle, 
-    isTutorial 
+  const {
+    uri,
+    imageWidth,
+    imageHeight,
+    screenHeight,
+    screenWidth,
+    isPortrait,
+    touchLocation,
+    target,
+    imageDimensionStyle,
+    isTutorial
   } = route?.params;
-  
+
   const context = useContext(AuthContext);
+  const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
+
+  useEffect(() => {
+    let mounted = true;
+
+    (async () => {
+      const [preferred, categoriesResponse] = await Promise.all([
+        getPreferredLanguage(),
+        getCategories({ context }),
+      ]);
+
+      if (!mounted) {
+        return;
+      }
+
+      const defaultLanguage = preferred || resolveDefaultLanguage() || 'en';
+
+      if (!languageTouchedRef.current) {
+        setLanguage((currentLanguage) => currentLanguage || defaultLanguage);
+        if (defaultLanguage) {
+          setLanguageError(false);
+        }
+      }
+
+      setCategories(categoriesResponse?.data ?? []);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const getPermissions = async () => {
+    let currentPermission = permissionResponse;
 
     // Detect if you can request this permission again
     if (permissionResponse.status === "undetermined") {
-      await requestPermission();
+      currentPermission = await requestPermission();
     };
-    if (!permissionResponse.canAskAgain || permissionResponse.status === "denied") {
+    if (!currentPermission?.canAskAgain || currentPermission?.status === "denied") {
       Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
       Linking.openSettings();
     } else {
-      if (permissionResponse.status === "granted") {
+      if (currentPermission?.status === "granted") {
         return true;
       };
     };
@@ -73,6 +119,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const handleImage = async ({userId, fileExtension}) => {
+    const selectedCategoryObject = selectableCategories.find((category) => category.key === selectedCategory);
     const imageInfos = {
       uri: uri,
       userId: userId,
@@ -85,6 +132,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
       isPortrait: isPortrait,
       xLocation: touchLocation.x,
       yLocation: touchLocation.y,
+      language: language,
+      categoryId: selectedCategoryObject?.id ?? null,
     };
 
     setIsLoading(true);
@@ -174,6 +223,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
         return;
       }
 
+      if (!language) {
+        setLanguageError(true);
+        return;
+      }
+      setLanguageError(false);
+
       let permissionStatus = await getPermissions();
       if (!permissionStatus) {
         return;
@@ -208,6 +263,20 @@ export default function SetInstructionsScreen({ navigation, route }) {
     setShowModal(false);
   };
 
+  const handleLanguageChange = (code) => {
+    languageTouchedRef.current = true;
+    setLanguage(code);
+    setLanguageError(false);
+  };
+
+  const handleCategorySelect = (categoryKey) => {
+    const normalizedCategoryKey = normalizeUploadCategoryKey(categoryKey);
+
+    setSelectedCategory((currentCategory) => (
+      currentCategory === normalizedCategoryKey ? null : normalizedCategoryKey
+    ));
+  };
+
 
   if (isLoading) {
     return <LoadingOverlay message={"Image is being uploaded"} />;
@@ -220,14 +289,19 @@ export default function SetInstructionsScreen({ navigation, route }) {
         <Text style={styles.selectorLabel}>Language</Text>
         <LanguageSelector
           value={language}
-          onChange={setLanguage}
+          onChange={handleLanguageChange}
           testIDPrefix="setInstructions.language"
         />
+        {languageError && (
+          <Text testID="set-instructions.language.error" style={styles.errorText}>
+            Please select a language
+          </Text>
+        )}
         <Text style={styles.selectorLabel}>Category</Text>
         <CategoryChips
-          categories={MOCK_CATEGORIES}
+          categories={selectableCategories}
           selected={selectedCategory}
-          onSelect={setSelectedCategory}
+          onSelect={handleCategorySelect}
           testIDPrefix="setInstructions.category"
         />
       </View>
@@ -308,5 +382,10 @@ const styles = StyleSheet.create({
     color: '#1D133D',
     marginTop: 8,
     marginBottom: 4,
+  },
+  errorText: {
+    fontSize: 13,
+    color: '#B00020',
+    marginTop: 4,
   },
 });

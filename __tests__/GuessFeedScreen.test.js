@@ -89,6 +89,12 @@ jest.mock('../utils/auth', () => ({
   bootstrapStoredAuthSession: jest.fn(),
 }));
 
+jest.mock('../utils/storageDatum', () => ({
+  getOnboardingCompleted: jest.fn(),
+  getSessionLanguageFilter: jest.fn(),
+  saveSessionLanguageFilter: jest.fn(),
+}));
+
 import React from 'react';
 import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -97,10 +103,18 @@ import GuessFeedScreen from '../screens/GuessScreens/GuessFeedScreen';
 import { Root } from '../App';
 import { AuthContext } from '../store/auth-context';
 import { bootstrapStoredAuthSession } from '../utils/auth';
+import {
+  getOnboardingCompleted,
+  getSessionLanguageFilter,
+  saveSessionLanguageFilter,
+} from '../utils/storageDatum';
 
 describe('GuessFeedScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getOnboardingCompleted.mockResolvedValue(true);
+    getSessionLanguageFilter.mockResolvedValue('fr');
+    saveSessionLanguageFilter.mockResolvedValue(undefined);
     jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
@@ -113,6 +127,20 @@ describe('GuessFeedScreen', () => {
     Dimensions.get.mockRestore();
   });
 
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  function createDeferred() {
+    let resolve;
+    const promise = new Promise((promiseResolve) => {
+      resolve = promiseResolve;
+    });
+
+    return { promise, resolve };
+  }
+
   function makeRoute(overrides = {}) {
     return {
       params: {
@@ -123,21 +151,51 @@ describe('GuessFeedScreen', () => {
     };
   }
 
-  it('renders SwipeImage with category and language derived from route params', async () => {
+  it('prefers explicit route language over stored session filter on mount', async () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
-    const route = makeRoute();
+    const route = makeRoute({ language: 'de' });
+    let renderer;
 
     await act(async () => {
-      create(<GuessFeedScreen navigation={navigation} route={route} />);
+      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
+      await flushEffects();
     });
 
     expect(mockSwipeImage).toHaveBeenCalledTimes(1);
     const props = mockSwipeImage.mock.calls[0][0];
     expect(props.category).toEqual({ id: 'cat-1', key: 'nature' });
-    expect(props.language).toBe('fr');
+    expect(props.language).toBe('de');
     expect(props.screenWidth).toBe(320);
     expect(props.screenHeight).toBe(640);
     expect(typeof props.startGuessing).toBe('function');
+    expect(typeof props.onOpenFilter).toBe('function');
+    expect(getSessionLanguageFilter).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
+  });
+
+  it('falls back to stored session filter when route does not provide language', async () => {
+    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: undefined });
+    const deferredLanguage = createDeferred();
+    let renderer;
+
+    getSessionLanguageFilter.mockReturnValue(deferredLanguage.promise);
+
+    await act(async () => {
+      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
+    });
+
+    expect(mockSwipeImage).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('en');
+
+    await act(async () => {
+      deferredLanguage.resolve('fr');
+      await flushEffects();
+    });
+
+    expect(getSessionLanguageFilter).toHaveBeenCalledTimes(1);
+    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('fr');
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('fr');
   });
 
   it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {
@@ -146,6 +204,7 @@ describe('GuessFeedScreen', () => {
 
     await act(async () => {
       create(<GuessFeedScreen navigation={navigation} route={route} />);
+      await flushEffects();
     });
 
     const { startGuessing } = mockSwipeImage.mock.calls[0][0];
@@ -178,6 +237,7 @@ describe('GuessFeedScreen', () => {
 
     await act(async () => {
       create(<GuessFeedScreen navigation={navigation} route={route} />);
+      await flushEffects();
     });
 
     expect(mockSwipeImage).toHaveBeenCalledTimes(1);
@@ -185,6 +245,52 @@ describe('GuessFeedScreen', () => {
     expect(props.category).toEqual({ id: 'cat-1', key: 'nature' });
     expect(props.language).toBe('fr');
     expect(typeof props.startGuessing).toBe('function');
+  });
+
+  it('opens the language filter modal when SwipeImage requests it', async () => {
+    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute();
+    let renderer;
+
+    await act(async () => {
+      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
+      await flushEffects();
+    });
+
+    expect(() => renderer.root.findByProps({ testID: 'guess-feed.filter.language' })).toThrow();
+
+    await act(async () => {
+      mockSwipeImage.mock.calls[0][0].onOpenFilter();
+      await flushEffects();
+    });
+
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.option.fr' })).toBeTruthy();
+  });
+
+  it('persists the selected language and rerenders SwipeImage with the updated filter', async () => {
+    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute();
+    let renderer;
+
+    await act(async () => {
+      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
+      await flushEffects();
+    });
+
+    await act(async () => {
+      mockSwipeImage.mock.calls[0][0].onOpenFilter();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-feed.filter.language.option.de' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(saveSessionLanguageFilter).toHaveBeenCalledWith('de');
+    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('de');
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
   });
 });
 

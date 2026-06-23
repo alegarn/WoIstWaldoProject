@@ -43,15 +43,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const [sessionLanguage, setSessionLanguage] = useState(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
-  useEffect(() => {
-    getCategories({ context }).then((response) => {
-      setCategories(response?.data ?? []);
-    });
-  }, [context]);
-
-  useEffect(() => {
-    getSessionLanguageFilter().then(setLanguage);
-  }, []);
+  const isTutorial = route?.params?.isTutorial;
 
   useEffect(() => {
     let cancelled = false;
@@ -97,23 +89,7 @@ export default function GuessPathScreen({ navigation, route }) {
       category,
       language: navigationLanguage,
     });
-  }
-
-  function handleSelectLanguage(code) {
-    saveSessionLanguageFilter(code);
-    setLanguage(code);
-    setIsFilterVisible(false);
-  }
-
-  function renderCategoryCard({ item }) {
-    return (
-      <GuessCategoryCard
-        category={{ ...item, id: item.key }}
-        testIDPrefix="guess-path.category"
-        onPress={() => handleSelectCategory(item)}
-      />
-    );
-  }
+  };
 
   const handleSelectLanguage = async (code) => {
     await saveSessionLanguageFilter(code);

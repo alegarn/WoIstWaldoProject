@@ -2,6 +2,8 @@ jest.mock('react-native', () => ({
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
   Text: 'Text',
+  View: 'View',
+  Image: 'Image',
   StyleSheet: {
     create: (styles) => styles,
   },
@@ -15,6 +17,7 @@ import { GlobalStyle } from '../constants/theme';
 
 describe('CategoryChips', () => {
   const categories = [
+    { key: 'other', name: 'Backend Other' },
     { key: 'recent', name: 'Recent' },
     { key: 'nature', name: 'Nature' },
     { key: 'city', name: 'City' },
@@ -58,5 +61,28 @@ describe('CategoryChips', () => {
 
     expect(onSelect).toHaveBeenCalledWith('city');
     expect(onSelect).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders a single reset chip first and maps it to null', async () => {
+    const onSelect = jest.fn();
+    const renderer = await renderChips({ onSelect, selected: null });
+
+    const pressables = renderer.root.findAllByType('Pressable');
+
+    expect(pressables[0].props.testID).toBe('categories.chip.other');
+    expect(renderer.root.findAllByProps({ testID: 'categories.chip.other' })).toHaveLength(1);
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'categories.chip.other' }).props.onPress();
+    });
+
+    expect(onSelect).toHaveBeenCalledWith(null);
+  });
+
+  it('renders the null-thumbnail fallback for categories without thumbnails', async () => {
+    const renderer = await renderChips({ selected: null });
+
+    expect(renderer.root.findByProps({ testID: 'categories.chip.other.fallback' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'categories.chip.nature.fallback' })).toBeTruthy();
   });
 });

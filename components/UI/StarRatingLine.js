@@ -8,6 +8,12 @@ const STAR_COUNT = 5;
 export default function StarRatingLine({ value, onChange, widthPercent = 80, testIDPrefix, disabled }) {
   const animatedValue = useRef(new Animated.Value(value || 0)).current;
 
+  // This slider only renders on ResultScreen, outside SwipeableCard. That avoids
+  // the card PanResponder conflict in this phase. If it ever moves into a vertical
+  // scroll container, switch `onMoveShouldSetPanResponderCapture` to compare
+  // `Math.abs(g.dx) > Math.abs(g.dy)` so horizontal drags win without stealing
+  // vertical scroll.
+
   const lineWidth = useMemo(
     () => Dimensions.get('window').width * (widthPercent / 100),
     [widthPercent]

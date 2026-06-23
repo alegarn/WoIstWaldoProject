@@ -2,20 +2,15 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, Pressable, Text, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
-import BadgeDetailModal from './BadgeDetailModal';
 import StarRatingBadge from './StarRatingBadge';
-import { MOCK_IMAGE_DETAILS } from '../../data/mock-image-detail';
-import { MOCK_RATINGS } from '../../data/mock-ratings';
 import { isE2EMode } from '../../utils/e2eMode';
 
-export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe, onBadgePress }) {
   const e2eMode = isE2EMode();
-  const badgeRating = MOCK_RATINGS[2];
 
   // States _________________________________________________________________
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [imageChoice, setImageChoice] = useState(require('../../assets/icons/tears.png'));
-  const [detailImage, setDetailImage] = useState(null);
   const xPosition = useRef(new Animated.Value(0)).current;
   const yPosition = useRef(new Animated.Value(0)).current; // Add yPosition
   
@@ -81,14 +76,6 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
   const toggleDescription = useCallback(() => {
     setShowFullDescription((prev) => !prev);
-  }, []);
-
-  const openBadgeDetail = useCallback(() => {
-    setDetailImage(MOCK_IMAGE_DETAILS.full);
-  }, []);
-
-  const closeBadgeDetail = useCallback(() => {
-    setDetailImage(null);
   }, []);
 
   /* overlay on long press ? */
@@ -278,12 +265,13 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           testID={`guess-path.card-image.${item.listId}`} >
 
           <View style={styles.badgeContainer}>
+            {/* Sloppy taps with horizontal movement can be captured by PanResponder. Accepted trade-off for now. */}
+            {/* Current stack depth is small; badge render cost is acceptable. If the feed ever moves to a larger virtualized list, prefer a lighter icon path before adding badge complexity. */}
             <StarRatingBadge
-              onPress={openBadgeDetail}
-              ratingsCount={badgeRating.count}
-              size={36}
-              testIDPrefix={`guess-path.card.rating.${item.listId}`}
-              value={badgeRating.average}
+              onPress={() => onBadgePress?.(item)}
+              ratingsCount={item.ratingsCount}
+              testIDPrefix={`guess-path.card.${item.listId}`}
+              value={item.averageRating}
             />
           </View>
           
@@ -309,13 +297,6 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               opacity: overlayOpacity,
             }
           ]} />
-
-        <BadgeDetailModal
-          image={detailImage}
-          onClose={closeBadgeDetail}
-          onOpenFilter={() => {}}
-          testIDPrefix={`guess-path.card.rating.${item.listId}.detail`}
-        />
 
       </Animated.View>
     );

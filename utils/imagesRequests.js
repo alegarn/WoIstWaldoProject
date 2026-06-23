@@ -210,6 +210,7 @@ export function buildImageObject(image, filePath) {
   imageObject.creatorUsername = image.creator_username;
   imageObject.createdAt = image.created_at;
   imageObject.fullDescription = image.full_description;
+  imageObject.language = image.language;
 
   if (image.category != null) {
     imageObject.category = {
@@ -273,7 +274,7 @@ export async function getImages(pictureId, context, filters = {}) {
 
     if (imagesInfosData.length === 0) {
       if (lastSkippedPictureId !== null) {
-        await saveLastImageUuid(lastSkippedPictureId);
+        await saveLastImageUuid(lastSkippedPictureId, filters?.category_key, filters?.language);
       }
 
       return { isError: false, images: [] };
@@ -283,7 +284,7 @@ export async function getImages(pictureId, context, filters = {}) {
     const images = await downloadImageBatch(imagesInfosData, token);
 
     if (images.length > 0) {
-      await saveLastImageUuid(lastBatchPictureId);
+      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
       return { isError: false, images: images };
     }
 

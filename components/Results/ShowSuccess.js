@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
+import RatingSubmissionBlock from './RatingSubmissionBlock';
 import { deleteImageFromStorage, removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
 import { AuthContext } from '../../store/auth-context';
@@ -18,6 +19,8 @@ export default function ShowSuccess({ navigation, route }) {
   const listId = route.params?.listId;
   const imageFilePath = route.params?.imageFile;
   const isTutorial = route.params?.isTutorial;
+  const categoryKey = route.params?.category?.key;
+  const language = route.params?.language;
 
   const context = useContext(AuthContext);
 
@@ -33,7 +36,7 @@ export default function ShowSuccess({ navigation, route }) {
   };
 
   async function handleRemoveImageFromList(listId, imageFilePath) {
-    await removeImageFromList(listId);
+    await removeImageFromList(listId, categoryKey, language);
     await deleteImageFromStorage(imageFilePath);
   };
 
@@ -50,7 +53,7 @@ export default function ShowSuccess({ navigation, route }) {
     handleScore();
 
     return () => clearTimeout(timeout);
-  }, []);
+  }, [categoryKey, imageFilePath, language, listId, pictureId]);
 
   const ShowResult = ({ navigation, isTutorial }) => {
     return (
@@ -64,6 +67,7 @@ export default function ShowSuccess({ navigation, route }) {
           success={true} 
           isTutorial={isTutorial} 
         />
+        <RatingSubmissionBlock pictureId={pictureId} context={context} />
         {
           isTutorial &&
             <TutorialOverlay
