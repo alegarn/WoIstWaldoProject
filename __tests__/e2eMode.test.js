@@ -9,6 +9,7 @@ jest.mock('react-native', () => ({
 }));
 
 import {
+  buildE2ECategories,
   buildE2EGuessCardFromPayload,
   buildE2EGuessCards,
   buildE2EHiddenGuessPayload,
@@ -71,8 +72,35 @@ describe('e2eMode helpers', () => {
         imageFile: 'file:///e2e-fixture.jpg',
         pictureId: 'e2e-guess-card',
         listId: 1,
+        category: expect.objectContaining({ id: 'e2e-cat-nature', key: 'nature', name: 'Nature' }),
+        language: 'en',
+        averageRating: expect.any(Number),
+        ratingsCount: expect.any(Number),
+        tags: expect.any(Array),
+        creatorUsername: expect.any(String),
+        createdAt: expect.any(String),
+        fullDescription: expect.any(String),
       }),
     ]);
+  });
+
+  it('exposes a deterministic set of e2e categories for browse flows', () => {
+    const categories = buildE2ECategories();
+
+    expect(categories).toHaveLength(6);
+    expect(categories[0].id).toBe('e2e-default-category');
+
+    categories.forEach((category) => {
+      expect(category).toEqual(
+        expect.objectContaining({
+          id: expect.any(String),
+          key: expect.any(String),
+          name: expect.any(String),
+          thumbnailUrl: null,
+        }),
+      );
+      expect('count' in category).toBe(true);
+    });
   });
 
   it('builds and restores an e2e hidden guess payload for the saved hide bridge', () => {
@@ -106,6 +134,13 @@ describe('e2eMode helpers', () => {
         description: 'Look near the barn',
         touchLocation: { x: 0.58, y: 0.46 },
         listId: 1,
+        language: 'en',
+        averageRating: expect.any(Number),
+        ratingsCount: expect.any(Number),
+        tags: expect.any(Array),
+        creatorUsername: expect.any(String),
+        createdAt: expect.any(String),
+        fullDescription: expect.any(String),
       })
     );
   });

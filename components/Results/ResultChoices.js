@@ -4,9 +4,11 @@ import BigButton from '../UI/BigButton';
 import { useContext } from 'react';
 import { AuthContext } from '../../store/auth-context';
 
-export default function ResultChoices({ navigation, success, retryGuess, isTutorial }) {
+export default function ResultChoices({ navigation, route, success, retryGuess, isTutorial }) {
 
   const context = useContext(AuthContext);
+
+  const routeParams = route?.params ?? {};
 
   const returnHome = async () => {
     isTutorial
@@ -31,6 +33,19 @@ export default function ResultChoices({ navigation, success, retryGuess, isTutor
   };
 
   function backToSwipe() {
+    if (routeParams.category && routeParams.language) {
+      navigation.reset({
+        index: 3,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'GuessPathScreen', params: { isTutorial } },
+          { name: 'GuessFeedScreen', params: { category: routeParams.category, language: routeParams.language } },
+          { name: 'ResultScreen' },
+        ],
+      });
+      return;
+    }
+
     navigation.reset({
       index: 1,
       routes: [{ 

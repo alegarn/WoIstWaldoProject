@@ -21,6 +21,7 @@ import HidingPathScreen from './screens/HideScreens/HidingPathScreen';
 import HideScreen from './screens/HideScreens/HideScreen';
 // Guess screens
 import GuessPathScreen from './screens/GuessScreens/GuessPathScreen';
+import GuessFeedScreen from './screens/GuessScreens/GuessFeedScreen';
 import GuessScreen from './screens/GuessScreens/GuessScreen';
 import AdScreen from './screens/GuessScreens/AdScreen';
 import ResultScreen from './screens/GuessScreens/ResultScreen';
@@ -35,6 +36,8 @@ import { AuthContext } from './store/auth-context';
 import LoadingOverlay from './components/UI/LoadingOverlay';
 
 import 'expo-dev-client';
+
+const MockPreviewScreen = __DEV__ ? require('./screens/MockPreviewScreen').default : null;
 
 // AdMob
 /* import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
@@ -190,6 +193,23 @@ function AuthenticatedStack({ authContext }) {
                 testID="guess-path.header.back" />)
           })} />
         <Stack.Screen
+          name="GuessFeedScreen"
+          component={GuessFeedScreen}
+          options={({ navigation }) => ({
+            presentation: "modal",
+            headerShown: true,
+            title: "Guess Feed",
+            headerLeft: () => (
+              <IconButton
+                accessibilityLabel="Go back"
+                icon="arrow-back"
+                color={"white"}
+                size={24}
+                style={{ marginRight: 20 }}
+                onPress={() => navigation.goBack()}
+                testID="guess-feed.button.back" />)
+          })} />
+        <Stack.Screen
           name="GuessScreen"
           component={GuessScreen}
           options={{
@@ -218,6 +238,12 @@ function AuthenticatedStack({ authContext }) {
             presentation: "modal",
             headerShown: true
           }} />
+        {__DEV__ && process.env.EXPO_PUBLIC_E2E_MODE !== 'true' && (
+          <Stack.Screen
+            name="MockPreview"
+            component={MockPreviewScreen}
+            options={{ title: "Mock Preview" }} />
+        )}
       </Stack.Navigator>
     </>
   );

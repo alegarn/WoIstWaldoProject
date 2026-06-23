@@ -69,6 +69,7 @@ jest.mock('../screens/HomeScreen', () => 'HomeScreen');
 jest.mock('../screens/HideScreens/HidingPathScreen', () => 'HidingPathScreen');
 jest.mock('../screens/HideScreens/HideScreen', () => 'HideScreen');
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => 'GuessPathScreen');
+jest.mock('../screens/GuessScreens/GuessFeedScreen', () => 'GuessFeedScreen');
 jest.mock('../screens/GuessScreens/GuessScreen', () => 'GuessScreen');
 jest.mock('../screens/GuessScreens/AdScreen', () => 'AdScreen');
 jest.mock('../screens/GuessScreens/ResultScreen', () => 'ResultScreen');

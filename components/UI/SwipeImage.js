@@ -12,7 +12,10 @@ import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../
 import { GlobalStyle } from '../../constants/theme';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language }) {
+
+  const categoryKey = category?.key || 'all';
+  const lang = language || 'any';
 
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
@@ -37,7 +40,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   const handleData = useCallback(async (data) => {
     console.log("handleData");
 
-    const lastId = await getLastImageId();
+    const lastId = await getLastImageId(categoryKey, lang);
     // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
     const updatedImageList = data?.map((image, index) => ({
      ...image,
@@ -48,7 +51,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
-      await storeImageList(updatedImageList);
+      await storeImageList(updatedImageList, categoryKey, lang);
       setImageList(updatedImageList);
 
       if (updatedImageList?.length > 0) {
@@ -64,20 +67,20 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
-        const newImageList = await updateImageList(updatedImageList);
+        const newImageList = await updateImageList(updatedImageList, categoryKey, lang);
         setImageList(newImageList);
         return true
       };
 
       return false
     };
-  }, []);
+  }, [categoryKey, lang]);
 
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
-    const lastImageUuid = await getLastImageUuid();
+    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
-    const response = await getImages(pictureId, context);
+    const response = await getImages(pictureId, context, { category_id: category?.id, language });
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
@@ -88,7 +91,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData]);
+  }, [context, handleData, category, language, categoryKey, lang]);
 
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
@@ -126,8 +129,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       return;
     }
 
-    //await emptyImageList();
-    const localImageList = await getLocalImages();
+    //await emptyImageList(categoryKey, lang);
+    const localImageList = await getLocalImages(categoryKey, lang);
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
@@ -143,10 +146,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
-    await removeImageFromList(id);
+    await removeImageFromList(id, categoryKey, lang);
     await deleteImageFromStorage(imageFilePath);
     return null;
-  }, []);
+  }, [categoryKey, lang]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.

@@ -2,10 +2,21 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
+const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
+const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
+const DEFAULT_LANGUAGE = 'en';
 
-export async function getLocalImages() {
+function imageListKey(categoryKey, language) {
+  return `imageList:${categoryKey || 'all'}:${language || 'any'}`;
+};
+
+function lastImageUuidKey(categoryKey, language) {
+  return `lastImageUuid:${categoryKey || 'all'}:${language || 'any'}`;
+};
+
+export async function getLocalImages(categoryKey, language) {
   //console.log("getLocalImages");
-  const imageList = await AsyncStorage.getItem("imageList");
+  const imageList = await AsyncStorage.getItem(imageListKey(categoryKey, language));
   return imageList ? JSON.parse(imageList) : null;
 };
 
@@ -17,9 +28,9 @@ function getLastListId(list) {
   return lastListId
 };
 
-export async function getLastImageId() {
+export async function getLastImageId(categoryKey, language) {
   console.log("getLastImageId");
-  const localImageList = await AsyncStorage.getItem("imageList");
+  const localImageList = await AsyncStorage.getItem(imageListKey(categoryKey, language));
   //console.log("getLastImageId localImageList", localImageList);
 
   if ((localImageList !== null) && (localImageList !== "[]")) {
@@ -32,14 +43,34 @@ export async function getLastImageId() {
   return 0;
 };
 
-export async function saveLastImageUuid(imageUuid) {
-  await AsyncStorage.setItem("lastImageUuid", imageUuid);
+export async function saveLastImageUuid(imageUuid, categoryKey, language) {
+  await AsyncStorage.setItem(lastImageUuidKey(categoryKey, language), imageUuid);
   return null;
 };
 
-export async function getLastImageUuid() {
-  const lastImageUuid = await AsyncStorage.getItem("lastImageUuid");
+export async function getLastImageUuid(categoryKey, language) {
+  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKey(categoryKey, language));
   return lastImageUuid;
+};
+
+export async function getSessionLanguageFilter() {
+  const stored = await AsyncStorage.getItem(SESSION_LANGUAGE_FILTER_KEY);
+  return stored || DEFAULT_LANGUAGE;
+};
+
+export async function saveSessionLanguageFilter(code) {
+  await AsyncStorage.setItem(SESSION_LANGUAGE_FILTER_KEY, code);
+  return null;
+};
+
+export async function getPreferredLanguage() {
+  const stored = await AsyncStorage.getItem(PREFERRED_LANGUAGE_KEY);
+  return stored || DEFAULT_LANGUAGE;
+};
+
+export async function savePreferredLanguage(code) {
+  await AsyncStorage.setItem(PREFERRED_LANGUAGE_KEY, code);
+  return null;
 };
 
 function parseStoredValue(value) {
@@ -83,8 +114,9 @@ async function removeFromCache(localUri) {
   deleteFileIfPresent(new File(localUri));
 };
 
-export async function emptyImageList() {
-  const localList = await AsyncStorage.getItem("imageList")
+export async function emptyImageList(categoryKey, language) {
+  const listKey = imageListKey(categoryKey, language);
+  const localList = await AsyncStorage.getItem(listKey)
   //console.log("emptyImageList imageList", localList);
   //console.log("if (localList !== null) && (localList !== '[]')", (localList !== null) && (localList !== "[]"));
 
@@ -94,12 +126,12 @@ export async function emptyImageList() {
     });
   };
 
-  await AsyncStorage.removeItem("imageList");
-  await AsyncStorage.removeItem("lastImageUuid");
+  await AsyncStorage.removeItem(listKey);
+  await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language));
 };
 
-export async function storeImageList(imageList) {
-  await AsyncStorage.setItem("imageList", JSON.stringify(imageList));
+export async function storeImageList(imageList, categoryKey, language) {
+  await AsyncStorage.setItem(imageListKey(categoryKey, language), JSON.stringify(imageList));
 };
 
 function removeObjectById(imageListObject, listId) {
@@ -112,20 +144,22 @@ function removeObjectById(imageListObject, listId) {
   return imageListObject;
 };
 
-export async function updateImageList(updatedImageList) {
-  const imageList = await AsyncStorage.getItem("imageList");
+export async function updateImageList(updatedImageList, categoryKey, language) {
+  const listKey = imageListKey(categoryKey, language);
+  const imageList = await AsyncStorage.getItem(listKey);
   const jsonImageList = JSON.parse(imageList);
   const newImageList = [...jsonImageList, ...updatedImageList];
-  await AsyncStorage.setItem("imageList", JSON.stringify(newImageList));
+  await AsyncStorage.setItem(listKey, JSON.stringify(newImageList));
   return newImageList;
 };
 
 
-export async function removeImageFromList(listId) {
-  const imageList = await AsyncStorage.getItem("imageList");
+export async function removeImageFromList(listId, categoryKey, language) {
+  const listKey = imageListKey(categoryKey, language);
+  const imageList = await AsyncStorage.getItem(listKey);
   const jsonImageList = JSON.parse(imageList);
   const updatedImageList = removeObjectById(jsonImageList, listId);
-  await AsyncStorage.setItem("imageList", JSON.stringify(updatedImageList));
+  await AsyncStorage.setItem(listKey, JSON.stringify(updatedImageList));
   return null;
 };
 

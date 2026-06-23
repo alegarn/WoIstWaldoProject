@@ -37,9 +37,13 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  getPreferredLanguage,
+  getSessionLanguageFilter,
   removeImageFromList,
   saveE2EHiddenGuessCard,
   saveLastImageUuid,
+  savePreferredLanguage,
+  saveSessionLanguageFilter,
   storeImageList,
   updateImageList,
 } from '../utils/storageDatum';
@@ -76,10 +80,32 @@ describe('storageDatum utilities', () => {
 
   it('stores and reads the last downloaded image uuid', async () => {
     await saveLastImageUuid('uuid-1');
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('lastImageUuid', 'uuid-1');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('lastImageUuid:all:any', 'uuid-1');
 
     AsyncStorage.getItem.mockResolvedValueOnce('uuid-1');
     expect(await getLastImageUuid()).toBe('uuid-1');
+  });
+
+  it('round-trips the session language filter and defaults to en when unset', async () => {
+    await saveSessionLanguageFilter('fr');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('sessionLanguageFilter', 'fr');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('fr');
+    expect(await getSessionLanguageFilter()).toBe('fr');
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getSessionLanguageFilter()).toBe('en');
+  });
+
+  it('round-trips the preferred language and defaults to en when unset', async () => {
+    await savePreferredLanguage('de');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('preferredLanguage', 'de');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('de');
+    expect(await getPreferredLanguage()).toBe('de');
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getPreferredLanguage()).toBe('en');
   });
 
   it('stores, reads, and clears the saved e2e hidden guess payload', async () => {
@@ -106,8 +132,8 @@ describe('storageDatum utilities', () => {
     expect(File).toHaveBeenCalledWith('file:///cache/a.jpg');
     expect(File).toHaveBeenCalledWith('file:///cache/b.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList');
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList:all:any');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:any');
   });
 
   it('appends new images and removes entries by list id', async () => {
@@ -116,17 +142,33 @@ describe('storageDatum utilities', () => {
     const updatedList = await updateImageList([{ listId: 3 }]);
 
     expect(updatedList).toEqual([{ listId: 1 }, { listId: 2 }, { listId: 3 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList', JSON.stringify(updatedList));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify(updatedList));
 
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1 }, { listId: 2 }, { listId: 3 }]));
     await removeImageFromList(2);
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
+  });
+
+  it('namespaces image lists by category and language without colliding', async () => {
+    const cityList = [{ listId: 1 }];
+    const natureList = [{ listId: 2 }];
+
+    await storeImageList(cityList, 'city', 'fr');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr', JSON.stringify(cityList));
+
+    await storeImageList(natureList, 'nature', 'fr');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:nature:fr', JSON.stringify(natureList));
+
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('imageList:city:fr', JSON.stringify(natureList));
+
+    await storeImageList([{ listId: 9 }]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 9 }]));
   });
 
   it('stores image lists and deletes both the cached file and ImagePicker mirror', async () => {
     await storeImageList([{ listId: 7 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList', JSON.stringify([{ listId: 7 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 7 }]));
 
     await deleteImageFromStorage('file:///cache/abc.jpg');
 

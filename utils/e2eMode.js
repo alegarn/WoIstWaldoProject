@@ -9,6 +9,53 @@ const E2E_GUESS_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_HIDE_LOCATION = { x: 0.58, y: 0.46 };
 const E2E_INCORRECT_HIDE_LOCATION = { x: 0.18, y: 0.18 };
 
+const E2E_GUESS_CARD_CATEGORY = { id: 'e2e-cat-nature', key: 'nature', name: 'Nature' };
+const E2E_GUESS_CARD_LANGUAGE = 'en';
+const E2E_GUESS_CARD_AVERAGE_RATING = 4.5;
+const E2E_GUESS_CARD_RATINGS_COUNT = 7;
+const E2E_GUESS_CARD_TAGS = [
+  { id: 'e2e-tag-outdoors', name: 'Outdoors' },
+  { id: 'e2e-tag-scenic', name: 'Scenic' },
+];
+const E2E_GUESS_CARD_CREATOR_USERNAME = 'e2e_creator';
+const E2E_GUESS_CARD_CREATED_AT = '2024-01-01T00:00:00.000Z';
+const E2E_GUESS_CARD_FULL_DESCRIPTION =
+  'A scenic spot used for deterministic e2e guess flows.';
+
+const E2E_CATEGORIES = [
+  {
+    id: 'e2e-default-category',
+    key: 'all',
+    name: 'Recent/All',
+    thumbnailUrl: null,
+    count: undefined,
+  },
+  { id: 'e2e-cat-other', key: 'other', name: 'Other', thumbnailUrl: null, count: undefined },
+  { id: 'e2e-cat-nature', key: 'nature', name: 'Nature', thumbnailUrl: null, count: undefined },
+  { id: 'e2e-cat-city', key: 'city', name: 'City', thumbnailUrl: null, count: undefined },
+  { id: 'e2e-cat-people', key: 'people', name: 'People', thumbnailUrl: null, count: undefined },
+  {
+    id: 'e2e-cat-abstract',
+    key: 'abstract',
+    name: 'Abstract',
+    thumbnailUrl: null,
+    count: undefined,
+  },
+];
+
+function attachE2EGuessCardMetadata(card, overrides = {}) {
+  card.category = overrides.category ?? E2E_GUESS_CARD_CATEGORY;
+  card.language = overrides.language ?? E2E_GUESS_CARD_LANGUAGE;
+  card.averageRating = overrides.averageRating ?? E2E_GUESS_CARD_AVERAGE_RATING;
+  card.ratingsCount = overrides.ratingsCount ?? E2E_GUESS_CARD_RATINGS_COUNT;
+  card.tags = overrides.tags ?? E2E_GUESS_CARD_TAGS;
+  card.creatorUsername = overrides.creatorUsername ?? E2E_GUESS_CARD_CREATOR_USERNAME;
+  card.createdAt = overrides.createdAt ?? E2E_GUESS_CARD_CREATED_AT;
+  card.fullDescription = overrides.fullDescription ?? E2E_GUESS_CARD_FULL_DESCRIPTION;
+
+  return card;
+}
+
 function resolveLocalAsset(assetSource) {
   const resolvedAsset = ReactNativeImage.resolveAssetSource(assetSource);
 
@@ -21,6 +68,10 @@ function resolveLocalAsset(assetSource) {
 
 export function isE2EMode() {
   return process.env.EXPO_PUBLIC_E2E_MODE === 'true';
+}
+
+export function buildE2ECategories() {
+  return E2E_CATEGORIES.map((category) => ({ ...category }));
 }
 
 export function getE2EAdDelayMs() {
@@ -69,17 +120,19 @@ export function buildE2EGuessCards() {
   const isPortrait = asset.height >= asset.width;
 
   return [
-    new ImageModel(
-      asset.uri,
-      'e2e-guess-card',
-      'Find the hidden point near the center ring.',
-      asset.height,
-      asset.width,
-      isPortrait,
-      getE2EHideLocation(),
-      asset.height,
-      asset.width,
-      1,
+    attachE2EGuessCardMetadata(
+      new ImageModel(
+        asset.uri,
+        'e2e-guess-card',
+        'Find the hidden point near the center ring.',
+        asset.height,
+        asset.width,
+        isPortrait,
+        getE2EHideLocation(),
+        asset.height,
+        asset.width,
+        1,
+      ),
     ),
   ];
 }
@@ -112,17 +165,29 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
     return null;
   }
 
-  return new ImageModel(
-    payload.uri,
-    payload.pictureId ?? 'e2e-hidden-guess-card',
-    payload.description,
-    payload.imageHeight,
-    payload.imageWidth,
-    payload.isPortrait,
-    payload.hiddenLocation,
-    payload.screenHeight,
-    payload.screenWidth,
-    listId,
+  return attachE2EGuessCardMetadata(
+    new ImageModel(
+      payload.uri,
+      payload.pictureId ?? 'e2e-hidden-guess-card',
+      payload.description,
+      payload.imageHeight,
+      payload.imageWidth,
+      payload.isPortrait,
+      payload.hiddenLocation,
+      payload.screenHeight,
+      payload.screenWidth,
+      listId,
+    ),
+    {
+      category: payload.category ?? null,
+      language: payload.language ?? E2E_GUESS_CARD_LANGUAGE,
+      averageRating: payload.averageRating ?? E2E_GUESS_CARD_AVERAGE_RATING,
+      ratingsCount: payload.ratingsCount ?? E2E_GUESS_CARD_RATINGS_COUNT,
+      tags: payload.tags ?? E2E_GUESS_CARD_TAGS,
+      creatorUsername: payload.creatorUsername ?? E2E_GUESS_CARD_CREATOR_USERNAME,
+      createdAt: payload.createdAt ?? E2E_GUESS_CARD_CREATED_AT,
+      fullDescription: payload.fullDescription ?? E2E_GUESS_CARD_FULL_DESCRIPTION,
+    },
   );
 }
 

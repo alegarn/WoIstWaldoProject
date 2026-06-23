@@ -2,14 +2,20 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, Pressable, Text, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
+import BadgeDetailModal from './BadgeDetailModal';
+import StarRatingBadge from './StarRatingBadge';
+import { MOCK_IMAGE_DETAILS } from '../../data/mock-image-detail';
+import { MOCK_RATINGS } from '../../data/mock-ratings';
 import { isE2EMode } from '../../utils/e2eMode';
 
 export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
   const e2eMode = isE2EMode();
+  const badgeRating = MOCK_RATINGS[2];
 
   // States _________________________________________________________________
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [imageChoice, setImageChoice] = useState(require('../../assets/icons/tears.png'));
+  const [detailImage, setDetailImage] = useState(null);
   const xPosition = useRef(new Animated.Value(0)).current;
   const yPosition = useRef(new Animated.Value(0)).current; // Add yPosition
   
@@ -75,6 +81,14 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
   const toggleDescription = useCallback(() => {
     setShowFullDescription((prev) => !prev);
+  }, []);
+
+  const openBadgeDetail = useCallback(() => {
+    setDetailImage(MOCK_IMAGE_DETAILS.full);
+  }, []);
+
+  const closeBadgeDetail = useCallback(() => {
+    setDetailImage(null);
   }, []);
 
   /* overlay on long press ? */
@@ -262,6 +276,16 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           resizeMode='contain'
           style={[styles.imageStyle, styles.expanded]}
           testID={`guess-path.card-image.${item.listId}`} >
+
+          <View style={styles.badgeContainer}>
+            <StarRatingBadge
+              onPress={openBadgeDetail}
+              ratingsCount={badgeRating.count}
+              size={36}
+              testIDPrefix={`guess-path.card.rating.${item.listId}`}
+              value={badgeRating.average}
+            />
+          </View>
           
           <GuessDescription
             item={item}
@@ -285,6 +309,13 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
               opacity: overlayOpacity,
             }
           ]} />
+
+        <BadgeDetailModal
+          image={detailImage}
+          onClose={closeBadgeDetail}
+          onOpenFilter={() => {}}
+          testIDPrefix={`guess-path.card.rating.${item.listId}.detail`}
+        />
 
       </Animated.View>
     );
@@ -336,6 +367,12 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     justifyContent: 'flex-end',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 2,
   },
   overlayStyle: {
     backgroundColor: '#fff',

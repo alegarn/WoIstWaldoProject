@@ -153,11 +153,11 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, language: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 5 }),
       expect.objectContaining({ pictureId: 'img-2', listId: 6 }),
-    ]);
+    ], 'all', 'any');
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.listId)).toEqual([6, 5]);
   });
 
@@ -173,10 +173,10 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, language: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
-    ]);
+    ], 'all', 'any');
   });
 
   it('shows the empty-state guidance when the backend returns no playable images', async () => {
@@ -253,12 +253,12 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
-    expect(removeImageFromList).toHaveBeenCalledWith(1);
+    expect(removeImageFromList).toHaveBeenCalledWith(1, 'all', 'any');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///1.jpg');
-    expect(getImages).toHaveBeenCalledWith('image-4', contextValue);
+    expect(getImages).toHaveBeenCalledWith('image-4', contextValue, { category_id: undefined, language: undefined });
     expect(updateImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
-    ]);
+    ], 'all', 'any');
   });
 
   it('uses the seeded guess cards in e2e mode instead of cache or network state', async () => {
