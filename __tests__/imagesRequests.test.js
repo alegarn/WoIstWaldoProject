@@ -404,8 +404,6 @@ describe('buildImageObject', () => {
     expect(mapped.category).toEqual({
       id: 7,
       name: 'Crowd',
-      thumbnail_url: 'https://backend.example/thumb.png',
-      sort_order: 3,
       thumbnailUrl: 'https://backend.example/thumb.png',
       sortOrder: 3,
     });

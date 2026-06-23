@@ -32,6 +32,9 @@ export default function StarRatingLine({ value, onChange, widthPercent = 80, tes
     animatedValue.setValue(value || 0);
   }, [animatedValue, value]);
 
+  const valueRef = useRef(value);
+  useEffect(() => { valueRef.current = value; }, [value]);
+
   const panResponder = useMemo(() => {
     if (disabled) {
       return { panHandlers: {} };
@@ -49,18 +52,18 @@ export default function StarRatingLine({ value, onChange, widthPercent = 80, tes
       onMoveShouldSetPanResponderCapture: () => true,
       onPanResponderMove: (evt, gestureState) => {
         const next = computeValueFromMoveX(gestureState.moveX);
-        if (next !== value) {
+        if (next !== valueRef.current) {
           onChange(next);
         }
       },
       onPanResponderRelease: (evt, gestureState) => {
         const next = computeValueFromMoveX(gestureState.moveX);
-        if (next !== value) {
+        if (next !== valueRef.current) {
           onChange(next);
         }
       },
     });
-  }, [disabled, lineWidth, onChange, value]);
+  }, [disabled, lineWidth, onChange]);
 
   const rounded = Math.round(value || 0);
 

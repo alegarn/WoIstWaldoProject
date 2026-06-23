@@ -60,8 +60,6 @@ describe('categoryRequests utilities', () => {
           id: 'cat-1',
           key: 'nature',
           name: 'Nature',
-          thumbnail_url: 'https://cdn.example/thumb.png',
-          sort_order: 3,
           thumbnailUrl: 'https://cdn.example/thumb.png',
           sortOrder: 3,
         },

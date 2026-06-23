@@ -54,15 +54,18 @@ const SettingsScreen = () => {
 
   // useEffect to fetch email and username_________________________________________
   useLayoutEffect(() => {
-    getEmail().then((email) => {
-      setEmail(email);
+    let mounted = true;
+    Promise.all([
+      getEmail(),
+      getUserName(),
+      getPreferredLanguage(),
+    ]).then(([emailValue, usernameValue, languageValue]) => {
+      if (!mounted) return;
+      setEmail(emailValue);
+      setUsername(usernameValue);
+      setPreferredLanguage(languageValue || resolveDefaultLanguage());
     });
-    getUserName().then((username) => {
-      setUsername(username);
-    });
-    getPreferredLanguage().then((language) => {
-      setPreferredLanguage(language || resolveDefaultLanguage());
-    });
+    return () => { mounted = false; };
   }, []);
 
 /*   const data = {

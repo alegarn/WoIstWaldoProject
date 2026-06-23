@@ -1,22 +1,7 @@
 import axios from 'axios';
 
 import { getBackendHeaders, setHeaders } from './auth';
-import { isE2EMode } from './e2eMode';
-
-const E2E_IMAGE_RATING = {
-  id: 'e2e-image-rating-id',
-  image_id: 'e2e-image-id',
-  user_id: 'e2e-rater-id',
-  global_rating: 4,
-  quality_rating: 4,
-  enigma_rating: 3,
-  fun_rating: 5,
-  difficulty_rating: 2,
-};
-
-const E2E_IMAGE_TAGS = [
-  { id: 'e2e-image-tag-1', name: 'scenic', user_id: 'e2e-tagger-id', username: 'e2e_tagger' },
-];
+import { buildE2EImageRating, buildE2EImageTags, isE2EMode } from './e2eMode';
 
 function unwrapData(responseData) {
   if (responseData && typeof responseData === 'object' && 'data' in responseData) {
@@ -50,7 +35,14 @@ function buildRatingPayload(payload = {}) {
 
 export async function submitRating({ pictureId, context, payload }) {
   if (isE2EMode()) {
-    return { data: E2E_IMAGE_RATING };
+    return {
+      data: {
+        ...buildE2EImageRating(),
+        id: 'e2e-image-rating-id',
+        image_id: 'e2e-image-id',
+        user_id: 'e2e-rater-id',
+      },
+    };
   }
 
   const { token, userId } = await getBackendHeaders(context);
@@ -65,7 +57,14 @@ export async function submitRating({ pictureId, context, payload }) {
 
 export async function getImageRating({ pictureId, context }) {
   if (isE2EMode()) {
-    return { data: E2E_IMAGE_RATING };
+    return {
+      data: {
+        ...buildE2EImageRating(),
+        id: 'e2e-image-rating-id',
+        image_id: 'e2e-image-id',
+        user_id: 'e2e-rater-id',
+      },
+    };
   }
 
   const { token, userId } = await getBackendHeaders(context);
@@ -80,7 +79,7 @@ export async function getImageRating({ pictureId, context }) {
 
 export async function getImageTags({ pictureId, context }) {
   if (isE2EMode()) {
-    return { data: E2E_IMAGE_TAGS };
+    return { data: buildE2EImageTags() };
   }
 
   const { token, userId } = await getBackendHeaders(context);

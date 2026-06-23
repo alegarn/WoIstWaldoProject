@@ -213,10 +213,11 @@ export function buildImageObject(image, filePath) {
   imageObject.language = image.language;
 
   if (image.category != null) {
+    const { thumbnail_url, sort_order, ...rest } = image.category;
     imageObject.category = {
-      ...image.category,
-      thumbnailUrl: image.category.thumbnail_url,
-      sortOrder: image.category.sort_order,
+      ...rest,
+      thumbnailUrl: thumbnail_url,
+      sortOrder: sort_order,
     };
   } else {
     imageObject.category = image.category;

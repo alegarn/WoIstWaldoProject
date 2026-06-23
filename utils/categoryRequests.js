@@ -3,10 +3,11 @@ import { getBackendHeaders, setHeaders } from "./auth";
 import { buildE2ECategories, isE2EMode } from "./e2eMode";
 
 function normalizeCategory(category) {
+  const { thumbnail_url, sort_order, ...rest } = category;
   return {
-    ...category,
-    thumbnailUrl: category.thumbnail_url,
-    sortOrder: category.sort_order,
+    ...rest,
+    thumbnailUrl: thumbnail_url,
+    sortOrder: sort_order,
   };
 }
 

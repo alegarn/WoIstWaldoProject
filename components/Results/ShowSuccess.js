@@ -55,17 +55,18 @@ export default function ShowSuccess({ navigation, route }) {
     return () => clearTimeout(timeout);
   }, [categoryKey, imageFilePath, language, listId, pictureId]);
 
-  const ShowResult = ({ navigation, isTutorial }) => {
+  const ShowResult = ({ navigation, isTutorial, route }) => {
     return (
       <View testID="result.screen.success" style={styles.result}>
         <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>You Found It!</Text>
         <Text testID="result.screen.success.subtitle" style={[styles.subtitle, styles.marginBottom]}>
           <Text style={styles.title}>1</Text> point earned!
         </Text>
-        <ResultChoices 
-          navigation={navigation} 
-          success={true} 
-          isTutorial={isTutorial} 
+        <ResultChoices
+          navigation={navigation}
+          route={route}
+          success={true}
+          isTutorial={isTutorial}
         />
         <RatingSubmissionBlock pictureId={pictureId} context={context} />
         {
@@ -84,9 +85,10 @@ export default function ShowSuccess({ navigation, route }) {
         showSuccessImageAnimated ?
           <ImageAnimated success={true} />
         :
-          <ShowResult 
-            navigation={navigation} 
-            isTutorial={isTutorial} 
+          <ShowResult
+            navigation={navigation}
+            route={route}
+            isTutorial={isTutorial}
           />
       }
     </View>

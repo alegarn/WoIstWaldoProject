@@ -11,12 +11,14 @@ jest.mock('../utils/auth', () => ({
 
 jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
+  buildE2EImageRating: jest.fn(),
+  buildE2EImageTags: jest.fn(),
 }));
 
 import axios from 'axios';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
-import { isE2EMode } from '../utils/e2eMode';
+import { buildE2EImageRating, buildE2EImageTags, isE2EMode } from '../utils/e2eMode';
 import {
   addImageTag,
   deleteImageTag,
@@ -25,15 +27,19 @@ import {
   submitRating,
 } from '../utils/ratingRequests';
 
-const E2E_RATING = {
-  id: 'e2e-image-rating-id',
-  image_id: 'e2e-image-id',
-  user_id: 'e2e-rater-id',
+const E2E_RATING_VALUES = {
   global_rating: 4,
   quality_rating: 4,
   enigma_rating: 3,
   fun_rating: 5,
   difficulty_rating: 2,
+};
+
+const E2E_RATING = {
+  ...E2E_RATING_VALUES,
+  id: 'e2e-image-rating-id',
+  image_id: 'e2e-image-id',
+  user_id: 'e2e-rater-id',
 };
 
 const E2E_TAGS = [
@@ -44,6 +50,8 @@ describe('ratingRequests utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     isE2EMode.mockReturnValue(false);
+    buildE2EImageRating.mockReturnValue({ ...E2E_RATING_VALUES });
+    buildE2EImageTags.mockReturnValue(E2E_TAGS.map((tag) => ({ ...tag })));
     process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
     getBackendHeaders.mockResolvedValue({
       token: 'Bearer token',
