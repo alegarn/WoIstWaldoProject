@@ -20,8 +20,9 @@ jest.mock('expo-file-system', () => {
   return { File };
 });
 
-jest.mock('@expo/vector-icons', () => ({
+jest.mock('@react-native-vector-icons/ionicons', () => ({
   Ionicons: 'Ionicons',
+  default: 'Ionicons',
 }), { virtual: true });
 
 jest.mock('expo-media-library', () => ({

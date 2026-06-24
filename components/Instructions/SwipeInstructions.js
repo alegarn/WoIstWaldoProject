@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import BigButton from '../UI/BigButton';
 import { GlobalStyle } from "../../constants/theme";

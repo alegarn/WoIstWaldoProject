@@ -1,6 +1,6 @@
 import { useRef, useState, useContext, useEffect } from 'react';
 import { View, Text, ImageBackground, StyleSheet, Alert } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
 
