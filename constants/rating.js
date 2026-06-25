@@ -1,10 +1,10 @@
 export const RATING_LABELS = [
   "?",
   "Death of fun",
-  "Very Bad",
-  "Meh, why not",
-  "Ok ok, not bad",
-  "Good Guess",
+  "Meh...",
+  "Ok, why not",
+  "Ok ok, good guess",
+  "Great Guess!",
 ];
 
 export const RATING_COLORS = {
