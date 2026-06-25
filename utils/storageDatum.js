@@ -17,9 +17,32 @@ function lastImageUuidKey(categoryKey, language) {
 };
 
 export async function getLocalImages(categoryKey, language) {
-  //console.log("getLocalImages");
-  const imageList = await AsyncStorage.getItem(imageListKey(categoryKey, language));
-  return imageList ? JSON.parse(imageList) : null;
+  const stored = await AsyncStorage.getItem(imageListKey(categoryKey, language));
+  if (!stored) {
+    return null;
+  }
+
+  let images;
+  try {
+    images = JSON.parse(stored);
+  } catch {
+    return null;
+  }
+
+  if (!Array.isArray(images)) {
+    return null;
+  }
+
+  // Cache (Paths.cache) is not durable across restarts/updates, but this list is.
+  // Drop entries whose image file is gone and persist the trimmed list so dead
+  // uris don't linger and render as blank cards.
+  const viable = images.filter((image) => localImageFileExists(image?.imageFile));
+
+  if (viable.length !== images.length) {
+    await AsyncStorage.setItem(imageListKey(categoryKey, language), JSON.stringify(viable));
+  }
+
+  return viable;
 };
 
 function getLastListId(list) {
@@ -151,6 +174,14 @@ function deleteFileIfPresent(file) {
   }
 }
 
+function localImageFileExists(uri) {
+  try {
+    return !!new File(uri).exists;
+  } catch {
+    return false;
+  }
+}
+
 async function removeFromCache(localUri) {
   if (!localUri) {
     return;
@@ -193,7 +224,7 @@ function removeObjectById(imageListObject, listId) {
 export async function updateImageList(updatedImageList, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
-  const jsonImageList = JSON.parse(imageList);
+  const jsonImageList = imageList ? JSON.parse(imageList) : [];
   const newImageList = [...jsonImageList, ...updatedImageList];
   await AsyncStorage.setItem(listKey, JSON.stringify(newImageList));
   return newImageList;
