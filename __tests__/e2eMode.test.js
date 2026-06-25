@@ -95,7 +95,7 @@ describe('e2eMode helpers', () => {
   it('exposes a deterministic set of e2e categories for browse flows', () => {
     const categories = buildE2ECategories();
 
-    expect(categories).toHaveLength(6);
+    expect(categories).toHaveLength(9);
     expect(categories[0].id).toBe('e2e-default-category');
 
     categories.forEach((category) => {
@@ -104,7 +104,7 @@ describe('e2eMode helpers', () => {
           id: expect.any(String),
           key: expect.any(String),
           name: expect.any(String),
-          thumbnailUrl: null,
+          thumbnailUrl: expect.anything(),
         }),
       );
       expect('count' in category).toBe(true);

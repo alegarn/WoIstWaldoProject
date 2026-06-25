@@ -29,7 +29,6 @@ const RECENT_ALL_CATEGORY = {
   id: 'all',
   key: 'all',
   name: 'Recent/All',
-  thumbnailUrl: undefined,
   count: undefined,
 };
 

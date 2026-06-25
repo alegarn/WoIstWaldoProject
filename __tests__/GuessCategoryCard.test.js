@@ -13,10 +13,12 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import GuessCategoryCard from '../components/UI/GuessCategoryCard';
+import { CATEGORY_ASSETS } from '../utils/categoryAssets';
 
 describe('GuessCategoryCard', () => {
   const category = {
     id: 'nature',
+    key: 'nature',
     name: 'Nature',
   };
 
@@ -30,7 +32,7 @@ describe('GuessCategoryCard', () => {
         <GuessCategoryCard
           category={category}
           thumbnailUrl={thumbnailUrl}
-          count={12}
+          count={undefined}
           onPress={jest.fn()}
           testIDPrefix="guess-category"
           {...overrides}
@@ -72,5 +74,31 @@ describe('GuessCategoryCard', () => {
     });
 
     expect(onPress).toHaveBeenCalledTimes(1);
+  });
+
+  it('uses the local asset when thumbnailUrl is missing and the key is known', async () => {
+    const renderer = await renderCard({ thumbnailUrl: undefined });
+
+    const image = renderer.root.findByType('ImageBackground');
+
+    expect(image.props.source).toBe(CATEGORY_ASSETS.nature);
+  });
+
+  it('prefers an explicit remote thumbnailUrl string over the local asset', async () => {
+    const renderer = await renderCard({ thumbnailUrl: 'https://example/x.png' });
+
+    const image = renderer.root.findByType('ImageBackground');
+
+    expect(image.props.source).toBe('https://example/x.png');
+  });
+
+  it('renders the fallback view when the key is unknown and thumbnailUrl is missing', async () => {
+    const renderer = await renderCard({
+      category: { id: 'unknown', key: 'unknown', name: 'Mystery' },
+      thumbnailUrl: undefined,
+    });
+
+    expect(() => renderer.root.findByType('ImageBackground')).toThrow();
+    expect(renderer.root.findByType('Text').props.children).toBe('Mystery');
   });
 });

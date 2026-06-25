@@ -1,6 +1,5 @@
 jest.mock('react-native', () => ({
   Pressable: 'Pressable',
-  ScrollView: 'ScrollView',
   Text: 'Text',
   View: 'View',
   Image: 'Image',

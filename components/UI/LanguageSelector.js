@@ -9,8 +9,10 @@ export default function LanguageSelector({
   testIDPrefix,
   accessibilityLabel,
   accessibilityHint,
+  variant = 'light',
 }) {
   const [visible, setVisible] = useState(false);
+  const isOverlay = variant === 'overlay';
 
   const selectedName =
     LANGUAGES.find((language) => language.code === value)?.name || value || 'Select language';
@@ -28,8 +30,8 @@ export default function LanguageSelector({
         accessibilityRole="button"
         onPress={() => setVisible(true)}
         testID={`${testIDPrefix}.button`}
-        style={styles.button}>
-        <Text style={styles.buttonText}>{selectedName}</Text>
+        style={[styles.button, isOverlay && styles.buttonOverlay]}>
+        <Text style={[styles.buttonText, isOverlay && styles.buttonTextOverlay]}>{selectedName}</Text>
       </Pressable>
 
       <Modal
@@ -78,9 +80,16 @@ const styles = StyleSheet.create({
     borderColor: '#CCC',
     backgroundColor: '#FFF',
   },
+  buttonOverlay: {
+    backgroundColor: 'transparent',
+    borderColor: '#FFFFFF',
+  },
   buttonText: {
     fontSize: 15,
     color: '#1D133D',
+  },
+  buttonTextOverlay: {
+    color: '#FFFFFF',
   },
   modalContainer: {
     flex: 1,

@@ -3,6 +3,7 @@ import { Image as ReactNativeImage } from 'react-native';
 import { RANKING as DUMMY_RANKING } from '../data/dummy-data';
 import ImageModel from '../models/image';
 import { savePreferredLanguage, setOnboardingCompleted } from './storageDatum';
+import { getCategoryAsset } from './categoryAssets';
 import { handlePicturePress } from './targetLocation';
 
 const E2E_HIDE_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
@@ -28,18 +29,63 @@ const E2E_CATEGORIES = [
     id: 'e2e-default-category',
     key: 'all',
     name: 'Recent/All',
-    thumbnailUrl: null,
+    thumbnailUrl: getCategoryAsset('all'),
     count: undefined,
   },
-  { id: 'e2e-cat-other', key: 'other', name: 'Other', thumbnailUrl: null, count: undefined },
-  { id: 'e2e-cat-nature', key: 'nature', name: 'Nature', thumbnailUrl: null, count: undefined },
-  { id: 'e2e-cat-city', key: 'city', name: 'City', thumbnailUrl: null, count: undefined },
-  { id: 'e2e-cat-people', key: 'people', name: 'People', thumbnailUrl: null, count: undefined },
+  {
+    id: 'e2e-cat-other',
+    key: 'other',
+    name: 'Other',
+    thumbnailUrl: getCategoryAsset('other'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-nature',
+    key: 'nature',
+    name: 'Nature',
+    thumbnailUrl: getCategoryAsset('nature'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-city',
+    key: 'city',
+    name: 'City',
+    thumbnailUrl: getCategoryAsset('city'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-animals',
+    key: 'animals',
+    name: 'Animals',
+    thumbnailUrl: getCategoryAsset('animals'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-food',
+    key: 'food',
+    name: 'Food',
+    thumbnailUrl: getCategoryAsset('food'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-vehicles',
+    key: 'vehicles',
+    name: 'Vehicles',
+    thumbnailUrl: getCategoryAsset('vehicles'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-interiors',
+    key: 'interiors',
+    name: 'Interiors',
+    thumbnailUrl: getCategoryAsset('interiors'),
+    count: undefined,
+  },
   {
     id: 'e2e-cat-abstract',
     key: 'abstract',
     name: 'Abstract',
-    thumbnailUrl: null,
+    thumbnailUrl: getCategoryAsset('abstract'),
     count: undefined,
   },
 ];

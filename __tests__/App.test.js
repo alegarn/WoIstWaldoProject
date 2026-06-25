@@ -91,6 +91,7 @@ jest.mock('../store/auth-context', () => {
 
 jest.mock('../utils/auth', () => ({
   bootstrapStoredAuthSession: jest.fn(),
+  getUserName: jest.fn(),
 }));
 
 jest.mock('../utils/e2eMode', () => ({
@@ -107,7 +108,7 @@ import { act, create } from 'react-test-renderer';
 
 import { Root } from '../App';
 import { AuthContext } from '../store/auth-context';
-import { bootstrapStoredAuthSession } from '../utils/auth';
+import { bootstrapStoredAuthSession, getUserName } from '../utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from '../utils/e2eMode';
 import { getOnboardingCompleted } from '../utils/storageDatum';
 
@@ -118,6 +119,8 @@ describe('App Root', () => {
     ensureE2EOnboardingBypass.mockResolvedValue(undefined);
     getOnboardingCompleted.mockResolvedValue(true);
     isE2EMode.mockReturnValue(false);
+    bootstrapStoredAuthSession.mockResolvedValue(false);
+    getUserName.mockResolvedValue({ status: 200, data: { username: 'waldo' } });
   });
 
   async function flushEffects() {
@@ -313,5 +316,89 @@ describe('App Root', () => {
     expect(ensureE2EOnboardingBypass).toHaveBeenCalledTimes(1);
     expect(recordedScreens.map(({ name }) => name)).toContain('LanguageOnboarding');
     expect(recordedScreens.map(({ name }) => name)).not.toContain('HomeScreen');
+  });
+
+  it('re-validates the restored token against the backend after a successful restore', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(getUserName).toHaveBeenCalledWith({ context: contextValue });
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('logs out when the restored token is rejected by the backend with 401', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getUserName.mockResolvedValue({ status: 401, data: { errors: ['Unauthorized'] } });
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(contextValue.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the session when the restored token validation call fails without an auth rejection', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getUserName.mockRejectedValue(new Error('network down'));
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('skips token validation in e2e mode', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    isE2EMode.mockReturnValue(true);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).not.toHaveBeenCalled();
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('does not validate the token when no session was restored', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(false);
+
+    const contextValue = {
+      IsAuthenticated: false,
+      isAuthenticated: false,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).not.toHaveBeenCalled();
+    expect(contextValue.logout).not.toHaveBeenCalled();
   });
 });

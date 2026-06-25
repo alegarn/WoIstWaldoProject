@@ -1,5 +1,5 @@
 import { useRef, useState, useContext, useEffect } from 'react';
-import { View, Text, ImageBackground, StyleSheet, Alert } from 'react-native';
+import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
@@ -9,8 +9,6 @@ import { AuthContext } from "../store/auth-context";
 import HideDescription from '../components/Picture/Descriptions/HideDescription';
 import CenteredModal from "../components/UI/CenteredModal";
 import ModalContent from '../components/UI/ModalContent';
-import LanguageSelector from '../components/UI/LanguageSelector';
-import CategoryChips from '../components/UI/CategoryChips';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import { imageUploader } from "../utils/fileUploader";
 import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
@@ -24,6 +22,7 @@ import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
 
 const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
+const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
 
 function isUploadableCategoryKey(categoryKey) {
   return typeof categoryKey === 'string' && !NON_UPLOAD_CATEGORY_KEYS.has(categoryKey);
@@ -40,11 +39,13 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [language, setLanguage] = useState(null);
   const [languageError, setLanguageError] = useState(false);
   const [categories, setCategories] = useState([]);
+  const [categoriesError, setCategoriesError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const languageTouchedRef = useRef(false);
+  const isMountedRef = useRef(true);
 
   const {
     uri,
@@ -62,13 +63,31 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const context = useContext(AuthContext);
   const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
 
+  const loadCategories = async () => {
+    const categoriesResponse = await getCategories({ context });
+
+    if (!isMountedRef.current) {
+      return;
+    }
+
+    if (categoriesResponse?.isError) {
+      setCategories([]);
+      setCategoriesError(categoriesResponse?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
+      return;
+    }
+
+    setCategories(categoriesResponse?.data ?? []);
+    setCategoriesError(null);
+  };
+
   useEffect(() => {
     let mounted = true;
+    isMountedRef.current = true;
 
     (async () => {
-      const [preferred, categoriesResponse] = await Promise.all([
+      const [preferred] = await Promise.all([
         getPreferredLanguage(),
-        getCategories({ context }),
+        loadCategories(),
       ]);
 
       if (!mounted) {
@@ -83,12 +102,11 @@ export default function SetInstructionsScreen({ navigation, route }) {
           setLanguageError(false);
         }
       }
-
-      setCategories(categoriesResponse?.data ?? []);
     })();
 
     return () => {
       mounted = false;
+      isMountedRef.current = false;
     };
   }, []);
 
@@ -285,26 +303,6 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   return (
     <View style={styles.container} testID="set-instructions.screen">
-      <View style={styles.selectors} testID="set-instructions.selectors">
-        <Text style={styles.selectorLabel}>Language</Text>
-        <LanguageSelector
-          value={language}
-          onChange={handleLanguageChange}
-          testIDPrefix="setInstructions.language"
-        />
-        {languageError && (
-          <Text testID="set-instructions.language.error" style={styles.errorText}>
-            Please select a language
-          </Text>
-        )}
-        <Text style={styles.selectorLabel}>Category</Text>
-        <CategoryChips
-          categories={selectableCategories}
-          selected={selectedCategory}
-          onSelect={handleCategorySelect}
-          testIDPrefix="setInstructions.category"
-        />
-      </View>
       <ImageBackground
         accessibilityLabel="Set instructions image"
         source={{uri : uri}}
@@ -314,10 +312,16 @@ export default function SetInstructionsScreen({ navigation, route }) {
       >
         <HideDescription
           onSubmit={handlePressDescription}
-          label="Describe the hidden point"
-          invalid={false}
           onCancel={onCancelGoBack}
-          textInputConfig={{ multiline: true }}/>
+          language={language}
+          onLanguageChange={handleLanguageChange}
+          languageError={languageError}
+          categories={selectableCategories}
+          categoriesError={categoriesError}
+          onRetryCategories={loadCategories}
+          selectedCategory={selectedCategory}
+          onCategorySelect={handleCategorySelect}
+        />
         <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
       </ImageBackground>
       {
@@ -364,28 +368,5 @@ const styles = StyleSheet.create({
   },
   targetStyle: {
     zIndex: -1,
-  },
-  selectors: {
-    position: 'absolute',
-    top: 16,
-    left: 16,
-    right: 16,
-    zIndex: 10,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingBottom: 8,
-  },
-  selectorLabel: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#1D133D',
-    marginTop: 8,
-    marginBottom: 4,
-  },
-  errorText: {
-    fontSize: 13,
-    color: '#B00020',
-    marginTop: 4,
   },
 });

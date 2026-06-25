@@ -1,23 +1,45 @@
 import { Pressable, View, Text, ImageBackground, StyleSheet } from 'react-native';
 
+import { getCategoryAsset } from '../../utils/categoryAssets';
+
+function isRemoteThumbnail(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
 export default function GuessCategoryCard({ category, thumbnailUrl, count, onPress, testIDPrefix }) {
+  const cardTestID = `${testIDPrefix}.card.${category.id}`;
+  const useRemote = isRemoteThumbnail(thumbnailUrl);
+  const source = useRemote ? thumbnailUrl : getCategoryAsset(category?.key);
+
   return (
-    <Pressable
-      onPress={onPress}
-      testID={`${testIDPrefix}.card.${category.id}`}
-      style={styles.card}>
-      <ImageBackground source={thumbnailUrl} style={styles.image} imageStyle={styles.imageRadius}>
-        <View style={styles.overlay} />
-        <Text style={styles.name}>{category.name}</Text>
-        {count !== undefined && count !== 0 && (
-          <View style={styles.countBadge}>
-            <Text testID={`${testIDPrefix}.card.${category.id}.count`} style={styles.countText}>
-              {count}
-            </Text>
-          </View>
-        )}
-      </ImageBackground>
+    <Pressable onPress={onPress} testID={cardTestID} style={styles.card}>
+      {source !== undefined ? (
+        <ImageBackground source={source} style={styles.image} imageStyle={styles.imageRadius}>
+          <View style={styles.overlay} />
+          <Text style={styles.name}>{category.name}</Text>
+          {renderCountBadge(count, cardTestID)}
+        </ImageBackground>
+      ) : (
+        <View style={[styles.image, styles.fallback]}>
+          <Text style={styles.name}>{category.name}</Text>
+          {renderCountBadge(count, cardTestID)}
+        </View>
+      )}
     </Pressable>
+  );
+}
+
+function renderCountBadge(count, cardTestID) {
+  if (count === undefined || count === 0) {
+    return null;
+  }
+
+  return (
+    <View style={styles.countBadge}>
+      <Text testID={`${cardTestID}.count`} style={styles.countText}>
+        {count}
+      </Text>
+    </View>
   );
 }
 
@@ -38,6 +60,10 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   imageRadius: {
+    borderRadius: 12,
+  },
+  fallback: {
+    backgroundColor: '#1D133D',
     borderRadius: 12,
   },
   overlay: {

@@ -1,4 +1,4 @@
-import { Pressable, ScrollView, Text, View, Image, StyleSheet } from 'react-native';
+import { Pressable, Text, View, Image, StyleSheet } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
 
@@ -8,17 +8,15 @@ const OTHER_CATEGORY = {
   thumbnailUrl: null,
 };
 
-export default function CategoryChips({ selected, onSelect, categories = [], testIDPrefix }) {
+export default function CategoryChips({ selected, onSelect, categories = [], testIDPrefix, variant = 'light' }) {
+  const isOverlay = variant === 'overlay';
   const visibleCategories = [
     OTHER_CATEGORY,
     ...categories.filter((category) => category?.key && category.key !== OTHER_CATEGORY.key),
   ];
 
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
-      contentContainerStyle={styles.container}>
+    <View style={styles.container}>
       {visibleCategories.map((category) => {
         const chipValue = category.key === OTHER_CATEGORY.key ? null : category.key;
         const isSelected = category.key === OTHER_CATEGORY.key ? selected == null : selected === category.key;
@@ -29,7 +27,12 @@ export default function CategoryChips({ selected, onSelect, categories = [], tes
             key={category.key}
             onPress={() => onSelect(chipValue)}
             testID={`${testIDPrefix}.chip.${category.key}`}
-            style={[styles.chip, isSelected && styles.chipSelected]}>
+            style={[
+              styles.chip,
+              isOverlay && styles.chipOverlay,
+              isSelected && styles.chipSelected,
+              isSelected && isOverlay && styles.chipSelectedOverlay,
+            ]}>
             {hasThumbnail ? (
               <Image source={{ uri: category.thumbnailUrl }} style={styles.thumbnail} />
             ) : (
@@ -38,18 +41,24 @@ export default function CategoryChips({ selected, onSelect, categories = [], tes
                 style={[styles.thumbnail, styles.thumbnailFallback]}
               />
             )}
-            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+            <Text style={[
+              styles.chipText,
+              isOverlay && styles.chipTextOverlay,
+              isSelected && styles.chipTextSelected,
+            ]}>
               {category.name}
             </Text>
           </Pressable>
         );
       })}
-    </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     paddingVertical: 8,
     paddingHorizontal: 4,
     gap: 8,
@@ -65,9 +74,17 @@ const styles = StyleSheet.create({
     borderColor: '#CCC',
     backgroundColor: '#FFF',
   },
+  chipOverlay: {
+    backgroundColor: 'transparent',
+    borderColor: '#FFFFFF',
+  },
   chipSelected: {
     backgroundColor: GlobalStyle.color.primaryColor500,
     borderColor: GlobalStyle.color.primaryColor500,
+  },
+  chipSelectedOverlay: {
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
+    borderColor: '#FFFFFF',
   },
   thumbnail: {
     width: 18,
@@ -80,6 +97,9 @@ const styles = StyleSheet.create({
   chipText: {
     fontSize: 14,
     color: '#1D133D',
+  },
+  chipTextOverlay: {
+    color: '#FFFFFF',
   },
   chipTextSelected: {
     color: '#FFF',

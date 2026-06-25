@@ -45,7 +45,13 @@ const MockPreviewScreen = __DEV__ ? require('./screens/MockPreviewScreen').defau
 import { getUserConsent } from './utils/adHandling';
  */
 
-import { bootstrapStoredAuthSession } from './utils/auth';
+import {
+  bootstrapStoredAuthSession,
+  getStoredAuthState,
+  getUserName,
+  hasCompleteAuthState,
+  isPersistedBearerToken,
+} from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
 import { getOnboardingCompleted } from './utils/storageDatum';
 
@@ -420,15 +426,81 @@ export function Root() {
   const authContext = useContext(AuthContext);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function fetchStoredSession() {
+      let restored = false;
+
       try {
-        await bootstrapStoredAuthSession(authContext.restoreSession);
+        restored = await bootstrapStoredAuthSession(authContext.restoreSession);
       } catch (error) {
         console.warn('Failed to restore stored auth session', error);
+      }
+
+      if (!restored) {
+        if (cancelled) {
+          return;
+        }
+
+        if (
+          typeof getStoredAuthState === 'function' &&
+          typeof hasCompleteAuthState === 'function' &&
+          typeof isPersistedBearerToken === 'function'
+        ) {
+          try {
+            const storedAuthState = await getStoredAuthState();
+            const hasStoredAuthFields = !!(storedAuthState?.token || storedAuthState?.userId);
+            const hasValidStoredSession =
+              hasCompleteAuthState(storedAuthState) &&
+              isPersistedBearerToken(storedAuthState.token);
+
+            if (hasStoredAuthFields && !hasValidStoredSession) {
+              await authContext.logout();
+            }
+          } catch (error) {
+            console.warn('Failed to inspect stored auth session', error);
+          }
+        }
+
+        return;
+      }
+
+      if (cancelled || isE2EMode()) {
+        return;
+      }
+
+      if (typeof getUserName !== 'function') {
+        return;
+      }
+
+      try {
+        // Cheap authed call: confirms the stored token is still server-valid.
+        // Only auth rejection should clear the session here. Network/server
+        // failures should not force-log the user out on app launch.
+        const result = await getUserName({ context: authContext });
+
+        if (cancelled) {
+          return;
+        }
+
+        const status = result?.status;
+        if (status === 401 || status === 403) {
+          await authContext.logout();
+        }
+      } catch (error) {
+        const status = error?.response?.status ?? error?.status;
+
+        if (!cancelled && (status === 401 || status === 403)) {
+          await authContext.logout();
+        }
       }
     };
 
     fetchStoredSession();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   return <Navigation  authContext={authContext}/>

@@ -3,8 +3,6 @@ const mockCenteredModal = jest.fn(() => null);
 const mockModalContent = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
-const mockLanguageSelector = jest.fn(() => null);
-const mockCategoryChips = jest.fn(() => null);
 const mockDeleteLocalImage = jest.fn();
 
 const mockRequestPermission = jest.fn();
@@ -78,14 +76,12 @@ jest.mock('../components/UI/LoadingOverlay', () => {
 
 jest.mock('../components/UI/LanguageSelector', () => {
   return function MockLanguageSelector(props) {
-    mockLanguageSelector(props);
     return null;
   };
 });
 
 jest.mock('../components/UI/CategoryChips', () => {
   return function MockCategoryChips(props) {
-    mockCategoryChips(props);
     return null;
   };
 });
@@ -268,6 +264,10 @@ describe('SetInstructionScreen', () => {
 
   function getModalProps() {
     return mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+  }
+
+  function getHideDescriptionProps() {
+    return mockHideDescription.mock.calls[mockHideDescription.mock.calls.length - 1][0];
   }
 
   it('rejects invalid file types before trying the upload pipeline', async () => {
@@ -557,10 +557,8 @@ describe('SetInstructionScreen', () => {
 
     await renderScreen();
 
-    const lastCall = mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
     expect(getPreferredLanguage).toHaveBeenCalled();
-    expect(mockLanguageSelector).toHaveBeenCalled();
-    expect(lastCall.value).toBe('fr');
+    expect(getHideDescriptionProps().language).toBe('fr');
     expect(resolveDefaultLanguage).not.toHaveBeenCalled();
   });
 
@@ -570,19 +568,54 @@ describe('SetInstructionScreen', () => {
 
     await renderScreen();
 
-    const lastCall = mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
     expect(getPreferredLanguage).toHaveBeenCalled();
     expect(resolveDefaultLanguage).toHaveBeenCalled();
-    expect(lastCall.value).toBe('de');
+    expect(getHideDescriptionProps().language).toBe('de');
   });
 
   it('renders every category returned by getCategories through CategoryChips', async () => {
     await renderScreen();
 
-    const lastCall = mockCategoryChips.mock.calls[mockCategoryChips.mock.calls.length - 1][0];
     expect(getCategories).toHaveBeenCalledWith({ context: expect.any(Object) });
-    expect(mockCategoryChips).toHaveBeenCalled();
-    expect(lastCall.categories).toEqual([
+    expect(getHideDescriptionProps().categories).toEqual([
+      { id: 'cat-2', key: 'nature', name: 'Nature' },
+      { id: 'cat-3', key: 'city', name: 'City' },
+    ]);
+  });
+
+  it('passes the category load failure message to HideDescription when category hydration fails', async () => {
+    getCategories.mockResolvedValueOnce({
+      isError: true,
+      message: 'Categories unavailable right now',
+    });
+
+    await renderScreen();
+
+    expect(getHideDescriptionProps().categories).toEqual([]);
+    expect(getHideDescriptionProps().categoriesError).toBe('Categories unavailable right now');
+    expect(typeof getHideDescriptionProps().onRetryCategories).toBe('function');
+  });
+
+  it('retries category hydration and clears the inline error after a successful retry', async () => {
+    getCategories
+      .mockResolvedValueOnce({
+        isError: true,
+        message: 'Categories unavailable right now',
+      })
+      .mockResolvedValueOnce({ data: categoriesFixture });
+
+    await renderScreen();
+
+    expect(getHideDescriptionProps().categoriesError).toBe('Categories unavailable right now');
+
+    await act(async () => {
+      await getHideDescriptionProps().onRetryCategories();
+      await flushEffects();
+    });
+
+    expect(getCategories).toHaveBeenCalledTimes(2);
+    expect(getHideDescriptionProps().categoriesError).toBeNull();
+    expect(getHideDescriptionProps().categories).toEqual([
       { id: 'cat-2', key: 'nature', name: 'Nature' },
       { id: 'cat-3', key: 'city', name: 'City' },
     ]);
@@ -592,16 +625,16 @@ describe('SetInstructionScreen', () => {
     await renderScreen();
 
     await act(async () => {
-      mockCategoryChips.mock.calls[0][0].onSelect('nature');
+      mockHideDescription.mock.calls[0][0].onCategorySelect('nature');
     });
 
-    expect(mockCategoryChips.mock.calls[mockCategoryChips.mock.calls.length - 1][0].selected).toBe('nature');
+    expect(getHideDescriptionProps().selectedCategory).toBe('nature');
 
     await act(async () => {
-      mockCategoryChips.mock.calls[mockCategoryChips.mock.calls.length - 1][0].onSelect('nature');
+      getHideDescriptionProps().onCategorySelect('nature');
     });
 
-    expect(mockCategoryChips.mock.calls[mockCategoryChips.mock.calls.length - 1][0].selected).toBeNull();
+    expect(getHideDescriptionProps().selectedCategory).toBeNull();
   });
 
   it('falls back to en when no preferred language or locale heuristic is available', async () => {
@@ -610,8 +643,7 @@ describe('SetInstructionScreen', () => {
 
     await renderScreen();
 
-    const lastCall = mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
-    expect(lastCall.value).toBe('en');
+    expect(getHideDescriptionProps().language).toBe('en');
   });
 
   it('blocks submission with an inline error and skips the uploader when language hydration has not finished yet', async () => {
@@ -619,7 +651,7 @@ describe('SetInstructionScreen', () => {
 
     getPreferredLanguage.mockReturnValue(preferredLanguageDeferred.promise);
 
-    const renderer = await renderScreen();
+    await renderScreen();
 
     await act(async () => {
       mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
@@ -630,7 +662,7 @@ describe('SetInstructionScreen', () => {
       await flushEffects();
     });
 
-    expect(renderer.root.findByProps({ testID: 'set-instructions.language.error' })).toBeTruthy();
+    expect(getHideDescriptionProps().languageError).toBe(true);
     expect(imageUploader).not.toHaveBeenCalled();
     expect(handleImageType).not.toHaveBeenCalled();
     expect(navigation.reset).not.toHaveBeenCalled();
@@ -649,7 +681,7 @@ describe('SetInstructionScreen', () => {
     await renderScreen();
 
     await act(async () => {
-      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0].onChange('fr');
+      mockHideDescription.mock.calls[0][0].onLanguageChange('fr');
     });
 
     await act(async () => {
@@ -657,19 +689,18 @@ describe('SetInstructionScreen', () => {
       await flushEffects();
     });
 
-    const lastCall = mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
-    expect(lastCall.value).toBe('fr');
+    expect(getHideDescriptionProps().language).toBe('fr');
   });
 
   it('includes the resolved category_id in the upload payload when a chip is selected', async () => {
     await renderScreen();
 
     await act(async () => {
-      mockCategoryChips.mock.calls[0][0].onSelect('nature');
+      mockHideDescription.mock.calls[0][0].onCategorySelect('nature');
     });
 
     await act(async () => {
-      mockLanguageSelector.mock.calls[0][0].onChange('fr');
+      mockHideDescription.mock.calls[0][0].onLanguageChange('fr');
     });
 
     await act(async () => {
@@ -694,13 +725,13 @@ describe('SetInstructionScreen', () => {
     await renderScreen();
 
     await act(async () => {
-      mockCategoryChips.mock.calls[0][0].onSelect('all');
+      mockHideDescription.mock.calls[0][0].onCategorySelect('all');
     });
 
-    expect(mockCategoryChips.mock.calls[mockCategoryChips.mock.calls.length - 1][0].selected).toBeNull();
+    expect(getHideDescriptionProps().selectedCategory).toBeNull();
 
     await act(async () => {
-      mockLanguageSelector.mock.calls[0][0].onChange('fr');
+      mockHideDescription.mock.calls[0][0].onLanguageChange('fr');
     });
 
     await act(async () => {
@@ -728,11 +759,11 @@ describe('SetInstructionScreen', () => {
     await renderScreen();
 
     await act(async () => {
-      mockCategoryChips.mock.calls[0][0].onSelect('nature');
+      mockHideDescription.mock.calls[0][0].onCategorySelect('nature');
     });
 
     await act(async () => {
-      mockLanguageSelector.mock.calls[0][0].onChange('fr');
+      mockHideDescription.mock.calls[0][0].onLanguageChange('fr');
     });
 
     await act(async () => {
@@ -762,8 +793,14 @@ describe('SetInstructionScreen', () => {
 
     await renderScreen();
 
-    expect(mockLanguageSelector).toHaveBeenCalled();
-    expect(mockCategoryChips).toHaveBeenCalled();
+    const hideDescriptionProps = getHideDescriptionProps();
+    expect(hideDescriptionProps.language).toBe('en');
+    expect(hideDescriptionProps.categories).toEqual([
+      { id: 'cat-2', key: 'nature', name: 'Nature' },
+      { id: 'cat-3', key: 'city', name: 'City' },
+    ]);
+    expect(typeof hideDescriptionProps.onLanguageChange).toBe('function');
+    expect(typeof hideDescriptionProps.onCategorySelect).toBe('function');
 
     await act(async () => {
       mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
