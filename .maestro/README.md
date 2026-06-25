@@ -43,6 +43,7 @@ The checked-in sample file is `.maestro/e2e.env.example.yaml`. Copy it to `.maes
 - In E2E mode, `game.instructions.hide.overlay` and `game.instructions.guess.overlay` dismiss the full-screen instruction overlays directly, which is more reliable on device than targeting the inner CTA button.
 - `SetInstructionsScreen` saves a hidden-picture payload into app storage after a successful hide upload.
 - `SwipeImage` prefers that saved payload in E2E mode before falling back to the seeded guess card.
+- Guess flows now enter the swipe stack through the synthetic `guess-path.category.card.all` category before dismissing `guess-path.button.start`.
 - `guess-path.card.saved` proves the saved hide payload is present; `guess-path.card.fallback` identifies the seeded fallback card.
 - On the guess screen, a normal tap on `game.picture.guess-surface` selects the saved hidden point. A long press on the same surface selects the deterministic incorrect point for failure coverage.
 - `guess-path.card.1` is either the saved hidden picture or the seeded fallback card; swiping it to the right enters the guess screen.

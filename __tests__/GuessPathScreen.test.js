@@ -1,5 +1,4 @@
 const mockGuessCategoryCard = jest.fn(() => null);
-const mockSwipeInstructions = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 
@@ -7,18 +6,6 @@ jest.mock('../components/UI/GuessCategoryCard', () => {
   return function MockGuessCategoryCard(props) {
     mockGuessCategoryCard(props);
     return null;
-  };
-});
-
-jest.mock('../components/Instructions/SwipeInstructions', () => {
-  const React = require('react');
-  const { Pressable } = require('react-native');
-
-  return function MockSwipeInstructions({ handleFilterClick }) {
-    mockSwipeInstructions({ handleFilterClick });
-    return (
-      <Pressable testID="guess-path.stub.show-grid" onPress={handleFilterClick} />
-    );
   };
 });
 
@@ -77,6 +64,7 @@ const CATEGORIES = [
 
 describe('GuessPathScreen', () => {
   const contextValue = { token: 'Bearer token' };
+  const mountedRenderers = [];
   let navigation;
 
   beforeEach(() => {
@@ -94,7 +82,11 @@ describe('GuessPathScreen', () => {
     navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn() };
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      mountedRenderers.splice(0).forEach((renderer) => renderer.unmount());
+    });
+
     Dimensions.get.mockRestore();
   });
 
@@ -117,13 +109,9 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    return renderer;
-  }
+    mountedRenderers.push(renderer);
 
-  function dismissOverlay(renderer) {
-    act(() => {
-      renderer.root.findByProps({ testID: 'guess-path.stub.show-grid' }).props.onPress();
-    });
+    return renderer;
   }
 
   function getCardPropsByKey(key) {
@@ -154,8 +142,7 @@ describe('GuessPathScreen', () => {
   });
 
   it('renders the synthetic Recent/All card as the first grid item', async () => {
-    const renderer = await renderScreen();
-    dismissOverlay(renderer);
+    await renderScreen();
 
     const renderedKeys = mockGuessCategoryCard.mock.calls.map(
       ([props]) => props.category.id
@@ -168,22 +155,20 @@ describe('GuessPathScreen', () => {
   });
 
   it('renders one GuessCategoryCard per category returned by the api', async () => {
-    const renderer = await renderScreen();
-    dismissOverlay(renderer);
+    await renderScreen();
 
-    const renderedKeys = mockGuessCategoryCard.mock.calls.map(
+    const renderedKeys = [...new Set(mockGuessCategoryCard.mock.calls.map(
       ([props]) => props.category.id
-    );
+    ))];
 
     expect(renderedKeys).toEqual(['all', 'nature', 'city']);
   });
 
   it('passes the grid testID and slug-based card testIDs to the flat list', async () => {
     const renderer = await renderScreen();
-    dismissOverlay(renderer);
 
     expect(renderer.root.findByProps({ testID: 'guess-path.category.grid' })).toBeTruthy();
-    expect(mockGuessCategoryCard.mock.calls[1][0]).toEqual(
+    expect(getCardPropsByKey('nature')).toEqual(
       expect.objectContaining({
         testIDPrefix: 'guess-path.category',
         category: expect.objectContaining({ id: 'nature', name: 'Nature' }),
@@ -192,8 +177,7 @@ describe('GuessPathScreen', () => {
   });
 
   it('navigates to GuessFeedScreen with the selected category and resolved language', async () => {
-    const renderer = await renderScreen();
-    dismissOverlay(renderer);
+    await renderScreen();
 
     const natureCard = getCardPropsByKey('nature');
 
@@ -218,7 +202,6 @@ describe('GuessPathScreen', () => {
 
   it('opens the language filter modal when the details button is tapped', async () => {
     const renderer = await renderScreen();
-    dismissOverlay(renderer);
 
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.filter.language' })
@@ -238,7 +221,6 @@ describe('GuessPathScreen', () => {
 
   it('persists the selected language and updates the resolved language label', async () => {
     const renderer = await renderScreen();
-    dismissOverlay(renderer);
 
     await act(async () => {
       getDetailsButtonProps().onPress();
@@ -259,6 +241,14 @@ describe('GuessPathScreen', () => {
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
         .children
     ).toBe('fr');
+  });
+
+  it('keeps the e2e home button available on the category screen', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    const renderer = await renderScreen();
+
+    expect(renderer.root.findByProps({ testID: 'guess-path.button.home' })).toBeTruthy();
   });
 
   it('renders the TutorialOverlay only when the isTutorial route param is set', async () => {

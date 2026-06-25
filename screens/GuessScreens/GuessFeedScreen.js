@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
 import { LANGUAGES } from '../../constants/languages';
 import {
@@ -17,6 +18,7 @@ const DEFAULT_LANGUAGE = 'en';
 export default function GuessFeedScreen({ navigation, route }) {
   const { category, language: routeLanguage } = route.params || {};
   const [language, setLanguage] = useState(routeLanguage || null);
+  const [showOverlay, setShowOverlay] = useState(true);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
@@ -84,15 +86,22 @@ export default function GuessFeedScreen({ navigation, route }) {
         {language || DEFAULT_LANGUAGE}
       </Text>
 
-      <SwipeImage
-        key={`${category?.key || 'all'}:${language || 'any'}`}
-        screenWidth={screenWidth}
-        screenHeight={screenHeight}
-        startGuessing={startGuessing}
-        category={category}
-        language={language || DEFAULT_LANGUAGE}
-        onOpenFilter={handleOpenFilter}
-      />
+      {showOverlay ? (
+        <SwipeInstructions
+          screenWidth={screenWidth}
+          handleFilterClick={() => setShowOverlay(false)}
+        />
+      ) : (
+        <SwipeImage
+          key={`${category?.key || 'all'}:${language || 'any'}`}
+          screenWidth={screenWidth}
+          screenHeight={screenHeight}
+          startGuessing={startGuessing}
+          category={category}
+          language={language || DEFAULT_LANGUAGE}
+          onOpenFilter={handleOpenFilter}
+        />
+      )}
 
       <Modal
         visible={isFilterModalVisible}

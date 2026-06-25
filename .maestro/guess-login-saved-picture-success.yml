@@ -10,6 +10,12 @@ appId: com.alegarn.WoIstWaldoProject
     id: home.button.guess
 - extendedWaitUntil:
     visible:
+      id: guess-path.category.card.all
+    timeout: 10000
+- tapOn:
+    id: guess-path.category.card.all
+- extendedWaitUntil:
+    visible:
       id: guess-path.button.start
     timeout: 10000
 - tapOn:

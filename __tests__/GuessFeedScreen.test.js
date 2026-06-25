@@ -1,4 +1,5 @@
 const mockSwipeImage = jest.fn(() => null);
+const mockSwipeInstructions = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
 const recordedScreens = [];
@@ -44,6 +45,16 @@ jest.mock('../components/UI/SwipeImage', () => {
   return function MockSwipeImage(props) {
     mockSwipeImage(props);
     return null;
+  };
+});
+
+jest.mock('../components/Instructions/SwipeInstructions', () => {
+  const React = require('react');
+  const { Pressable } = require('react-native');
+
+  return function MockSwipeInstructions({ handleFilterClick, screenWidth }) {
+    mockSwipeInstructions({ handleFilterClick, screenWidth });
+    return <Pressable testID="guess-feed.stub.start-swipe" onPress={handleFilterClick} />;
   };
 });
 
@@ -110,6 +121,8 @@ import {
 } from '../utils/storageDatum';
 
 describe('GuessFeedScreen', () => {
+  const mountedRenderers = [];
+
   beforeEach(() => {
     jest.clearAllMocks();
     getOnboardingCompleted.mockResolvedValue(true);
@@ -123,7 +136,11 @@ describe('GuessFeedScreen', () => {
     });
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      mountedRenderers.splice(0).forEach((renderer) => renderer.unmount());
+    });
+
     Dimensions.get.mockRestore();
   });
 
@@ -151,15 +168,36 @@ describe('GuessFeedScreen', () => {
     };
   }
 
-  it('prefers explicit route language over stored session filter on mount', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
-    const route = makeRoute({ language: 'de' });
+  function dismissSwipeInstructions(renderer) {
+    act(() => {
+      renderer.root.findByProps({ testID: 'guess-feed.stub.start-swipe' }).props.onPress();
+    });
+  }
+
+  async function renderScreen(navigation, route) {
     let renderer;
 
     await act(async () => {
       renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
       await flushEffects();
     });
+
+    mountedRenderers.push(renderer);
+
+    return renderer;
+  }
+
+  it('prefers explicit route language over stored session filter on mount', async () => {
+    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: 'de' });
+    const renderer = await renderScreen(navigation, route);
+
+    expect(mockSwipeInstructions).toHaveBeenCalledTimes(1);
+    expect(mockSwipeInstructions.mock.calls[0][0].screenWidth).toBe(320);
+    expect(mockSwipeImage).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
+
+    dismissSwipeInstructions(renderer);
 
     expect(mockSwipeImage).toHaveBeenCalledTimes(1);
     const props = mockSwipeImage.mock.calls[0][0];
@@ -170,20 +208,16 @@ describe('GuessFeedScreen', () => {
     expect(typeof props.startGuessing).toBe('function');
     expect(typeof props.onOpenFilter).toBe('function');
     expect(getSessionLanguageFilter).not.toHaveBeenCalled();
-    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
   });
 
   it('falls back to stored session filter when route does not provide language', async () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
     const deferredLanguage = createDeferred();
-    let renderer;
 
     getSessionLanguageFilter.mockReturnValue(deferredLanguage.promise);
 
-    await act(async () => {
-      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
-    });
+    const renderer = await renderScreen(navigation, route);
 
     expect(mockSwipeImage).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('en');
@@ -194,18 +228,22 @@ describe('GuessFeedScreen', () => {
     });
 
     expect(getSessionLanguageFilter).toHaveBeenCalledTimes(1);
-    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('fr');
+    expect(mockSwipeInstructions).toHaveBeenCalledTimes(1);
+    expect(mockSwipeImage).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('fr');
+
+    dismissSwipeInstructions(renderer);
+
+    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('fr');
   });
 
   it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ isTutorial: true });
 
-    await act(async () => {
-      create(<GuessFeedScreen navigation={navigation} route={route} />);
-      await flushEffects();
-    });
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
 
     const { startGuessing } = mockSwipeImage.mock.calls[0][0];
 
@@ -235,10 +273,9 @@ describe('GuessFeedScreen', () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
 
-    await act(async () => {
-      create(<GuessFeedScreen navigation={navigation} route={route} />);
-      await flushEffects();
-    });
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
 
     expect(mockSwipeImage).toHaveBeenCalledTimes(1);
     const props = mockSwipeImage.mock.calls[0][0];
@@ -250,14 +287,11 @@ describe('GuessFeedScreen', () => {
   it('opens the language filter modal when SwipeImage requests it', async () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
-    let renderer;
-
-    await act(async () => {
-      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
-      await flushEffects();
-    });
+    const renderer = await renderScreen(navigation, route);
 
     expect(() => renderer.root.findByProps({ testID: 'guess-feed.filter.language' })).toThrow();
+
+    dismissSwipeInstructions(renderer);
 
     await act(async () => {
       mockSwipeImage.mock.calls[0][0].onOpenFilter();
@@ -271,12 +305,9 @@ describe('GuessFeedScreen', () => {
   it('persists the selected language and rerenders SwipeImage with the updated filter', async () => {
     const navigation = { replace: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
-    let renderer;
+    const renderer = await renderScreen(navigation, route);
 
-    await act(async () => {
-      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
-      await flushEffects();
-    });
+    dismissSwipeInstructions(renderer);
 
     await act(async () => {
       mockSwipeImage.mock.calls[0][0].onOpenFilter();

@@ -1,6 +1,5 @@
 import { useContext, useEffect, useState } from 'react';
 import {
-  Dimensions,
   FlatList,
   Modal,
   Pressable,
@@ -11,7 +10,6 @@ import {
 } from 'react-native';
 
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
-import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import IconButton from '../../components/UI/IconButton';
 import { LANGUAGES } from '../../constants/languages';
@@ -22,8 +20,6 @@ import {
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
 import { AuthContext } from '../../store/auth-context';
-
-const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const RECENT_ALL_CATEGORY = {
   id: 'all',
@@ -37,7 +33,6 @@ const NAVIGATION_ANY_LANGUAGE = 'any';
 
 export default function GuessPathScreen({ navigation, route }) {
   const context = useContext(AuthContext);
-  const [showOverlay, setShowOverlay] = useState(true);
   const [categories, setCategories] = useState([]);
   const [sessionLanguage, setSessionLanguage] = useState(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -100,7 +95,7 @@ export default function GuessPathScreen({ navigation, route }) {
 
   return (
     <>
-      {isE2EMode() && showOverlay && (
+      {isE2EMode() && (
         <Pressable
           accessibilityLabel="Return to home"
           accessibilityRole="button"
@@ -116,52 +111,43 @@ export default function GuessPathScreen({ navigation, route }) {
         {resolvedLanguage}
       </Text>
 
-      {showOverlay ? (
-        <>
-          <SwipeInstructions
-            screenWidth={SCREEN_WIDTH}
-            imageIsPortrait={true}
-            handleFilterClick={() => setShowOverlay(false)}
-          />
-          {isTutorial && (
-            <TutorialOverlay
-              screen={"GuessPathScreen"}
-              instructionsPosition={{ top: 0, left: 0 }}
-            />
-          )}
-        </>
-      ) : (
-        <View style={styles.gridContainer}>
-          <View style={styles.header}>
-            <IconButton
-              icon="ellipsis-horizontal"
-              color="#1D133D"
-              size={24}
-              onPress={() => setIsFilterModalVisible(true)}
-              testID="guess-path.button.details"
-              accessibilityLabel="Open language filter"
-            />
-          </View>
-          <FlatList
-            data={gridData}
-            numColumns={2}
-            keyExtractor={(item) => item.id}
-            columnWrapperStyle={styles.columnWrapper}
-            contentContainerStyle={styles.gridContent}
-            testID="guess-path.category.grid"
-            renderItem={({ item }) => (
-              <View style={styles.gridItem}>
-                <GuessCategoryCard
-                  category={{ ...item, id: item.key }}
-                  thumbnailUrl={item.thumbnailUrl}
-                  count={item.count}
-                  onPress={() => handleCategoryPress(item)}
-                  testIDPrefix="guess-path.category"
-                />
-              </View>
-            )}
+      <View style={styles.gridContainer}>
+        <View style={styles.header}>
+          <IconButton
+            icon="ellipsis-horizontal"
+            color="#1D133D"
+            size={24}
+            onPress={() => setIsFilterModalVisible(true)}
+            testID="guess-path.button.details"
+            accessibilityLabel="Open language filter"
           />
         </View>
+        <FlatList
+          data={gridData}
+          numColumns={2}
+          keyExtractor={(item) => item.id}
+          columnWrapperStyle={styles.columnWrapper}
+          contentContainerStyle={styles.gridContent}
+          testID="guess-path.category.grid"
+          renderItem={({ item }) => (
+            <View style={styles.gridItem}>
+              <GuessCategoryCard
+                category={{ ...item, id: item.key }}
+                thumbnailUrl={item.thumbnailUrl}
+                count={item.count}
+                onPress={() => handleCategoryPress(item)}
+                testIDPrefix="guess-path.category"
+              />
+            </View>
+          )}
+        />
+      </View>
+
+      {isTutorial && (
+        <TutorialOverlay
+          screen={"GuessPathScreen"}
+          instructionsPosition={{ top: 0, left: 0 }}
+        />
       )}
 
       <Modal
