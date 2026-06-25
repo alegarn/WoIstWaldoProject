@@ -327,7 +327,7 @@ const styles = StyleSheet.create({
   },
   e2eOpenButton: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     right: 16,
     zIndex: 2,
     backgroundColor: 'rgba(29, 19, 61, 0.92)',

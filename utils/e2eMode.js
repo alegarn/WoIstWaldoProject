@@ -157,7 +157,10 @@ export async function ensureE2EOnboardingBypass() {
 }
 
 export function buildE2ECategories() {
-  return E2E_CATEGORIES.map((category) => ({ ...category }));
+  return E2E_CATEGORIES.map((category) => ({
+    ...category,
+    thumbnailUrl: resolveLocalAsset(category.thumbnailUrl)?.uri ?? null,
+  }));
 }
 
 export function getE2EAdDelayMs() {
@@ -204,23 +207,24 @@ export function buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial 
 export function buildE2EGuessCards() {
   const asset = resolveLocalAsset(E2E_GUESS_ASSET);
   const isPortrait = asset.height >= asset.width;
+  const hiddenLocation = getE2EHideLocation();
 
-  return [
-    attachE2EGuessCardMetadata(
-      new ImageModel(
-        asset.uri,
-        'e2e-guess-card',
-        'Find the hidden point near the center ring.',
-        asset.height,
-        asset.width,
-        isPortrait,
-        getE2EHideLocation(),
-        asset.height,
-        asset.width,
-        1,
-      ),
+  const card = attachE2EGuessCardMetadata(
+    new ImageModel(
+      asset.uri,
+      'e2e-guess-card',
+      'Find the hidden point near the center ring.',
+      asset.height,
+      asset.width,
+      isPortrait,
+      hiddenLocation,
+      asset.height,
+      asset.width,
+      1,
     ),
-  ];
+  );
+  card.hiddenLocation = hiddenLocation;
+  return [card];
 }
 
 export function buildE2EHiddenGuessPayload({
@@ -251,7 +255,7 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
     return null;
   }
 
-  return attachE2EGuessCardMetadata(
+  const card = attachE2EGuessCardMetadata(
     new ImageModel(
       payload.uri,
       payload.pictureId ?? 'e2e-hidden-guess-card',
@@ -275,6 +279,8 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
       fullDescription: payload.fullDescription ?? E2E_GUESS_CARD_FULL_DESCRIPTION,
     },
   );
+  card.hiddenLocation = payload.hiddenLocation;
+  return card;
 }
 
 export function buildE2ERankingRows() {

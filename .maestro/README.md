@@ -5,10 +5,10 @@ This directory contains login-first Maestro flows for the deterministic app runt
 ## Files
 
 - `auth-boot-login.yml`: clean launch/login smoke flow using the stable auth and home-screen ids.
-- `hide-login-save-picture.yml`: logs in, hides a point, uploads the fixture image, and saves the hidden-picture bridge payload for later guess flows.
-- `guess-login-saved-picture-success.yml`: logs in, opens the guess path, reuses the saved hide payload, and verifies the success result.
-- `guess-login-saved-picture-failure.yml`: logs in, opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, and verifies the failure result.
-- `hide-to-guess-to-result.yml`: full deterministic login -> hide -> guess -> ranking journey using the saved hide payload bridge.
+- `hide-login-save-picture.yml`: assumes an already-connected, logged-in session on HomeScreen; hides a point, uploads the fixture image, walks the 3-step describe → language → category wizard, and saves the hidden-picture bridge payload for later guess flows.
+- `guess-login-saved-picture-success.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, and verifies the success result.
+- `guess-login-saved-picture-failure.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, and verifies the failure result.
+- `hide-to-guess-to-result.yml`: assumes an already-connected, logged-in session on HomeScreen; runs the deterministic hide -> guess -> ranking journey using the saved hide payload bridge.
 - `auth-boot-signup.yml`: signup smoke flow that generates unique credentials at runtime so it can be rerun without email or username collisions.
 - `e2e.env.example.yaml`: sample Maestro flow variables only.
 
@@ -33,15 +33,16 @@ EXPO_PUBLIC_E2E_MODE=true npx expo run:android
 
 If you are testing a prebuilt artifact, the same env must be present during the build that produced that artifact.
 
-Maestro `-e` variables and values loaded from an env file do not toggle the app runtime mode. They only supply flow inputs such as login credentials, hide descriptions, expected result text, and seeded leaderboard expectations.
+Maestro `-e KEY=VALUE` variables passed inline on the auth flow CLI supply flow inputs such as login credentials, hide descriptions, expected result text, and seeded leaderboard expectations. They do not toggle the app runtime mode.
 
-The checked-in sample file is `.maestro/e2e.env.example.yaml`. Copy it to `.maestro/e2e.env.yaml` or pass the example file directly after replacing the placeholder credentials. The flow files themselves do not define fallback env values, so the env file or `-e` CLI values are the source of truth at runtime.
+The checked-in sample file is `.maestro/e2e.env.example.yaml`; it only documents the available flow inputs. The feature flows take no env vars, and the auth flow takes its login credentials via `-e LOGIN_EMAIL=... -e LOGIN_PASSWORD=...` on the command line. The flow files themselves do not define fallback env values, so the `-e` CLI values are the source of truth at runtime.
 
 ## What Deterministic E2E Mode Changes
 
 - `image-picker.button.select-image` bypasses the OS picker and navigates directly to `HideScreen` with a bundled fixture image.
 - In E2E mode, `game.instructions.hide.overlay` and `game.instructions.guess.overlay` dismiss the full-screen instruction overlays directly, which is more reliable on device than targeting the inner CTA button.
 - `SetInstructionsScreen` saves a hidden-picture payload into app storage after a successful hide upload.
+- `SetInstructionsScreen` now gates the hide save behind a 3-step wizard (describe → language → category); the flow taps `set-instructions.button.next` twice before `set-instructions.button.confirm-description`.
 - `SwipeImage` prefers that saved payload in E2E mode before falling back to the seeded guess card.
 - Guess flows now enter the swipe stack through the synthetic `guess-path.category.card.all` category before dismissing `guess-path.button.start`.
 - `guess-path.card.saved` proves the saved hide payload is present; `guess-path.card.fallback` identifies the seeded fallback card.
@@ -54,16 +55,30 @@ The checked-in sample file is `.maestro/e2e.env.example.yaml`. Copy it to `.maes
 
 ## Running The Flows
 
+The app is an Expo Dev Client: re-launching it breaks the Metro JS bundle connection (the dev client must be reconnected manually each time). To avoid that, run in two phases.
+
+### Phase 1 — establish the session once
+
+Launch the app, connect it to Metro, log in, and land on HomeScreen. Either do this manually, or run:
+
 ```bash
-cp .maestro/e2e.env.example.yaml .maestro/e2e.env.yaml
-maestro test .maestro/auth-boot-login.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/hide-login-save-picture.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/guess-login-saved-picture-success.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/guess-login-saved-picture-failure.yml --env-file .maestro/e2e.env.yaml
-maestro test .maestro/hide-to-guess-to-result.yml --env-file .maestro/e2e.env.yaml
+maestro test .maestro/auth-boot-login.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
 ```
 
-Run `hide-login-save-picture.yml` before either guess-only flow. Those guess-only flows now assert `guess-path.card.saved`, so they fail early if the saved payload bridge was never created.
+This is the ONLY flow that re-launches the app and logs in. After it completes, the app stays open, connected, and on HomeScreen.
+
+### Phase 2 — run feature flows in sequence
+
+The feature flows assume the app is already on HomeScreen. They do NOT re-launch or re-login. Each ends back on HomeScreen so the next one starts from the same point. Run them in order (hide must run before the guess-only flows, because they assert the saved payload the hide flow creates):
+
+```bash
+maestro test .maestro/hide-login-save-picture.yml
+maestro test .maestro/guess-login-saved-picture-success.yml
+maestro test .maestro/guess-login-saved-picture-failure.yml
+maestro test .maestro/hide-to-guess-to-result.yml
+```
+
+These flows take no env vars.
 
 The Android app id is `com.alegarn.WoIstWaldoProject`.
 
