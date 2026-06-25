@@ -20,11 +20,16 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   btn: {
-    backgroundColor: GlobalStyle.color.primaryColor500,
+    backgroundColor: GlobalStyle.color.primaryColor,
     alignSelf: "center",
+    borderWidth: 1,
+    borderColor: 'rgba(160, 118, 249, 0.5)',
+    justifyContent: 'center',
   },
   btnText: {
     textAlign: 'center',
     color: "white",
+    fontWeight: '600',
+    fontSize: 11,
   },
 });

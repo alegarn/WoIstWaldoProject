@@ -179,6 +179,6 @@ export default function RankingScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: GlobalStyle.color.primaryColor500,
+    backgroundColor: GlobalStyle.color.primaryColor800,
   },
 });
