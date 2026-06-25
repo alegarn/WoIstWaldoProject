@@ -67,6 +67,10 @@ export default function GuessFeedScreen({ navigation, route }) {
     navigation.replace('GuessScreen', {
       ...route.params,
       ...item,
+      // API exposes the hidden target coords as `touchLocation` on ImageModel,
+      // but GuessScreen reads `hiddenLocation`. Alias so the guess-confirm path
+      // has the coords it needs (see utils/targetLocation.js isOnTarget).
+      hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
       language: language || DEFAULT_LANGUAGE,
     });
