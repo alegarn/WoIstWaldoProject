@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
 
 import StarRatingLine from '../UI/StarRatingLine';
+import CenteredModal from '../UI/CenteredModal';
 import { addImageTag, deleteImageTag, submitRating } from '../../utils/ratingRequests';
 import { RATING_DIMENSIONS } from '../../constants/rating';
 import { getUserTags, saveUserTag } from '../../utils/storageDatum';
@@ -208,17 +209,26 @@ export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix
         </Text>
       </Pressable>
 
-      {detailed &&
-        RATING_DIMENSIONS.map((dim) => (
-          <View key={dim.key} style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{dim.label}</Text>
-            <StarRatingLine
-              value={detailRatings[dim.key] || 0}
-              onChange={(next) => handleDetailChange(dim.key, next)}
-              testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
-            />
-          </View>
-        ))}
+      <CenteredModal
+        isModalVisible={detailed}
+        onCancel={() => setDetailed(false)}
+        onPress={() => setDetailed(false)}
+        testIDPrefix="result.rating.details"
+      >
+        <View>
+          <Text style={styles.detailModalTitle}>Rate in details</Text>
+          {RATING_DIMENSIONS.map((dim) => (
+            <View key={dim.key} style={styles.detailRow}>
+              <Text style={styles.detailLabel}>{dim.label}</Text>
+              <StarRatingLine
+                value={detailRatings[dim.key] || 0}
+                onChange={(next) => handleDetailChange(dim.key, next)}
+                testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
+              />
+            </View>
+          ))}
+        </View>
+      </CenteredModal>
 
       <View style={styles.tagsSection}>
         <Text style={styles.detailLabel}>Tags</Text>
