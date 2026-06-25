@@ -11,4 +11,8 @@ appId: com.woistwaldo
     id: "home.button.guess"
 - waitForAnimationEnd
 - assertVisible:
+    id: "guess-path.category.card.all"
+- tapOn:
+    id: "guess-path.category.card.all"
+- assertVisible:
     id: "guess-path.button.start"
