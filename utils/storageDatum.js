@@ -180,6 +180,7 @@ export async function storeImageList(imageList, categoryKey, language) {
 };
 
 function removeObjectById(imageListObject, listId) {
+  if (!Array.isArray(imageListObject)) return imageListObject;
   for (let i = 0; i < imageListObject.length; i++) {
     if (imageListObject[i].listId === listId) {
       imageListObject.splice(i, 1);
@@ -202,6 +203,9 @@ export async function updateImageList(updatedImageList, categoryKey, language) {
 export async function removeImageFromList(listId, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
+  if (imageList === null || imageList === undefined) {
+    return null;
+  };
   const jsonImageList = JSON.parse(imageList);
   const updatedImageList = removeObjectById(jsonImageList, listId);
   await AsyncStorage.setItem(listKey, JSON.stringify(updatedImageList));

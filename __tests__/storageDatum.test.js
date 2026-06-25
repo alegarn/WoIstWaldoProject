@@ -192,6 +192,12 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
   });
 
+  it('does not throw or write when no image list is stored for the namespace', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    await expect(removeImageFromList(2, 'city', 'fr')).resolves.toBe(null);
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+  });
+
   it('namespaces image lists by category and language without colliding', async () => {
     const cityList = [{ listId: 1 }];
     const natureList = [{ listId: 2 }];
