@@ -215,18 +215,25 @@ export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix
         onPress={() => setDetailed(false)}
         testIDPrefix="result.rating.details"
       >
-        <View>
-          <Text style={styles.detailModalTitle}>Rate in details</Text>
-          {RATING_DIMENSIONS.map((dim) => (
-            <View key={dim.key} style={styles.detailRow}>
-              <Text style={styles.detailLabel}>{dim.label}</Text>
-              <StarRatingLine
-                value={detailRatings[dim.key] || 0}
-                onChange={(next) => handleDetailChange(dim.key, next)}
-                testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
-              />
-            </View>
-          ))}
+        <View style={styles.detailModalBody}>
+          <View style={styles.detailModalHeader}>
+            <Text style={styles.detailModalTitle}>Rate in details</Text>
+            <View style={styles.detailModalDivider} />
+          </View>
+          <View style={styles.detailRowsContainer}>
+            {RATING_DIMENSIONS.map((dim) => (
+              <View key={dim.key} style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{dim.label}</Text>
+                <StarRatingLine
+                  value={detailRatings[dim.key] || 0}
+                  onChange={(next) => handleDetailChange(dim.key, next)}
+                  testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
+                  widthPercent={60}
+                  hideLabel
+                />
+              </View>
+            ))}
+          </View>
         </View>
       </CenteredModal>
 
@@ -340,8 +347,46 @@ const styles = StyleSheet.create({
     color: '#1D133D',
   },
   detailRow: {
-    marginTop: 12,
+    marginTop: 16,
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F6F2FF',
+    width: '100%',
+  },
+  detailModalBody: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '100%',
+  },
+  detailModalHeader: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFD700',
+    backgroundColor: '#1D133D',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    overflow: 'hidden',
+  },
+  detailModalDivider: {
+    width: '60%',
+    height: 2,
+    backgroundColor: '#1D133D',
+    marginTop: 12,
+    borderRadius: 2,
+  },
+  detailRowsContainer: {
+    width: '100%',
+    marginTop: 8,
   },
   tagsSection: {
     width: '100%',

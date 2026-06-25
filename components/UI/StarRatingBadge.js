@@ -3,16 +3,14 @@ import { Text, StyleSheet, Animated, Pressable } from 'react-native';
 
 import { RATING_COLORS } from '../../constants/rating';
 
-const STAR_COUNT = 5;
-
 export default function StarRatingBadge({ value, ratingsCount, size = 30, onPress, testIDPrefix }) {
   const animatedValue = useRef(new Animated.Value(value || 0)).current;
 
   const interpolatedColor = useMemo(
     () =>
       animatedValue.interpolate({
-        inputRange: [0, STAR_COUNT],
-        outputRange: [RATING_COLORS.low, RATING_COLORS.high],
+        inputRange: [0, 1, 2, 3, 4, 5],
+        outputRange: RATING_COLORS.stops,
       }),
     [animatedValue]
   );
