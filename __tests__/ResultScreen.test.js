@@ -54,4 +54,17 @@ describe('ResultScreen', () => {
     expect(mockShowFailure).toHaveBeenCalledWith({ navigation, route });
     expect(mockShowSuccess).not.toHaveBeenCalled();
   });
+
+  it('does not throw when route has no params (defense-in-depth guard)', async () => {
+    const navigation = { reset: jest.fn() };
+    const route = {};
+
+    await act(async () => {
+      create(<ResultScreen route={route} navigation={navigation} />);
+    });
+
+    expect(handleOrientation).toHaveBeenCalledWith('portrait');
+    expect(mockShowFailure).toHaveBeenCalledWith({ navigation, route });
+    expect(mockShowSuccess).not.toHaveBeenCalled();
+  });
 });

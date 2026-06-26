@@ -1,15 +1,16 @@
 export const RATING_LABELS = [
   "?",
   "Death of fun",
-  "Very Bad",
-  "Meh, why not",
-  "Ok ok, not bad",
-  "Good Guess",
+  "Meh...",
+  "Ok, why not",
+  "Ok ok, good guess",
+  "Great Guess!",
 ];
 
 export const RATING_COLORS = {
   low: "#1D133D",
   high: "#FFD700",
+  stops: ["#1D133D", "#1D133D", "#E53935", "#FB8C00", "#43A047", "#FFD700"],
 };
 
 export const RATING_DIMENSIONS = [

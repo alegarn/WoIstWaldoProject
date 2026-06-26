@@ -4,6 +4,7 @@ import { AppState } from 'react-native';
 
 import { CommonActions, DefaultTheme, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { NavigationBar } from 'expo-navigation-bar';
 //import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
 
@@ -515,6 +516,7 @@ export default function App() {
 
   return (
     <AuthContextProvider>
+      <NavigationBar hidden />
       <Root />
     </AuthContextProvider>
   );

@@ -14,7 +14,7 @@ export default function ResultScreen({ route, navigation }) {
     handleOrientation("portrait");
   }, []);
 
-  const { onTarget } = route?.params;
+  const { onTarget } = route?.params ?? {};
 
   if (onTarget) {
     return <ShowSuccess navigation={navigation} route={route} />;

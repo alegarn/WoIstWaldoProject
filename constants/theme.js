@@ -42,6 +42,10 @@ export const GlobalStyle = {
     quaternaryColor900: "#173A79",
     error100: '#fcdcbf',
     error500: '#f37c13',
+    success: '#4BB543',
+    warning: '#FFCC00',
+    info: '#17a2b8',
+    win: '#FFD700',
   },
 };
 
