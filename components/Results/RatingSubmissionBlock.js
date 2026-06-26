@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
 
+import { GlobalStyle } from '../../constants/theme';
+
 import StarRatingLine from '../UI/StarRatingLine';
 import CenteredModal from '../UI/CenteredModal';
 import { addImageTag, deleteImageTag, submitRating } from '../../utils/ratingRequests';
@@ -362,7 +364,7 @@ export default function RatingSubmissionBlock({
       <CenteredModal
         isModalVisible={detailsModalOpen}
         onCancel={() => setDetailsModalOpen(false)}
-        onPress={() => setDetailsModalOpen(false)}
+        onPress={handleSaveDetails}
         testIDPrefix={`${testIDPrefix}.details.modal`}
       >
         <View style={styles.detailModalBody}>
@@ -384,14 +386,6 @@ export default function RatingSubmissionBlock({
               </View>
             ))}
           </View>
-          <Pressable
-            testID={`${testIDPrefix}.details.save`}
-            onPress={handleSaveDetails}
-            disabled={savingDetails}
-            style={[styles.validate, savingDetails && styles.validateDisabled]}
-          >
-            <Text style={styles.validateText}>Save</Text>
-          </Pressable>
         </View>
       </CenteredModal>
     </View>
@@ -443,17 +437,17 @@ const styles = StyleSheet.create({
   detailModalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#FFD700',
-    backgroundColor: '#1D133D',
+    color: "white",
+    backgroundColor: GlobalStyle.color.primaryColor,
     paddingHorizontal: 16,
     paddingVertical: 8,
-    borderRadius: 999,
+    borderRadius: 8,
     overflow: 'hidden',
   },
   detailModalDivider: {
     width: '60%',
     height: 2,
-    backgroundColor: '#1D133D',
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
     marginTop: 12,
     borderRadius: 2,
   },
@@ -475,21 +469,21 @@ const styles = StyleSheet.create({
   tagInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#1D133D',
+    borderColor: GlobalStyle.color.tertiaryColor900,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#1D133D',
+    color: GlobalStyle.color.tertiaryColor900,
     backgroundColor: '#FFFFFF',
   },
   addTagButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#1D133D',
+    backgroundColor: GlobalStyle.color.primaryColor100,
   },
   addTagButtonText: {
-    color: '#FFD700',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -507,7 +501,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1ECFF',
   },
   suggestionText: {
-    color: '#1D133D',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 13,
   },
   tagsContainer: {
@@ -521,7 +515,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#1D133D',
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
   },
   tagChipText: {
     color: '#FFFFFF',
@@ -530,22 +524,10 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     marginBottom: 4,
-    color: '#1D133D',
-  },
-  validate: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#1D133D',
-    borderRadius: 8,
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   validateDisabled: {
     opacity: 0.4,
-  },
-  validateText: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   errorText: {
     marginTop: 12,

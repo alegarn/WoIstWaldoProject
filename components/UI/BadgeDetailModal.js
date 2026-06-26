@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
   },
   filterText: {
     fontSize: 16,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
     fontWeight: 'bold',
   },
   closeButton: {
@@ -130,7 +130,7 @@ const styles = StyleSheet.create({
   closeText: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   scroll: {
     flex: 1,
@@ -156,6 +156,6 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 15,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

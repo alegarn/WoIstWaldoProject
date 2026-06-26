@@ -211,7 +211,7 @@ describe('RatingSubmissionBlock', () => {
     });
 
     await act(async () => {
-      await findTestID(renderer, 'result.rating.details.save').props.onPress();
+      await findTestID(renderer, 'result.rating.details.modal.confirm').props.onPress();
     });
 
     expect(submitRating).toHaveBeenLastCalledWith({

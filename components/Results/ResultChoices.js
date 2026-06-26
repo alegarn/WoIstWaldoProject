@@ -1,5 +1,6 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 
+import { GlobalStyle } from '../../constants/theme';
 import { useContext } from 'react';
 import { AuthContext } from '../../store/auth-context';
 
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
     width: '90%',
   },
   primaryText: {
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
     fontSize: 26,
     fontWeight: 'bold',
     textAlign: 'center',
@@ -132,10 +133,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     width: '70%',
     borderWidth: 1,
-    borderColor: '#1D133D',
+    borderColor: 'GlobalStyle.color.tertiaryColor900',
   },
   secondaryText: {
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
