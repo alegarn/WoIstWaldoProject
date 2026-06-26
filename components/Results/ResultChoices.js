@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 import { useContext } from 'react';
 import { AuthContext } from '../../store/auth-context';
+import Button from '../UI/Button';
 
 export default function ResultChoices({ navigation, route, success, retryGuess, isTutorial }) {
 
@@ -85,19 +86,14 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
       >
         <Text style={styles.primaryText}>Next Card</Text>
       </Pressable>
-      <Pressable
+      <Button
         accessibilityLabel="Home"
-        accessibilityRole="button"
         testID="result.button.home"
         onPress={returnHome}
-        style={({ pressed }) => [
-          styles.button,
-          styles.secondary,
-          pressed && styles.pressed,
-        ]}
+        style={[styles.button, styles.homeButton]}
       >
-        <Text style={styles.secondaryText}>Home</Text>
-      </Pressable>
+        Home
+      </Button>
     </View>
   );
 };
@@ -122,21 +118,21 @@ const styles = StyleSheet.create({
     width: '90%',
   },
   primaryText: {
-    color: 'GlobalStyle.color.tertiaryColor900',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 26,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-  secondary: {
-    backgroundColor: '#ECEAF2',
+  homeButton: {
+    backgroundColor: GlobalStyle.color.primaryColor100,
     paddingVertical: 10,
     paddingHorizontal: 16,
-    width: '70%',
+    width: '50%',
     borderWidth: 1,
-    borderColor: 'GlobalStyle.color.tertiaryColor900',
+    borderColor: GlobalStyle.color.primaryColor900,
   },
   secondaryText: {
-    color: 'GlobalStyle.color.tertiaryColor900',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 18,
     fontWeight: '600',
     textAlign: 'center',
