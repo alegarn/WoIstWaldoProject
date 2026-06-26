@@ -37,6 +37,7 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  getNextImage,
   getOnboardingCompleted,
   getPreferredLanguage,
   getSessionLanguageFilter,
@@ -65,8 +66,21 @@ describe('storageDatum utilities', () => {
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     expect(await getLocalImages()).toBeNull();
 
-    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1 }]));
-    expect(await getLocalImages()).toEqual([{ listId: 1 }]);
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1, imageFile: 'file:///cache/1.jpg' }]));
+    expect(await getLocalImages()).toEqual([{ listId: 1, imageFile: 'file:///cache/1.jpg' }]);
+  });
+
+  it('prunes entries whose cached image file no longer exists and re-stores the trimmed list', async () => {
+    mockFileExists = false;
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+      { listId: 1, imageFile: 'file:///cache/gone.jpg' },
+      { listId: 2, imageFile: 'file:///cache/also-gone.jpg' },
+    ]));
+
+    const result = await getLocalImages('all', 'any');
+
+    expect(result).toEqual([]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([]));
   });
 
   it('derives the highest stored image id and falls back to zero for an empty list', async () => {
@@ -192,6 +206,19 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
   });
 
+  it('treats a missing stored list as empty and creates it on append', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    const updatedList = await updateImageList([{ listId: 5 }], 'city', 'fr');
+    expect(updatedList).toEqual([{ listId: 5 }]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr', JSON.stringify([{ listId: 5 }]));
+  });
+
+  it('does not throw or write when no image list is stored for the namespace', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    await expect(removeImageFromList(2, 'city', 'fr')).resolves.toBe(null);
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+  });
+
   it('namespaces image lists by category and language without colliding', async () => {
     const cityList = [{ listId: 1 }];
     const natureList = [{ listId: 2 }];
@@ -217,5 +244,32 @@ describe('storageDatum utilities', () => {
     expect(File).toHaveBeenNthCalledWith(1, 'file:///cache/abc.jpg');
     expect(File).toHaveBeenNthCalledWith(2, expect.objectContaining({ uri: 'file:///cache/' }), 'ImagePicker/abc.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns the first remaining image when the played card has already been removed', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+      { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      { listId: 3, imageFile: 'file:///cache/3.jpg' },
+    ]));
+
+    expect(await getNextImage('all', 'any')).toEqual({ listId: 2, imageFile: 'file:///cache/2.jpg' });
+  });
+
+  it('returns the first image whose listId is strictly greater than currentListId', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+      { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      { listId: 3, imageFile: 'file:///cache/3.jpg' },
+    ]));
+
+    expect(await getNextImage('all', 'any', 2)).toEqual({ listId: 3, imageFile: 'file:///cache/3.jpg' });
+  });
+
+  it('returns null when the deck is missing or empty', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getNextImage('all', 'any')).toBeNull();
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+    expect(await getNextImage('all', 'any')).toBeNull();
   });
 });

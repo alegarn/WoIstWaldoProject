@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
+import { GlobalStyle } from '../../constants/theme';
 import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
 import { LANGUAGES } from '../../constants/languages';
@@ -67,6 +68,10 @@ export default function GuessFeedScreen({ navigation, route }) {
     navigation.replace('GuessScreen', {
       ...route.params,
       ...item,
+      // API exposes the hidden target coords as `touchLocation` on ImageModel,
+      // but GuessScreen reads `hiddenLocation`. Alias so the guess-confirm path
+      // has the coords it needs (see utils/targetLocation.js isOnTarget).
+      hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
       language: language || DEFAULT_LANGUAGE,
     });
@@ -166,14 +171,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   modalCloseButton: {
     padding: 8,
   },
   modalCloseText: {
     fontSize: 15,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   option: {
     paddingVertical: 14,
@@ -190,6 +195,6 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

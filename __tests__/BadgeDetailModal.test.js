@@ -37,6 +37,13 @@ const LIVE_IMAGE_DETAILS = {
   fullDescription: 'Find Waldo near the bridge.',
   averageRating: 4.5,
   ratingsCount: 9,
+  ratings: {
+    global_rating: 4,
+    quality_rating: 3,
+    enigma_rating: 4,
+    fun_rating: 5,
+    difficulty_rating: 2,
+  },
 };
 
 function formatExpectedDate(value) {
@@ -76,6 +83,29 @@ describe('BadgeDetailModal', () => {
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.creator' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.date' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.enigma' })).toBeTruthy();
+
+    const globalRow = renderer.root.findByProps({ testID: 'badge.detail.row.global-rating' });
+    const globalTexts = globalRow
+      .findAllByType('Text')
+      .map((node) => String(node.props.children));
+    expect(globalTexts.join(' ')).toEqual(expect.stringContaining('4.5'));
+    expect(globalTexts.join(' ')).toEqual(expect.stringContaining('9'));
+
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.quality' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.enigma' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.fun' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.difficulty' })
+    ).toBeTruthy();
   });
 
   it('renders live camelCase image fields with formatted values', async () => {
@@ -87,6 +117,25 @@ describe('BadgeDetailModal', () => {
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.creator' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.date' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.enigma' })).toBeTruthy();
+
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.global-rating' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.quality' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.enigma' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.fun' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings.difficulty' })
+    ).toBeTruthy();
 
     expect(renderer.root.findAllByType('Text').map((node) => node.props.children).flat()).toEqual(
       expect.arrayContaining([
@@ -114,6 +163,13 @@ describe('BadgeDetailModal', () => {
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.language' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.date' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'badge.detail.row.enigma' })).toBeTruthy();
+
+    expect(
+      renderer.root.findByProps({ testID: 'badge.detail.row.global-rating' })
+    ).toBeTruthy();
+    expect(() => {
+      renderer.root.findByProps({ testID: 'badge.detail.row.detailed-ratings' });
+    }).toThrow();
   });
 
   it('hides camelCase rows whose source values are missing', async () => {

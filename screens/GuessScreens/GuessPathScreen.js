@@ -9,6 +9,7 @@ import {
   View,
 } from 'react-native';
 
+import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import IconButton from '../../components/UI/IconButton';
@@ -115,7 +116,7 @@ export default function GuessPathScreen({ navigation, route }) {
         <View style={styles.header}>
           <IconButton
             icon="ellipsis-horizontal"
-            color="#1D133D"
+            color="GlobalStyle.color.tertiaryColor900"
             size={24}
             onPress={() => setIsFilterModalVisible(true)}
             testID="guess-path.button.details"
@@ -246,14 +247,14 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   modalCloseButton: {
     padding: 8,
   },
   modalCloseText: {
     fontSize: 15,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   option: {
     paddingVertical: 14,
@@ -270,6 +271,6 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

@@ -44,6 +44,7 @@ jest.mock('../utils/imagesRequests', () => ({
 }));
 
 jest.mock('../utils/ratingRequests', () => ({
+  getImageRating: jest.fn(),
   getImageTags: jest.fn(),
 }));
 
@@ -83,7 +84,7 @@ import { GlobalStyle } from '../constants/theme';
 import { AuthContext } from '../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
-import { getImageTags } from '../utils/ratingRequests';
+import { getImageRating, getImageTags } from '../utils/ratingRequests';
 import {
   deleteImageFromStorage,
   getE2EHiddenGuessCard,
@@ -110,6 +111,7 @@ describe('SwipeImage', () => {
     isE2EMode.mockReturnValue(false);
     getImages.mockResolvedValue({ isError: false, images: [] });
     getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
     getE2EHiddenGuessCard.mockResolvedValue(null);
     buildE2EGuessCardFromPayload.mockImplementation((payload) => (
       payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
@@ -351,7 +353,8 @@ describe('SwipeImage', () => {
   });
 
   it('renders one hoisted BadgeDetailModal and populates it from the card item plus fetched tags', async () => {
-    const deferred = createDeferred();
+    const tagDeferred = createDeferred();
+    const ratingDeferred = createDeferred();
     const cachedItem = {
       listId: 1,
       pictureId: 'img-1',
@@ -371,7 +374,8 @@ describe('SwipeImage', () => {
       { listId: 3, pictureId: 'img-3', imageFile: 'file:///3.jpg' },
       { listId: 4, pictureId: 'img-4', imageFile: 'file:///4.jpg' },
     ]);
-    getImageTags.mockReturnValue(deferred.promise);
+    getImageTags.mockReturnValue(tagDeferred.promise);
+    getImageRating.mockReturnValue(ratingDeferred.promise);
 
     const { renderer } = await renderSwipeImage();
     const cardProps = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'img-1')[0];
@@ -383,10 +387,11 @@ describe('SwipeImage', () => {
 
     expect(renderer.root.findAllByType('BadgeDetailModal')).toHaveLength(1);
     expect(getImageTags).toHaveBeenCalledWith({ pictureId: 'img-1', context: contextValue });
+    expect(getImageRating).toHaveBeenCalledWith({ pictureId: 'img-1', context: contextValue });
     expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual(cachedItem);
 
     await act(async () => {
-      deferred.resolve({
+      tagDeferred.resolve({
         data: [
           { id: 'tag-1', name: 'scenic' },
           { id: 'tag-2', name: 'night' },
@@ -399,6 +404,19 @@ describe('SwipeImage', () => {
     expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual({
       ...cachedItem,
       tags: ['scenic', 'night'],
+    });
+
+    await act(async () => {
+      ratingDeferred.resolve({
+        data: { global_rating: 4, quality_rating: 3, enigma_rating: 4, fun_rating: 5, difficulty_rating: 2 },
+      });
+      await flushEffects();
+    });
+
+    expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual({
+      ...cachedItem,
+      tags: ['scenic', 'night'],
+      ratings: { global_rating: 4, quality_rating: 3, enigma_rating: 4, fun_rating: 5, difficulty_rating: 2 },
     });
   });
 
@@ -429,6 +447,7 @@ describe('SwipeImage', () => {
       },
     ]);
     getImageTags.mockReturnValue(deferred.promise);
+    getImageRating.mockResolvedValue({ data: undefined });
 
     const { renderer } = await renderSwipeImage();
     const cardProps = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'img-1')[0];

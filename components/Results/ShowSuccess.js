@@ -2,17 +2,18 @@ import { useState, useEffect, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
-import ImageAnimated from './ImageAnimated';
 import RatingSubmissionBlock from './RatingSubmissionBlock';
+import ScoreCelebration from './ScoreCelebration';
 import { deleteImageFromStorage, removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
+import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowSuccess({ navigation, route }) {
 
-  const [showSuccessImageAnimated, setshowSuccessImageAnimated] = useState(true);
-  
+  const [phase, setPhase] = useState('celebration');
+
   // used to get the image owner and point the user earning points
   const pictureId = route.params?.pictureId;
 
@@ -40,57 +41,43 @@ export default function ShowSuccess({ navigation, route }) {
     await deleteImageFromStorage(imageFilePath);
   };
 
+  const handleNextCard = () => navigateToNextGuess(navigation, {
+    category: route.params?.category,
+    language,
+    currentListId: listId,
+    isTutorial,
+  });
+
 /* useEffect________________________________________________ */
 
   useEffect(() => {
-    // stop the animation
-    const timeout = setTimeout(() => {
-      //console.log("showSuccessImageAnimated", showSuccessImageAnimated);
-      setshowSuccessImageAnimated(false);
-    }, 1000);
-    
     handleRemoveImageFromList(listId, imageFilePath);
     handleScore();
-
-    return () => clearTimeout(timeout);
   }, [categoryKey, imageFilePath, language, listId, pictureId]);
-
-  const ShowResult = ({ navigation, isTutorial, route }) => {
-    return (
-      <View testID="result.screen.success" style={styles.result}>
-        <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>You Found It!</Text>
-        <Text testID="result.screen.success.subtitle" style={[styles.subtitle, styles.marginBottom]}>
-          <Text style={styles.title}>1</Text> point earned!
-        </Text>
-        <ResultChoices
-          navigation={navigation}
-          route={route}
-          success={true}
-          isTutorial={isTutorial}
-        />
-        <RatingSubmissionBlock pictureId={pictureId} context={context} />
-        {
-          isTutorial &&
-            <TutorialOverlay
-              screen={"ShowSuccess"}
-            />
-        }
-      </View>
-    );
-  };
 
   return (
     <View style={styles.container} testID="result.screen.success.container">
-      {
-        showSuccessImageAnimated ?
-          <ImageAnimated success={true} />
-        :
-          <ShowResult
+      <View testID="result.screen.success" style={styles.result}>
+        <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>You Found It!</Text>
+        <ScoreCelebration points={1} testIDPrefix="result.celebration" />
+        {phase === 'rated' && (
+          <ResultChoices
             navigation={navigation}
             route={route}
+            success={true}
             isTutorial={isTutorial}
+            onNextCard={handleNextCard}
           />
-      }
+        )}
+        <RatingSubmissionBlock
+          pictureId={pictureId}
+          context={context}
+          onSubmitted={() => setPhase('rated')}
+        />
+        {isTutorial && (
+          <TutorialOverlay screen={"ShowSuccess"} />
+        )}
+      </View>
     </View>
   );
 }
@@ -110,11 +97,6 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: 'black',
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 18,
     color: 'black',
     textAlign: 'center',
   },

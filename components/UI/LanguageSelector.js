@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, View, Text, Modal, ScrollView, StyleSheet } from 'react-native';
 
 import { LANGUAGES } from '../../constants/languages';
+import { GlobalStyle } from '../../constants/theme';
 
 export default function LanguageSelector({
   value,
@@ -86,7 +87,7 @@ const styles = StyleSheet.create({
   },
   buttonText: {
     fontSize: 15,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   buttonTextOverlay: {
     color: '#FFFFFF',
@@ -106,14 +107,14 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   closeButton: {
     padding: 8,
   },
   closeText: {
     fontSize: 15,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   option: {
     paddingVertical: 14,
@@ -130,6 +131,6 @@ const styles = StyleSheet.create({
   },
   optionTextSelected: {
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

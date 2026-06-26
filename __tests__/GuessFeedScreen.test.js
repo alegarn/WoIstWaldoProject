@@ -254,6 +254,7 @@ describe('GuessFeedScreen', () => {
           imageFile: 'file:///waldo.jpg',
           listId: 7,
           description: 'Find Waldo',
+          touchLocation: { x: 0.5, y: 0.5 },
         },
       });
     });
@@ -266,6 +267,8 @@ describe('GuessFeedScreen', () => {
       imageFile: 'file:///waldo.jpg',
       listId: 7,
       description: 'Find Waldo',
+      touchLocation: { x: 0.5, y: 0.5 },
+      hiddenLocation: { x: 0.5, y: 0.5 },
     });
   });
 
