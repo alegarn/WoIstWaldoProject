@@ -68,6 +68,12 @@ appId: com.alegarn.WoIstWaldoProject
     timeout: 10000
 - assertVisible:
     id: result.screen.success
+- tapOn:
+        id: result.rating.global.star.5
+- extendedWaitUntil:
+        visible:
+            id: result.button.home
+        timeout: 10000
 - assertVisible:
     id: result.button.home
 # Ranking navigation omitted: RankingScreen hits a pre-existing, unrelated app

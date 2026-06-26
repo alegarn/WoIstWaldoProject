@@ -1,7 +1,8 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
 # Return to HomeScreen from any authenticated screen.
-# Handles: ResultScreen, RankingScreen, GuessPathScreen, and any modal.
+# Handles: ResultScreen, GuessScreen, GuessFeedScreen, RankingScreen,
+# GuessPathScreen, and any modal.
 # Ends with the home screen ready for the next flow.
 
 # Result screen → tap "Go to Home"
@@ -16,6 +17,35 @@ appId: com.alegarn.WoIstWaldoProject
           visible:
             id: home.button.ranking
           timeout: 10000
+
+# GuessScreen with tutorial overlay still up → dismiss it first
+- runFlow:
+    when:
+      visible:
+        id: game.instructions.guess.overlay
+    commands:
+      - tapOn:
+          id: game.instructions.guess.overlay
+      - waitForAnimationToEnd
+
+# GuessScreen → system back to GuessFeedScreen
+- runFlow:
+    when:
+      visible:
+        id: game.picture.guess-surface
+    commands:
+      - back
+      - waitForAnimationToEnd
+
+# GuessFeedScreen → native header back
+- runFlow:
+    when:
+      visible:
+        id: guess-feed.button.back
+    commands:
+      - tapOn:
+          id: guess-feed.button.back
+      - waitForAnimationToEnd
 
 # Ranking screen → system back
 - runFlow:
@@ -47,9 +77,14 @@ appId: com.alegarn.WoIstWaldoProject
       - waitForAnimationToEnd
 
 # Dismiss tutorial modal on home
-- tapOn:
-    id: home.tutorial-modal.close
-    optional: true
+- runFlow:
+    when:
+      visible:
+        id: home.tutorial-modal.close
+    commands:
+      - tapOn:
+          id: home.tutorial-modal.close
+      - waitForAnimationToEnd
 
 # Confirm home screen ready
 - extendedWaitUntil:

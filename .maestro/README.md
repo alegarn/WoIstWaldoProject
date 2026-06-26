@@ -6,8 +6,8 @@ This directory contains login-first Maestro flows for the deterministic app runt
 
 - `auth-boot-login.yml`: clean launch/login smoke flow using the stable auth and home-screen ids.
 - `hide-login-save-picture.yml`: assumes an already-connected, logged-in session on HomeScreen; hides a point, uploads the fixture image, walks the 3-step describe → language → category wizard, and saves the hidden-picture bridge payload for later guess flows.
-- `guess-login-saved-picture-success.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, and verifies the success result.
-- `guess-login-saved-picture-failure.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, and verifies the failure result.
+- `guess-login-saved-picture-success.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, submits a star rating, verifies the success result actions, then uses `Next Card` to confirm direct continuation into the next guess.
+- `guess-login-saved-picture-failure.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, verifies the failure result actions, then uses `Next Card` to confirm direct continuation into the next guess.
 - `hide-to-guess-to-result.yml`: assumes an already-connected, logged-in session on HomeScreen; runs the deterministic hide -> guess -> ranking journey using the saved hide payload bridge.
 - `auth-boot-signup.yml`: signup smoke flow that generates unique credentials at runtime so it can be rerun without email or username collisions.
 - `e2e.env.example.yaml`: sample Maestro flow variables only.
@@ -50,6 +50,9 @@ The checked-in sample file is `.maestro/e2e.env.example.yaml`; it only documents
 - `guess-path.card.1` is either the saved hidden picture or the seeded fallback card; swiping it to the right enters the guess screen.
 - Ranking data is seeded deterministically; the first row name is `John`.
 - Ad delay is reduced to zero, so the result screen is reached immediately after guess confirmation.
+- On success, `result.button.home` and `result.button.next` appear only after selecting a global star on `result.rating.global.star.{1-5}` and waiting for the auto-submit to finish.
+- `result.button.next` replaces the old `result.button.another` selector on both success and failure outcomes.
+- `result.button.next` routes directly into the next guess when another card exists, so `_shared/return_home.yaml` now unwinds GuessScreen and GuessFeedScreen as part of cleanup.
 
 - `result.screen.success` and `result.screen.failure` expose stable outcome assertions without relying on localized result copy.
 

@@ -72,8 +72,20 @@ appId: com.alegarn.WoIstWaldoProject
     timeout: 10000
 - assertVisible:
     id: result.screen.success
+- tapOn:
+        id: result.rating.global.star.5
+- extendedWaitUntil:
+        visible:
+            id: result.button.next
+        timeout: 10000
 - assertVisible:
     id: result.button.home
 - assertVisible:
-    id: result.button.another
+        id: result.button.next
+- tapOn:
+        id: result.button.next
+- extendedWaitUntil:
+        visible:
+            id: game.instructions.guess.overlay
+        timeout: 10000
 - runFlow: "_shared/return_home.yaml"
