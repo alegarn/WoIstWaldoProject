@@ -272,4 +272,38 @@ describe('SwipeableCard', () => {
     expect(onBadgePress).toHaveBeenCalledWith(item);
     expect(getImageTags).not.toHaveBeenCalled();
   });
+
+  it('does not trigger a swipe action on a pure tap release while the badge press still forwards to onBadgePress', async () => {
+    const removeCard = jest.fn();
+    const onSwipe = jest.fn();
+    const onBadgePress = jest.fn();
+
+    await renderCard({ removeCard, onSwipe, onBadgePress });
+
+    expect(capturedPanResponder.onStartShouldSetPanResponder()).toBe(false);
+    expect(capturedPanResponder.onStartShouldSetPanResponderCapture()).toBe(false);
+
+    await act(async () => {
+      capturedPanResponder.onPanResponderRelease(null, { dx: 0, dy: 0 });
+    });
+
+    expect(removeCard).not.toHaveBeenCalled();
+    expect(onSwipe).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockStarRatingBadge.mock.calls[0][0].onPress();
+    });
+
+    expect(onBadgePress).toHaveBeenCalledWith(item);
+  });
+
+  it('renders the full-card swipe overlay with pointerEvents none so taps fall through to the badge', async () => {
+    const renderer = await renderCard();
+
+    const animatedImages = renderer.root.findAllByType('AnimatedImage');
+    const overlay = animatedImages.find((node) => node.props.pointerEvents === 'none');
+
+    expect(animatedImages.length).toBeGreaterThan(0);
+    expect(overlay).toBeTruthy();
+  });
 });

@@ -264,9 +264,12 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           style={[styles.imageStyle, styles.expanded]}
           testID={`guess-path.card-image.${item.listId}`} >
 
-          <View style={styles.badgeContainer}>
+          <View
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            style={styles.badgeContainer}>
             {/* Sloppy taps with horizontal movement can be captured by PanResponder. Accepted trade-off for now. */}
             {/* Current stack depth is small; badge render cost is acceptable. If the feed ever moves to a larger virtualized list, prefer a lighter icon path before adding badge complexity. */}
+            {/* Larger non-pressable wrapper around the badge enlarges the touch landing zone so sloppy taps on the star/? badge reach the Pressable reliably. */}
             <StarRatingBadge
               onPress={() => onBadgePress?.(item)}
               ratingsCount={item.ratingsCount}
@@ -287,6 +290,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
 
         <Animated.Image
+          pointerEvents="none"
           source={imageChoice}
           resizeMode='contain'
           style={[
@@ -354,6 +358,11 @@ const styles = StyleSheet.create({
     top: 16,
     left: 16,
     zIndex: 2,
+    padding: 12,
+    minWidth: 60,
+    minHeight: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   overlayStyle: {
     backgroundColor: '#fff',

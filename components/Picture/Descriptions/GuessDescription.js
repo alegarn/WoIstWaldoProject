@@ -3,26 +3,23 @@ import IconButton from '../../UI/IconButton';
 import { GlobalStyle } from '../../../constants/theme';
 
 export default function GuessDescription({ item, showFullDescription, toggleDescription, style }) {
+  const text = item?.description || item?.fullDescription || item?.full_description;
+  const hasDescription = !(text === undefined || text === '');
 
-//   console.log("GuessDescription item", item?.description?.length); /* undefined */
-//   console.log("GuessDescription showFullDescription", showFullDescription); /* false */
-
-  // item?.description?.length > 3 -> 30
-  // swipe up to show full description
   return (
     <View style={[styles.descriptionArea, style]}>
-      {(item?.description?.length > 3) && (
-          <IconButton
-            icon= {showFullDescription ? "chevron-down" : "chevron-up"}
-            color={GlobalStyle.color.secondaryColor500}
-            size={30}
-            /* onPress={toggleDescription} */ />
-        )}
+      {hasDescription && (
+        <IconButton
+          icon={showFullDescription ? "chevron-down" : "chevron-up"}
+          color={GlobalStyle.color.secondaryColor500}
+          size={30}
+          onPress={toggleDescription} />
+      )}
       <Text
         style={styles.cardDescriptionStyle}
-        numberOfLines={showFullDescription ? undefined : 3}>
-        {(item?.description === undefined || item?.description === "") ? "No description" : item?.description}
-{/*         {`\n GuessDescription item: ${item?.description?.length} \n showFullDescription: ${showFullDescription} \n item: ${JSON.stringify(item)}`} */}      
+        testID="guess-description.text"
+        numberOfLines={showFullDescription ? undefined : 2}>
+        {hasDescription ? text : "No description"}
       </Text>
     </View>
   )
@@ -34,7 +31,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
   },
   cardDescriptionStyle: {
-    color: GlobalStyle.color.secondaryColor,
+    color: GlobalStyle.color.secondaryColor900,
     fontSize: 16,
     fontWeight: 'bold',
     textAlign: 'center',

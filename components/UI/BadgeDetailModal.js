@@ -1,4 +1,5 @@
 import { Modal, View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { RATING_DIMENSIONS } from '../../constants/rating';
 
 function normalizeTags(tags) {
   if (Array.isArray(tags)) {
@@ -40,6 +41,13 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
   const creator = image?.creatorUsername ?? image?.creator_username;
   const createdAt = formatCreatedAt(image?.createdAt ?? image?.created_at);
   const fullDescription = image?.fullDescription ?? image?.full_description;
+  const averageRating = image?.averageRating ?? image?.ratings_average;
+  const ratingsCount = image?.ratingsCount ?? image?.ratings_count;
+  const detailedRatings = RATING_DIMENSIONS.map(({ key, label }) => ({
+    key,
+    label,
+    value: image?.ratings?.[`${key}_rating`],
+  })).filter((dimension) => dimension.value != null);
 
   return (
     <Modal visible={!!image} animationType="slide" transparent={false} onRequestClose={onClose}>
@@ -91,10 +99,33 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
             </View>
           ) : null}
 
+          {Number.isFinite(averageRating) ? (
+            <View style={styles.row} testID={`${testIDPrefix}.row.global-rating`}>
+              <Text style={styles.label}>Global rating</Text>
+              <Text style={styles.value}>{`★ ${averageRating} (${ratingsCount ?? 0})`}</Text>
+            </View>
+          ) : null}
+
           {fullDescription ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.enigma`}>
               <Text style={styles.label}>Enigma</Text>
               <Text style={styles.value}>{fullDescription}</Text>
+            </View>
+          ) : null}
+
+          {detailedRatings.length > 0 ? (
+            <View style={styles.row} testID={`${testIDPrefix}.row.detailed-ratings`}>
+              <Text style={styles.label}>Ratings</Text>
+              {detailedRatings.map(({ key, label, value }) => (
+                <View
+                  key={key}
+                  style={styles.dimensionRow}
+                  testID={`${testIDPrefix}.row.detailed-ratings.${key}`}
+                >
+                  <Text style={styles.dimensionLabel}>{label}</Text>
+                  <Text style={styles.dimensionValue}>{value}</Text>
+                </View>
+              ))}
             </View>
           ) : null}
         </ScrollView>
@@ -156,6 +187,20 @@ const styles = StyleSheet.create({
   },
   value: {
     fontSize: 15,
+    color: 'GlobalStyle.color.tertiaryColor900',
+  },
+  dimensionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 4,
+  },
+  dimensionLabel: {
+    fontSize: 14,
+    color: 'GlobalStyle.color.tertiaryColor900',
+  },
+  dimensionValue: {
+    fontSize: 14,
+    fontWeight: 'bold',
     color: 'GlobalStyle.color.tertiaryColor900',
   },
 });
