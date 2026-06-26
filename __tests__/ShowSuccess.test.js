@@ -1,6 +1,7 @@
 const mockResultChoices = jest.fn(() => null);
-const mockImageAnimated = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
+const mockRatingSubmissionBlock = jest.fn(() => null);
+const mockScoreCelebration = jest.fn(() => null);
 
 jest.mock('../components/Results/ResultChoices', () => {
   return function MockResultChoices(props) {
@@ -9,16 +10,23 @@ jest.mock('../components/Results/ResultChoices', () => {
   };
 });
 
-jest.mock('../components/Results/ImageAnimated', () => {
-  return function MockImageAnimated(props) {
-    mockImageAnimated(props);
+jest.mock('../components/UI/TutorialOverlay', () => {
+  return function MockTutorialOverlay(props) {
+    mockTutorialOverlay(props);
     return null;
   };
 });
 
-jest.mock('../components/UI/TutorialOverlay', () => {
-  return function MockTutorialOverlay(props) {
-    mockTutorialOverlay(props);
+jest.mock('../components/Results/RatingSubmissionBlock', () => {
+  return function MockRatingSubmissionBlock(props) {
+    mockRatingSubmissionBlock(props);
+    return null;
+  };
+});
+
+jest.mock('../components/Results/ScoreCelebration', () => {
+  return function MockScoreCelebration(props) {
+    mockScoreCelebration(props);
     return null;
   };
 });
@@ -62,7 +70,7 @@ describe('ShowSuccess', () => {
     jest.useRealTimers();
   });
 
-  it('cleans up storage, updates the score, and reveals result choices after the animation', async () => {
+  it('cleans up storage, updates the score, shows celebration, hides choices until rated', async () => {
     const navigation = { reset: jest.fn() };
     const route = {
       params: {
@@ -85,17 +93,12 @@ describe('ShowSuccess', () => {
       );
     });
 
-    expect(mockImageAnimated).toHaveBeenCalledWith({ success: true });
     expect(removeImageFromList).toHaveBeenCalledWith(7, 'nature', 'fr');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///waldo.jpg');
     expect(updateUserScore).toHaveBeenCalledWith({
       score: 1,
       pictureId: 'image-1',
       context: { userId: '42' },
-    });
-
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
     });
 
     const successContainer = renderer.root.findByProps({ testID: 'result.screen.success.container' });
@@ -122,6 +125,29 @@ describe('ShowSuccess', () => {
         color: 'black',
       })
     );
+
+    expect(mockScoreCelebration).toHaveBeenCalledWith(
+      expect.objectContaining({ points: 1, testIDPrefix: 'result.celebration' })
+    );
+
+    expect(mockRatingSubmissionBlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pictureId: 'image-1',
+        context: { userId: '42' },
+        onSubmitted: expect.any(Function),
+      })
+    );
+
+    expect(mockResultChoices).not.toHaveBeenCalled();
+
+    const ratingCall = mockRatingSubmissionBlock.mock.calls.find(
+      ([props]) => typeof props.onSubmitted === 'function'
+    );
+    const onSubmitted = ratingCall[0].onSubmitted;
+
+    await act(async () => {
+      onSubmitted();
+    });
 
     expect(mockResultChoices).toHaveBeenCalledWith(
       expect.objectContaining({

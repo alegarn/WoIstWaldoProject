@@ -1,4 +1,5 @@
 jest.mock('../components/UI/StarRatingLine', () => {
+  const React = require('react');
   function MockStarRatingLine(props) {
     return null;
   }
@@ -26,22 +27,29 @@ import { getUserTags, saveUserTag } from '../utils/storageDatum';
 
 const DEFAULT_CONTEXT = { token: 'Bearer t', userId: '42' };
 
-function instancesOf(renderer, type) {
-  return renderer.root.findAllByType(type);
+function findStarLineByPrefix(renderer, prefix) {
+  return renderer.root.findByProps({ testIDPrefix: prefix });
+}
+
+function findTestID(renderer, testID) {
+  return renderer.root.findByProps({ testID });
+}
+
+function findAllTestID(renderer, testID) {
+  return renderer.root.findAllByProps({ testID });
 }
 
 describe('RatingSubmissionBlock', () => {
-  let MockStarRatingLine;
-
-  beforeAll(() => {
-    MockStarRatingLine = jest.requireMock('../components/UI/StarRatingLine');
-  });
-
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
     getUserTags.mockResolvedValue([]);
     saveUserTag.mockResolvedValue([]);
     addImageTag.mockResolvedValue({ data: { id: 'tag-1', name: 'scenic' } });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   async function renderBlock(overrides = {}) {
@@ -59,218 +67,13 @@ describe('RatingSubmissionBlock', () => {
     return renderer;
   }
 
-  it('renders the global StarRatingLine using the result.rating.global prefix', async () => {
-    const renderer = await renderBlock();
-
-    const globalLine = renderer.root.findByProps({
-      testIDPrefix: 'result.rating.global',
-    });
-
-    expect(globalLine).toBeTruthy();
-    expect(globalLine.props.value).toBe(0);
-  });
-
-  it('keeps the Validate button disabled until the global rating is greater than zero', async () => {
-    const renderer = await renderBlock();
-
-    const validateBefore = renderer.root.findByProps({
-      testID: 'result.rating.validate',
-    });
-    expect(validateBefore.props.disabled).toBe(true);
-
-    const globalLine = renderer.root.findByProps({
-      testIDPrefix: 'result.rating.global',
-    });
-
+  async function flushPromises() {
     await act(async () => {
-      globalLine.props.onChange(5);
+      await Promise.resolve();
     });
+  }
 
-    const validateAfter = renderer.root.findByProps({
-      testID: 'result.rating.validate',
-    });
-    expect(validateAfter.props.disabled).toBe(false);
-  });
-
-  it('expands the four detail rows when "Rate in details" is toggled', async () => {
-    const renderer = await renderBlock();
-
-    expect(instancesOf(renderer, MockStarRatingLine)).toHaveLength(1);
-
-    const toggle = renderer.root.findByProps({
-      testID: 'result.rating.toggle-details',
-    });
-
-    await act(async () => {
-      toggle.props.onPress();
-    });
-
-    const lines = instancesOf(renderer, MockStarRatingLine);
-    expect(lines).toHaveLength(5);
-
-    const prefixes = lines.map((node) => node.props.testIDPrefix);
-    expect(prefixes).toEqual([
-      'result.rating.global',
-      'result.rating.detail.quality',
-      'result.rating.detail.enigma',
-      'result.rating.detail.fun',
-      'result.rating.detail.difficulty',
-    ]);
-  });
-
-  it('submits only global_rating when no detail ratings are set', async () => {
-    submitRating.mockResolvedValue({ data: { id: 'r1', global_rating: 5 } });
-
-    const renderer = await renderBlock();
-
-    const globalLine = renderer.root.findByProps({
-      testIDPrefix: 'result.rating.global',
-    });
-
-    await act(async () => {
-      globalLine.props.onChange(5);
-    });
-
-    const validate = renderer.root.findByProps({ testID: 'result.rating.validate' });
-
-    await act(async () => {
-      await validate.props.onPress();
-    });
-
-    expect(submitRating).toHaveBeenCalledWith({
-      pictureId: 'image-1',
-      context: DEFAULT_CONTEXT,
-      payload: { global_rating: 5 },
-    });
-  });
-
-  it('includes the optional snake_case sub-ratings when detail ratings are filled', async () => {
-    submitRating.mockResolvedValue({ data: { id: 'r1' } });
-
-    const renderer = await renderBlock();
-
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'result.rating.toggle-details' }).props.onPress();
-    });
-
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.global' })
-        .props.onChange(4);
-    });
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.detail.quality' })
-        .props.onChange(3);
-    });
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.detail.enigma' })
-        .props.onChange(2);
-    });
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.detail.fun' })
-        .props.onChange(5);
-    });
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.detail.difficulty' })
-        .props.onChange(1);
-    });
-
-    await act(async () => {
-      await renderer.root.findByProps({ testID: 'result.rating.validate' }).props.onPress();
-    });
-
-    expect(submitRating).toHaveBeenCalledWith({
-      pictureId: 'image-1',
-      context: DEFAULT_CONTEXT,
-      payload: {
-        global_rating: 4,
-        quality_rating: 3,
-        enigma_rating: 2,
-        fun_rating: 5,
-        difficulty_rating: 1,
-      },
-    });
-  });
-
-  it('renders the success state when submitRating resolves without isError', async () => {
-    submitRating.mockResolvedValue({ data: { id: 'r1', global_rating: 5 } });
-
-    const renderer = await renderBlock();
-
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.global' })
-        .props.onChange(5);
-    });
-
-    await act(async () => {
-      await renderer.root.findByProps({ testID: 'result.rating.validate' }).props.onPress();
-    });
-
-    expect(renderer.root.findByProps({ testID: 'result.rating.success' })).toBeTruthy();
-  });
-
-  it('renders the recoverable error state when submitRating resolves with isError', async () => {
-    submitRating.mockResolvedValue({ isError: true, message: 'Network Error' });
-
-    const renderer = await renderBlock();
-
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.global' })
-        .props.onChange(3);
-    });
-
-    await act(async () => {
-      await renderer.root.findByProps({ testID: 'result.rating.validate' }).props.onPress();
-    });
-
-    const errorNode = renderer.root.findByProps({ testID: 'result.rating.error' });
-    expect(errorNode.props.children).toBe('Network Error');
-
-    const validateAfter = renderer.root.findByProps({ testID: 'result.rating.validate' });
-    expect(validateAfter.props.disabled).toBe(false);
-  });
-
-  it('cooperates with e2e mode by accepting a deterministic submitRating fixture', async () => {
-    const e2eFixture = {
-      data: {
-        id: 'e2e-image-rating-id',
-        global_rating: 4,
-        quality_rating: 4,
-        enigma_rating: 3,
-        fun_rating: 5,
-        difficulty_rating: 2,
-      },
-    };
-    submitRating.mockResolvedValue(e2eFixture);
-
-    const renderer = await renderBlock();
-
-    await act(async () => {
-      renderer.root
-        .findByProps({ testIDPrefix: 'result.rating.global' })
-        .props.onChange(4);
-    });
-
-    await act(async () => {
-      await renderer.root.findByProps({ testID: 'result.rating.validate' }).props.onPress();
-    });
-
-    expect(submitRating).toHaveBeenCalledTimes(1);
-    expect(submitRating).toHaveBeenCalledWith({
-      pictureId: 'image-1',
-      context: DEFAULT_CONTEXT,
-      payload: { global_rating: 4 },
-    });
-    expect(renderer.root.findByProps({ testID: 'result.rating.success' })).toBeTruthy();
-  });
-
-  it('hides gracefully without crashing when pictureId is undefined', async () => {
+  it('renders nothing when pictureId is undefined', async () => {
     let renderer;
     await act(async () => {
       renderer = create(
@@ -282,19 +85,182 @@ describe('RatingSubmissionBlock', () => {
     expect(submitRating).not.toHaveBeenCalled();
   });
 
-  it('accepts tag input text and adds a visible chip through addImageTag', async () => {
+  it('phase rating renders exactly one StarRatingLine using the result.rating.global prefix', async () => {
+    const renderer = await renderBlock();
+
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
+    expect(globalLine).toBeTruthy();
+    expect(globalLine.props.value).toBe(0);
+    expect(globalLine.props.starSize).toBe(48);
+    expect(globalLine.props.widthPercent).toBe(90);
+
+    expect(
+      renderer.root.findAllByType(
+        jest.requireMock('../components/UI/StarRatingLine')
+      )
+    ).toHaveLength(1);
+  });
+
+  it('auto-submits global_rating after debounce when a global star is selected', async () => {
+    submitRating.mockResolvedValue({ data: { id: 'r1' } });
+
+    const renderer = await renderBlock();
+
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
+
+    await act(async () => {
+      globalLine.props.onChange(5);
+    });
+
+    expect(submitRating).not.toHaveBeenCalled();
+
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+    });
+    await flushPromises();
+
+    expect(submitRating).toHaveBeenCalledTimes(1);
+    expect(submitRating).toHaveBeenCalledWith({
+      pictureId: 'image-1',
+      context: DEFAULT_CONTEXT,
+      payload: { global_rating: 5 },
+    });
+  });
+
+  it('invokes onSubmitted once after a successful auto-submit', async () => {
+    submitRating.mockResolvedValue({ data: { id: 'r1' } });
+    const onSubmitted = jest.fn();
+
+    const renderer = await renderBlock({ onSubmitted });
+
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
+
+    await act(async () => {
+      globalLine.props.onChange(5);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+    });
+    await flushPromises();
+
+    expect(onSubmitted).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not render a Validate button', async () => {
+    const renderer = await renderBlock();
+
+    expect(findAllTestID(renderer, 'result.rating.validate')).toHaveLength(0);
+  });
+
+  it('transitions to submitted phase with two links and no global star after auto-submit', async () => {
+    submitRating.mockResolvedValue({ data: { id: 'r1' } });
+
+    const renderer = await renderBlock();
+
+    expect(findAllTestID(renderer, 'result.rating.tags.link')).toHaveLength(0);
+    expect(findAllTestID(renderer, 'result.rating.details.link')).toHaveLength(0);
+
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
+
+    await act(async () => {
+      globalLine.props.onChange(5);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+    });
+    await flushPromises();
+
+    expect(
+      findAllTestID(renderer, 'result.rating.global')
+    ).toHaveLength(0);
+    expect(findTestID(renderer, 'result.rating.tags.link')).toBeTruthy();
+    expect(findTestID(renderer, 'result.rating.details.link')).toBeTruthy();
+  });
+
+  it('details flow submits global plus filled sub-rating and closes the modal', async () => {
+    submitRating.mockResolvedValueOnce({ data: { id: 'r1' } });
+    submitRating.mockResolvedValue({ data: { id: 'r1-updated' } });
+
+    const renderer = await renderBlock();
+
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
+    await act(async () => {
+      globalLine.props.onChange(5);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+    });
+    await flushPromises();
+
+    await act(async () => {
+      findTestID(renderer, 'result.rating.details.link').props.onPress();
+    });
+
+    const MockStarRatingLine = jest.requireMock('../components/UI/StarRatingLine');
+    const lines = renderer.root.findAllByType(MockStarRatingLine);
+    const prefixes = lines.map((node) => node.props.testIDPrefix);
+    expect(prefixes).toEqual([
+      'result.rating.detail.quality',
+      'result.rating.detail.enigma',
+      'result.rating.detail.fun',
+      'result.rating.detail.difficulty',
+    ]);
+
+    await act(async () => {
+      findStarLineByPrefix(renderer, 'result.rating.detail.quality').props.onChange(3);
+    });
+
+    await act(async () => {
+      await findTestID(renderer, 'result.rating.details.save').props.onPress();
+    });
+
+    expect(submitRating).toHaveBeenLastCalledWith({
+      pictureId: 'image-1',
+      context: DEFAULT_CONTEXT,
+      payload: { global_rating: 5, quality_rating: 3 },
+    });
+
+    const detailLines = renderer.root
+      .findAllByType(MockStarRatingLine)
+      .filter((node) => node.props.testIDPrefix?.startsWith('result.rating.detail.'));
+    const stillVisibleCount = detailLines.filter((node) => {
+      let cursor = node;
+      while (cursor?.parent) {
+        if (cursor.type === 'Modal' && cursor.props.visible === false) {
+          return false;
+        }
+        cursor = cursor.parent;
+      }
+      return true;
+    }).length;
+    expect(stillVisibleCount).toBe(0);
+  });
+
+  it('tags flow adds a visible chip via addImageTag', async () => {
+    submitRating.mockResolvedValue({ data: { id: 'r1' } });
     addImageTag.mockResolvedValue({ data: { id: 'tag-9', name: 'night walk' } });
 
     const renderer = await renderBlock();
 
+    const globalLine = findStarLineByPrefix(renderer, 'result.rating.global');
     await act(async () => {
-      renderer.root.findByProps({ testID: 'result.rating.tags.input' }).props.onChangeText('Night Walk');
+      globalLine.props.onChange(5);
+    });
+    await act(async () => {
+      jest.advanceTimersByTime(700);
+    });
+    await flushPromises();
+
+    await act(async () => {
+      findTestID(renderer, 'result.rating.tags.link').props.onPress();
     });
 
-    expect(renderer.root.findByProps({ testID: 'result.rating.tags.input' }).props.value).toBe('Night Walk');
+    await act(async () => {
+      findTestID(renderer, 'result.rating.tags.input').props.onChangeText('Night Walk');
+    });
 
     await act(async () => {
-      await renderer.root.findByProps({ testID: 'result.rating.tags.add' }).props.onPress();
+      await findTestID(renderer, 'result.rating.tags.add').props.onPress();
     });
 
     expect(addImageTag).toHaveBeenCalledWith({
@@ -303,26 +269,8 @@ describe('RatingSubmissionBlock', () => {
       name: 'night walk',
     });
     expect(saveUserTag).toHaveBeenCalledWith('night walk');
-    expect(renderer.root.findByProps({ testID: 'result.rating.tags.chip.night%20walk' })).toBeTruthy();
-  });
-
-  it('shows stable tag suggestions from saved user tags while typing', async () => {
-    getUserTags.mockResolvedValue(['museum', 'mountain', 'city']);
-
-    const renderer = await renderBlock();
-
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'result.rating.tags.input' }).props.onChangeText('m');
-    });
-
     expect(
-      renderer.root.findByProps({ testID: 'result.rating.tags.suggestion.museum' })
+      findTestID(renderer, 'result.rating.tags.chip.night%20walk')
     ).toBeTruthy();
-    expect(
-      renderer.root.findByProps({ testID: 'result.rating.tags.suggestion.mountain' })
-    ).toBeTruthy();
-    expect(
-      renderer.root.findAllByProps({ testID: 'result.rating.tags.suggestion.city' })
-    ).toHaveLength(0);
   });
 });

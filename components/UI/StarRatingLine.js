@@ -5,7 +5,7 @@ import { RATING_COLORS, RATING_LABELS } from '../../constants/rating';
 
 const STAR_COUNT = 5;
 
-export default function StarRatingLine({ value, onChange, widthPercent = 80, testIDPrefix, disabled, hideLabel = false }) {
+export default function StarRatingLine({ value, onChange, widthPercent = 80, testIDPrefix, disabled, hideLabel = false, starSize = 32 }) {
   const animatedValue = useRef(new Animated.Value(value || 0)).current;
 
   // This slider only renders on ResultScreen, outside SwipeableCard. That avoids
@@ -79,7 +79,7 @@ export default function StarRatingLine({ value, onChange, widthPercent = 80, tes
             disabled={disabled}
             onPress={disabled ? undefined : () => onChange(starIndex)}
             style={styles.star}>
-            <Animated.Text style={[styles.starText, { color: interpolatedColor }]}>
+            <Animated.Text style={[styles.starText, { color: interpolatedColor, fontSize: starSize }]}>
               {filled ? '★' : '☆'}
             </Animated.Text>
           </Pressable>
