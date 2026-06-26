@@ -297,6 +297,15 @@ describe('SwipeableCard', () => {
     expect(onBadgePress).toHaveBeenCalledWith(item);
   });
 
+  it('does not capture the pan responder for tap-like micro-moves so the badge Pressable keeps the gesture', async () => {
+    await renderCard();
+
+    expect(capturedPanResponder.onMoveShouldSetPanResponderCapture(null, { dx: 3, dy: 2 })).toBe(false);
+    expect(capturedPanResponder.onMoveShouldSetPanResponderCapture(null, { dx: 50, dy: 0 })).toBe(true);
+    expect(capturedPanResponder.onMoveShouldSetPanResponder(null, { dx: 3, dy: 2 })).toBe(false);
+    expect(capturedPanResponder.onMoveShouldSetPanResponder(null, { dx: 50, dy: 0 })).toBe(true);
+  });
+
   it('renders the full-card swipe overlay with pointerEvents none so taps fall through to the badge', async () => {
     const renderer = await renderCard();
 

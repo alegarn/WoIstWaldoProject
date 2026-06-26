@@ -5,6 +5,8 @@ import GuessDescription from '../Picture/Descriptions/GuessDescription';
 import StarRatingBadge from './StarRatingBadge';
 import { isE2EMode } from '../../utils/e2eMode';
 
+const TAP_SLOP = 8;
+
 export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe, onBadgePress }) {
   const e2eMode = isE2EMode();
 
@@ -83,9 +85,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: () => true,
+        // Small moves stay on the badge (tap works); once a move exceeds the slop the card claims the gesture (swipe still works).
+        onMoveShouldSetPanResponder: (evt, gestureState) => Math.abs(gestureState.dx) > TAP_SLOP || Math.abs(gestureState.dy) > TAP_SLOP,
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: (evt, gestureState) => Math.abs(gestureState.dx) > TAP_SLOP || Math.abs(gestureState.dy) > TAP_SLOP,
         onPanResponderMove: (evt, gestureState) => {
           xPosition.setValue(gestureState.dx);
           yPosition.setValue(gestureState.dy);

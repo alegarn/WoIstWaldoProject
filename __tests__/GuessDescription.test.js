@@ -4,6 +4,9 @@ jest.mock('react-native', () => ({
   Pressable: 'Pressable',
   StyleSheet: {
     create: (styles) => styles,
+    flatten: (style) => (Array.isArray(style)
+      ? Object.assign({}, ...style.filter(Boolean))
+      : style),
   },
 }));
 
@@ -24,6 +27,7 @@ jest.mock('../constants/theme', () => ({
 }));
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import GuessDescription from '../components/Picture/Descriptions/GuessDescription';
@@ -95,6 +99,16 @@ describe('GuessDescription', () => {
     expect(
       renderer.root.findByProps({ testID: 'guess-description.text' }).props.children
     ).toBe(fullDescription);
+  });
+
+  it('positions the description area absolutely at 25% from the bottom', async () => {
+    const renderer = await renderDescription();
+
+    const area = renderer.root.findByType('View');
+    const style = StyleSheet.flatten(area.props.style);
+
+    expect(style.position).toBe('absolute');
+    expect(style.bottom).toBe('25%');
   });
 
   it('falls back to full_description snake_case when other fields are missing', async () => {

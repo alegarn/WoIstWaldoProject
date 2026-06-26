@@ -8,13 +8,6 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
 
   return (
     <View style={[styles.descriptionArea, style]}>
-      {hasDescription && (
-        <IconButton
-          icon={showFullDescription ? "chevron-down" : "chevron-up"}
-          color={GlobalStyle.color.secondaryColor500}
-          size={30}
-          onPress={toggleDescription} />
-      )}
       <Text
         style={styles.cardDescriptionStyle}
         testID="guess-description.text"
@@ -27,6 +20,10 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
 
 const styles = StyleSheet.create({
   descriptionArea: {
+    position: 'absolute',
+    bottom: '10%',
+    left: 0,
+    right: 0,
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.85)',
   },
