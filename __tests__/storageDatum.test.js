@@ -37,6 +37,7 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  getNextImage,
   getOnboardingCompleted,
   getPreferredLanguage,
   getSessionLanguageFilter,
@@ -243,5 +244,32 @@ describe('storageDatum utilities', () => {
     expect(File).toHaveBeenNthCalledWith(1, 'file:///cache/abc.jpg');
     expect(File).toHaveBeenNthCalledWith(2, expect.objectContaining({ uri: 'file:///cache/' }), 'ImagePicker/abc.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns the first remaining image when the played card has already been removed', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+      { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      { listId: 3, imageFile: 'file:///cache/3.jpg' },
+    ]));
+
+    expect(await getNextImage('all', 'any')).toEqual({ listId: 2, imageFile: 'file:///cache/2.jpg' });
+  });
+
+  it('returns the first image whose listId is strictly greater than currentListId', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+      { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      { listId: 3, imageFile: 'file:///cache/3.jpg' },
+    ]));
+
+    expect(await getNextImage('all', 'any', 2)).toEqual({ listId: 3, imageFile: 'file:///cache/3.jpg' });
+  });
+
+  it('returns null when the deck is missing or empty', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getNextImage('all', 'any')).toBeNull();
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+    expect(await getNextImage('all', 'any')).toBeNull();
   });
 });

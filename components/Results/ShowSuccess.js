@@ -6,6 +6,7 @@ import RatingSubmissionBlock from './RatingSubmissionBlock';
 import ScoreCelebration from './ScoreCelebration';
 import { deleteImageFromStorage, removeImageFromList } from '../../utils/storageDatum';
 import { updateUserScore } from '../../utils/scoreRequests';
+import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
@@ -40,6 +41,25 @@ export default function ShowSuccess({ navigation, route }) {
     await deleteImageFromStorage(imageFilePath);
   };
 
+  const handleNextCard = async () => {
+    const ok = await navigateToNextGuess(navigation, {
+      category: route.params?.category,
+      language,
+      currentListId: listId,
+      isTutorial,
+    });
+    if (!ok) {
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'GuessPathScreen', params: { isTutorial } },
+          { name: 'GuessFeedScreen', params: { category: route.params?.category, language } },
+        ],
+      });
+    }
+  };
+
 /* useEffect________________________________________________ */
 
   useEffect(() => {
@@ -58,6 +78,7 @@ export default function ShowSuccess({ navigation, route }) {
             route={route}
             success={true}
             isTutorial={isTutorial}
+            onNextCard={handleNextCard}
           />
         )}
         <RatingSubmissionBlock

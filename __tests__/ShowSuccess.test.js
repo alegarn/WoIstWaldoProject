@@ -40,6 +40,10 @@ jest.mock('../utils/scoreRequests', () => ({
   updateUserScore: jest.fn(),
 }));
 
+jest.mock('../utils/guessNavigation', () => ({
+  navigateToNextGuess: jest.fn(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -56,6 +60,7 @@ import ShowSuccess from '../components/Results/ShowSuccess';
 import { AuthContext } from '../store/auth-context';
 import { deleteImageFromStorage, removeImageFromList } from '../utils/storageDatum';
 import { updateUserScore } from '../utils/scoreRequests';
+import { navigateToNextGuess } from '../utils/guessNavigation';
 
 describe('ShowSuccess', () => {
   beforeEach(() => {
@@ -64,6 +69,7 @@ describe('ShowSuccess', () => {
     removeImageFromList.mockResolvedValue(undefined);
     deleteImageFromStorage.mockResolvedValue(undefined);
     updateUserScore.mockResolvedValue({ status: 200 });
+    navigateToNextGuess.mockResolvedValue(true);
   });
 
   afterEach(() => {
@@ -154,10 +160,118 @@ describe('ShowSuccess', () => {
         navigation,
         success: true,
         isTutorial: true,
+        onNextCard: expect.any(Function),
       })
     );
     expect(mockTutorialOverlay).toHaveBeenCalledWith(
       expect.objectContaining({ screen: 'ShowSuccess' })
     );
+  });
+
+  it('onNextCard delegates to navigateToNextGuess and does not reset when a card is resolved', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+    const route = {
+      params: {
+        pictureId: 'image-1',
+        listId: 7,
+        imageFile: 'file:///waldo.jpg',
+        isTutorial: false,
+        category,
+        language: 'fr',
+      },
+    };
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ userId: '42' }}>
+          <ShowSuccess navigation={navigation} route={route} />
+        </AuthContext.Provider>
+      );
+    });
+
+    const ratingCall = mockRatingSubmissionBlock.mock.calls.find(
+      ([props]) => typeof props.onSubmitted === 'function'
+    );
+    await act(async () => {
+      ratingCall[0].onSubmitted();
+    });
+
+    const choicesCall = mockResultChoices.mock.calls.find(
+      (props) => typeof props[0].onNextCard === 'function'
+    );
+    const onNextCard = choicesCall[0].onNextCard;
+
+    navigateToNextGuess.mockResolvedValue(true);
+
+    await act(async () => {
+      await onNextCard();
+    });
+
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category,
+      language: 'fr',
+      currentListId: 7,
+      isTutorial: false,
+    });
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('onNextCard falls back to feed reset when navigateToNextGuess resolves false', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+    const route = {
+      params: {
+        pictureId: 'image-1',
+        listId: 7,
+        imageFile: 'file:///waldo.jpg',
+        isTutorial: true,
+        category,
+        language: 'fr',
+      },
+    };
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ userId: '42' }}>
+          <ShowSuccess navigation={navigation} route={route} />
+        </AuthContext.Provider>
+      );
+    });
+
+    const ratingCall = mockRatingSubmissionBlock.mock.calls.find(
+      ([props]) => typeof props.onSubmitted === 'function'
+    );
+    await act(async () => {
+      ratingCall[0].onSubmitted();
+    });
+
+    const choicesCall = mockResultChoices.mock.calls.find(
+      (props) => typeof props[0].onNextCard === 'function'
+    );
+    const onNextCard = choicesCall[0].onNextCard;
+
+    navigateToNextGuess.mockResolvedValue(false);
+
+    await act(async () => {
+      await onNextCard();
+    });
+
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category,
+      language: 'fr',
+      currentListId: 7,
+      isTutorial: true,
+    });
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 2,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: true } },
+        { name: 'GuessFeedScreen', params: { category, language: 'fr' } },
+      ],
+    });
   });
 });

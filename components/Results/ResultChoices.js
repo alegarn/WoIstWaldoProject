@@ -5,7 +5,7 @@ import { useContext } from 'react';
 import { AuthContext } from '../../store/auth-context';
 import Button from '../UI/Button';
 
-export default function ResultChoices({ navigation, route, success, retryGuess, isTutorial }) {
+export default function ResultChoices({ navigation, route, success, retryGuess, isTutorial, onNextCard }) {
 
   const context = useContext(AuthContext);
 
@@ -35,15 +35,7 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
 
   function backToSwipe() {
     if (routeParams.category && routeParams.language) {
-      navigation.reset({
-        index: 3,
-        routes: [
-          { name: 'HomeScreen' },
-          { name: 'GuessPathScreen', params: { isTutorial } },
-          { name: 'GuessFeedScreen', params: { category: routeParams.category, language: routeParams.language } },
-          { name: 'ResultScreen' },
-        ],
-      });
+      onNextCard?.();
       return;
     }
 

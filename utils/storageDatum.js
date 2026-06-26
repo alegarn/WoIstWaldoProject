@@ -45,6 +45,27 @@ export async function getLocalImages(categoryKey, language) {
   return viable;
 };
 
+/**
+ * Resolve the next playable card from the persisted deck.
+ * Reuses getLocalImages (already drops non-viable/local-missing files). The deck
+ * is ordered ascending by listId (see getLastImageId / getLastListId).
+ * - currentListId is a finite number → first item whose listId is strictly greater.
+ * - otherwise (undefined/null/NaN) → first item of the deck.
+ * Returns null when the deck is missing or empty.
+ */
+export async function getNextImage(categoryKey, language, currentListId) {
+  const images = await getLocalImages(categoryKey, language);
+  if (!Array.isArray(images) || images.length === 0) {
+    return null;
+  }
+
+  if (Number.isFinite(currentListId)) {
+    return images.find((image) => image?.listId > currentListId) ?? null;
+  }
+
+  return images[0];
+};
+
 function getLastListId(list) {
   const lastListId = list.reduce((maxId, image) => {
     const imageId = image.listId;

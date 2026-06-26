@@ -4,6 +4,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import ResultChoices from './ResultChoices';
 import ImageAnimated from './ImageAnimated';
 import TutorialOverlay from '../UI/TutorialOverlay';
+import { navigateToNextGuess } from '../../utils/guessNavigation';
 
 
 
@@ -21,7 +22,10 @@ export default function ShowFailure({ navigation, route }) {
     hiddenLocation, 
     screenHeight, 
     screenWidth, 
-    isTutorial 
+    isTutorial,
+    listId,
+    category,
+    language
   } = route?.params;
 
 
@@ -55,6 +59,25 @@ export default function ShowFailure({ navigation, route }) {
     });
   };
 
+  const handleNextCard = async () => {
+    const ok = await navigateToNextGuess(navigation, {
+      category,
+      language,
+      currentListId: listId,
+      isTutorial,
+    });
+    if (!ok) {
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'GuessPathScreen', params: { isTutorial } },
+          { name: 'GuessFeedScreen', params: { category, language } },
+        ],
+      });
+    }
+  };
+
   return (
     <>
       <View style={styles.container}>
@@ -66,9 +89,11 @@ export default function ShowFailure({ navigation, route }) {
               <Text style={styles.title}>You didn't find it :(</Text>
               <ResultChoices 
                 navigation={navigation} 
+                route={route}
                 retryGuess={retryGuess} 
                 success={false} 
                 isTutorial={isTutorial} 
+                onNextCard={handleNextCard}
               />
             </View>
         }

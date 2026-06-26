@@ -85,6 +85,7 @@ describe('ResultChoices', () => {
   it('deep-links back to GuessFeedScreen with category and language when present', async () => {
     const navigation = { reset: jest.fn() };
     const category = { id: 'cat-1', key: 'nature' };
+    const onNextCard = jest.fn();
 
     let renderer;
     await act(async () => {
@@ -95,6 +96,7 @@ describe('ResultChoices', () => {
             route={{ params: { category, language: 'fr' } }}
             success={true}
             isTutorial={false}
+            onNextCard={onNextCard}
           />
         </AuthContext.Provider>
       );
@@ -104,14 +106,7 @@ describe('ResultChoices', () => {
       await getButtonByTestID(renderer, 'result.button.next').props.onPress();
     });
 
-    expect(navigation.reset).toHaveBeenCalledWith({
-      index: 3,
-      routes: [
-        { name: 'HomeScreen' },
-        { name: 'GuessPathScreen', params: { isTutorial: false } },
-        { name: 'GuessFeedScreen', params: { category, language: 'fr' } },
-        { name: 'ResultScreen' },
-      ],
-    });
+    expect(onNextCard).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 });
