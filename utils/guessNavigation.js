@@ -5,8 +5,9 @@ import { getNextImage } from './storageDatum';
  * navigation stack so Back from GuessScreen lands on the feed (decision D3).
  * Mirrors the GuessScreen param contract of GuessFeedScreen.startGuessing
  * (spread item, hiddenLocation alias, category, language) so it lives in one place.
- * Returns true when a card was resolved and the stack was reset, false when the
- * deck is exhausted so the caller can fall back to the feed.
+ * Always navigates: when a next card is resolved it resets to a 4-route stack
+ * ending on GuessScreen; when the deck is exhausted it resets to a 3-route
+ * feed stack ending on GuessFeedScreen. Both stacks end on a Back-to-feed target.
  */
 export async function navigateToNextGuess(navigation, { category, language, currentListId, isTutorial }) {
   const categoryKey = category?.key || 'all';
@@ -14,7 +15,15 @@ export async function navigateToNextGuess(navigation, { category, language, curr
   const item = await getNextImage(categoryKey, language, currentListId);
 
   if (!item) {
-    return false;
+    navigation.reset({
+      index: 2,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial } },
+        { name: 'GuessFeedScreen', params: { category, language } },
+      ],
+    });
+    return;
   }
 
   navigation.reset({
@@ -35,6 +44,4 @@ export async function navigateToNextGuess(navigation, { category, language, curr
       },
     ],
   });
-
-  return true;
 }

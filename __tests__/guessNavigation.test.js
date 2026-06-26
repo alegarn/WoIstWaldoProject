@@ -10,7 +10,7 @@ describe('navigateToNextGuess', () => {
     jest.clearAllMocks();
   });
 
-  it('resets to a clean stack with GuessScreen receiving the next item and returns true', async () => {
+  it('resets once to a clean stack with GuessScreen receiving the next item', async () => {
     const navigation = { reset: jest.fn() };
     const category = { key: 'city' };
     const item = {
@@ -20,32 +20,34 @@ describe('navigateToNextGuess', () => {
     };
     getNextImage.mockResolvedValueOnce(item);
 
-    const result = await navigateToNextGuess(navigation, {
+    await navigateToNextGuess(navigation, {
       category,
       language: 'fr',
       currentListId: 5,
       isTutorial: true,
     });
 
-    expect(result).toBe(true);
     expect(getNextImage).toHaveBeenCalledWith('city', 'fr', 5);
     expect(navigation.reset).toHaveBeenCalledTimes(1);
-
-    const resetArg = navigation.reset.mock.calls[0][0];
-    expect(resetArg.index).toBe(3);
-    expect(resetArg.routes).toHaveLength(4);
-    expect(resetArg.routes[0]).toEqual({ name: 'HomeScreen' });
-    expect(resetArg.routes[1]).toEqual({ name: 'GuessPathScreen', params: { isTutorial: true } });
-    expect(resetArg.routes[2]).toEqual({ name: 'GuessFeedScreen', params: { category, language: 'fr' } });
-    expect(resetArg.routes[3].name).toBe('GuessScreen');
-    expect(resetArg.routes[3].params).toEqual({
-      listId: 7,
-      imageFile: 'file:///cache/7.jpg',
-      touchLocation: { x: 0.4, y: 0.6 },
-      hiddenLocation: { x: 0.4, y: 0.6 },
-      category,
-      language: 'fr',
-      isTutorial: true,
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 3,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: true } },
+        { name: 'GuessFeedScreen', params: { category, language: 'fr' } },
+        {
+          name: 'GuessScreen',
+          params: {
+            listId: 7,
+            imageFile: 'file:///cache/7.jpg',
+            touchLocation: { x: 0.4, y: 0.6 },
+            hiddenLocation: { x: 0.4, y: 0.6 },
+            category,
+            language: 'fr',
+            isTutorial: true,
+          },
+        },
+      ],
     });
   });
 
@@ -58,17 +60,27 @@ describe('navigateToNextGuess', () => {
     expect(getNextImage).toHaveBeenCalledWith('all', 'en', undefined);
   });
 
-  it('does not reset navigation and returns false when the deck is exhausted', async () => {
+  it('resets once to the 3-route feed stack when the deck is exhausted', async () => {
     const navigation = { reset: jest.fn() };
+    const category = { key: 'nature' };
     getNextImage.mockResolvedValueOnce(null);
 
-    const result = await navigateToNextGuess(navigation, {
-      category: { key: 'nature' },
+    await navigateToNextGuess(navigation, {
+      category,
       language: 'de',
       currentListId: 9,
+      isTutorial: false,
     });
 
-    expect(result).toBe(false);
-    expect(navigation.reset).not.toHaveBeenCalled();
+    expect(getNextImage).toHaveBeenCalledWith('nature', 'de', 9);
+    expect(navigation.reset).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 2,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: false } },
+        { name: 'GuessFeedScreen', params: { category, language: 'de' } },
+      ],
+    });
   });
 });

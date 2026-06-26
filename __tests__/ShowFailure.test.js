@@ -120,8 +120,6 @@ describe('ShowFailure', () => {
     const navigation = { replace: jest.fn(), reset: jest.fn() };
     const route = buildRoute({ listId: 42 });
 
-    mockedNavigateToNextGuess.mockResolvedValue(true);
-
     await renderShowFailure({ navigation, route });
 
     const props = mockResultChoices.mock.calls.at(-1)[0];
@@ -134,30 +132,6 @@ describe('ShowFailure', () => {
       language: 'en',
       currentListId: 42,
       isTutorial: true,
-    });
-    expect(navigation.reset).not.toHaveBeenCalled();
-  });
-
-  it('falls back to a feed navigation.reset when navigateToNextGuess resolves false', async () => {
-    const navigation = { replace: jest.fn(), reset: jest.fn() };
-    const route = buildRoute();
-
-    mockedNavigateToNextGuess.mockResolvedValue(false);
-
-    await renderShowFailure({ navigation, route });
-
-    const props = mockResultChoices.mock.calls.at(-1)[0];
-    await act(async () => {
-      await props.onNextCard();
-    });
-
-    expect(navigation.reset).toHaveBeenCalledWith({
-      index: 2,
-      routes: [
-        { name: 'HomeScreen' },
-        { name: 'GuessPathScreen', params: { isTutorial: true } },
-        { name: 'GuessFeedScreen', params: { category: route.params.category, language: 'en' } },
-      ],
     });
   });
 });

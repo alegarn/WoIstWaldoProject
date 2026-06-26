@@ -41,24 +41,12 @@ export default function ShowSuccess({ navigation, route }) {
     await deleteImageFromStorage(imageFilePath);
   };
 
-  const handleNextCard = async () => {
-    const ok = await navigateToNextGuess(navigation, {
-      category: route.params?.category,
-      language,
-      currentListId: listId,
-      isTutorial,
-    });
-    if (!ok) {
-      navigation.reset({
-        index: 2,
-        routes: [
-          { name: 'HomeScreen' },
-          { name: 'GuessPathScreen', params: { isTutorial } },
-          { name: 'GuessFeedScreen', params: { category: route.params?.category, language } },
-        ],
-      });
-    }
-  };
+  const handleNextCard = () => navigateToNextGuess(navigation, {
+    category: route.params?.category,
+    language,
+    currentListId: listId,
+    isTutorial,
+  });
 
 /* useEffect________________________________________________ */
 

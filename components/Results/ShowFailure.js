@@ -59,24 +59,12 @@ export default function ShowFailure({ navigation, route }) {
     });
   };
 
-  const handleNextCard = async () => {
-    const ok = await navigateToNextGuess(navigation, {
-      category,
-      language,
-      currentListId: listId,
-      isTutorial,
-    });
-    if (!ok) {
-      navigation.reset({
-        index: 2,
-        routes: [
-          { name: 'HomeScreen' },
-          { name: 'GuessPathScreen', params: { isTutorial } },
-          { name: 'GuessFeedScreen', params: { category, language } },
-        ],
-      });
-    }
-  };
+  const handleNextCard = () => navigateToNextGuess(navigation, {
+    category,
+    language,
+    currentListId: listId,
+    isTutorial,
+  });
 
   return (
     <>
