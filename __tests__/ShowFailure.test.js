@@ -1,5 +1,4 @@
 const mockResultChoices = jest.fn(() => null);
-const mockImageAnimated = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 
 jest.mock('../utils/guessNavigation', () => ({
@@ -9,13 +8,6 @@ jest.mock('../utils/guessNavigation', () => ({
 jest.mock('../components/Results/ResultChoices', () => {
   return function MockResultChoices(props) {
     mockResultChoices(props);
-    return null;
-  };
-});
-
-jest.mock('../components/Results/ImageAnimated', () => {
-  return function MockImageAnimated(props) {
-    mockImageAnimated(props);
     return null;
   };
 });
@@ -59,32 +51,26 @@ async function renderShowFailure({ navigation, route }) {
   await act(async () => {
     renderer = create(<ShowFailure navigation={navigation} route={route} />);
   });
-  await act(async () => {
-    jest.advanceTimersByTime(1000);
-  });
   return renderer;
 }
 
 describe('ShowFailure', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.useFakeTimers();
     mockedNavigateToNextGuess.mockReset();
   });
 
-  afterEach(() => {
-    jest.useRealTimers();
-  });
-
-  it('reveals the failure result state and retry choices after the animation', async () => {
+  it('shows the failure result state immediately with retry choices (no pre-animation)', async () => {
     const navigation = { replace: jest.fn(), reset: jest.fn() };
     const route = buildRoute();
 
     const renderer = await renderShowFailure({ navigation, route });
 
-    expect(mockImageAnimated).toHaveBeenCalledWith({ success: false });
-
     expect(renderer.root.findByProps({ testID: 'result.screen.failure' })).toBeTruthy();
+
+    const title = renderer.root.findByProps({ testID: 'result.screen.failure.title' });
+    expect(title.props.children).toContain('😢');
+
     expect(mockResultChoices).toHaveBeenCalledWith(
       expect.objectContaining({
         navigation,

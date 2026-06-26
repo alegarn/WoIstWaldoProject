@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, StyleSheet } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
 import { useContext } from 'react';
@@ -48,41 +48,41 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
     });
   };
 
+  // Visual hierarchy:
+  //  - Failure: Retry is the primary (hero) action; Next Card + Home are equal-weight secondaries.
+  //  - Success: Next Card is the primary action; Home stays its original small style.
+  // Behaviour (onPress handlers) is unchanged.
+  const isFailure = success === false;
+  const nextIsPrimary = !isFailure;
+
   return(
     <View style={styles.buttonContainer}>
-      {success === false && (
-        <Pressable
+      {isFailure && (
+        <Button
           accessibilityLabel="Retry this one"
-          accessibilityRole="button"
           testID="result.button.retry"
           onPress={handleRetry}
-          style={({ pressed }) => [
-            styles.button,
-            styles.secondary,
-            pressed && styles.pressed,
-          ]}
+          style={[styles.button, styles.primary]}
+          textStyle={styles.primaryText}
         >
-          <Text style={styles.secondaryText}>Retry this one</Text>
-        </Pressable>
+          Retry this one
+        </Button>
       )}
-      <Pressable
+      <Button
         accessibilityLabel="Next Card"
-        accessibilityRole="button"
         testID="result.button.next"
         onPress={backToSwipe}
-        style={({ pressed }) => [
-          styles.button,
-          styles.primary,
-          pressed && styles.pressed,
-        ]}
+        style={[styles.button, nextIsPrimary ? styles.primary : styles.secondary]}
+        textStyle={nextIsPrimary ? styles.primaryText : styles.secondaryText}
       >
-        <Text style={styles.primaryText}>Next Card</Text>
-      </Pressable>
+        Next Card
+      </Button>
       <Button
         accessibilityLabel="Home"
         testID="result.button.home"
         onPress={returnHome}
-        style={[styles.button, styles.homeButton]}
+        style={[styles.button, isFailure ? styles.secondary : styles.homeButton]}
+        textStyle={isFailure ? styles.secondaryText : undefined}
       >
         Home
       </Button>
@@ -104,7 +104,7 @@ const styles = StyleSheet.create({
     marginVertical: 6,
   },
   primary: {
-    backgroundColor: '#FFD700',
+    backgroundColor: GlobalStyle.color.win,
     paddingVertical: 18,
     paddingHorizontal: 24,
     width: '90%',
@@ -115,6 +115,20 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
   },
+  secondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: GlobalStyle.color.primaryColor,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    width: '65%',
+  },
+  secondaryText: {
+    color: GlobalStyle.color.primaryColor,
+    fontSize: 20,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
   homeButton: {
     backgroundColor: GlobalStyle.color.primaryColor100,
     paddingVertical: 10,
@@ -122,14 +136,5 @@ const styles = StyleSheet.create({
     width: '50%',
     borderWidth: 1,
     borderColor: GlobalStyle.color.primaryColor900,
-  },
-  secondaryText: {
-    color: GlobalStyle.color.tertiaryColor900,
-    fontSize: 18,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  pressed: {
-    opacity: 0.75,
   },
 });
