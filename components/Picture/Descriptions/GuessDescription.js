@@ -21,7 +21,7 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
 const styles = StyleSheet.create({
   descriptionArea: {
     position: 'absolute',
-    bottom: '10%',
+    bottom: '5%',
     left: 0,
     right: 0,
     alignItems: 'center',
