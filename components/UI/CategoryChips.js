@@ -96,7 +96,7 @@ const styles = StyleSheet.create({
   },
   chipText: {
     fontSize: 14,
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   chipTextOverlay: {
     color: '#FFFFFF',

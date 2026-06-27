@@ -1,15 +1,13 @@
-import { useEffect, useState } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Animated } from 'react-native';
 
 import ResultChoices from './ResultChoices';
-import ImageAnimated from './ImageAnimated';
 import TutorialOverlay from '../UI/TutorialOverlay';
+import { navigateToNextGuess } from '../../utils/guessNavigation';
 
 
 
 export default function ShowFailure({ navigation, route }) {
-
-  const [showFailureImageAnimated, setShowSadImageAnimated] = useState(true);
 
   const { 
     imageFile, 
@@ -21,22 +19,28 @@ export default function ShowFailure({ navigation, route }) {
     hiddenLocation, 
     screenHeight, 
     screenWidth, 
-    isTutorial 
+    isTutorial,
+    listId,
+    category,
+    language
   } = route?.params;
 
+  const pulse = useRef(new Animated.Value(0)).current;
 
 /* useEffect________________________________________________ */
 
   useEffect(() => {
-    // stop the animation
-    const timeout = setTimeout(() => {
-      // 2 times
-      console.log("showFailureImageAnimated", showFailureImageAnimated);
-      setShowSadImageAnimated(false);
-    }, 1000);
-
-    return () => clearTimeout(timeout);
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
   }, []);
+
+  const messageScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
 
 
 /* functions________________________________________________ */
@@ -55,23 +59,32 @@ export default function ShowFailure({ navigation, route }) {
     });
   };
 
+  const handleNextCard = () => navigateToNextGuess(navigation, {
+    category,
+    language,
+    currentListId: listId,
+    isTutorial,
+  });
+
   return (
     <>
       <View style={styles.container}>
-        {
-          showFailureImageAnimated ?
-            <ImageAnimated success={false} />
-          :
-            <View testID="result.screen.failure">
-              <Text style={styles.title}>You didn't find it :(</Text>
-              <ResultChoices 
-                navigation={navigation} 
-                retryGuess={retryGuess} 
-                success={false} 
-                isTutorial={isTutorial} 
-              />
-            </View>
-        }
+        <View testID="result.screen.failure" style={styles.result}>
+          <Animated.Text
+            testID="result.screen.failure.title"
+            style={[styles.title, { transform: [{ scale: messageScale }] }]}
+          >
+            You didn't find it 😢
+          </Animated.Text>
+          <ResultChoices 
+            navigation={navigation} 
+            route={route}
+            retryGuess={retryGuess} 
+            success={false} 
+            isTutorial={isTutorial} 
+            onNextCard={handleNextCard}
+          />
+        </View>
       </View>
       {
         isTutorial &&
@@ -86,12 +99,21 @@ export default function ShowFailure({ navigation, route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: 'white',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  result: {
+    width: '100%',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+  },
   title: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
+    color: 'black',
+    textAlign: 'center',
+    marginBottom: 16,
   },
 
 });

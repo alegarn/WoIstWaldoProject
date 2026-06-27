@@ -24,7 +24,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const [noMoreCard, setNoMoreCard] = useState(null);
 
   const context = useContext(AuthContext);
-  const { detailImage, detailTags, detailVisible, openDetail, closeDetail } = useBadgeDetail(context);
+  const { detailImage, detailTags, detailRating, detailVisible, openDetail, closeDetail } = useBadgeDetail(context);
 
   const imageListRef = useRef(null);
   imageListRef.current = imageList;
@@ -237,11 +237,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       return detailImage;
     }
 
-    return {
+    const merged = {
       ...detailImage,
       tags: detailTags.map((tag) => tag?.name ?? tag),
     };
-  }, [detailImage, detailTags]);
+
+    if (detailRating !== undefined) {
+      merged.ratings = detailRating;
+    }
+
+    return merged;
+  }, [detailImage, detailTags, detailRating]);
 
   return (
     <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">

@@ -1,11 +1,21 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Login-first guess flow. It expects a previously saved E2E hidden-guess payload
-# and fails fast if the saved description is not present on the guess screen.
-# Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
-# Example: maestro test .maestro/guess-login-saved-picture-success.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
-
-- runFlow: auth-boot-login.yml
+# Guess success flow. Assumes the app is already launched, connected to Metro,
+# logged in, and sitting on HomeScreen. Run auth-boot-login.yml ONCE first, then
+# run hide-login-save-picture.yml to create the saved payload this flow asserts.
+# Do NOT re-launch the app in this flow (it breaks the Metro connection).
+# Expects a previously saved E2E hidden-guess payload and fails fast if the saved
+# description is not present on the guess screen (guess-path.card.saved).
+# Env vars: pass via -e KEY=VALUE (Maestro 2.3.0; --env-file is NOT supported).
+# Example: maestro test .maestro/guess-login-saved-picture-success.yml
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.hide
 - tapOn:
     id: home.button.guess
 - extendedWaitUntil:
@@ -28,8 +38,10 @@ appId: com.alegarn.WoIstWaldoProject
     id: guess-path.card.1
 - assertVisible:
     id: guess-path.card.saved
-- tapOn:
-    id: guess-path.card.open.1
+- swipe:
+    elementIds:
+      - guess-path.card.1
+    direction: RIGHT
 - extendedWaitUntil:
     visible:
       id: game.instructions.guess.overlay
@@ -60,8 +72,20 @@ appId: com.alegarn.WoIstWaldoProject
     timeout: 10000
 - assertVisible:
     id: result.screen.success
+- tapOn:
+        id: result.rating.global.star.5
+- extendedWaitUntil:
+        visible:
+            id: result.button.next
+        timeout: 10000
 - assertVisible:
     id: result.button.home
 - assertVisible:
-    id: result.button.another
+        id: result.button.next
+- tapOn:
+        id: result.button.next
+- extendedWaitUntil:
+        visible:
+            id: game.instructions.guess.overlay
+        timeout: 10000
 - runFlow: "_shared/return_home.yaml"

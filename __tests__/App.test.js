@@ -5,9 +5,10 @@ const recordedScreens = [];
 jest.mock('expo-dev-client', () => ({}));
 
 jest.mock('expo-navigation-bar', () => ({
-  setPositionAsync: jest.fn(),
-  setVisibilityAsync: jest.fn(),
-  setBehaviorAsync: jest.fn(),
+  NavigationBar: () => null,
+  setHidden: jest.fn(),
+  setStyle: jest.fn(),
+  setVisibilityAsync: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('expo-status-bar', () => ({

@@ -1,6 +1,7 @@
 import { Pressable, View, Text, ImageBackground, StyleSheet } from 'react-native';
 
 import { getCategoryAsset } from '../../utils/categoryAssets';
+import { GlobalStyle } from '../../constants/theme';
 
 function isRemoteThumbnail(value) {
   return typeof value === 'string' && value.length > 0;
@@ -63,7 +64,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   fallback: {
-    backgroundColor: '#1D133D',
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
     borderRadius: 12,
   },
   overlay: {

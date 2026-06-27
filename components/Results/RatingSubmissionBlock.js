@@ -1,7 +1,10 @@
-import { useEffect, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, TextInput } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
+
+import { GlobalStyle } from '../../constants/theme';
 
 import StarRatingLine from '../UI/StarRatingLine';
+import CenteredModal from '../UI/CenteredModal';
 import { addImageTag, deleteImageTag, submitRating } from '../../utils/ratingRequests';
 import { RATING_DIMENSIONS } from '../../constants/rating';
 import { getUserTags, saveUserTag } from '../../utils/storageDatum';
@@ -13,22 +16,50 @@ const PAYLOAD_KEY_BY_DIMENSION = {
   difficulty: 'difficulty_rating',
 };
 
+const AUTO_SUBMIT_DEBOUNCE_MS = 700;
+
 function normalizeTagName(name) {
   return String(name || '').trim().toLowerCase();
 }
 
-export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix = 'result.rating' }) {
+function buildDetailPayloadSnippet(detailRatings) {
+  const snippet = {};
+  for (const dim of RATING_DIMENSIONS) {
+    const value = detailRatings[dim.key];
+    const payloadKey = PAYLOAD_KEY_BY_DIMENSION[dim.key];
+    if (value && value > 0) {
+      snippet[payloadKey] = value;
+    }
+  }
+  return snippet;
+}
+
+export default function RatingSubmissionBlock({
+  pictureId,
+  context,
+  testIDPrefix = 'result.rating',
+  onSubmitted,
+}) {
+  const [phase, setPhase] = useState('rating');
   const [globalRating, setGlobalRating] = useState(0);
-  const [detailed, setDetailed] = useState(false);
+  const [tagsModalOpen, setTagsModalOpen] = useState(false);
+  const [detailsModalOpen, setDetailsModalOpen] = useState(false);
   const [detailRatings, setDetailRatings] = useState({});
   const [tagInput, setTagInput] = useState('');
   const [tags, setTags] = useState([]);
   const [userTags, setUserTags] = useState([]);
   const [tagError, setTagError] = useState(null);
   const [addingTag, setAddingTag] = useState(false);
-  const [validating, setValidating] = useState(false);
+  const [savingDetails, setSavingDetails] = useState(false);
   const [submitError, setSubmitError] = useState(null);
-  const [submitted, setSubmitted] = useState(false);
+
+  const debounceTimerRef = useRef(null);
+  const hasAutoSubmittedRef = useRef(false);
+  const globalRatingRef = useRef(0);
+
+  useEffect(() => {
+    globalRatingRef.current = globalRating;
+  }, [globalRating]);
 
   useEffect(() => {
     let isActive = true;
@@ -56,6 +87,10 @@ export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix
 
     return () => {
       isActive = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+        debounceTimerRef.current = null;
+      }
     };
   }, [pictureId]);
 
@@ -63,57 +98,78 @@ export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix
     return null;
   }
 
-  const canValidate = globalRating > 0 && !validating;
-  const normalizedTagInput = normalizeTagName(tagInput);
-  const canAddTag = normalizedTagInput.length > 0 && !addingTag;
-  // Suggestions are local AsyncStorage strings and expected to stay small in v1,
-  // so synchronous filtering is intentional. Add debouncing only if the list grows.
-  const filteredSuggestions = normalizedTagInput
-    ? userTags.filter(
-        (name) =>
-          name.includes(normalizedTagInput) &&
-          !tags.some((tag) => tag.name === name)
-      )
-    : [];
-
-  const handleDetailChange = (key, next) => {
-    setDetailRatings((prev) => ({ ...prev, [key]: next }));
-  };
-
-  const buildPayload = () => {
-    const payload = { global_rating: globalRating };
-    for (const dim of RATING_DIMENSIONS) {
-      const value = detailRatings[dim.key];
-      const payloadKey = PAYLOAD_KEY_BY_DIMENSION[dim.key];
-      if (value && value > 0) {
-        payload[payloadKey] = value;
-      }
+  const clearDebounce = () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = null;
     }
-    return payload;
   };
 
-  const handleValidate = async () => {
-    if (!canValidate) {
+  const runAutoSubmit = async (ratingValue) => {
+    if (hasAutoSubmittedRef.current) {
       return;
     }
+    hasAutoSubmittedRef.current = true;
 
-    setValidating(true);
     setSubmitError(null);
 
     const response = await submitRating({
       pictureId,
       context,
-      payload: buildPayload(),
+      payload: { global_rating: ratingValue },
     });
 
-    setValidating(false);
+    if (response?.isError) {
+      hasAutoSubmittedRef.current = false;
+      setSubmitError(response.message || 'Failed to submit rating');
+      return;
+    }
+
+    setPhase('submitted');
+    onSubmitted?.();
+  };
+
+  const handleGlobalChange = (next) => {
+    setGlobalRating(next);
+
+    if (next > 0) {
+      clearDebounce();
+      debounceTimerRef.current = setTimeout(() => {
+        debounceTimerRef.current = null;
+        void runAutoSubmit(next);
+      }, AUTO_SUBMIT_DEBOUNCE_MS);
+    } else {
+      clearDebounce();
+    }
+  };
+
+  const handleDetailChange = (key, next) => {
+    setDetailRatings((prev) => ({ ...prev, [key]: next }));
+  };
+
+  const handleSaveDetails = async () => {
+    if (savingDetails) {
+      return;
+    }
+
+    setSavingDetails(true);
+    setSubmitError(null);
+
+    const payload = {
+      global_rating: globalRatingRef.current || globalRating,
+      ...buildDetailPayloadSnippet(detailRatings),
+    };
+
+    const response = await submitRating({ pictureId, context, payload });
+
+    setSavingDetails(false);
 
     if (response?.isError) {
       setSubmitError(response.message || 'Failed to submit rating');
       return;
     }
 
-    setSubmitted(true);
+    setDetailsModalOpen(false);
   };
 
   const handleAddTag = async (rawName = tagInput) => {
@@ -181,129 +237,157 @@ export default function RatingSubmissionBlock({ pictureId, context, testIDPrefix
     }
   };
 
-  if (submitted) {
+  const normalizedTagInput = normalizeTagName(tagInput);
+  const canAddTag = normalizedTagInput.length > 0 && !addingTag;
+  // Suggestions are local AsyncStorage strings and expected to stay small in v1,
+  // so synchronous filtering is intentional. Add debouncing only if the list grows.
+  const filteredSuggestions = normalizedTagInput
+    ? userTags.filter(
+        (name) =>
+          name.includes(normalizedTagInput) &&
+          !tags.some((tag) => tag.name === name)
+      )
+    : [];
+
+  if (phase === 'rating') {
     return (
-      <View testID={`${testIDPrefix}.success`} style={styles.container}>
-        <Text style={styles.sectionTitle}>Thanks for your rating!</Text>
+      <View testID={`${testIDPrefix}.block`} style={styles.container}>
+        <StarRatingLine
+          value={globalRating}
+          onChange={handleGlobalChange}
+          testIDPrefix={`${testIDPrefix}.global`}
+          starSize={48}
+          widthPercent={90}
+        />
+
+        {submitError && (
+          <Text testID={`${testIDPrefix}.error`} style={styles.errorText}>
+            {submitError}
+          </Text>
+        )}
       </View>
     );
   }
 
   return (
     <View testID={`${testIDPrefix}.block`} style={styles.container}>
-      <Text style={styles.sectionTitle}>Global rating</Text>
-      <StarRatingLine
-        value={globalRating}
-        onChange={setGlobalRating}
-        testIDPrefix={`${testIDPrefix}.global`}
-      />
-
-      <Pressable
-        testID={`${testIDPrefix}.toggle-details`}
-        onPress={() => setDetailed((v) => !v)}
-        style={styles.toggle}
-      >
-        <Text style={styles.toggleText}>
-          {detailed ? 'Hide details' : 'Rate in details'}
-        </Text>
-      </Pressable>
-
-      {detailed &&
-        RATING_DIMENSIONS.map((dim) => (
-          <View key={dim.key} style={styles.detailRow}>
-            <Text style={styles.detailLabel}>{dim.label}</Text>
-            <StarRatingLine
-              value={detailRatings[dim.key] || 0}
-              onChange={(next) => handleDetailChange(dim.key, next)}
-              testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
-            />
-          </View>
-        ))}
-
-      <View style={styles.tagsSection}>
-        <Text style={styles.detailLabel}>Tags</Text>
-        <View style={styles.tagInputRow}>
-          <TextInput
-            testID={`${testIDPrefix}.tags.input`}
-            value={tagInput}
-            onChangeText={setTagInput}
-            onSubmitEditing={() => {
-              void handleAddTag();
-            }}
-            placeholder="Add a tag"
-            autoCapitalize="none"
-            autoCorrect={false}
-            style={styles.tagInput}
-          />
-          <Pressable
-            testID={`${testIDPrefix}.tags.add`}
-            onPress={() => {
-              void handleAddTag();
-            }}
-            disabled={!canAddTag}
-            style={[styles.addTagButton, !canAddTag && styles.validateDisabled]}
-          >
-            <Text style={styles.addTagButtonText}>Add</Text>
-          </Pressable>
-        </View>
-
-        {filteredSuggestions.length > 0 && (
-          <View style={styles.suggestionsContainer}>
-            {filteredSuggestions.map((name) => (
-              <Pressable
-                key={name}
-                testID={`${testIDPrefix}.tags.suggestion.${encodeURIComponent(name)}`}
-                onPress={() => setTagInput(name)}
-                style={styles.suggestionChip}
-              >
-                <Text style={styles.suggestionText}>{name}</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {tags.length > 0 && (
-          <View style={styles.tagsContainer}>
-            {tags.map((tag) => (
-              <Pressable
-                key={tag.id}
-                testID={`${testIDPrefix}.tags.chip.${encodeURIComponent(tag.name)}`}
-                onPress={() => {
-                  void handleRemoveTag(tag);
-                }}
-                style={styles.tagChip}
-              >
-                <Text style={styles.tagChipText}>{tag.name} ×</Text>
-              </Pressable>
-            ))}
-          </View>
-        )}
-
-        {tagError && (
-          <Text testID={`${testIDPrefix}.tags.error`} style={styles.errorText}>
-            {tagError}
-          </Text>
-        )}
+      {/* <View style={styles.linksRow}>
+        <Pressable
+          testID={`${testIDPrefix}.tags.link`}
+          onPress={() => setTagsModalOpen(true)}
+          style={styles.link}
+        >
+          <Text style={styles.linkText}>Add tags (optional)</Text>
+        </Pressable>
+        <Pressable
+          testID={`${testIDPrefix}.details.link`}
+          onPress={() => setDetailsModalOpen(true)}
+          style={styles.link}
+        >
+          <Text style={styles.linkText}>Add details (optional)</Text>
+        </Pressable>
       </View>
 
-      <Pressable
-        testID={`${testIDPrefix}.validate`}
-        onPress={handleValidate}
-        disabled={!canValidate}
-        style={[styles.validate, !canValidate && styles.validateDisabled]}
+      <CenteredModal
+        isModalVisible={tagsModalOpen}
+        onCancel={() => setTagsModalOpen(false)}
+        onPress={() => setTagsModalOpen(false)}
+        testIDPrefix={`${testIDPrefix}.tags.modal`}
       >
-        {validating ? (
-          <ActivityIndicator testID={`${testIDPrefix}.validating`} />
-        ) : (
-          <Text style={styles.validateText}>Validate</Text>
-        )}
-      </Pressable>
+        <View style={styles.tagsSection}>
+          <Text style={styles.detailModalTitle}>Tags</Text>
+          <View style={styles.tagInputRow}>
+            <TextInput
+              testID={`${testIDPrefix}.tags.input`}
+              value={tagInput}
+              onChangeText={setTagInput}
+              onSubmitEditing={() => {
+                void handleAddTag();
+              }}
+              placeholder="Add a tag"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={styles.tagInput}
+            />
+            <Pressable
+              testID={`${testIDPrefix}.tags.add`}
+              onPress={() => {
+                void handleAddTag();
+              }}
+              disabled={!canAddTag}
+              style={[styles.addTagButton, !canAddTag && styles.validateDisabled]}
+            >
+              <Text style={styles.addTagButtonText}>Add</Text>
+            </Pressable>
+          </View>
 
-      {submitError && (
-        <Text testID={`${testIDPrefix}.error`} style={styles.errorText}>
-          {submitError}
-        </Text>
-      )}
+          {filteredSuggestions.length > 0 && (
+            <View style={styles.suggestionsContainer}>
+              {filteredSuggestions.map((name) => (
+                <Pressable
+                  key={name}
+                  testID={`${testIDPrefix}.tags.suggestion.${encodeURIComponent(name)}`}
+                  onPress={() => setTagInput(name)}
+                  style={styles.suggestionChip}
+                >
+                  <Text style={styles.suggestionText}>{name}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {tags.length > 0 && (
+            <View style={styles.tagsContainer}>
+              {tags.map((tag) => (
+                <Pressable
+                  key={tag.id}
+                  testID={`${testIDPrefix}.tags.chip.${encodeURIComponent(tag.name)}`}
+                  onPress={() => {
+                    void handleRemoveTag(tag);
+                  }}
+                  style={styles.tagChip}
+                >
+                  <Text style={styles.tagChipText}>{tag.name} ×</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+
+          {tagError && (
+            <Text testID={`${testIDPrefix}.tags.error`} style={styles.errorText}>
+              {tagError}
+            </Text>
+          )}
+        </View>
+      </CenteredModal>
+
+      <CenteredModal
+        isModalVisible={detailsModalOpen}
+        onCancel={() => setDetailsModalOpen(false)}
+        onPress={handleSaveDetails}
+        testIDPrefix={`${testIDPrefix}.details.modal`}
+      >
+        <View style={styles.detailModalBody}>
+          <View style={styles.detailModalHeader}>
+            <Text style={styles.detailModalTitle}>Rate in details</Text>
+            <View style={styles.detailModalDivider} />
+          </View>
+          <View style={styles.detailRowsContainer}>
+            {RATING_DIMENSIONS.map((dim) => (
+              <View key={dim.key} style={styles.detailRow}>
+                <Text style={styles.detailLabel}>{dim.label}</Text>
+                <StarRatingLine
+                  value={detailRatings[dim.key] || 0}
+                  onChange={(next) => handleDetailChange(dim.key, next)}
+                  testIDPrefix={`${testIDPrefix}.detail.${dim.key}`}
+                  widthPercent={60}
+                  hideLabel
+                />
+              </View>
+            ))}
+          </View>
+        </View>
+      </CenteredModal> */}
     </View>
   );
 }
@@ -315,52 +399,91 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 16,
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 12,
-    color: '#1D133D',
+  linksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
   },
-  toggle: {
-    marginTop: 12,
-    padding: 8,
+  link: {
+    padding: 4,
   },
-  toggleText: {
+  linkText: {
     fontSize: 14,
-    color: '#1D133D',
+    color: '#6B6480',
   },
   detailRow: {
-    marginTop: 12,
+    marginTop: 16,
     alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#F6F2FF',
+    width: '100%',
+  },
+  detailModalBody: {
+    padding: 20,
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    width: '100%',
+  },
+  detailModalHeader: {
+    width: '100%',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  detailModalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: "white",
+    backgroundColor: GlobalStyle.color.primaryColor,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  detailModalDivider: {
+    width: '60%',
+    height: 2,
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
+    marginTop: 12,
+    borderRadius: 2,
+  },
+  detailRowsContainer: {
+    width: '100%',
+    marginTop: 8,
   },
   tagsSection: {
     width: '100%',
-    marginTop: 16,
+    alignItems: 'center',
   },
   tagInputRow: {
     width: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginTop: 12,
   },
   tagInput: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#1D133D',
+    borderColor: GlobalStyle.color.tertiaryColor900,
     borderRadius: 8,
     paddingHorizontal: 12,
     paddingVertical: 10,
-    color: '#1D133D',
+    color: GlobalStyle.color.tertiaryColor900,
     backgroundColor: '#FFFFFF',
   },
   addTagButton: {
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: '#1D133D',
+    backgroundColor: GlobalStyle.color.primaryColor100,
   },
   addTagButtonText: {
-    color: '#FFD700',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 14,
     fontWeight: 'bold',
   },
@@ -378,7 +501,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F1ECFF',
   },
   suggestionText: {
-    color: '#1D133D',
+    color: GlobalStyle.color.tertiaryColor900,
     fontSize: 13,
   },
   tagsContainer: {
@@ -392,7 +515,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 999,
-    backgroundColor: '#1D133D',
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
   },
   tagChipText: {
     color: '#FFFFFF',
@@ -401,22 +524,10 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 14,
     marginBottom: 4,
-    color: '#1D133D',
-  },
-  validate: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 20,
-    backgroundColor: '#1D133D',
-    borderRadius: 8,
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   validateDisabled: {
     opacity: 0.4,
-  },
-  validateText: {
-    color: '#FFD700',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
   errorText: {
     marginTop: 12,

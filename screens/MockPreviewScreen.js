@@ -8,6 +8,7 @@ import BadgeDetailModal from '../components/UI/BadgeDetailModal';
 import LanguageSelector from '../components/UI/LanguageSelector';
 import CategoryChips from '../components/UI/CategoryChips';
 
+import { GlobalStyle } from '../constants/theme';
 import { MOCK_CATEGORIES } from '../data/mock-categories';
 import { MOCK_RATINGS } from '../data/mock-ratings';
 import { MOCK_IMAGE_DETAILS } from '../data/mock-image-detail';
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
   header: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
     marginBottom: 16,
   },
   section: {
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#1D133D',
+    color: 'GlobalStyle.color.tertiaryColor900',
     textTransform: 'uppercase',
     marginBottom: 12,
   },
@@ -205,7 +206,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 6,
-    backgroundColor: '#1D133D',
+    backgroundColor: 'GlobalStyle.color.tertiaryColor900',
   },
   buttonText: {
     color: '#FFFFFF',
