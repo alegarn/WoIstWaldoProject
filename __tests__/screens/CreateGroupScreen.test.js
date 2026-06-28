@@ -1,0 +1,124 @@
+const mockButton = jest.fn(() => null);
+const mockCenteredModal = jest.fn(() => null);
+const mockLoadingOverlay = jest.fn(() => null);
+const mockUseGroupsHub = jest.fn();
+const mockUseActiveGroup = jest.fn();
+
+jest.mock('../../components/UI/Button', () => {
+  return function MockButton(props) {
+    mockButton(props);
+    return null;
+  };
+});
+
+jest.mock('../../components/UI/CenteredModal', () => {
+  return function MockCenteredModal(props) {
+    mockCenteredModal(props);
+    return null;
+  };
+});
+
+jest.mock('../../components/UI/LoadingOverlay', () => {
+  return function MockLoadingOverlay(props) {
+    mockLoadingOverlay(props);
+    return null;
+  };
+});
+
+jest.mock('../../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => mockUseGroupsHub(),
+}));
+
+jest.mock('../../hooks/useActiveGroup', () => ({
+  useActiveGroup: () => mockUseActiveGroup(),
+}));
+
+jest.mock('../../services/groups/groupApi', () => ({
+  createGroup: jest.fn(),
+}));
+
+jest.mock('../../store/auth-context', () => {
+  const React = require('react');
+  return {
+    AuthContext: React.createContext({}),
+  };
+});
+
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+
+import CreateGroupScreen from '../../screens/Groups/CreateGroupScreen';
+import { AuthContext } from '../../store/auth-context';
+import { createGroup } from '../../services/groups/groupApi';
+
+describe('CreateGroupScreen', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    mockUseActiveGroup.mockReturnValue({ setActive: jest.fn() });
+  });
+
+  async function renderScreen({ authContext = {}, navigation = { replace: jest.fn(), navigate: jest.fn() } } = {}) {
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={authContext}>
+          <CreateGroupScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+      await Promise.resolve();
+    });
+    return { renderer, navigation };
+  }
+
+  it('routes to PaywallScreen when the user premium tier is below 2', async () => {
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    await renderScreen({ authContext: { premiumTier: 1 }, navigation });
+
+    expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
+  });
+
+  it('keeps the user on the create form when premium tier >= 2 and submit calls createGroup with the entered payload', async () => {
+    createGroup.mockResolvedValue({ status: 201, data: { id: 'g-new' } });
+    const setActive = jest.fn().mockResolvedValue(undefined);
+    mockUseActiveGroup.mockReturnValue({ setActive });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+
+    expect(navigation.replace).not.toHaveBeenCalledWith('PaywallScreen', expect.anything());
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
+      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
+      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-group.button.submit' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+    expect(modalProps.confirmTestID).toBe('create-group.confirm.ok');
+
+    await act(async () => {
+      await modalProps.onPress();
+      await Promise.resolve();
+    });
+
+    expect(createGroup).toHaveBeenCalledWith(
+      expect.objectContaining({ premiumTier: 2 }),
+      { name: 'Waldos', primaryColor: '#111111', secondaryColor: '#eeeeee' }
+    );
+    expect(setActive).toHaveBeenCalledWith('g-new');
+    expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-new' },
+    });
+  });
+});
