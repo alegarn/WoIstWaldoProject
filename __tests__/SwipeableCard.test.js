@@ -1,4 +1,6 @@
 const mockGuessDescription = jest.fn(() => null);
+const mockStarRatingBadge = jest.fn(() => null);
+const mockBadgeDetailModal = jest.fn(() => null);
 
 let capturedPanResponder;
 
@@ -6,9 +8,27 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
 }));
 
+jest.mock('../utils/ratingRequests', () => ({
+  getImageTags: jest.fn(),
+}));
+
 jest.mock('../components/Picture/Descriptions/GuessDescription', () => {
   return function MockGuessDescription(props) {
     mockGuessDescription(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/StarRatingBadge', () => {
+  return function MockStarRatingBadge(props) {
+    mockStarRatingBadge(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/BadgeDetailModal', () => {
+  return function MockBadgeDetailModal(props) {
+    mockBadgeDetailModal(props);
     return null;
   };
 });
@@ -74,12 +94,16 @@ import { act, create } from 'react-test-renderer';
 
 import SwipeableCard from '../components/UI/SwipeableCard';
 import { isE2EMode } from '../utils/e2eMode';
+import { getImageTags } from '../utils/ratingRequests';
 
 describe('SwipeableCard', () => {
   const item = {
     listId: 7,
+    pictureId: 'picture-7',
     imageFile: 'file:///waldo.jpg',
     description: 'Find Waldo behind the tree.',
+    averageRating: 4.4,
+    ratingsCount: 12,
   };
 
   beforeEach(() => {
@@ -223,5 +247,72 @@ describe('SwipeableCard', () => {
         pictureId: 'e2e-hidden-guess-card',
       }),
     });
+  });
+
+  it('renders StarRatingBadge from the item and forwards badge presses without local modal state', async () => {
+    const onBadgePress = jest.fn();
+
+    await renderCard({ onBadgePress });
+
+    expect(mockStarRatingBadge).toHaveBeenCalledTimes(1);
+    expect(mockStarRatingBadge.mock.calls[0][0]).toEqual(
+      expect.objectContaining({
+        value: item.averageRating,
+        ratingsCount: item.ratingsCount,
+        testIDPrefix: 'guess-path.card.7',
+      })
+    );
+    expect(mockBadgeDetailModal).not.toHaveBeenCalled();
+    expect(getImageTags).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockStarRatingBadge.mock.calls[0][0].onPress();
+    });
+
+    expect(onBadgePress).toHaveBeenCalledWith(item);
+    expect(getImageTags).not.toHaveBeenCalled();
+  });
+
+  it('does not trigger a swipe action on a pure tap release while the badge press still forwards to onBadgePress', async () => {
+    const removeCard = jest.fn();
+    const onSwipe = jest.fn();
+    const onBadgePress = jest.fn();
+
+    await renderCard({ removeCard, onSwipe, onBadgePress });
+
+    expect(capturedPanResponder.onStartShouldSetPanResponder()).toBe(false);
+    expect(capturedPanResponder.onStartShouldSetPanResponderCapture()).toBe(false);
+
+    await act(async () => {
+      capturedPanResponder.onPanResponderRelease(null, { dx: 0, dy: 0 });
+    });
+
+    expect(removeCard).not.toHaveBeenCalled();
+    expect(onSwipe).not.toHaveBeenCalled();
+
+    await act(async () => {
+      mockStarRatingBadge.mock.calls[0][0].onPress();
+    });
+
+    expect(onBadgePress).toHaveBeenCalledWith(item);
+  });
+
+  it('does not capture the pan responder for tap-like micro-moves so the badge Pressable keeps the gesture', async () => {
+    await renderCard();
+
+    expect(capturedPanResponder.onMoveShouldSetPanResponderCapture(null, { dx: 3, dy: 2 })).toBe(false);
+    expect(capturedPanResponder.onMoveShouldSetPanResponderCapture(null, { dx: 50, dy: 0 })).toBe(true);
+    expect(capturedPanResponder.onMoveShouldSetPanResponder(null, { dx: 3, dy: 2 })).toBe(false);
+    expect(capturedPanResponder.onMoveShouldSetPanResponder(null, { dx: 50, dy: 0 })).toBe(true);
+  });
+
+  it('renders the full-card swipe overlay with pointerEvents none so taps fall through to the badge', async () => {
+    const renderer = await renderCard();
+
+    const animatedImages = renderer.root.findAllByType('AnimatedImage');
+    const overlay = animatedImages.find((node) => node.props.pointerEvents === 'none');
+
+    expect(animatedImages.length).toBeGreaterThan(0);
+    expect(overlay).toBeTruthy();
   });
 });

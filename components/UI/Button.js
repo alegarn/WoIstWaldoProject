@@ -1,7 +1,7 @@
 import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function Button({ children, style, onPress, mode, thin, cancel, testID, accessibilityLabel }) {
+export default function Button({ children, style, onPress, mode, thin, cancel, testID, accessibilityLabel, textStyle }) {
 
 
   return (
@@ -23,7 +23,8 @@ export default function Button({ children, style, onPress, mode, thin, cancel, t
             styles.buttonText,
             mode === "flat" && styles.flatText,
             cancel && mode !== "flat" && styles.cancelButtonText,
-            cancel && mode === "flat" && styles.flatCancelText]}
+            cancel && mode === "flat" && styles.flatCancelText,
+            textStyle]}
             >
               {children}  
           </Text>

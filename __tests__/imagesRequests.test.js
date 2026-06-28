@@ -41,7 +41,7 @@ import axios from 'axios';
 import { File, Paths } from 'expo-file-system';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
-import { getImages, performImageUpload, prepareImageUpload, saveImageInfos } from '../utils/imagesRequests';
+import { getImages, performImageUpload, prepareImageUpload, saveImageInfos, buildImageObject } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 
 describe('imagesRequests utilities', () => {
@@ -200,7 +200,7 @@ describe('imagesRequests utilities', () => {
       { encoding: 'base64' }
     );
     expect(response.isError).toBe(false);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined);
   });
 
   it('skips a fully broken batch and continues to the next batch of playable images', async () => {
@@ -261,7 +261,75 @@ describe('imagesRequests utilities', () => {
         }),
       ],
     });
-    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img', undefined, undefined);
+  });
+
+  it('threads category and language filters into the initial image batch query params', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' }, { category_id: 'X', language: 'fr' });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_image_batch',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { category_id: 'X', language: 'fr' },
+      }
+    );
+  });
+
+  it('threads category and language filters into the next image batch body', async () => {
+    axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages('first-img', { token: 'Bearer token' }, { category_id: 'X', language: 'fr' });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/next_image_batch',
+      { image: { name: 'first-img', category_id: 'X', language: 'fr' } },
+      { headers: { Authorization: 'Bearer token' } }
+    );
+  });
+
+  it('threads category_key and language into saveLastImageUuid when a batch resolves', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              name: 'img-1',
+              description: 'Find Waldo',
+              image_height: 100,
+              image_width: 200,
+              is_portrait: true,
+              x_location: 0.3,
+              y_location: 0.7,
+              screen_height: 400,
+              screen_width: 300,
+              storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+
+    await getImages(
+      null,
+      { token: 'Bearer token' },
+      { category_id: 'uuid-123', category_key: 'nature', language: 'fr' }
+    );
+
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', 'nature', 'fr');
+  });
+
+  it('leaves the request unchanged when no filters are provided (legacy full feed)', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_image_batch',
+      { headers: { Authorization: 'Bearer token' } }
+    );
   });
 
   it('posts image metadata with backend headers and maps request failures', async () => {
@@ -286,5 +354,104 @@ describe('imagesRequests utilities', () => {
       title: 'Internal server error, please wait and try again',
       message: 'Metadata failed',
     });
+  });
+});
+
+describe('buildImageObject', () => {
+  it('maps snake_case API payload to camelCase app object including nested category fields', () => {
+    const apiImage = {
+      name: 'img-1',
+      description: 'Short',
+      image_height: 100,
+      image_width: 200,
+      is_portrait: true,
+      x_location: 0.3,
+      y_location: 0.7,
+      screen_height: 400,
+      screen_width: 300,
+      storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
+      ratings_average: 4.5,
+      ratings_count: 12,
+      creator_username: 'waldo',
+      created_at: '2024-01-02T00:00:00Z',
+      full_description: 'Find Waldo in the crowd',
+      language: 'fr',
+      category: {
+        id: 7,
+        name: 'Crowd',
+        thumbnail_url: 'https://backend.example/thumb.png',
+        sort_order: 3,
+      },
+    };
+
+    const mapped = buildImageObject(apiImage, 'file:///cache/img-1.png');
+
+    expect(mapped.pictureId).toBe('img-1');
+    expect(mapped.imageFile).toBe('file:///cache/img-1.png');
+    expect(mapped.description).toBe('Short');
+    expect(mapped.imageHeight).toBe(100);
+    expect(mapped.imageWidth).toBe(200);
+    expect(mapped.isPortrait).toBe(true);
+    expect(mapped.touchLocation).toEqual({ x: 0.3, y: 0.7 });
+    expect(mapped.screenHeight).toBe(400);
+    expect(mapped.screenWidth).toBe(300);
+    expect(mapped.averageRating).toBe(4.5);
+    expect(mapped.ratingsCount).toBe(12);
+    expect(mapped.creatorUsername).toBe('waldo');
+    expect(mapped.createdAt).toBe('2024-01-02T00:00:00Z');
+    expect(mapped.fullDescription).toBe('Find Waldo in the crowd');
+    expect(mapped.language).toBe('fr');
+    expect(mapped.category).toEqual({
+      id: 7,
+      name: 'Crowd',
+      thumbnailUrl: 'https://backend.example/thumb.png',
+      sortOrder: 3,
+    });
+  });
+
+  it('does not crash on legacy payload without snake_case fields or category', () => {
+    const legacyApiImage = {
+      name: 'legacy-img',
+      description: 'Legacy',
+      image_height: 100,
+      image_width: 200,
+      is_portrait: true,
+      x_location: 0.3,
+      y_location: 0.7,
+      screen_height: 400,
+      screen_width: 300,
+    };
+
+    const mapped = buildImageObject(legacyApiImage, 'file:///cache/legacy-img.png');
+
+    expect(mapped.pictureId).toBe('legacy-img');
+    expect(mapped.imageFile).toBe('file:///cache/legacy-img.png');
+    expect(mapped.description).toBe('Legacy');
+    expect(mapped.averageRating).toBeUndefined();
+    expect(mapped.ratingsCount).toBeUndefined();
+    expect(mapped.creatorUsername).toBeUndefined();
+    expect(mapped.createdAt).toBeUndefined();
+    expect(mapped.fullDescription).toBeUndefined();
+    expect(mapped.language).toBeUndefined();
+    expect(mapped.category).toBeUndefined();
+  });
+
+  it('preserves null category as null on the mapped object', () => {
+    const apiImage = {
+      name: 'img-2',
+      description: 'No category',
+      image_height: 100,
+      image_width: 200,
+      is_portrait: true,
+      x_location: 0.3,
+      y_location: 0.7,
+      screen_height: 400,
+      screen_width: 300,
+      category: null,
+    };
+
+    const mapped = buildImageObject(apiImage, 'file:///cache/img-2.png');
+
+    expect(mapped.category).toBeNull();
   });
 });

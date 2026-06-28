@@ -1,5 +1,6 @@
 const mockSwipeableCard = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
+const mockBadgeDetailModal = jest.fn(() => null);
 
 jest.mock('react-native-gesture-handler', () => {
   const React = require('react');
@@ -24,8 +25,27 @@ jest.mock('../components/UI/LoadingOverlay', () => {
   };
 });
 
+jest.mock('../components/UI/BadgeDetailModal', () => {
+  const React = require('react');
+
+  return function MockBadgeDetailModal(props) {
+    mockBadgeDetailModal(props);
+    return React.createElement('BadgeDetailModal', {
+      testID: `${props.testIDPrefix}.modal`,
+      image: props.image,
+      onClose: props.onClose,
+      onOpenFilter: props.onOpenFilter,
+    });
+  };
+});
+
 jest.mock('../utils/imagesRequests', () => ({
   getImages: jest.fn(),
+}));
+
+jest.mock('../utils/ratingRequests', () => ({
+  getImageRating: jest.fn(),
+  getImageTags: jest.fn(),
 }));
 
 jest.mock('../utils/storageDatum', () => ({
@@ -64,6 +84,7 @@ import { GlobalStyle } from '../constants/theme';
 import { AuthContext } from '../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../utils/e2eMode';
 import { getImages } from '../utils/imagesRequests';
+import { getImageRating, getImageTags } from '../utils/ratingRequests';
 import {
   deleteImageFromStorage,
   getE2EHiddenGuessCard,
@@ -88,6 +109,9 @@ describe('SwipeImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
     getE2EHiddenGuessCard.mockResolvedValue(null);
     buildE2EGuessCardFromPayload.mockImplementation((payload) => (
       payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
@@ -109,13 +133,31 @@ describe('SwipeImage', () => {
     await Promise.resolve();
   }
 
-  async function renderSwipeImage(startGuessing = jest.fn()) {
+  function createDeferred() {
+    let resolve;
+    let reject;
+
+    const promise = new Promise((nextResolve, nextReject) => {
+      resolve = nextResolve;
+      reject = nextReject;
+    });
+
+    return { promise, resolve, reject };
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language } = {}) {
     let renderer;
 
     await act(async () => {
       renderer = create(
         <AuthContext.Provider value={contextValue}>
-          <SwipeImage screenWidth={320} screenHeight={640} startGuessing={startGuessing} />
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+          />
         </AuthContext.Provider>
       );
 
@@ -153,11 +195,11 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, category_key: 'all', language: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 5 }),
       expect.objectContaining({ pictureId: 'img-2', listId: 6 }),
-    ]);
+    ], 'all', 'any');
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.listId)).toEqual([6, 5]);
   });
 
@@ -173,10 +215,28 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue);
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, category_key: 'all', language: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
-    ]);
+    ], 'all', 'any');
+  });
+
+  it('normalizes the synthetic all card so category_id stays undefined while category_key is threaded', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'img-1', imageFile: 'file:///one.jpg' },
+      ],
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'all', key: 'all' } });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      contextValue,
+      { category_id: undefined, category_key: 'all', language: undefined }
+    );
   });
 
   it('shows the empty-state guidance when the backend returns no playable images', async () => {
@@ -253,12 +313,12 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
-    expect(removeImageFromList).toHaveBeenCalledWith(1);
+    expect(removeImageFromList).toHaveBeenCalledWith(1, 'all', 'any');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///1.jpg');
-    expect(getImages).toHaveBeenCalledWith('image-4', contextValue);
+    expect(getImages).toHaveBeenCalledWith('image-4', contextValue, { category_id: undefined, category_key: 'all', language: undefined });
     expect(updateImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
-    ]);
+    ], 'all', 'any');
   });
 
   it('uses the seeded guess cards in e2e mode instead of cache or network state', async () => {
@@ -290,5 +350,130 @@ describe('SwipeImage', () => {
     });
     expect(buildE2EGuessCards).not.toHaveBeenCalled();
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toEqual(['e2e-hidden-guess-card']);
+  });
+
+  it('renders one hoisted BadgeDetailModal and populates it from the card item plus fetched tags', async () => {
+    const tagDeferred = createDeferred();
+    const ratingDeferred = createDeferred();
+    const cachedItem = {
+      listId: 1,
+      pictureId: 'img-1',
+      imageFile: 'file:///1.jpg',
+      averageRating: 4.5,
+      ratingsCount: 9,
+      category: { name: 'City' },
+      language: 'fr',
+      creatorUsername: 'waldo',
+      createdAt: '2026-01-02T00:00:00Z',
+      fullDescription: 'Find Waldo near the bridge.',
+    };
+
+    getLocalImages.mockResolvedValue([
+      cachedItem,
+      { listId: 2, pictureId: 'img-2', imageFile: 'file:///2.jpg' },
+      { listId: 3, pictureId: 'img-3', imageFile: 'file:///3.jpg' },
+      { listId: 4, pictureId: 'img-4', imageFile: 'file:///4.jpg' },
+    ]);
+    getImageTags.mockReturnValue(tagDeferred.promise);
+    getImageRating.mockReturnValue(ratingDeferred.promise);
+
+    const { renderer } = await renderSwipeImage();
+    const cardProps = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'img-1')[0];
+
+    await act(async () => {
+      cardProps.onBadgePress(cardProps.item);
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findAllByType('BadgeDetailModal')).toHaveLength(1);
+    expect(getImageTags).toHaveBeenCalledWith({ pictureId: 'img-1', context: contextValue });
+    expect(getImageRating).toHaveBeenCalledWith({ pictureId: 'img-1', context: contextValue });
+    expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual(cachedItem);
+
+    await act(async () => {
+      tagDeferred.resolve({
+        data: [
+          { id: 'tag-1', name: 'scenic' },
+          { id: 'tag-2', name: 'night' },
+        ],
+      });
+      await flushEffects();
+    });
+
+    expect(renderer.root.findAllByType('BadgeDetailModal')).toHaveLength(1);
+    expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual({
+      ...cachedItem,
+      tags: ['scenic', 'night'],
+    });
+
+    await act(async () => {
+      ratingDeferred.resolve({
+        data: { global_rating: 4, quality_rating: 3, enigma_rating: 4, fun_rating: 5, difficulty_rating: 2 },
+      });
+      await flushEffects();
+    });
+
+    expect(mockBadgeDetailModal.mock.calls[mockBadgeDetailModal.mock.calls.length - 1][0].image).toEqual({
+      ...cachedItem,
+      tags: ['scenic', 'night'],
+      ratings: { global_rating: 4, quality_rating: 3, enigma_rating: 4, fun_rating: 5, difficulty_rating: 2 },
+    });
+  });
+
+  it('does not warn when the detail modal closes before tag fetching resolves', async () => {
+    const deferred = createDeferred();
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    getLocalImages.mockResolvedValue([
+      {
+        listId: 1,
+        pictureId: 'img-1',
+        imageFile: 'file:///1.jpg',
+      },
+      {
+        listId: 2,
+        pictureId: 'img-2',
+        imageFile: 'file:///2.jpg',
+      },
+      {
+        listId: 3,
+        pictureId: 'img-3',
+        imageFile: 'file:///3.jpg',
+      },
+      {
+        listId: 4,
+        pictureId: 'img-4',
+        imageFile: 'file:///4.jpg',
+      },
+    ]);
+    getImageTags.mockReturnValue(deferred.promise);
+    getImageRating.mockResolvedValue({ data: undefined });
+
+    const { renderer } = await renderSwipeImage();
+    const cardProps = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'img-1')[0];
+
+    await act(async () => {
+      cardProps.onBadgePress(cardProps.item);
+      await Promise.resolve();
+    });
+
+    const modal = renderer.root.findByType('BadgeDetailModal');
+
+    await act(async () => {
+      modal.props.onClose();
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      renderer.unmount();
+    });
+
+    await act(async () => {
+      deferred.resolve({ data: [{ id: 'tag-1', name: 'scenic' }] });
+      await flushEffects();
+    });
+
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    consoleErrorSpy.mockRestore();
   });
 });

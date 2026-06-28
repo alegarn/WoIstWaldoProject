@@ -1,6 +1,7 @@
 const mockButton = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
+const mockLanguageSelector = jest.fn(() => null);
 
 jest.mock('../components/UI/Button', () => {
   return function MockButton(props) {
@@ -23,10 +24,22 @@ jest.mock('../components/UI/LoadingOverlay', () => {
   };
 });
 
+jest.mock('../components/UI/LanguageSelector', () => {
+  return function MockLanguageSelector(props) {
+    mockLanguageSelector(props);
+    return null;
+  };
+});
+
 jest.mock('../utils/auth', () => ({
   updateUser: jest.fn(),
   deleteAccount: jest.fn(),
   checkSecureStoreItem: jest.fn(),
+}));
+
+jest.mock('../utils/storageDatum', () => ({
+  getPreferredLanguage: jest.fn(),
+  savePreferredLanguage: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -44,6 +57,7 @@ import { act, create } from 'react-test-renderer';
 import SettingsScreen from '../screens/SettingsScreen';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem, deleteAccount, updateUser } from '../utils/auth';
+import { getPreferredLanguage, savePreferredLanguage } from '../utils/storageDatum';
 
 describe('SettingsScreen', () => {
   const contextValue = {
@@ -66,6 +80,8 @@ describe('SettingsScreen', () => {
 
       return Promise.resolve(null);
     });
+    getPreferredLanguage.mockResolvedValue('en');
+    savePreferredLanguage.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -176,6 +192,55 @@ describe('SettingsScreen', () => {
     expect(Alert.alert).toHaveBeenCalledWith(
       'Account deleted successfully!',
       'Account removed.\nWe are sorry to see you go!'
+    );
+  });
+
+  it('renders the preferred language row with the expected testID and label', async () => {
+    const renderer = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'settings.input.preferred-language' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ children: 'Preferred language (for new enigmas):' })
+    ).toBeTruthy();
+  });
+
+  it('loads the stored preferred language on mount and forwards it to the selector', async () => {
+    getPreferredLanguage.mockResolvedValue('fr');
+
+    await renderScreen();
+
+    expect(getPreferredLanguage).toHaveBeenCalledTimes(1);
+    const lastCall =
+      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
+    expect(lastCall).toEqual(
+      expect.objectContaining({
+        value: 'fr',
+        testIDPrefix: 'settings.input.preferred-language.selector',
+      })
+    );
+  });
+
+  it('persists the selected preferred language, updates the row, and shows a success alert', async () => {
+    await renderScreen();
+
+    const lastCall =
+      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
+    const onChange = lastCall.onChange;
+
+    await act(async () => {
+      onChange('de');
+      await flushEffects();
+    });
+
+    expect(savePreferredLanguage).toHaveBeenCalledWith('de');
+    const updatedCall =
+      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
+    expect(updatedCall.value).toBe('de');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Preferred language saved!',
+      'Your preferred language for new enigmas is now: de'
     );
   });
 });

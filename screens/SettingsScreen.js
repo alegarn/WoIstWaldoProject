@@ -1,10 +1,13 @@
 import { useContext, useEffect, useLayoutEffect, useState } from 'react';
 import { View, Text, TextInput, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import Button from '../components/UI/Button';
+import LanguageSelector from '../components/UI/LanguageSelector';
 import { GlobalStyle } from '../constants/theme';
 import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
+import { getPreferredLanguage, savePreferredLanguage } from '../utils/storageDatum';
+import { resolveDefaultLanguage } from '../utils/languageDefaults';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 
@@ -15,6 +18,7 @@ const SettingsScreen = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [oldPassword, setOldPassword] = useState('');
+  const [preferredLanguage, setPreferredLanguage] = useState('');
   // UI states __________________________________________________________________
   const [isLoading, setIsLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
@@ -50,12 +54,18 @@ const SettingsScreen = () => {
 
   // useEffect to fetch email and username_________________________________________
   useLayoutEffect(() => {
-    getEmail().then((email) => {
-      setEmail(email);
+    let mounted = true;
+    Promise.all([
+      getEmail(),
+      getUserName(),
+      getPreferredLanguage(),
+    ]).then(([emailValue, usernameValue, languageValue]) => {
+      if (!mounted) return;
+      setEmail(emailValue);
+      setUsername(usernameValue);
+      setPreferredLanguage(languageValue || resolveDefaultLanguage());
     });
-    getUserName().then((username) => {
-      setUsername(username);
-    });
+    return () => { mounted = false; };
   }, []);
 
 /*   const data = {
@@ -105,6 +115,15 @@ const SettingsScreen = () => {
 
     Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
 
+  };
+
+  const handleSelectPreferredLanguage = async (code) => {
+    await savePreferredLanguage(code);
+    setPreferredLanguage(code);
+    Alert.alert(
+      'Preferred language saved!',
+      `Your preferred language for new enigmas is now: ${code}`
+    );
   };
 
   const handleChangePassword = async () => {
@@ -228,7 +247,15 @@ const SettingsScreen = () => {
               style={styles.textInput}
             />
             <Button accessibilityLabel="Save username" children="Save" onPress={() => handleButtonClick('username')} style={styles.button} testID="settings.button.save-username" />
-  
+
+            <Text style={styles.title}>Preferred language (for new enigmas):</Text>
+            <View testID="settings.input.preferred-language">
+              <LanguageSelector
+                value={preferredLanguage}
+                onChange={handleSelectPreferredLanguage}
+                testIDPrefix="settings.input.preferred-language.selector"
+              />
+            </View>
           </View>
   
           <View style={styles.boxContainer}>

@@ -1,12 +1,3 @@
-const mockBigButton = jest.fn(() => null);
-
-jest.mock('../components/UI/BigButton', () => {
-  return function MockBigButton(props) {
-    mockBigButton(props);
-    return null;
-  };
-});
-
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -26,17 +17,17 @@ describe('ResultChoices', () => {
     jest.clearAllMocks();
   });
 
-  function getButtonProps(text) {
-    const buttonCall = mockBigButton.mock.calls.find(([props]) => props.text === text);
-    return buttonCall?.[0];
+  function getButtonByTestID(renderer, testID) {
+    return renderer.root.findByProps({ testID });
   }
 
   it('returns to HomeScreen and persists tutorial progress when needed', async () => {
     const navigation = { reset: jest.fn() };
     const updateTutorialStatus = jest.fn().mockResolvedValue(undefined);
 
+    let renderer;
     await act(async () => {
-      create(
+      renderer = create(
         <AuthContext.Provider value={{
           updateTutorialStatus,
           isTutorialFinished: { hidePathDone: false },
@@ -47,7 +38,7 @@ describe('ResultChoices', () => {
     });
 
     await act(async () => {
-      await getButtonProps('Go to Home').onPress();
+      await getButtonByTestID(renderer, 'result.button.home').props.onPress();
     });
 
     expect(updateTutorialStatus).toHaveBeenCalledWith({
@@ -65,8 +56,9 @@ describe('ResultChoices', () => {
     const navigation = { reset: jest.fn() };
     const retryGuess = jest.fn();
 
+    let renderer;
     await act(async () => {
-      create(
+      renderer = create(
         <AuthContext.Provider value={{ updateTutorialStatus: jest.fn(), isTutorialFinished: {} }}>
           <ResultChoices
             navigation={navigation}
@@ -78,13 +70,43 @@ describe('ResultChoices', () => {
       );
     });
 
-    getButtonProps('Retry this one').onPress();
-    getButtonProps('Another one').onPress();
+    await act(async () => {
+      getButtonByTestID(renderer, 'result.button.retry').props.onPress();
+      getButtonByTestID(renderer, 'result.button.next').props.onPress();
+    });
 
     expect(retryGuess).toHaveBeenCalledTimes(1);
     expect(navigation.reset).toHaveBeenCalledWith({
       index: 1,
       routes: [{ name: 'GuessPathScreen', params: { isTutorial: false } }],
     });
+  });
+
+  it('deep-links back to GuessFeedScreen with category and language when present', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+    const onNextCard = jest.fn();
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ updateTutorialStatus: jest.fn(), isTutorialFinished: {} }}>
+          <ResultChoices
+            navigation={navigation}
+            route={{ params: { category, language: 'fr' } }}
+            success={true}
+            isTutorial={false}
+            onNextCard={onNextCard}
+          />
+        </AuthContext.Provider>
+      );
+    });
+
+    await act(async () => {
+      await getButtonByTestID(renderer, 'result.button.next').props.onPress();
+    });
+
+    expect(onNextCard).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).not.toHaveBeenCalled();
   });
 });

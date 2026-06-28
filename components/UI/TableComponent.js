@@ -13,7 +13,7 @@ function buildRankingMetrics(width, height) {
     headerHeight: height * 0.07,
     headerBorderRadius: height * 0.01,
     headerMarginBottom: height * 0.03,
-    headerFontSize: height * 0.03,
+    headerFontSize: height * 0.022,
 
     rowHeight: height * 0.07,
 
@@ -25,15 +25,31 @@ function buildRankingMetrics(width, height) {
 
     buttonWidth: width * 0.18,
     buttonHeight: height * 0.03,
-    buttonBorderRadius: 5,
+    buttonBorderRadius: height * 0.015,
   };
 }
 
+function getRankColor(rank) {
+  if (rank === 1) return '#FFD700';
+  if (rank === 2) return '#C8C8C8';
+  if (rank === 3) return '#CD7F32';
+  return '#fff';
+}
+
+function getRowBackground(rank) {
+  if (rank === 1) return 'rgba(255, 215, 0, 0.07)';
+  if (rank === 2) return 'rgba(200, 200, 200, 0.06)';
+  if (rank === 3) return 'rgba(205, 127, 50, 0.06)';
+  return rank % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'transparent';
+}
+
 const RowItem = React.memo(function RowItem({ row, onPressMore, metrics, styles }) {
+  const rankColor = getRankColor(row.rank);
+  const rowBackground = getRowBackground(row.rank);
   return (
-    <View style={styles.row} testID={`ranking.row.${row.rank}`}>
+    <View style={[styles.row, { backgroundColor: rowBackground }]} testID={`ranking.row.${row.rank}`}>
       <View style={styles.cell}>
-        <Text style={[styles.text, styles.big]} numberOfLines={1} testID={`ranking.row.${row.rank}.rank`}>
+        <Text style={[styles.text, styles.big, { color: rankColor, fontWeight: 'bold' }]} numberOfLines={1} testID={`ranking.row.${row.rank}.rank`}>
           {row.rank}
         </Text>
       </View>
@@ -43,7 +59,7 @@ const RowItem = React.memo(function RowItem({ row, onPressMore, metrics, styles 
         </Text>
       </View>
       <View style={styles.cell}>
-        <Text style={[styles.text, styles.big]} numberOfLines={1} testID={`ranking.row.${row.rank}.score`}>
+        <Text style={[styles.text, styles.big, styles.score]} numberOfLines={1} testID={`ranking.row.${row.rank}.score`}>
           {row.score}
         </Text>
       </View>
@@ -71,21 +87,26 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       padding: metrics.containerPaddingHorizontal,
       paddingTop: metrics.containerPaddingTop,
       paddingBottom: metrics.containerPaddingBottom,
-      backgroundColor: GlobalStyle.color.primaryColor,
+      backgroundColor: GlobalStyle.color.primaryColor800,
     },
     head: {
       height: metrics.headerHeight,
-      backgroundColor: GlobalStyle.color.primaryColor300,
+      backgroundColor: GlobalStyle.color.primaryColor600,
       flexDirection: 'row',
       alignSelf: "center",
       overflow: "hidden",
       borderTopLeftRadius: metrics.headerBorderRadius,
       borderTopRightRadius: metrics.headerBorderRadius,
       marginBottom: metrics.headerMarginBottom,
+      borderBottomWidth: 1.5,
+      borderBottomColor: 'rgba(160, 118, 249, 0.5)',
     },
     headText: {
-      color: "#fff",
+      color: '#c8b4ff',
       fontSize: metrics.headerFontSize,
+      textTransform: 'uppercase',
+      letterSpacing: 1,
+      fontWeight: '700',
     },
     text: {
       margin: metrics.textMargin,
@@ -103,12 +124,17 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       width: metrics.cellWidth,
       height: metrics.cellHeight,
       borderBottomWidth: 0.5,
-      borderBottomColor: GlobalStyle.color.primaryColor900,
+      borderBottomColor: 'rgba(255, 255, 255, 0.08)',
       textAlign: 'center',
       textAlignVertical: 'center',
+      justifyContent: 'center',
     },
     big: {
       fontSize: metrics.textFontSize,
+    },
+    score: {
+      color: GlobalStyle.color.secondaryColor,
+      fontWeight: '700',
     },
   }), [metrics]);
 

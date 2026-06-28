@@ -14,9 +14,9 @@ import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import IconButton from '../components/UI/IconButton';
 
-const HideImage = require('../assets/home/WoIstWaldo-character-hide.png');
-const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.png');
-const RankingImage = require('../assets/home/WoIstWaldo-character-stats.png');
+const HideImage = require('../assets/home/WoIstWaldo-character-hide.webp');
+const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.webp');
+const RankingImage = require('../assets/home/WoIstWaldo-character-stats.webp');
 
 export default function HomeScreen({ navigation, route }) {
   // States __________________________________________________________________

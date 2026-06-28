@@ -5,9 +5,10 @@ const recordedScreens = [];
 jest.mock('expo-dev-client', () => ({}));
 
 jest.mock('expo-navigation-bar', () => ({
-  setPositionAsync: jest.fn(),
-  setVisibilityAsync: jest.fn(),
-  setBehaviorAsync: jest.fn(),
+  NavigationBar: () => null,
+  setHidden: jest.fn(),
+  setStyle: jest.fn(),
+  setVisibilityAsync: jest.fn(() => Promise.resolve()),
 }));
 
 jest.mock('expo-status-bar', () => ({
@@ -69,9 +70,11 @@ jest.mock('../screens/HomeScreen', () => 'HomeScreen');
 jest.mock('../screens/HideScreens/HidingPathScreen', () => 'HidingPathScreen');
 jest.mock('../screens/HideScreens/HideScreen', () => 'HideScreen');
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => 'GuessPathScreen');
+jest.mock('../screens/GuessScreens/GuessFeedScreen', () => 'GuessFeedScreen');
 jest.mock('../screens/GuessScreens/GuessScreen', () => 'GuessScreen');
 jest.mock('../screens/GuessScreens/AdScreen', () => 'AdScreen');
 jest.mock('../screens/GuessScreens/ResultScreen', () => 'ResultScreen');
+jest.mock('../screens/LanguageOnboardingScreen', () => 'LanguageOnboardingScreen');
 jest.mock('../screens/SetInstructionScreen', () => 'SetInstructionScreen');
 jest.mock('../screens/RankingScreen', () => 'RankingScreen');
 jest.mock('../screens/SettingsScreen', () => 'SettingsScreen');
@@ -89,6 +92,16 @@ jest.mock('../store/auth-context', () => {
 
 jest.mock('../utils/auth', () => ({
   bootstrapStoredAuthSession: jest.fn(),
+  getUserName: jest.fn(),
+}));
+
+jest.mock('../utils/e2eMode', () => ({
+  ensureE2EOnboardingBypass: jest.fn(),
+  isE2EMode: jest.fn(),
+}));
+
+jest.mock('../utils/storageDatum', () => ({
+  getOnboardingCompleted: jest.fn(),
 }));
 
 import React from 'react';
@@ -96,15 +109,24 @@ import { act, create } from 'react-test-renderer';
 
 import { Root } from '../App';
 import { AuthContext } from '../store/auth-context';
-import { bootstrapStoredAuthSession } from '../utils/auth';
+import { bootstrapStoredAuthSession, getUserName } from '../utils/auth';
+import { ensureE2EOnboardingBypass, isE2EMode } from '../utils/e2eMode';
+import { getOnboardingCompleted } from '../utils/storageDatum';
 
 describe('App Root', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     recordedScreens.length = 0;
+    ensureE2EOnboardingBypass.mockResolvedValue(undefined);
+    getOnboardingCompleted.mockResolvedValue(true);
+    isE2EMode.mockReturnValue(false);
+    bootstrapStoredAuthSession.mockResolvedValue(false);
+    getUserName.mockResolvedValue({ status: 200, data: { username: 'waldo' } });
   });
 
   async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
   }
@@ -221,5 +243,163 @@ describe('App Root', () => {
     });
 
     expect(navigation.goBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('routes authenticated users through language onboarding when onboarding is incomplete', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getOnboardingCompleted.mockResolvedValue(false);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getOnboardingCompleted).toHaveBeenCalledTimes(1);
+    expect(recordedScreens.map(({ name }) => name)).toContain('LanguageOnboarding');
+    expect(recordedScreens.map(({ name }) => name)).not.toContain('HomeScreen');
+  });
+
+  it('fails closed to language onboarding when the stored onboarding state cannot be read', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getOnboardingCompleted.mockRejectedValue(new Error('storage failed'));
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getOnboardingCompleted).toHaveBeenCalledTimes(1);
+    expect(recordedScreens.map(({ name }) => name)).toContain('LanguageOnboarding');
+    expect(recordedScreens.map(({ name }) => name)).not.toContain('HomeScreen');
+  });
+
+  it('skips onboarding in e2e mode after seeding the persisted defaults', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    isE2EMode.mockReturnValue(true);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(ensureE2EOnboardingBypass).toHaveBeenCalledTimes(1);
+    expect(getOnboardingCompleted).not.toHaveBeenCalled();
+    expect(recordedScreens.map(({ name }) => name)).toContain('HomeScreen');
+    expect(recordedScreens.map(({ name }) => name)).not.toContain('LanguageOnboarding');
+  });
+
+  it('fails closed to language onboarding when e2e onboarding seeding fails', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    isE2EMode.mockReturnValue(true);
+    ensureE2EOnboardingBypass.mockRejectedValue(new Error('seed failed'));
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(ensureE2EOnboardingBypass).toHaveBeenCalledTimes(1);
+    expect(recordedScreens.map(({ name }) => name)).toContain('LanguageOnboarding');
+    expect(recordedScreens.map(({ name }) => name)).not.toContain('HomeScreen');
+  });
+
+  it('re-validates the restored token against the backend after a successful restore', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(getUserName).toHaveBeenCalledWith({ context: contextValue });
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('logs out when the restored token is rejected by the backend with 401', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getUserName.mockResolvedValue({ status: 401, data: { errors: ['Unauthorized'] } });
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(contextValue.logout).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the session when the restored token validation call fails without an auth rejection', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    getUserName.mockRejectedValue(new Error('network down'));
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('skips token validation in e2e mode', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(true);
+    isE2EMode.mockReturnValue(true);
+
+    const contextValue = {
+      IsAuthenticated: true,
+      isAuthenticated: true,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).not.toHaveBeenCalled();
+    expect(contextValue.logout).not.toHaveBeenCalled();
+  });
+
+  it('does not validate the token when no session was restored', async () => {
+    bootstrapStoredAuthSession.mockResolvedValue(false);
+
+    const contextValue = {
+      IsAuthenticated: false,
+      isAuthenticated: false,
+      restoreSession: jest.fn(),
+      logout: jest.fn(),
+    };
+
+    await renderRoot(contextValue);
+
+    expect(getUserName).not.toHaveBeenCalled();
+    expect(contextValue.logout).not.toHaveBeenCalled();
   });
 });

@@ -2,9 +2,12 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, Pressable, Text, View } from 'react-native';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
+import StarRatingBadge from './StarRatingBadge';
 import { isE2EMode } from '../../utils/e2eMode';
 
-export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe }) {
+const TAP_SLOP = 8;
+
+export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe, onBadgePress }) {
   const e2eMode = isE2EMode();
 
   // States _________________________________________________________________
@@ -82,9 +85,10 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
     () =>
       PanResponder.create({
         onStartShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponder: () => true,
+        // Small moves stay on the badge (tap works); once a move exceeds the slop the card claims the gesture (swipe still works).
+        onMoveShouldSetPanResponder: (evt, gestureState) => Math.abs(gestureState.dx) > TAP_SLOP || Math.abs(gestureState.dy) > TAP_SLOP,
         onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponderCapture: (evt, gestureState) => Math.abs(gestureState.dx) > TAP_SLOP || Math.abs(gestureState.dy) > TAP_SLOP,
         onPanResponderMove: (evt, gestureState) => {
           xPosition.setValue(gestureState.dx);
           yPosition.setValue(gestureState.dy);
@@ -262,6 +266,20 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
           resizeMode='contain'
           style={[styles.imageStyle, styles.expanded]}
           testID={`guess-path.card-image.${item.listId}`} >
+
+          <View
+            hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+            style={styles.badgeContainer}>
+            {/* Sloppy taps with horizontal movement can be captured by PanResponder. Accepted trade-off for now. */}
+            {/* Current stack depth is small; badge render cost is acceptable. If the feed ever moves to a larger virtualized list, prefer a lighter icon path before adding badge complexity. */}
+            {/* Larger non-pressable wrapper around the badge enlarges the touch landing zone so sloppy taps on the star/? badge reach the Pressable reliably. */}
+            <StarRatingBadge
+              onPress={() => onBadgePress?.(item)}
+              ratingsCount={item.ratingsCount}
+              testIDPrefix={`guess-path.card.${item.listId}`}
+              value={item.averageRating}
+            />
+          </View>
           
           <GuessDescription
             item={item}
@@ -275,6 +293,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
 
         <Animated.Image
+          pointerEvents="none"
           source={imageChoice}
           resizeMode='contain'
           style={[
@@ -315,7 +334,7 @@ const styles = StyleSheet.create({
   },
   e2eOpenButton: {
     position: 'absolute',
-    top: 16,
+    bottom: 16,
     right: 16,
     zIndex: 2,
     backgroundColor: 'rgba(29, 19, 61, 0.92)',
@@ -336,6 +355,17 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 10,
     justifyContent: 'flex-end',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    zIndex: 2,
+    padding: 12,
+    minWidth: 60,
+    minHeight: 60,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   overlayStyle: {
     backgroundColor: '#fff',

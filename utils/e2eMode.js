@@ -2,12 +2,132 @@ import { Image as ReactNativeImage } from 'react-native';
 
 import { RANKING as DUMMY_RANKING } from '../data/dummy-data';
 import ImageModel from '../models/image';
+import { savePreferredLanguage, setOnboardingCompleted } from './storageDatum';
+import { getCategoryAsset } from './categoryAssets';
 import { handlePicturePress } from './targetLocation';
 
 const E2E_HIDE_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_GUESS_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_HIDE_LOCATION = { x: 0.58, y: 0.46 };
 const E2E_INCORRECT_HIDE_LOCATION = { x: 0.18, y: 0.18 };
+
+const E2E_GUESS_CARD_CATEGORY = { id: 'e2e-cat-nature', key: 'nature', name: 'Nature' };
+const E2E_GUESS_CARD_LANGUAGE = 'en';
+const E2E_GUESS_CARD_AVERAGE_RATING = 4.5;
+const E2E_GUESS_CARD_RATINGS_COUNT = 7;
+const E2E_GUESS_CARD_TAGS = [
+  { id: 'e2e-tag-outdoors', name: 'Outdoors' },
+  { id: 'e2e-tag-scenic', name: 'Scenic' },
+];
+const E2E_GUESS_CARD_CREATOR_USERNAME = 'e2e_creator';
+const E2E_GUESS_CARD_CREATED_AT = '2024-01-01T00:00:00.000Z';
+const E2E_GUESS_CARD_FULL_DESCRIPTION =
+  'A scenic spot used for deterministic e2e guess flows.';
+
+const E2E_CATEGORIES = [
+  {
+    id: 'e2e-default-category',
+    key: 'all',
+    name: 'Recent/All',
+    thumbnailUrl: getCategoryAsset('all'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-other',
+    key: 'other',
+    name: 'Other',
+    thumbnailUrl: getCategoryAsset('other'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-nature',
+    key: 'nature',
+    name: 'Nature',
+    thumbnailUrl: getCategoryAsset('nature'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-city',
+    key: 'city',
+    name: 'City',
+    thumbnailUrl: getCategoryAsset('city'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-animals',
+    key: 'animals',
+    name: 'Animals',
+    thumbnailUrl: getCategoryAsset('animals'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-food',
+    key: 'food',
+    name: 'Food',
+    thumbnailUrl: getCategoryAsset('food'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-vehicles',
+    key: 'vehicles',
+    name: 'Vehicles',
+    thumbnailUrl: getCategoryAsset('vehicles'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-interiors',
+    key: 'interiors',
+    name: 'Interiors',
+    thumbnailUrl: getCategoryAsset('interiors'),
+    count: undefined,
+  },
+  {
+    id: 'e2e-cat-abstract',
+    key: 'abstract',
+    name: 'Abstract',
+    thumbnailUrl: getCategoryAsset('abstract'),
+    count: undefined,
+  },
+];
+
+const E2E_IMAGE_RATING = {
+  global_rating: 4,
+  quality_rating: 3,
+  enigma_rating: 4,
+  fun_rating: 3,
+  difficulty_rating: 4,
+};
+
+const E2E_IMAGE_TAGS = [
+  { id: 'e2e-tag-1', name: 'hard', user_id: 'e2e-user', username: 'e2e-user' },
+  { id: 'e2e-tag-2', name: 'night', user_id: 'e2e-user', username: 'e2e-user' },
+];
+
+const E2E_IMAGE_DETAIL_CATEGORY = {
+  id: 'e2e-cat-nature',
+  key: 'nature',
+  name: 'Nature',
+  thumbnailUrl: null,
+  sortOrder: 0,
+};
+
+const E2E_IMAGE_DETAIL_CREATED_AT = '2026-01-15T10:30:00Z';
+const E2E_IMAGE_DETAIL_FULL_DESCRIPTION = 'e2e full description';
+const E2E_IMAGE_DETAIL_AVERAGE_RATING = 4;
+const E2E_IMAGE_DETAIL_RATINGS_COUNT = 5;
+
+function attachE2EGuessCardMetadata(card, overrides = {}) {
+  card.category = overrides.category ?? E2E_GUESS_CARD_CATEGORY;
+  card.language = overrides.language ?? E2E_GUESS_CARD_LANGUAGE;
+  card.averageRating = overrides.averageRating ?? E2E_GUESS_CARD_AVERAGE_RATING;
+  card.ratingsCount = overrides.ratingsCount ?? E2E_GUESS_CARD_RATINGS_COUNT;
+  card.tags = overrides.tags ?? E2E_GUESS_CARD_TAGS;
+  card.creatorUsername = overrides.creatorUsername ?? E2E_GUESS_CARD_CREATOR_USERNAME;
+  card.createdAt = overrides.createdAt ?? E2E_GUESS_CARD_CREATED_AT;
+  card.fullDescription = overrides.fullDescription ?? E2E_GUESS_CARD_FULL_DESCRIPTION;
+
+  return card;
+}
 
 function resolveLocalAsset(assetSource) {
   const resolvedAsset = ReactNativeImage.resolveAssetSource(assetSource);
@@ -21,6 +141,26 @@ function resolveLocalAsset(assetSource) {
 
 export function isE2EMode() {
   return process.env.EXPO_PUBLIC_E2E_MODE === 'true';
+}
+
+export async function ensureE2EOnboardingBypass() {
+  if (!isE2EMode()) {
+    return false;
+  }
+
+  await Promise.all([
+    savePreferredLanguage('en'),
+    setOnboardingCompleted(true),
+  ]);
+
+  return true;
+}
+
+export function buildE2ECategories() {
+  return E2E_CATEGORIES.map((category) => ({
+    ...category,
+    thumbnailUrl: resolveLocalAsset(category.thumbnailUrl)?.uri ?? null,
+  }));
 }
 
 export function getE2EAdDelayMs() {
@@ -67,8 +207,9 @@ export function buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial 
 export function buildE2EGuessCards() {
   const asset = resolveLocalAsset(E2E_GUESS_ASSET);
   const isPortrait = asset.height >= asset.width;
+  const hiddenLocation = getE2EHideLocation();
 
-  return [
+  const card = attachE2EGuessCardMetadata(
     new ImageModel(
       asset.uri,
       'e2e-guess-card',
@@ -76,12 +217,14 @@ export function buildE2EGuessCards() {
       asset.height,
       asset.width,
       isPortrait,
-      getE2EHideLocation(),
+      hiddenLocation,
       asset.height,
       asset.width,
       1,
     ),
-  ];
+  );
+  card.hiddenLocation = hiddenLocation;
+  return [card];
 }
 
 export function buildE2EHiddenGuessPayload({
@@ -112,18 +255,32 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
     return null;
   }
 
-  return new ImageModel(
-    payload.uri,
-    payload.pictureId ?? 'e2e-hidden-guess-card',
-    payload.description,
-    payload.imageHeight,
-    payload.imageWidth,
-    payload.isPortrait,
-    payload.hiddenLocation,
-    payload.screenHeight,
-    payload.screenWidth,
-    listId,
+  const card = attachE2EGuessCardMetadata(
+    new ImageModel(
+      payload.uri,
+      payload.pictureId ?? 'e2e-hidden-guess-card',
+      payload.description,
+      payload.imageHeight,
+      payload.imageWidth,
+      payload.isPortrait,
+      payload.hiddenLocation,
+      payload.screenHeight,
+      payload.screenWidth,
+      listId,
+    ),
+    {
+      category: payload.category ?? null,
+      language: payload.language ?? E2E_GUESS_CARD_LANGUAGE,
+      averageRating: payload.averageRating ?? E2E_GUESS_CARD_AVERAGE_RATING,
+      ratingsCount: payload.ratingsCount ?? E2E_GUESS_CARD_RATINGS_COUNT,
+      tags: payload.tags ?? E2E_GUESS_CARD_TAGS,
+      creatorUsername: payload.creatorUsername ?? E2E_GUESS_CARD_CREATOR_USERNAME,
+      createdAt: payload.createdAt ?? E2E_GUESS_CARD_CREATED_AT,
+      fullDescription: payload.fullDescription ?? E2E_GUESS_CARD_FULL_DESCRIPTION,
+    },
   );
+  card.hiddenLocation = payload.hiddenLocation;
+  return card;
 }
 
 export function buildE2ERankingRows() {
@@ -185,5 +342,26 @@ export function buildE2EUserScores(username) {
     guess_info: {
       guess_count: selectedRow.guessTotalCount,
     },
+  };
+}
+
+export function buildE2EImageRating() {
+  return { ...E2E_IMAGE_RATING };
+}
+
+export function buildE2EImageTags() {
+  return E2E_IMAGE_TAGS.map((tag) => ({ ...tag }));
+}
+
+export function buildE2EImageDetail() {
+  return {
+    category: { ...E2E_IMAGE_DETAIL_CATEGORY },
+    language: E2E_GUESS_CARD_LANGUAGE,
+    tags: buildE2EImageTags(),
+    creatorUsername: 'e2e-creator',
+    createdAt: E2E_IMAGE_DETAIL_CREATED_AT,
+    fullDescription: E2E_IMAGE_DETAIL_FULL_DESCRIPTION,
+    averageRating: E2E_IMAGE_DETAIL_AVERAGE_RATING,
+    ratingsCount: E2E_IMAGE_DETAIL_RATINGS_COUNT,
   };
 }

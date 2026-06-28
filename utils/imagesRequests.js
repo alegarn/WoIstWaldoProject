@@ -79,10 +79,17 @@ export async function prepareImageUpload(context, { contentType, contentLength }
 
 
 
-async function getImagesInfos({ config, userId }) {
+async function getImagesInfos({ config, userId, filters }) {
   //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
-  const response = await axios.get(url, config).then((response) => {
+  const requestConfig = { ...config };
+  const params = {};
+  if (filters?.category_id != null) params.category_id = filters.category_id;
+  if (filters?.language != null) params.language = filters.language;
+  if (Object.keys(params).length > 0) {
+    requestConfig.params = { ...requestConfig.params, ...params };
+  }
+  const response = await axios.get(url, requestConfig).then((response) => {
     //console.log("response getImagesInfos", response);
     return response;
   }).catch((error) => {
@@ -95,13 +102,16 @@ async function getImagesInfos({ config, userId }) {
   return response;
 };
 
-async function getNextImagesInfos({ config, userId, pictureId }){
+async function getNextImagesInfos({ config, userId, pictureId, filters }){
   //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
+  const imageBody = {
+    name: pictureId
+  };
+  if (filters?.category_id != null) imageBody.category_id = filters.category_id;
+  if (filters?.language != null) imageBody.language = filters.language;
   const imageData = {
-    image: {
-      name: pictureId
-    }
+    image: imageBody
   };
   const response = await axios.post(url, imageData, config )
     .then((response) => {
@@ -181,8 +191,8 @@ async function handleImagesDownload(image, token) {
   return filePath;
 };
 
-function buildImageObject(image, filePath) {
-  return new Image(
+export function buildImageObject(image, filePath) {
+  const imageObject = new Image(
     filePath,
     image.name,
     image.description,
@@ -194,6 +204,26 @@ function buildImageObject(image, filePath) {
     image.screen_width,
     null
   );
+
+  imageObject.averageRating = image.ratings_average;
+  imageObject.ratingsCount = image.ratings_count;
+  imageObject.creatorUsername = image.creator_username;
+  imageObject.createdAt = image.created_at;
+  imageObject.fullDescription = image.full_description;
+  imageObject.language = image.language;
+
+  if (image.category != null) {
+    const { thumbnail_url, sort_order, ...rest } = image.category;
+    imageObject.category = {
+      ...rest,
+      thumbnailUrl: thumbnail_url,
+      sortOrder: sort_order,
+    };
+  } else {
+    imageObject.category = image.category;
+  }
+
+  return imageObject;
 }
 
 async function downloadImageBatch(imagesInfosData, token) {
@@ -213,7 +243,7 @@ async function downloadImageBatch(imagesInfosData, token) {
 }
 
 
-export async function getImages(pictureId, context) {
+export async function getImages(pictureId, context, filters = {}) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
 
@@ -230,8 +260,8 @@ export async function getImages(pictureId, context) {
 
   while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES) {
     const imagesInfos = nextPictureId === null
-      ? await getImagesInfos({ config, userId })
-      : await getNextImagesInfos({ config, userId, pictureId: nextPictureId });
+      ? await getImagesInfos({ config, userId, filters })
+      : await getNextImagesInfos({ config, userId, pictureId: nextPictureId, filters });
 
     if (imagesInfos?.data === null) {
       return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
@@ -245,7 +275,7 @@ export async function getImages(pictureId, context) {
 
     if (imagesInfosData.length === 0) {
       if (lastSkippedPictureId !== null) {
-        await saveLastImageUuid(lastSkippedPictureId);
+        await saveLastImageUuid(lastSkippedPictureId, filters?.category_key, filters?.language);
       }
 
       return { isError: false, images: [] };
@@ -255,7 +285,7 @@ export async function getImages(pictureId, context) {
     const images = await downloadImageBatch(imagesInfosData, token);
 
     if (images.length > 0) {
-      await saveLastImageUuid(lastBatchPictureId);
+      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
       return { isError: false, images: images };
     }
 

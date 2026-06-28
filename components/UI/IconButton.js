@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, View } from "react-native";
-import Ionicons from '@expo/vector-icons/Ionicons';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 export default function IconButton({ icon, color, size, onPress, style, testID, accessibilityLabel }) {
   return (

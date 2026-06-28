@@ -1,6 +1,6 @@
 import { Pressable, View, Text, ImageBackground, StyleSheet } from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import BigButton from '../UI/BigButton';
 import { isE2EMode } from '../../utils/e2eMode';

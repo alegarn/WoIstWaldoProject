@@ -7,7 +7,7 @@ import TutorialOverlay from '../../components/UI/TutorialOverlay';
 
 export default function GuessScreen({ navigation, route }) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language } = route.params;
   //console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, /* "/* hiddenLocation */" */, /* hiddenLocation */, "listId", listId);
 
   const screenWidth = Dimensions.get('window').width;
@@ -34,7 +34,9 @@ export default function GuessScreen({ navigation, route }) {
       screenHeight: screenHeight,
       screenWidth: screenWidth,
       listId: listId,
-      isTutorial: isTutorial
+      isTutorial: isTutorial,
+      category,
+      language,
     });
   };
 

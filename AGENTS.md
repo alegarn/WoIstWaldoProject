@@ -12,8 +12,8 @@
 
 ## Local Contracts
 
-- Stack: Expo SDK 54, React Native 0.81, React 19, JavaScript only.
-- Entry: `App.js` wires `AuthContextProvider` and navigation.
+- Stack: Expo SDK 54, React Native 0.81, React 19, TypeScript (migrating from JavaScript).
+- Entry: `App.js` (or `App.tsx`) wires `AuthContextProvider` and navigation.
 - Routing: `@react-navigation/native-stack`, not Expo Router.
 - Auth: JWT tokens in `expo-secure-store`; `store/auth-context.js` restores session through `utils/auth.js`.
 - Backend base URL comes from `process.env.EXPO_PUBLIC_APP_BACKEND_URL`.
@@ -24,7 +24,7 @@
 
 ## Work Guidance
 
-- Match existing JavaScript style. Do not introduce TypeScript-only patterns.
+- Prefer TypeScript for new code. Migrating existing JavaScript to TypeScript is encouraged.
 - Keep screen files thin when possible. Put reusable view logic in `components/` and request/helper logic in `utils/`.
 - Prefer Jest for unit and mocked integration coverage. Use Maestro for full-device journeys, gesture-heavy flows, or deterministic E2E behavior.
 - Keep source-of-truth runtime rules here; keep one-off proposals in `planning/` instead.

@@ -1,17 +1,11 @@
 const mockResultChoices = jest.fn(() => null);
-const mockImageAnimated = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
+const mockRatingSubmissionBlock = jest.fn(() => null);
+const mockScoreCelebration = jest.fn(() => null);
 
 jest.mock('../components/Results/ResultChoices', () => {
   return function MockResultChoices(props) {
     mockResultChoices(props);
-    return null;
-  };
-});
-
-jest.mock('../components/Results/ImageAnimated', () => {
-  return function MockImageAnimated(props) {
-    mockImageAnimated(props);
     return null;
   };
 });
@@ -23,6 +17,20 @@ jest.mock('../components/UI/TutorialOverlay', () => {
   };
 });
 
+jest.mock('../components/Results/RatingSubmissionBlock', () => {
+  return function MockRatingSubmissionBlock(props) {
+    mockRatingSubmissionBlock(props);
+    return null;
+  };
+});
+
+jest.mock('../components/Results/ScoreCelebration', () => {
+  return function MockScoreCelebration(props) {
+    mockScoreCelebration(props);
+    return null;
+  };
+});
+
 jest.mock('../utils/storageDatum', () => ({
   deleteImageFromStorage: jest.fn(),
   removeImageFromList: jest.fn(),
@@ -30,6 +38,10 @@ jest.mock('../utils/storageDatum', () => ({
 
 jest.mock('../utils/scoreRequests', () => ({
   updateUserScore: jest.fn(),
+}));
+
+jest.mock('../utils/guessNavigation', () => ({
+  navigateToNextGuess: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -48,6 +60,7 @@ import ShowSuccess from '../components/Results/ShowSuccess';
 import { AuthContext } from '../store/auth-context';
 import { deleteImageFromStorage, removeImageFromList } from '../utils/storageDatum';
 import { updateUserScore } from '../utils/scoreRequests';
+import { navigateToNextGuess } from '../utils/guessNavigation';
 
 describe('ShowSuccess', () => {
   beforeEach(() => {
@@ -62,7 +75,7 @@ describe('ShowSuccess', () => {
     jest.useRealTimers();
   });
 
-  it('cleans up storage, updates the score, and reveals result choices after the animation', async () => {
+  it('cleans up storage, updates the score, shows celebration, hides choices until rated', async () => {
     const navigation = { reset: jest.fn() };
     const route = {
       params: {
@@ -70,6 +83,8 @@ describe('ShowSuccess', () => {
         listId: 7,
         imageFile: 'file:///waldo.jpg',
         isTutorial: true,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
       },
     };
 
@@ -83,17 +98,12 @@ describe('ShowSuccess', () => {
       );
     });
 
-    expect(mockImageAnimated).toHaveBeenCalledWith({ success: true });
-    expect(removeImageFromList).toHaveBeenCalledWith(7);
+    expect(removeImageFromList).toHaveBeenCalledWith(7, 'nature', 'fr');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///waldo.jpg');
     expect(updateUserScore).toHaveBeenCalledWith({
       score: 1,
       pictureId: 'image-1',
       context: { userId: '42' },
-    });
-
-    await act(async () => {
-      jest.advanceTimersByTime(1000);
     });
 
     const successContainer = renderer.root.findByProps({ testID: 'result.screen.success.container' });
@@ -121,15 +131,86 @@ describe('ShowSuccess', () => {
       })
     );
 
+    expect(mockScoreCelebration).toHaveBeenCalledWith(
+      expect.objectContaining({ points: 1, testIDPrefix: 'result.celebration' })
+    );
+
+    expect(mockRatingSubmissionBlock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pictureId: 'image-1',
+        context: { userId: '42' },
+        onSubmitted: expect.any(Function),
+      })
+    );
+
+    expect(mockResultChoices).not.toHaveBeenCalled();
+
+    const ratingCall = mockRatingSubmissionBlock.mock.calls.find(
+      ([props]) => typeof props.onSubmitted === 'function'
+    );
+    const onSubmitted = ratingCall[0].onSubmitted;
+
+    await act(async () => {
+      onSubmitted();
+    });
+
     expect(mockResultChoices).toHaveBeenCalledWith(
       expect.objectContaining({
         navigation,
         success: true,
         isTutorial: true,
+        onNextCard: expect.any(Function),
       })
     );
     expect(mockTutorialOverlay).toHaveBeenCalledWith(
       expect.objectContaining({ screen: 'ShowSuccess' })
     );
+  });
+
+  it('onNextCard delegates to navigateToNextGuess with the expected args', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+    const route = {
+      params: {
+        pictureId: 'image-1',
+        listId: 7,
+        imageFile: 'file:///waldo.jpg',
+        isTutorial: false,
+        category,
+        language: 'fr',
+      },
+    };
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ userId: '42' }}>
+          <ShowSuccess navigation={navigation} route={route} />
+        </AuthContext.Provider>
+      );
+    });
+
+    const ratingCall = mockRatingSubmissionBlock.mock.calls.find(
+      ([props]) => typeof props.onSubmitted === 'function'
+    );
+    await act(async () => {
+      ratingCall[0].onSubmitted();
+    });
+
+    const choicesCall = mockResultChoices.mock.calls.find(
+      (props) => typeof props[0].onNextCard === 'function'
+    );
+    const onNextCard = choicesCall[0].onNextCard;
+
+    await act(async () => {
+      await onNextCard();
+    });
+
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category,
+      language: 'fr',
+      currentListId: 7,
+      isTutorial: false,
+    });
   });
 });

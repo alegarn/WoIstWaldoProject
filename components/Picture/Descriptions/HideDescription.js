@@ -1,7 +1,18 @@
 import { useState } from "react";
 import ShowHideDescription from "./ShowHideDescription";
 
-export default function HideDescription({onSubmit, onCancel}) {
+export default function HideDescription({
+  onSubmit,
+  onCancel,
+  language,
+  onLanguageChange,
+  languageError,
+  categories,
+  categoriesError,
+  onRetryCategories,
+  selectedCategory,
+  onCategorySelect,
+}) {
 
   const [descriptionText, setDescriptionText] = useState({});
 
@@ -22,7 +33,15 @@ export default function HideDescription({onSubmit, onCancel}) {
     <ShowHideDescription
       inputChangeHandler={inputChangeHandler}
       submitHandler={submitHandler}
-      onCancel={onCancel} />
+      onCancel={onCancel}
+      language={language}
+      onLanguageChange={onLanguageChange}
+      languageError={languageError}
+      categories={categories}
+      categoriesError={categoriesError}
+      onRetryCategories={onRetryCategories}
+      selectedCategory={selectedCategory}
+      onCategorySelect={onCategorySelect} />
   );
 };
 

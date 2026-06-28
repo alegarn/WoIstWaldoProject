@@ -1,14 +1,20 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Login-first hide flow. A successful save also persists the E2E hidden-guess
-# payload so later guess flows can reuse the same picture deterministically.
-# Env vars: pass individually via -e KEY=VALUE on the CLI (Maestro 2.3.0).
-# Example: maestro test .maestro/hide-login-save-picture.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
+# Hide flow. Assumes the app is already launched, connected to Metro, logged in,
+# and sitting on HomeScreen. Run auth-boot-login.yml ONCE first to establish the
+# session. Do NOT re-launch the app in this flow (it breaks the Metro connection).
+# A successful save persists the E2E hidden-guess payload for later guess flows.
+# Env vars: pass via -e KEY=VALUE (Maestro 2.3.0; --env-file is NOT supported).
+# Example: maestro test .maestro/hide-login-save-picture.yml
 
-- runFlow: auth-boot-login.yml
-- setPermissions:
-    permissions:
-      all: allow
+- extendedWaitUntil:
+    visible:
+      id: home.button.hide
+    timeout: 10000
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
 - tapOn:
     id: home.button.hide
 - extendedWaitUntil:
@@ -45,6 +51,34 @@ appId: com.alegarn.WoIstWaldoProject
     visible:
       id: set-instructions.input.description
     timeout: 10000
+# Step describe -> language
+- tapOn:
+    id: set-instructions.button.next
+# At language step: explicitly select English to avoid racing the async default-language load.
+# handleNext blocks while language is null, so we set it ourselves before advancing.
+- extendedWaitUntil:
+    visible:
+      id: setInstructions.language.button
+    timeout: 5000
+- tapOn:
+    id: setInstructions.language.button
+- extendedWaitUntil:
+    visible:
+      id: setInstructions.language.option.en
+    timeout: 5000
+- tapOn:
+    id: setInstructions.language.option.en
+# Modal auto-closes on select; language='en' set -> safe to advance to category step
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.button.next
+    timeout: 5000
+- tapOn:
+    id: set-instructions.button.next
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.button.confirm-description
+    timeout: 5000
 - tapOn:
     id: set-instructions.button.confirm-description
 - extendedWaitUntil:

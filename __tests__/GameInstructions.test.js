@@ -1,5 +1,6 @@
-jest.mock('@expo/vector-icons', () => ({
+jest.mock('@react-native-vector-icons/ionicons', () => ({
   Ionicons: () => null,
+  default: () => null,
 }));
 
 jest.mock('../components/UI/BigButton', () => {

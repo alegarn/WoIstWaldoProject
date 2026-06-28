@@ -1,6 +1,7 @@
-import { createContext, useState } from "react";
+import { createContext, useEffect, useRef, useState } from "react";
 import * as SecureStore from 'expo-secure-store';
 
+import { setUnauthorizedHandler } from "../utils/apiClient";
 import { emptyImageList } from "../utils/storageDatum";
 
 export const AuthContext = createContext({
@@ -38,6 +39,25 @@ export default function AuthContextProvider({ children }) {
 
   const [headers, setHeaders] = useState({});
   const [isTutorialFinished, setIsTutorialFinished] = useState({isTutorial: false, guessPathDone: false, hidePathDone: false});
+
+  const logoutRef = useRef(logout);
+  const isLoggingOutRef = useRef(false);
+
+  useEffect(() => {
+    logoutRef.current = logout;
+  });
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      if (!isLoggingOutRef.current) {
+        void logoutRef.current();
+      }
+    });
+
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, []);
 
 
   function tokenAuthentication(token) {
@@ -98,6 +118,12 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function logout() {
+    if (isLoggingOutRef.current) {
+      return;
+    }
+
+    isLoggingOutRef.current = true;
+
     setAuthToken(null);
     setUserId('');
     setScoreId('');
@@ -105,16 +131,20 @@ export default function AuthContextProvider({ children }) {
     setEmail('');
     setHeaders({});
     setIsTutorialFinished({});
-
-    await SecureStore.deleteItemAsync('token');
-    await SecureStore.deleteItemAsync('userId');
-    await SecureStore.deleteItemAsync('email');
-    await SecureStore.deleteItemAsync('username');
-    await SecureStore.deleteItemAsync('isTutorialFinished');
-    await SecureStore.deleteItemAsync('scoreId');
-
-    await emptyImageList();
     setIsAuthenticated(false);
+
+    try {
+      await SecureStore.deleteItemAsync('token');
+      await SecureStore.deleteItemAsync('userId');
+      await SecureStore.deleteItemAsync('email');
+      await SecureStore.deleteItemAsync('username');
+      await SecureStore.deleteItemAsync('isTutorialFinished');
+      await SecureStore.deleteItemAsync('scoreId');
+
+      await emptyImageList();
+    } finally {
+      isLoggingOutRef.current = false;
+    }
   };
 
   async function saveScoreId(scoreId) {

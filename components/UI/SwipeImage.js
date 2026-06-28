@@ -2,8 +2,10 @@ import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } f
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
 import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
 
+import BadgeDetailModal from './BadgeDetailModal';
 import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
+import useBadgeDetail from './useBadgeDetail';
 
 import { getImages } from '../../utils/imagesRequests';
 import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
@@ -12,13 +14,17 @@ import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../
 import { GlobalStyle } from '../../constants/theme';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter }) {
+
+  const categoryKey = category?.key || 'all';
+  const lang = language || 'any';
 
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
   const [noMoreCard, setNoMoreCard] = useState(null);
 
   const context = useContext(AuthContext);
+  const { detailImage, detailTags, detailRating, detailVisible, openDetail, closeDetail } = useBadgeDetail(context);
 
   const imageListRef = useRef(null);
   imageListRef.current = imageList;
@@ -37,7 +43,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
   const handleData = useCallback(async (data) => {
     console.log("handleData");
 
-    const lastId = await getLastImageId();
+    const lastId = await getLastImageId(categoryKey, lang);
     // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
     const updatedImageList = data?.map((image, index) => ({
      ...image,
@@ -48,7 +54,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
-      await storeImageList(updatedImageList);
+      await storeImageList(updatedImageList, categoryKey, lang);
       setImageList(updatedImageList);
 
       if (updatedImageList?.length > 0) {
@@ -64,20 +70,24 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
-        const newImageList = await updateImageList(updatedImageList);
+        const newImageList = await updateImageList(updatedImageList, categoryKey, lang);
         setImageList(newImageList);
         return true
       };
 
       return false
     };
-  }, []);
+  }, [categoryKey, lang]);
 
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
-    const lastImageUuid = await getLastImageUuid();
+    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
-    const response = await getImages(pictureId, context);
+    const response = await getImages(pictureId, context, {
+      category_id: category?.id === 'all' ? undefined : category?.id,
+      category_key: category?.key || 'all',
+      language,
+    });
 
     if (response.isError === true) {
       Alert.alert(response.title, response.message);
@@ -88,7 +98,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData]);
+  }, [context, handleData, category, language, categoryKey, lang]);
 
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
@@ -126,8 +136,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
       return;
     }
 
-    //await emptyImageList();
-    const localImageList = await getLocalImages();
+    //await emptyImageList(categoryKey, lang);
+    const localImageList = await getLocalImages(categoryKey, lang);
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
@@ -143,10 +153,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
 
   const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
-    await removeImageFromList(id);
+    await removeImageFromList(id, categoryKey, lang);
     await deleteImageFromStorage(imageFilePath);
     return null;
-  }, []);
+  }, [categoryKey, lang]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -218,6 +228,27 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
     return [...imageList].reverse();
   }, [imageList]);
 
+  const modalImage = useMemo(() => {
+    if (!detailImage) {
+      return null;
+    }
+
+    if (detailTags === undefined) {
+      return detailImage;
+    }
+
+    const merged = {
+      ...detailImage,
+      tags: detailTags.map((tag) => tag?.name ?? tag),
+    };
+
+    if (detailRating !== undefined) {
+      merged.ratings = detailRating;
+    }
+
+    return merged;
+  }, [detailImage, detailTags, detailRating]);
+
   return (
     <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
@@ -242,6 +273,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
                     <SwipeableCard
                       key={item.listId}
                       item={item}
+                      onBadgePress={openDetail}
                       removeCard={removeCard}
                       screenWidth={screenWidth}
                       screenHeight={screenHeight}
@@ -253,6 +285,14 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing })
             )
             }
           </GestureHandlerRootView>
+          {detailVisible && modalImage ? (
+            <BadgeDetailModal
+              image={modalImage}
+              onClose={closeDetail}
+              onOpenFilter={onOpenFilter}
+              testIDPrefix="guess-path.detail"
+            />
+          ) : null}
         </>
         )
       }
