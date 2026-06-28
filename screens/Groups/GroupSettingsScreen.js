@@ -268,40 +268,8 @@ export default function GroupSettingsScreen({ navigation }) {
           </View>
         </>
       )}
-      data={categories}
+      data={[]}
       keyExtractor={(item) => String(item.id)}
-      renderItem={({ item }) => (
-        <View style={styles.categoryRow} testID={`group-settings.category.row.${item.id}`}>
-          <View style={styles.categoryLabel}>
-            <TextInput
-              accessibilityLabel={`Category ${item.name}`}
-              value={categoryDrafts[item.id] ?? item.name}
-              onChangeText={(value) => setCategoryDrafts((current) => ({ ...current, [item.id]: value }))}
-              style={styles.input}
-              testID={`group-settings.category.row.${item.id}.name`}
-            />
-          </View>
-          <Button
-            onPress={() => saveCategory(item)}
-            testID={`group-settings.category.row.${item.id}.save`}
-          >
-            Save
-          </Button>
-          <Button
-            onPress={() => pickAndUpload({ kind: 'category-thumbnail', flag: 'isCategoryThumbnail', label: 'Category thumbnail' }, item)}
-            testID={`group-settings.category.row.${item.id}.thumbnail`}
-          >
-            Thumb
-          </Button>
-          <Button
-            cancel
-            onPress={() => removeCategory(item)}
-            testID={`group-settings.category.row.${item.id}.delete`}
-          >
-            Delete
-          </Button>
-        </View>
-      )}
       ListFooterComponent={(
         <View style={styles.section} testID="group-settings.category.editor">
           <Text style={styles.title}>Categories</Text>
@@ -321,6 +289,38 @@ export default function GroupSettingsScreen({ navigation }) {
               testID="group-settings.category.add"
             />
           </View>
+          {categories.map((item) => (
+            <View key={item.id} style={styles.categoryRow} testID={`group-settings.category.row.${item.id}`}>
+              <View style={styles.categoryLabel}>
+                <TextInput
+                  accessibilityLabel={`Category ${item.name}`}
+                  value={categoryDrafts[item.id] ?? item.name}
+                  onChangeText={(value) => setCategoryDrafts((current) => ({ ...current, [item.id]: value }))}
+                  style={styles.input}
+                  testID={`group-settings.category.row.${item.id}.name`}
+                />
+              </View>
+              <Button
+                onPress={() => saveCategory(item)}
+                testID={`group-settings.category.row.${item.id}.save`}
+              >
+                Save
+              </Button>
+              <Button
+                onPress={() => pickAndUpload({ kind: 'category-thumbnail', flag: 'isCategoryThumbnail', label: 'Category thumbnail' }, item)}
+                testID="group-settings.uploader.category-thumbnail"
+              >
+                Thumb
+              </Button>
+              <Button
+                cancel
+                onPress={() => removeCategory(item)}
+                testID={`group-settings.category.row.${item.id}.delete`}
+              >
+                Delete
+              </Button>
+            </View>
+          ))}
         </View>
       )}
     />
