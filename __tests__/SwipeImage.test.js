@@ -61,6 +61,12 @@ jest.mock('../utils/storageDatum', () => ({
   deleteImageFromStorage: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupFeedCache', () => ({
+  __esModule: true,
+  readGroupFeedCache: jest.fn(),
+  writeGroupFeedCache: jest.fn(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 

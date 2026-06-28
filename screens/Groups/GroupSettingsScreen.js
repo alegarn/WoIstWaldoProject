@@ -16,6 +16,7 @@ import { updateGroupSettings } from '../../services/groups/groupApi';
 import {
   listGroupCategories,
   createGroupCategory,
+  updateGroupCategory,
   deleteGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
 import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
@@ -25,7 +26,6 @@ const UI_KINDS = [
   { kind: 'home-background', flag: 'isHomeBackground', label: 'Home background' },
   { kind: 'button-background', flag: 'isButtonBackground', label: 'Button background' },
   { kind: 'button-image', flag: 'isButtonImage', label: 'Button image' },
-  { kind: 'category-thumbnail', flag: 'isCategoryThumbnail', label: 'Category thumbnail' },
 ];
 
 export default function GroupSettingsScreen({ navigation }) {
@@ -47,6 +47,7 @@ export default function GroupSettingsScreen({ navigation }) {
   const [categoriesLoading, setCategoriesLoading] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [activeUploadKind, setActiveUploadKind] = useState(null);
+  const [categoryDrafts, setCategoryDrafts] = useState({});
 
   useEffect(() => {
     if (group) {
@@ -69,7 +70,14 @@ export default function GroupSettingsScreen({ navigation }) {
     const response = await listGroupCategories(authContext, groupId);
     setCategoriesLoading(false);
     if (response?.status === 200) {
-      setCategories(response.data ?? []);
+      const nextCategories = response.data ?? [];
+      setCategories(nextCategories);
+      setCategoryDrafts(
+        nextCategories.reduce((accumulator, category) => {
+          accumulator[category.id] = category.name ?? '';
+          return accumulator;
+        }, {}),
+      );
     } else {
       setCategoriesError(response?.data ?? 'Could not load categories.');
     }
@@ -106,7 +114,7 @@ export default function GroupSettingsScreen({ navigation }) {
     }
   };
 
-  const pickAndUpload = async (uiKind) => {
+  const pickAndUpload = async (uiKind, category) => {
     setActiveUploadKind(uiKind.kind);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -127,8 +135,9 @@ export default function GroupSettingsScreen({ navigation }) {
         contentType: `image/${fileExtension}`,
         contentLength: asset.fileSize ?? 0,
         [uiKind.flag]: true,
+        categoryId: category?.id,
       });
-      if (presignResponse?.status !== 200) {
+      if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
         Alert.alert(`Error ${presignResponse?.status ?? ''}`, 'Could not prepare upload.');
         return;
       }
@@ -141,6 +150,12 @@ export default function GroupSettingsScreen({ navigation }) {
         context: authContext,
       });
       if (uploadResponse?.status === 200 || uploadResponse?.status === 204) {
+        if (category?.id) {
+          await updateGroupCategory(authContext, groupId, category.id, {
+            thumbnailUrl: `private-images/${groupId}/groupUi/${uploadPlan.imageId}.${fileExtension}`,
+          });
+          await loadCategories();
+        }
         Alert.alert('Uploaded', `${uiKind.label} updated.`);
         refresh();
       } else {
@@ -162,6 +177,20 @@ export default function GroupSettingsScreen({ navigation }) {
       await loadCategories();
     } else {
       Alert.alert(`Error ${response?.status ?? ''}`, 'Could not add category.');
+    }
+  };
+
+  const saveCategory = async (category) => {
+    const nextName = categoryDrafts[category.id]?.trim();
+    if (!nextName || nextName === category.name) {
+      return;
+    }
+
+    const response = await updateGroupCategory(authContext, groupId, category.id, { name: nextName });
+    if (response?.status === 200 || response?.status === 204) {
+      await loadCategories();
+    } else {
+      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not update category.');
     }
   };
 
@@ -244,8 +273,26 @@ export default function GroupSettingsScreen({ navigation }) {
       renderItem={({ item }) => (
         <View style={styles.categoryRow} testID={`group-settings.category.row.${item.id}`}>
           <View style={styles.categoryLabel}>
-            <Text style={styles.categoryText}>{item.name}</Text>
+            <TextInput
+              accessibilityLabel={`Category ${item.name}`}
+              value={categoryDrafts[item.id] ?? item.name}
+              onChangeText={(value) => setCategoryDrafts((current) => ({ ...current, [item.id]: value }))}
+              style={styles.input}
+              testID={`group-settings.category.row.${item.id}.name`}
+            />
           </View>
+          <Button
+            onPress={() => saveCategory(item)}
+            testID={`group-settings.category.row.${item.id}.save`}
+          >
+            Save
+          </Button>
+          <Button
+            onPress={() => pickAndUpload({ kind: 'category-thumbnail', flag: 'isCategoryThumbnail', label: 'Category thumbnail' }, item)}
+            testID={`group-settings.category.row.${item.id}.thumbnail`}
+          >
+            Thumb
+          </Button>
           <Button
             cancel
             onPress={() => removeCategory(item)}

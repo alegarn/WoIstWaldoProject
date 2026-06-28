@@ -29,12 +29,13 @@ export async function createGroupCategory(context, groupId, { name, sortOrder } 
     .catch(mapRequestError);
 }
 
-export async function updateGroupCategory(context, groupId, categoryId, { name, sortOrder } = {}) {
+export async function updateGroupCategory(context, groupId, categoryId, { name, sortOrder, thumbnailUrl } = {}) {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
   const private_category = {};
   if (name !== undefined) private_category.name = name;
   if (sortOrder !== undefined) private_category.sort_order = sortOrder;
+  if (thumbnailUrl !== undefined) private_category.thumbnail_url = thumbnailUrl;
   const body = { private_category };
 
   return axios.patch(`${categoriesUrl(groupId)}/${categoryId}/`, body, config)

@@ -120,4 +120,32 @@ describe('ShowFailure', () => {
       isTutorial: true,
     });
   });
+
+  it('preserves private scope when retrying and advancing to the next card', async () => {
+    const scope = { kind: 'private', groupId: 'group-1' };
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute({ listId: 42, isTutorial: false, scope });
+
+    await renderShowFailure({ navigation, route });
+
+    const props = mockResultChoices.mock.calls.at(-1)[0];
+    props.retryGuess();
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'GuessScreen',
+      expect.objectContaining({ pictureId: 'image-1', isTutorial: false, scope })
+    );
+
+    await act(async () => {
+      await props.onNextCard();
+    });
+
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category: route.params.category,
+      language: 'en',
+      currentListId: 42,
+      isTutorial: false,
+      scope,
+    });
+  });
 });

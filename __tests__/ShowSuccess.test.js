@@ -213,4 +213,53 @@ describe('ShowSuccess', () => {
       isTutorial: false,
     });
   });
+
+  it('forwards private scope to score updates and next-card navigation', async () => {
+    const navigation = { reset: jest.fn() };
+    const category = { id: 'cat-1', key: 'nature' };
+    const scope = { kind: 'private', groupId: 'group-1' };
+    const route = {
+      params: {
+        pictureId: 'image-1',
+        listId: 7,
+        imageFile: 'file:///waldo.jpg',
+        isTutorial: false,
+        category,
+        language: 'fr',
+        scope,
+      },
+    };
+
+    await act(async () => {
+      create(
+        <AuthContext.Provider value={{ userId: '42' }}>
+          <ShowSuccess navigation={navigation} route={route} />
+        </AuthContext.Provider>
+      );
+    });
+
+    expect(updateUserScore).toHaveBeenCalledWith({
+      score: 1,
+      pictureId: 'image-1',
+      context: { userId: '42' },
+      scope,
+    });
+    expect(mockRatingSubmissionBlock).not.toHaveBeenCalled();
+
+    const choicesCall = mockResultChoices.mock.calls.find(
+      (props) => typeof props[0].onNextCard === 'function'
+    );
+
+    await act(async () => {
+      await choicesCall[0].onNextCard();
+    });
+
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category,
+      language: 'fr',
+      currentListId: 7,
+      isTutorial: false,
+      scope,
+    });
+  });
 });

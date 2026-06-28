@@ -49,14 +49,13 @@ export default function JoinByCodeScreen({ navigation }) {
       const reason = response?.data?.error || response?.data?.reason;
       if (reason === 'locked' || reason === 'group_locked') {
         setErrorMessage('Group is locked.');
+      } else if (reason === 'unknown_code') {
+        setErrorMessage('Unknown code.');
+      } else if (reason === 'already_member') {
+        setErrorMessage('You are already in this group.');
       } else {
         setErrorMessage('Group is full.');
       }
-      return;
-    }
-
-    if (status === 404) {
-      setErrorMessage('Unknown code.');
       return;
     }
 

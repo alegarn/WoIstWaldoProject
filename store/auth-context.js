@@ -22,6 +22,7 @@ export const AuthContext = createContext({
   premiumTier: 0,
   isGroupOwner: false,
   activeGroupId: null,
+  isPrivateMode: false,
   authenticate: () => {},
   logout: () => {},
   tokenAuthentication: () => {},
@@ -33,6 +34,7 @@ export const AuthContext = createContext({
   changeUsername: () => {},
   setEntitlement: () => {},
   setActiveGroupId: () => {},
+  setPrivateMode: () => {},
 });
 
 export function useAuthContext() {
@@ -84,6 +86,7 @@ export default function AuthContextProvider({ children }) {
   const [premiumTier, setPremiumTier] = useState(0);
   const [isGroupOwner, setIsGroupOwner] = useState(false);
   const [activeGroupId, setActiveGroupIdState] = useState(null);
+  const [isPrivateMode, setIsPrivateModeState] = useState(false);
 
   const [headers, setHeaders] = useState({});
   const [isTutorialFinished, setIsTutorialFinished] = useState({isTutorial: false, guessPathDone: false, hidePathDone: false});
@@ -128,6 +131,7 @@ export default function AuthContextProvider({ children }) {
     setPremiumTier(Number.isFinite(premiumTier) ? premiumTier : 0);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
+    setIsPrivateModeState(false);
 
     if (isTutorialFinished) {
       setIsTutorialFinished(isTutorialFinished);
@@ -167,6 +171,7 @@ export default function AuthContextProvider({ children }) {
     setPremiumTier(Number.isFinite(premiumTier) ? premiumTier : 0);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
+    setIsPrivateModeState(false);
 
     configureCreatorBilling({ userId });
 
@@ -193,6 +198,7 @@ export default function AuthContextProvider({ children }) {
     setPremiumTier(0);
     setIsGroupOwner(false);
     setActiveGroupIdState(null);
+    setIsPrivateModeState(false);
     setIsAuthenticated(false);
 
     try {
@@ -246,6 +252,10 @@ export default function AuthContextProvider({ children }) {
     setActiveGroupIdState(groupId ?? null);
   };
 
+  async function setPrivateMode(isEnabled) {
+    setIsPrivateModeState(!!isEnabled);
+  };
+
   async function verifyIsLoggedIn() {
     const token = await SecureStore.getItemAsync('token');
     //console.log("verifyIsLoggedIn", "token", token, "authToken", authToken);
@@ -290,6 +300,7 @@ export default function AuthContextProvider({ children }) {
     premiumTier: premiumTier,
     isGroupOwner: isGroupOwner,
     activeGroupId: activeGroupId,
+    isPrivateMode: isPrivateMode,
     authenticate: authenticate,
     logout: logout,
     tokenAuthentication: tokenAuthentication,
@@ -301,6 +312,7 @@ export default function AuthContextProvider({ children }) {
     changeUsername: changeUsername,
     setEntitlement: setEntitlement,
     setActiveGroupId: setActiveGroupId,
+    setPrivateMode: setPrivateMode,
     turnTutorialOn: turnTutorialOn,
     updateTutorialStatus: updateTutorialStatus
   };

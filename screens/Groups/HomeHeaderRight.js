@@ -9,9 +9,10 @@ export function HomeHeaderRight({ navigation, tintColor }) {
   const { data } = useGroupsHub();
   const owned = data?.owned ?? [];
   const joined = data?.joined ?? [];
-  const groups = [...owned, ...joined];
   const isPrivate = scope.kind === 'private';
   const hasAnyMembership = owned.length > 0 || joined.length > 0;
+  const hasActiveGroup = !!activeGroupId;
+  const canToggleScope = isPrivate ? hasAnyMembership : hasAnyMembership && hasActiveGroup;
 
   const toggleScope = () => {
     if (isPrivate) {
@@ -20,15 +21,15 @@ export function HomeHeaderRight({ navigation, tintColor }) {
       return;
     }
 
-    const targetGroupId = activeGroupId ?? groups[0]?.id;
-    if (!targetGroupId) {
-      navigation.navigate('GroupsListScreen');
+    if (!activeGroupId) {
       return;
     }
 
-    setActive(targetGroupId).then((response) => {
+    setActive(activeGroupId).then((response) => {
       if (response?.status === 200 || response?.status === 204) {
-        navigation.navigate('PrivateHomeScreen');
+        navigation.navigate('PrivateHomeScreen', {
+          scope: { kind: 'private', groupId: activeGroupId },
+        });
       }
     });
   };
@@ -40,7 +41,7 @@ export function HomeHeaderRight({ navigation, tintColor }) {
         icon={isPrivate ? 'earth' : 'people'}
         color={tintColor}
         size={24}
-        disabled={!hasAnyMembership}
+        disabled={!canToggleScope}
         onPress={toggleScope}
         testID="home.header.scope-toggle"
         style={{ marginRight: 20 }}

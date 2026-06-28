@@ -8,13 +8,14 @@ import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
 import { useActiveGroup } from '../hooks/useActiveGroup';
+import { useGroupsHub } from '../hooks/useGroupsHub';
 
 // Bounded resident window: 150 rows ≈ 7–8 cursor pages of 20 rows.
 // Keeps memory stable on low-end devices while allowing deep browsing.
 // Old slices are evicted when the cap is exceeded (see fetchCursorPage).
 const RANKING_RESIDENT_ROW_CAP = 150;
 
-export default function RankingScreen({ route }) {
+export default function RankingScreen({ route, navigation }) {
 
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -28,6 +29,10 @@ export default function RankingScreen({ route }) {
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   const isPrivate = scope?.kind === 'private';
+  const { data } = useGroupsHub();
+  const group = isPrivate
+    ? [...(data?.owned ?? []), ...(data?.joined ?? [])].find((entry) => entry.id === scope.groupId)
+    : null;
 
   const rankingScope = isPrivate ? scope : 'initial';
 
@@ -82,6 +87,10 @@ export default function RankingScreen({ route }) {
     };
   };
 
+  useEffect(() => {
+    navigation.setOptions({ title: group?.name ?? 'Ranking' });
+  }, [navigation, group?.name]);
+
 
 
   const handleRankingData = useCallback(async () => {
@@ -113,7 +122,7 @@ export default function RankingScreen({ route }) {
     fetchingRef.current = true;
     setIsLoading(true);
 
-    const response = await getRankingData(context, { after: nextCursor });
+    const response = await getRankingData(context, { scope: rankingScope, after: nextCursor });
 
     if (response?.status !== 200) {
       fetchingRef.current = false;
