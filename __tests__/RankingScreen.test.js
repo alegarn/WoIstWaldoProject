@@ -67,7 +67,7 @@ describe('RankingScreen', () => {
     await act(async () => {
       renderer = create(
         <AuthContext.Provider value={contextValue}>
-          <RankingScreen />
+          <RankingScreen navigation={{ setOptions: jest.fn() }} />
         </AuthContext.Provider>
       );
 
