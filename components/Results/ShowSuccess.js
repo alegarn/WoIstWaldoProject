@@ -11,8 +11,10 @@ import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowSuccess({ navigation, route }) {
+  const scope = route.params?.scope;
+  const isPrivateScope = scope?.kind === 'private';
 
-  const [phase, setPhase] = useState('celebration');
+  const [phase, setPhase] = useState(isPrivateScope ? 'rated' : 'celebration');
 
   // used to get the image owner and point the user earning points
   const pictureId = route.params?.pictureId;
@@ -29,11 +31,17 @@ export default function ShowSuccess({ navigation, route }) {
 
   // used to point the users earning points
   const handleScore = async () => {
-    const response = await updateUserScore({
+    const payload = {
       score: 1,
       pictureId: pictureId,
-      context: context
-    });
+      context: context,
+    };
+
+    if (isPrivateScope) {
+      payload.scope = scope;
+    }
+
+    const response = await updateUserScore(payload);
   };
 
   async function handleRemoveImageFromList(listId, imageFilePath) {
@@ -46,6 +54,7 @@ export default function ShowSuccess({ navigation, route }) {
     language,
     currentListId: listId,
     isTutorial,
+    scope: isPrivateScope ? scope : undefined,
   });
 
 /* useEffect________________________________________________ */
@@ -69,11 +78,13 @@ export default function ShowSuccess({ navigation, route }) {
             onNextCard={handleNextCard}
           />
         )}
-        <RatingSubmissionBlock
-          pictureId={pictureId}
-          context={context}
-          onSubmitted={() => setPhase('rated')}
-        />
+        {!isPrivateScope && (
+          <RatingSubmissionBlock
+            pictureId={pictureId}
+            context={context}
+            onSubmitted={() => setPhase('rated')}
+          />
+        )}
         {isTutorial && (
           <TutorialOverlay screen={"ShowSuccess"} />
         )}

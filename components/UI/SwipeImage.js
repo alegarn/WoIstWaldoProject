@@ -14,7 +14,7 @@ import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../
 import { GlobalStyle } from '../../constants/theme';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
 
   const categoryKey = category?.key || 'all';
   const lang = language || 'any';
@@ -87,6 +87,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       category_id: category?.id === 'all' ? undefined : category?.id,
       category_key: category?.key || 'all',
       language,
+      scope,
     });
 
     if (response.isError === true) {

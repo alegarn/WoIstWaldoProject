@@ -10,6 +10,7 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
   const context = useContext(AuthContext);
 
   const routeParams = route?.params ?? {};
+  const isPrivateScope = routeParams?.scope?.kind === 'private';
 
   const returnHome = async () => {
     isTutorial
@@ -22,8 +23,8 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
     navigation.reset({
       index: 0,
       routes: [{ 
-        name: 'HomeScreen', 
-        params: { isTutorial: isTutorial } 
+        name: isPrivateScope ? 'PrivateHomeScreen' : 'HomeScreen', 
+        params: isPrivateScope ? { scope: routeParams.scope, isTutorial } : { isTutorial: isTutorial } 
       }],
     });
   };
@@ -43,7 +44,7 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
       index: 1,
       routes: [{ 
         name: 'GuessPathScreen', 
-        params: { isTutorial: isTutorial } 
+        params: isPrivateScope ? { isTutorial: isTutorial, scope: routeParams.scope } : { isTutorial: isTutorial } 
       }],
     });
   };

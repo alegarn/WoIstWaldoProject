@@ -104,7 +104,7 @@ export function setHeaders({ token }) {
   return headers;
 };
 
-function mapRequestError(error) {
+export function mapRequestError(error) {
   return {
     status: error?.response?.status ?? error?.request?.status,
     data: error?.response?.data ?? error,

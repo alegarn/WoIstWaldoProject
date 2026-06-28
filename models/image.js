@@ -10,6 +10,13 @@ class Image {
     screenHeight,
     screenWidth,
     listId,
+    averageRating,
+    ratingsCount,
+    creatorUsername,
+    createdAt,
+    fullDescription,
+    language,
+    category,
   ) {
     this.imageFile = imageFile;
     this.pictureId = pictureId;
@@ -21,6 +28,13 @@ class Image {
     this.screenHeight = screenHeight;
     this.screenWidth = screenWidth;
     this.listId = listId;
+    this.averageRating = averageRating;
+    this.ratingsCount = ratingsCount;
+    this.creatorUsername = creatorUsername;
+    this.createdAt = createdAt;
+    this.fullDescription = fullDescription;
+    this.language = language;
+    this.category = category;
   };
 };
 

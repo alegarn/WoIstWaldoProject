@@ -7,13 +7,14 @@ import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
+import { useActiveGroup } from '../hooks/useActiveGroup';
 
 // Bounded resident window: 150 rows ≈ 7–8 cursor pages of 20 rows.
 // Keeps memory stable on low-end devices while allowing deep browsing.
 // Old slices are evicted when the cap is exceeded (see fetchCursorPage).
 const RANKING_RESIDENT_ROW_CAP = 150;
 
-export default function RankingScreen() {
+export default function RankingScreen({ route }) {
 
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -23,6 +24,12 @@ export default function RankingScreen() {
   const fetchingRef = useRef(false);
 
   const context = useContext(AuthContext);
+  const routeScope = route?.params?.scope;
+  const { scope: activeScope } = useActiveGroup();
+  const scope = routeScope ?? activeScope;
+  const isPrivate = scope?.kind === 'private';
+
+  const rankingScope = isPrivate ? scope : 'initial';
 
   const tableHeaders = RANKING?.tableHeaders;
 
@@ -78,7 +85,7 @@ export default function RankingScreen() {
 
 
   const handleRankingData = useCallback(async () => {
-    const response = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
+    const response = await getRankingData(context, { scope: rankingScope, top: 10, window: 5 });
 
     if (response?.status !== 200) {
       handleError(response?.message, response?.status);
@@ -96,12 +103,10 @@ export default function RankingScreen() {
 
     setSlices([converted]);
     setNextCursor(cursor);
-    // Initial response always enables cursor browsing; the first cursor
-    // fetch (null cursor = start from top) provides the first browse page.
     setHasMore(true);
     setMode('initial');
     return response;
-  }, [context]);
+  }, [context, rankingScope]);
 
   const fetchCursorPage = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
@@ -152,7 +157,7 @@ export default function RankingScreen() {
     setMode('browse');
     fetchingRef.current = false;
     setIsLoading(false);
-  }, [context, hasMore, nextCursor, displayRows.length, mode]);
+  }, [context, hasMore, nextCursor, displayRows.length, mode, rankingScope]);
 
   const handleEndReached = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;

@@ -7,8 +7,8 @@ import TutorialOverlay from '../../components/UI/TutorialOverlay';
 
 export default function GuessScreen({ navigation, route }) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language } = route.params;
-  //console.log("imageFile", imageFile, "pictureId", pictureId, "description", description, "imageHeight", imageHeight, "imageWidth", imageWidth, "isPortrait", isPortrait, /* "/* hiddenLocation */" */, /* hiddenLocation */, "listId", listId);
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope } = route.params;
+  const isPrivate = scope?.kind === 'private';
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -22,7 +22,7 @@ export default function GuessScreen({ navigation, route }) {
 
   function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
-    navigation.replace('AdScreen', {
+    const sharedParams = {
       onTarget: onTarget,
       imageFile: uri,
       pictureId: pictureId,
@@ -37,7 +37,15 @@ export default function GuessScreen({ navigation, route }) {
       isTutorial: isTutorial,
       category,
       language,
-    });
+      scope,
+    };
+
+    if (isPrivate) {
+      navigation.replace('ResultScreen', sharedParams);
+      return;
+    }
+
+    navigation.replace('AdScreen', sharedParams);
   };
 
 

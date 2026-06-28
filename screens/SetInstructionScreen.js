@@ -17,6 +17,7 @@ import { handleImageType, isTypeValid } from '../utils/imageInfos';
 import { getPreferredLanguage, saveE2EHiddenGuessCard } from '../utils/storageDatum';
 import { getCategories } from '../utils/categoryRequests';
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
+import { listGroupCategories } from '../services/groups/groupCategoriesApi';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
@@ -57,26 +58,40 @@ export default function SetInstructionsScreen({ navigation, route }) {
     touchLocation,
     target,
     imageDimensionStyle,
-    isTutorial
+    isTutorial,
+    scope,
   } = route?.params;
 
   const context = useContext(AuthContext);
+  const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
   const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
 
+  function normalizePrivateCategory(category) {
+    return {
+      ...category,
+      key: category?.key ?? category?.id,
+      thumbnailUrl: category?.thumbnailUrl ?? category?.thumbnail_url ?? null,
+    };
+  }
+
   const loadCategories = async () => {
-    const categoriesResponse = await getCategories({ context });
+    const categoriesResponse = isPrivateScope
+      ? await listGroupCategories(context, scope.groupId)
+      : await getCategories({ context });
 
     if (!isMountedRef.current) {
       return;
     }
 
-    if (categoriesResponse?.isError) {
+    if (categoriesResponse?.isError || (categoriesResponse?.status && categoriesResponse.status !== 200)) {
       setCategories([]);
-      setCategoriesError(categoriesResponse?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
+      setCategoriesError(categoriesResponse?.message || categoriesResponse?.data?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
       return;
     }
 
-    setCategories(categoriesResponse?.data ?? []);
+    setCategories((categoriesResponse?.data ?? []).map((category) => (
+      isPrivateScope ? normalizePrivateCategory(category) : category
+    )));
     setCategoriesError(null);
   };
 
@@ -133,7 +148,11 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const onCancelGoBack = () => {
-    navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial });
+    const params = { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial };
+    if (isPrivateScope) {
+      params.scope = scope;
+    }
+    navigation.replace("HideScreen", params);
   };
 
   const handleImage = async ({userId, fileExtension}) => {
@@ -157,7 +176,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
     setIsLoading(true);
 
     try {
-      const uploadState = await imageUploader({ imageInfos, context });
+      const uploaderArgs = { imageInfos, context };
+      if (isPrivateScope) {
+        uploaderArgs.scope = scope;
+      }
+
+      const uploadState = await imageUploader(uploaderArgs);
 
       if (uploadState.status !== 200) {
         setIsLoading(false);
@@ -213,15 +237,22 @@ export default function SetInstructionsScreen({ navigation, route }) {
     handleScreenUi();
     isTutorial && await handleTutorialUpdate();
 
+    const routeEntry = isPrivateScope
+      ? {
+          name: 'PrivateHomeScreen',
+          params: { scope, isTutorial, hidePathDone: true },
+        }
+      : {
+          name: 'HomeScreen',
+          params: {
+            isTutorial: isTutorial,
+            hidePathDone: true,
+          },
+        };
+
     navigation.reset({
       index: 0,
-      routes: [{ 
-        name: 'HomeScreen', 
-        params: { 
-          isTutorial: isTutorial,
-          hidePathDone: true
-        } 
-      }],
+      routes: [routeEntry],
     });
   };
 

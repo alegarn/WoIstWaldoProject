@@ -2,7 +2,7 @@ import { StyleSheet, Text, Pressable, Animated, ImageBackground, View } from 're
 import { useRef } from 'react';
 import { GlobalStyle } from '../../constants/theme';
 
-const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => {
+const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID, accessibilityState, pointerEvents }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
 
   const handlePressIn = () => {
@@ -30,12 +30,13 @@ const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => 
   );
 
   return (
-    <Animated.View 
+    <Animated.View
+      pointerEvents={pointerEvents}
       style={[
-        styles.container, 
-        { 
-          flex: heightPercent / 100, 
-          transform: [{ scale: scaleValue }] 
+        styles.container,
+        {
+          flex: heightPercent / 100,
+          transform: [{ scale: scaleValue }]
         }
       ]}
     >
@@ -43,6 +44,7 @@ const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => 
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        accessibilityState={accessibilityState}
         style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
         testID={testID}
       >

@@ -1,4 +1,5 @@
 import { useLayoutEffect } from "react";
+import { View, StyleSheet } from "react-native";
 
 import { handleOrientation } from "../../utils/orientation";
 
@@ -7,21 +8,35 @@ import ShowFailure from "../../components/Results/ShowFailure";
 
 export default function ResultScreen({ route, navigation }) {
 
-  // load twice (1)
-  console.log("ResultScreen");
-
   useLayoutEffect(() => {
     handleOrientation("portrait");
   }, []);
 
+  const scope = route?.params?.scope;
+  const isPrivate = scope?.kind === 'private';
+  const backgroundColor = isPrivate ? '#1D133D' : undefined;
+
   const { onTarget } = route?.params ?? {};
 
-  if (onTarget) {
-    return <ShowSuccess navigation={navigation} route={route} />;
-  };
+  const content = (() => {
+    if (onTarget) {
+      return <ShowSuccess navigation={navigation} route={route} />;
+    }
 
-  if (!onTarget) {
-    return <ShowFailure navigation={navigation} route={route} />;
-  };
+    if (!onTarget) {
+      return <ShowFailure navigation={navigation} route={route} />;
+    }
 
+    return null;
+  })();
+
+  if (backgroundColor) {
+    return <View style={styles.wrapper}>{content}</View>;
+  }
+
+  return content;
 };
+
+const styles = StyleSheet.create({
+  wrapper: { flex: 1 },
+});

@@ -3,6 +3,11 @@ import { File, Paths } from 'expo-file-system';
 import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
 import { saveLastImageUuid } from "./storageDatum";
+import { fetchPrivateFeedPageForGame } from "../services/groups/groupFeedApi";
+
+function isPrivateScope(scope) {
+  return scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
+}
 
 const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
 
@@ -246,6 +251,15 @@ async function downloadImageBatch(imagesInfosData, token) {
 export async function getImages(pictureId, context, filters = {}) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
+
+  if (isPrivateScope(filters?.scope)) {
+    return fetchPrivateFeedPageForGame(pictureId, context, {
+      groupId: filters.scope.groupId,
+      categoryId: filters?.category_id,
+      language: filters?.language,
+      categoryKey: filters?.category_key,
+    });
+  }
 
   const { token, userId } = await getBackendHeaders(context);
   const headers = setHeaders({ token });

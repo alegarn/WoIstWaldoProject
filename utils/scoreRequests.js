@@ -2,10 +2,49 @@ import axios from "axios";
 import { getBackendHeaders } from "./auth";
 import { setHeaders } from "./auth";
 import { buildE2ERankingResponse, buildE2EUserScores, isE2EMode } from './e2eMode';
+import {
+  fetchPrivateLeaderboard,
+  fetchPrivateLeaderboardNext,
+} from '../services/groups/groupLeaderboardApi';
 
-export async function updateUserScore({ score, pictureId, context }) {
+function isPrivateScope(scope) {
+  return scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
+}
+
+export async function updateUserScore({ score, pictureId, context, scope }) {
   if (isE2EMode()) {
     return { status: 200, message: 'E2E score update skipped' };
+  }
+
+  if (isPrivateScope(scope)) {
+    const { token, uid, expiry, access_token, client, userId, scoreId } = await getBackendHeaders(context);
+    const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/scores/${scoreId}`;
+    const headers = setHeaders({ token, uid, expiry, access_token, client });
+    const config = {
+      headers,
+      params: {
+        scope: 'private',
+        group_id: scope.groupId,
+      },
+    };
+    const requestData = {
+      score: {
+        score: score,
+        image_id: pictureId,
+      },
+    };
+
+    return axios
+      .put(url, requestData, config)
+      .then((response) => {
+        return { status: response.status, message: response.data };
+      })
+      .catch((error) => {
+        return {
+          status: error?.request?.status,
+          message: error?.message,
+        }
+      });
   }
 
   const { token, uid, expiry, access_token, client, userId, scoreId } = await getBackendHeaders(context);
@@ -39,6 +78,13 @@ export async function getRankingData(context, { scope, top, window, page, after,
   if (isE2EMode()) {
     const e2eData = buildE2ERankingResponse({ after, limit, scope, page });
     return { status: 200, data: e2eData };
+  }
+
+  if (isPrivateScope(scope)) {
+    if (after) {
+      return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit });
+    }
+    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, limit });
   }
 
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);

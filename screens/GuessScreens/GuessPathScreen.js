@@ -20,7 +20,9 @@ import {
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
+import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { AuthContext } from '../../store/auth-context';
+import { listGroupCategories } from '../../services/groups/groupCategoriesApi';
 
 const RECENT_ALL_CATEGORY = {
   id: 'all',
@@ -39,17 +41,33 @@ export default function GuessPathScreen({ navigation, route }) {
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
   const isTutorial = route?.params?.isTutorial;
+  const routeScope = route?.params?.scope;
+  const { scope: activeScope } = useActiveGroup();
+  const scope = routeScope ?? activeScope;
+  const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
+
+  function normalizePrivateCategory(category) {
+    return {
+      ...category,
+      key: category?.key ?? category?.id,
+      thumbnailUrl: category?.thumbnailUrl ?? category?.thumbnail_url ?? null,
+    };
+  }
 
   useEffect(() => {
     let cancelled = false;
 
     async function loadCategories() {
-      const response = await getCategories({ context });
+      const response = isPrivateScope
+        ? await listGroupCategories(context, scope.groupId)
+        : await getCategories({ context });
       if (cancelled) {
         return;
       }
       if (response?.data) {
-        setCategories(response.data);
+        setCategories((response.data ?? []).map((category) => (
+          isPrivateScope ? normalizePrivateCategory(category) : category
+        )));
       }
     }
 
@@ -57,7 +75,7 @@ export default function GuessPathScreen({ navigation, route }) {
     return () => {
       cancelled = true;
     };
-  }, [context]);
+  }, [context, isPrivateScope, scope?.groupId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,10 +98,16 @@ export default function GuessPathScreen({ navigation, route }) {
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
 
   const handleCategoryPress = (category) => {
-    navigation.navigate('GuessFeedScreen', {
+    const params = {
       category,
       language: navigationLanguage,
-    });
+    };
+
+    if (isPrivateScope) {
+      params.scope = scope;
+    }
+
+    navigation.navigate('GuessFeedScreen', params);
   };
 
   const handleSelectLanguage = async (code) => {

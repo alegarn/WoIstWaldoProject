@@ -10,6 +10,7 @@ import {
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
+import { useActiveGroup } from '../../hooks/useActiveGroup';
 
 const DEFAULT_LANGUAGE = 'en';
 
@@ -18,6 +19,9 @@ const DEFAULT_LANGUAGE = 'en';
 // still pass them explicitly so the cache namespace + filter plumbing stays explicit.
 export default function GuessFeedScreen({ navigation, route }) {
   const { category, language: routeLanguage } = route.params || {};
+  const routeScope = route?.params?.scope;
+  const { scope: activeScope } = useActiveGroup();
+  const scope = routeScope ?? activeScope;
   const [language, setLanguage] = useState(routeLanguage || null);
   const [showOverlay, setShowOverlay] = useState(true);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -105,6 +109,7 @@ export default function GuessFeedScreen({ navigation, route }) {
           category={category}
           language={language || DEFAULT_LANGUAGE}
           onOpenFilter={handleOpenFilter}
+          scope={scope}
         />
       )}
 
