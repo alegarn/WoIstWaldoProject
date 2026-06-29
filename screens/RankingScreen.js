@@ -122,7 +122,10 @@ export default function RankingScreen({ route, navigation }) {
     fetchingRef.current = true;
     setIsLoading(true);
 
-    const response = await getRankingData(context, { scope: rankingScope, after: nextCursor });
+    const cursorParams = isPrivate
+      ? { scope: rankingScope, after: nextCursor }
+      : { after: nextCursor };
+    const response = await getRankingData(context, cursorParams);
 
     if (response?.status !== 200) {
       fetchingRef.current = false;

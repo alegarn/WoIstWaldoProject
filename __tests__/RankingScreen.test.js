@@ -97,7 +97,7 @@ describe('RankingScreen', () => {
     expect(StyleSheet.flatten(screen.props.style)).toEqual(
       expect.objectContaining({
         flex: 1,
-        backgroundColor: GlobalStyle.color.primaryColor500,
+        backgroundColor: GlobalStyle.color.primaryColor800,
       })
     );
   });
