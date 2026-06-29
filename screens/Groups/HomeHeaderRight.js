@@ -1,4 +1,4 @@
-import { View } from 'react-native';
+import { View, Alert } from 'react-native';
 
 import IconButton from '../../components/UI/IconButton';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
@@ -31,6 +31,8 @@ export function HomeHeaderRight({ navigation, tintColor }) {
           scope: { kind: 'private', groupId: activeGroupId },
         });
       }
+    }).catch((err) => {
+      Alert.alert('Error', err?.message ?? 'Could not switch scope.');
     });
   };
 

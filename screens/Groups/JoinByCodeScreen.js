@@ -23,43 +23,48 @@ export default function JoinByCodeScreen({ navigation }) {
     }
 
     setIsSubmitting(true);
-    const response = await joinByCode(authContext, trimmed);
-    setIsSubmitting(false);
+    try {
+      const response = await joinByCode(authContext, trimmed);
 
-    const status = response?.status;
-    if (status === 200 || status === 201) {
-      const groupId = response?.data?.group_id ?? response?.data?.id;
-      if (groupId) {
-        await setActive(groupId);
-        navigation.replace('PrivateHomeScreen', {
-          scope: { kind: 'private', groupId },
-        });
-      } else {
-        navigation.navigate('GroupsListScreen');
+      const status = response?.status;
+      if (status === 200 || status === 201) {
+        const groupId = response?.data?.group_id ?? response?.data?.id;
+        if (groupId) {
+          await setActive(groupId);
+          navigation.replace('PrivateHomeScreen', {
+            scope: { kind: 'private', groupId },
+          });
+        } else {
+          navigation.navigate('GroupsListScreen');
+        }
+        return;
       }
-      return;
-    }
 
-    if (status === 429) {
-      setErrorMessage('Too many attempts — wait a minute.');
-      return;
-    }
-
-    if (status === 422) {
-      const reason = response?.data?.error || response?.data?.reason;
-      if (reason === 'locked' || reason === 'group_locked') {
-        setErrorMessage('Group is locked.');
-      } else if (reason === 'unknown_code') {
-        setErrorMessage('Unknown code.');
-      } else if (reason === 'already_member') {
-        setErrorMessage('You are already in this group.');
-      } else {
-        setErrorMessage('Group is full.');
+      if (status === 429) {
+        setErrorMessage('Too many attempts — wait a minute.');
+        return;
       }
-      return;
-    }
 
-    setErrorMessage('Could not join. Please try again.');
+      if (status === 422) {
+        const reason = response?.data?.error || response?.data?.reason;
+        if (reason === 'locked' || reason === 'group_locked') {
+          setErrorMessage('Group is locked.');
+        } else if (reason === 'unknown_code') {
+          setErrorMessage('Unknown code.');
+        } else if (reason === 'already_member') {
+          setErrorMessage('You are already in this group.');
+        } else {
+          setErrorMessage('Group is full.');
+        }
+        return;
+      }
+
+      setErrorMessage('Could not join. Please try again.');
+    } catch (err) {
+      setErrorMessage(err?.message ?? 'Could not join. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (

@@ -136,11 +136,11 @@ export default function PaywallScreen({ navigation, route }) {
     <View style={styles.container}>
       <FlatList
         data={packages}
-        keyExtractor={(item) => pickPackageId(item) ?? Math.random().toString()}
+        keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
         renderItem={({ item }) => {
           const id = pickPackageId(item);
-          const tierKey = Object.keys(TIER_TEST_IDS).find((key) => id && id.includes(key.replace('-', '_'))) ?? 'premium';
+          const tierKey = Object.keys(TIER_TEST_IDS).find((key) => id && id.includes(key.replaceAll('-', '_'))) ?? 'premium';
           return (
             <View style={styles.tierCard} testID={TIER_TEST_IDS[tierKey] ?? 'paywall.tier.premium'}>
               <Text style={styles.tierTitle}>{TIER_LABELS[tierKey] ?? 'Premium'}</Text>

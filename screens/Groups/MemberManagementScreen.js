@@ -113,12 +113,14 @@ export default function MemberManagementScreen() {
               <View style={styles.actions}>
                 <Button
                   cancel
+                  disabled={isWorking}
                   onPress={() => setRemoveTarget(item)}
                   testID="member-mgmt.button.remove"
                 >
                   Remove
                 </Button>
                 <Button
+                  disabled={isWorking}
                   onPress={() => setTransferTarget(item)}
                   testID="member-mgmt.button.transfer"
                 >

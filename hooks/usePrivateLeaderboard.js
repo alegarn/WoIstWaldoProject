@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
   fetchPrivateLeaderboard,
   fetchPrivateLeaderboardNext,
@@ -12,19 +12,30 @@ export function usePrivateLeaderboard({ groupId, limit } = {}) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const mounted = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
   const refresh = useCallback(async () => {
     if (!groupId) {
-      setIsLoading(false);
+      if (mounted.current) setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    if (mounted.current) {
+      setIsLoading(true);
+      setError(null);
+    }
 
     const response = await fetchPrivateLeaderboard(
       { token, userId },
       { groupId, limit },
     );
+
+    if (!mounted.current) return;
 
     if (response?.status === 200) {
       setRows(response.data.rows);
@@ -33,7 +44,7 @@ export function usePrivateLeaderboard({ groupId, limit } = {}) {
       setError(response?.data ?? response);
     }
 
-    setIsLoading(false);
+    if (mounted.current) setIsLoading(false);
   }, [token, userId, groupId, limit]);
 
   const loadMore = useCallback(async () => {
@@ -45,6 +56,8 @@ export function usePrivateLeaderboard({ groupId, limit } = {}) {
       { token, userId },
       { groupId, after: nextCursor, limit },
     );
+
+    if (!mounted.current) return;
 
     if (response?.status === 200) {
       setRows((prev) => [...prev, ...response.data.rows]);

@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { fetchPrivateFeedPage } from '../services/groups/groupFeedApi';
 import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { AuthContext } from '../store/auth-context';
@@ -10,19 +10,36 @@ export function usePrivateFeed({ groupId, categoryId, language } = {}) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const mounted = useRef(false);
+  const imagesRef = useRef([]);
+  const loadMoreInFlight = useRef(false);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  useEffect(() => {
+    imagesRef.current = images;
+  }, [images]);
+
   const refresh = useCallback(async () => {
     if (!groupId) {
-      setIsLoading(false);
+      if (mounted.current) setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    setError(null);
+    if (mounted.current) {
+      setIsLoading(true);
+      setError(null);
+    }
 
     const response = await fetchPrivateFeedPage(
       { token, userId },
       { groupId, cursor: null, categoryId, language },
     );
+
+    if (!mounted.current) return;
 
     if (response?.status === 200) {
       setImages(response.data.images);
@@ -36,7 +53,7 @@ export function usePrivateFeed({ groupId, categoryId, language } = {}) {
       setError(response?.data ?? response);
     }
 
-    setIsLoading(false);
+    if (mounted.current) setIsLoading(false);
   }, [token, userId, groupId, categoryId, language]);
 
   const loadMore = useCallback(async () => {
@@ -44,27 +61,38 @@ export function usePrivateFeed({ groupId, categoryId, language } = {}) {
       return;
     }
 
-    const response = await fetchPrivateFeedPage(
-      { token, userId },
-      { groupId, cursor: nextCursor, categoryId, language },
-    );
-
-    if (response?.status === 200) {
-      setImages((prev) => [...prev, ...response.data.images]);
-      setNextCursor(response.data.nextCursor);
-      await writeGroupFeedCache(
-        groupId,
-        { categoryId, language },
-        { images: [...images, ...response.data.images], nextCursor: response.data.nextCursor },
-      );
-    } else {
-      setError(response?.data ?? response);
+    if (loadMoreInFlight.current) {
+      return;
     }
-  }, [token, userId, groupId, categoryId, language, nextCursor, images]);
+
+    loadMoreInFlight.current = true;
+
+    try {
+      const response = await fetchPrivateFeedPage(
+        { token, userId },
+        { groupId, cursor: nextCursor, categoryId, language },
+      );
+
+      if (!mounted.current) return;
+
+      if (response?.status === 200) {
+        const nextImages = [...imagesRef.current, ...response.data.images];
+        setImages(nextImages);
+        setNextCursor(response.data.nextCursor);
+        await writeGroupFeedCache(
+          groupId,
+          { categoryId, language },
+          { images: nextImages, nextCursor: response.data.nextCursor },
+        );
+      } else {
+        setError(response?.data ?? response);
+      }
+    } finally {
+      loadMoreInFlight.current = false;
+    }
+  }, [token, userId, groupId, categoryId, language, nextCursor]);
 
   useEffect(() => {
-    let mounted = true;
-
     setIsLoading(true);
     setImages([]);
     setNextCursor(null);
@@ -72,23 +100,21 @@ export function usePrivateFeed({ groupId, categoryId, language } = {}) {
 
     (async () => {
       if (!groupId) {
-        setIsLoading(false);
+        if (mounted.current) setIsLoading(false);
         return;
       }
 
       const cached = await readGroupFeedCache(groupId, { categoryId, language });
 
-      if (mounted && cached?.images?.length) {
+      if (!mounted.current) return;
+
+      if (cached?.images?.length) {
         setImages(cached.images);
         setNextCursor(cached.nextCursor);
       }
 
       await refresh();
     })();
-
-    return () => {
-      mounted = false;
-    };
   }, [refresh, groupId, categoryId, language]);
 
   const hasMore = !!nextCursor;

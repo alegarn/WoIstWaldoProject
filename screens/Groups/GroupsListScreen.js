@@ -1,5 +1,5 @@
 import { useCallback, useContext } from 'react';
-import { View, Text, FlatList, StyleSheet } from 'react-native';
+import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import BigButton from '../../components/UI/BigButton';
@@ -28,14 +28,17 @@ export default function GroupsListScreen({ navigation }) {
     ...(data?.joined ?? []),
   ];
 
-  const openGroup = (group) => {
-    setActive(group.id).then((response) => {
+  const openGroup = async (group) => {
+    try {
+      const response = await setActive(group.id);
       if (response?.status === 200 || response?.status === 204) {
         navigation.navigate('PrivateHomeScreen', {
           scope: { kind: 'private', groupId: group.id },
         });
       }
-    });
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not open the group.');
+    }
   };
 
   if (isLoading && !data) {

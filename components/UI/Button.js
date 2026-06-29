@@ -1,7 +1,7 @@
 import { Pressable, Text, StyleSheet, View, Platform } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function Button({ children, style, onPress, mode, thin, cancel, testID, accessibilityLabel, textStyle }) {
+export default function Button({ children, style, onPress, mode, thin, cancel, testID, accessibilityLabel, textStyle, disabled }) {
 
 
   return (
@@ -14,6 +14,8 @@ export default function Button({ children, style, onPress, mode, thin, cancel, t
       <Pressable
         accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
+        accessibilityState={disabled ? { disabled: true } : undefined}
+        disabled={disabled}
         onPress={onPress}
         style={({pressed}) => pressed && styles.pressed}
         testID={testID}

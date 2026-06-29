@@ -46,27 +46,31 @@ export default function CreateGroupScreen({ navigation }) {
     setIsConfirmVisible(false);
     setIsSubmitting(true);
 
-    const response = await createGroup(authContext, {
-      name: name.trim(),
-      primaryColor,
-      secondaryColor,
-    });
-
-    setIsSubmitting(false);
-
-    if (response?.status === 200 || response?.status === 201) {
-      const newGroup = response?.data;
-      const groupId = newGroup?.id ?? newGroup?.private_group?.id;
-      if (groupId) {
-        await setActive(groupId);
-      }
-      navigation.replace('PrivateHomeScreen', {
-        scope: { kind: 'private', groupId },
+    try {
+      const response = await createGroup(authContext, {
+        name: name.trim(),
+        primaryColor,
+        secondaryColor,
       });
-      return;
-    }
 
-    Alert.alert(`Error ${response?.status ?? ''}`, 'Could not create the group. Please try again.');
+      if (response?.status === 200 || response?.status === 201) {
+        const newGroup = response?.data;
+        const groupId = newGroup?.id ?? newGroup?.private_group?.id;
+        if (groupId) {
+          await setActive(groupId);
+        }
+        navigation.replace('PrivateHomeScreen', {
+          scope: { kind: 'private', groupId },
+        });
+        return;
+      }
+
+      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not create the group. Please try again.');
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not create the group. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   if (isSubmitting) {

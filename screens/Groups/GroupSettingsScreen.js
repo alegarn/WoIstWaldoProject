@@ -100,17 +100,22 @@ export default function GroupSettingsScreen({ navigation }) {
 
   const saveSettings = async () => {
     setIsSavingSettings(true);
-    const response = await updateGroupSettings(authContext, groupId, {
-      name: name.trim(),
-      primaryColor,
-      secondaryColor,
-    });
-    setIsSavingSettings(false);
-    if (response?.status === 200 || response?.status === 204) {
-      Alert.alert('Saved', 'Group settings updated.');
-      refresh();
-    } else {
-      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not save settings.');
+    try {
+      const response = await updateGroupSettings(authContext, groupId, {
+        name: name.trim(),
+        primaryColor,
+        secondaryColor,
+      });
+      if (response?.status === 200 || response?.status === 204) {
+        Alert.alert('Saved', 'Group settings updated.');
+        refresh();
+      } else {
+        Alert.alert(`Error ${response?.status ?? ''}`, 'Could not save settings.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not save settings.');
+    } finally {
+      setIsSavingSettings(false);
     }
   };
 
