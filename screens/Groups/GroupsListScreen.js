@@ -15,7 +15,6 @@ export default function GroupsListScreen({ navigation }) {
   const { setActive } = useActiveGroup();
 
   const owned = data?.owned ?? [];
-  const canCreateGroup = (authContext?.premiumTier ?? 0) >= 2 && owned.length === 0;
 
   useFocusEffect(
     useCallback(() => {
@@ -69,13 +68,16 @@ export default function GroupsListScreen({ navigation }) {
           onPress={() => navigation.navigate('JoinByCodeScreen')}
           testID="groups-list.button.join"
         />
-        {canCreateGroup && (
-          <BigButton
-            text="Create group"
-            onPress={() => navigation.navigate('CreateGroupScreen')}
-            testID="groups-list.button.create"
-          />
-        )}
+        <BigButton
+          text="Create group"
+          onPress={() => navigation.navigate('CreateGroupScreen')}
+          testID="groups-list.button.create"
+        />
+        <BigButton
+          text="Store"
+          onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+          testID="groups-list.button.store"
+        />
       </View>
     );
   }
@@ -105,13 +107,16 @@ export default function GroupsListScreen({ navigation }) {
         onPress={() => navigation.navigate('JoinByCodeScreen')}
         testID="groups-list.button.join"
       />
-      {canCreateGroup && (
-        <BigButton
-          text="Create group"
-          onPress={() => navigation.navigate('CreateGroupScreen')}
-          testID="groups-list.button.create"
-        />
-      )}
+      <BigButton
+        text="Create group"
+        onPress={() => navigation.navigate('CreateGroupScreen')}
+        testID="groups-list.button.create"
+      />
+      <BigButton
+        text="Store"
+        onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+        testID="groups-list.button.store"
+      />
     </View>
   );
 }

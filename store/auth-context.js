@@ -47,13 +47,23 @@ function configureCreatorBilling({ userId }) {
   }
 
   try {
-    const Purchases = require('react-native-purchases').Purchases;
+    const { Purchases, LOG_LEVEL } = require('react-native-purchases');
     const Platform = require('react-native').Platform;
-    const apiKey = Platform.OS === 'ios'
+
+    if (__DEV__) {
+      Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+    }
+
+    const platformKey = Platform.OS === 'ios'
       ? process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY
       : process.env.EXPO_PUBLIC_REVENUECAT_ANDROID_API_KEY;
 
+    const apiKey = __DEV__ && process.env.EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY
+      ? process.env.EXPO_PUBLIC_REVENUECAT_TEST_STORE_API_KEY
+      : platformKey;
+
     if (!apiKey) {
+      console.warn('RevenueCat: missing API key — purchases disabled');
       return;
     }
 

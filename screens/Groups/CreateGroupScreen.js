@@ -1,6 +1,7 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
 
+import BigButton from '../../components/UI/BigButton';
 import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -24,14 +25,20 @@ export default function CreateGroupScreen({ navigation }) {
   const owned = data?.owned ?? [];
   const canCreateGroup = (authContext?.premiumTier ?? 0) >= 2 && owned.length === 0;
 
-  useEffect(() => {
-    if (!canCreateGroup) {
-      navigation.replace('PaywallScreen', { intent: 'create-group' });
-    }
-  }, [canCreateGroup, navigation]);
-
   if (!canCreateGroup) {
-    return <LoadingOverlay message="Checking entitlement..." />;
+    return (
+      <View style={styles.lockedContainer}>
+        <Text style={styles.lockedMessage}>
+          Group creation is a Premium+ feature.
+        </Text>
+        <BigButton
+          text="Unlock group creation"
+          onPress={() => navigation.replace('PaywallScreen', { intent: 'create-group' })}
+          testID="create-group.button.unlock"
+          accessibilityLabel="Unlock group creation"
+        />
+      </View>
+    );
   }
 
   const submit = () => {
@@ -133,6 +140,8 @@ export default function CreateGroupScreen({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20 },
+  lockedContainer: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20, alignItems: 'center', justifyContent: 'center' },
+  lockedMessage: { color: GlobalStyle.color.win, fontSize: 18, textAlign: 'center', marginBottom: 20 },
   label: { color: '#fff', fontSize: 16, marginTop: 12 },
   input: { backgroundColor: '#fff', color: '#000', padding: 10, marginTop: 4, borderRadius: 4 },
   button: { marginTop: 24, backgroundColor: GlobalStyle.color.primaryColor100 },
