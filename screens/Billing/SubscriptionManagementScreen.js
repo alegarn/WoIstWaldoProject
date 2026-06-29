@@ -28,7 +28,7 @@ function platformSubscriptionUrl() {
     : 'https://play.google.com/store/account/subscriptions';
 }
 
-export default function SubscriptionManagementScreen() {
+export default function SubscriptionManagementScreen({ navigation }) {
   const authContext = useContext(AuthContext);
   const [isWorking, setIsWorking] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
@@ -86,6 +86,16 @@ export default function SubscriptionManagementScreen() {
         </Text>
       )}
 
+      {(authContext?.premiumTier ?? 0) < 3 && (
+        <Button
+          accessibilityLabel="Upgrade"
+          onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+          style={styles.button}
+          testID="subscription-manage.button.upgrade"
+        >
+          Upgrade
+        </Button>
+      )}
       <Button
         accessibilityLabel="Restore purchases"
         onPress={handleRestore}

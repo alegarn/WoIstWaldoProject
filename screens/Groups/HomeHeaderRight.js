@@ -57,6 +57,15 @@ export function HomeHeaderRight({ navigation, tintColor }) {
         testID="home.header.groups-star"
         style={{ marginRight: 20 }}
       />
+      <IconButton
+        accessibilityLabel="Open store"
+        icon="diamond-outline"
+        color={tintColor}
+        size={24}
+        style={{ marginRight: 20 }}
+        onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+        testID="home.header.store"
+      />
     </View>
   );
 }

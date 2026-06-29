@@ -306,6 +306,16 @@ const SettingsScreen = ({ navigation }) => {
               style={styles.button}
               testID="settings.button.subscription"
             />
+            {(context?.premiumTier ?? 0) < 1 && (
+              <Button
+                accessibilityLabel="Go premium"
+                children="Go Premium (no ads)"
+                mode="flat"
+                onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+                style={styles.button}
+                testID="settings.button.go-premium"
+              />
+            )}
           </View>
 
           <View style={styles.dangerZoneContainer}>

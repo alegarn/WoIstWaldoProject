@@ -82,9 +82,15 @@ describe('CreateGroupScreen', () => {
     return { renderer, navigation };
   }
 
-  it('routes to PaywallScreen when the user premium tier is below 2', async () => {
+  it('renders the unlock CTA when the user premium tier is below 2 and routes to PaywallScreen on tap', async () => {
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    await renderScreen({ authContext: { premiumTier: 1 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 1 }, navigation });
+
+    expect(renderer.root.findByProps({ testID: 'create-group.button.unlock' })).toBeTruthy();
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' }).props.onPress();
+    });
 
     expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
   });

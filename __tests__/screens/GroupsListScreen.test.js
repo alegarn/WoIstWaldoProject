@@ -89,16 +89,16 @@ describe('GroupsListScreen', () => {
     expect(renderer.root.findByProps({ testID: 'groups-list.empty' })).toBeTruthy();
   });
 
-  it('offers the create-group CTA only when premiumTier >= 2 and the user owns no group', async () => {
+  it('always offers the create-group CTA regardless of tier or ownership (Fix A: gate removed)', async () => {
     const renderer = await renderScreen({
-      authContext: { premiumTier: 2 },
+      authContext: { premiumTier: 0 },
       hubData: { owned: [], joined: [], pendingInvites: [] },
     });
 
     expect(renderer.root.findByProps({ testID: 'groups-list.button.create' })).toBeTruthy();
 
     const ownedRenderer = await renderScreen({
-      authContext: { premiumTier: 2 },
+      authContext: { premiumTier: 0 },
       hubData: {
         owned: [{ id: 'g-1', role: 'owner', name: 'Mine' }],
         joined: [],
@@ -106,7 +106,7 @@ describe('GroupsListScreen', () => {
       },
     });
 
-    expect(ownedRenderer.root.findAllByProps({ testID: 'groups-list.button.create' })).toHaveLength(0);
+    expect(ownedRenderer.root.findAllByProps({ testID: 'groups-list.button.create' })).toHaveLength(1);
   });
 
   it('calls setActive with the tapped group id and then navigates to PrivateHomeScreen with private scope', async () => {
