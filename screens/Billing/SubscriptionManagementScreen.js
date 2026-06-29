@@ -5,15 +5,11 @@ import Button from '../../components/UI/Button';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
-import { syncEntitlement } from '../../services/billing/billingApi';
-
-function getPurchasesModule() {
-  try {
-    return require('react-native-purchases').default;
-  } catch (error) {
-    return null;
-  }
-}
+import {
+  getPurchasesModule,
+  applyEntitlementToContext,
+  restoreAndSync,
+} from '../../utils/purchases';
 
 function tierLabel(tier) {
   if (tier >= 3) return 'Premium+ Extension';
@@ -41,17 +37,11 @@ export default function SubscriptionManagementScreen({ navigation }) {
     setIsWorking(true);
     setRestoreError(false);
     try {
-      await Purchases.restorePurchases();
-      const response = await syncEntitlement(authContext);
-      const entitlement = response?.data;
-      if (!entitlement?.is_premium) {
+      const result = await restoreAndSync(authContext);
+      if (!result.hasEntitlement) {
         setRestoreError(true);
       } else {
-        authContext.setEntitlement({
-          isPremium: entitlement.is_premium,
-          premiumTier: entitlement.premium_tier,
-          premiumExpiresAt: entitlement.premium_expires_at,
-        });
+        applyEntitlementToContext(authContext, result.entitlement);
       }
     } catch (error) {
       setRestoreError(true);

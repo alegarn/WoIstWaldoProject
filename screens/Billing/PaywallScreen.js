@@ -6,6 +6,12 @@ import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { syncEntitlement } from '../../services/billing/billingApi';
+import {
+  getPurchasesModule,
+  hasActiveEntitlement,
+  applyEntitlementToContext,
+  restoreAndSync,
+} from '../../utils/purchases';
 
 const TIER_TEST_IDS = {
   premium: 'paywall.tier.premium',
@@ -22,14 +28,6 @@ const TIER_LABELS = {
 const TIER_LOOKUP = [...Object.entries(TIER_TEST_IDS)]
   .map(([key, testId]) => [key.replaceAll('-', '_'), testId])
   .sort((a, b) => b[0].length - a[0].length);
-
-function getPurchasesModule() {
-  try {
-    return require('react-native-purchases').default;
-  } catch (error) {
-    return null;
-  }
-}
 
 function pickPackageId(pkg) {
   return pkg?.identifier ?? pkg?.product?.identifier ?? pkg?.id;
@@ -103,7 +101,16 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setIsPurchasing(true);
     try {
-      await Purchases.purchasePackage(pkg);
+      const customerInfo = await Purchases.purchasePackage(pkg);
+      if (hasActiveEntitlement(customerInfo)) {
+        try {
+          authContext.setEntitlement({
+            isPremium: true,
+            premiumTier: undefined,
+            premiumExpiresAt: undefined,
+          });
+        } catch (_) {}
+      }
       await applySyncAndRoute();
     } catch (error) {
       if (error?.userCancelled) {
@@ -122,19 +129,12 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setRestoreError(false);
     try {
-      const info = await Purchases.restorePurchases();
-      const response = await syncEntitlement(authContext);
-      const entitlement = response?.data;
-      const hasEntitlement = !!entitlement?.is_premium || (!!info && Object.keys(info.entitlements?.active ?? {}).length > 0);
-      if (!hasEntitlement) {
+      const result = await restoreAndSync(authContext);
+      if (!result.hasEntitlement) {
         setRestoreError(true);
         return;
       }
-      authContext.setEntitlement({
-        isPremium: entitlement.is_premium,
-        premiumTier: entitlement.premium_tier,
-        premiumExpiresAt: entitlement.premium_expires_at,
-      });
+      applyEntitlementToContext(authContext, result.entitlement);
     } catch (error) {
       setRestoreError(true);
       Alert.alert('Restore failed', error?.message ?? '');

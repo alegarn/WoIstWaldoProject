@@ -54,7 +54,7 @@ describe('SubscriptionManagementScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ ...authContext, setEntitlement: jest.fn() }}>
+        <AuthContext.Provider value={{ setEntitlement: jest.fn(), ...authContext }}>
           <SubscriptionManagementScreen />
         </AuthContext.Provider>
       );
@@ -110,5 +110,26 @@ describe('SubscriptionManagementScreen', () => {
     });
 
     expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
+  });
+
+  it('flips state via customerInfo active entitlement even when backend is_premium is false', async () => {
+    Purchases.restorePurchases.mockResolvedValue({ entitlements: { active: { pro: {} } } });
+    syncEntitlement.mockResolvedValue({ status: 200, data: { is_premium: false } });
+
+    const authContext = { premiumTier: 0, setEntitlement: jest.fn() };
+    const renderer = await renderScreen({ authContext });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'subscription-manage.button.restore' }).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Purchases.restorePurchases).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findAllByProps({ testID: 'subscription-error' })).toHaveLength(0);
   });
 });

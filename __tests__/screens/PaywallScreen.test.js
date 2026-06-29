@@ -60,7 +60,7 @@ describe('PaywallScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ ...authContext, setEntitlement: jest.fn() }}>
+        <AuthContext.Provider value={{ setEntitlement: jest.fn(), ...authContext }}>
           <PaywallScreen navigation={navigation} route={route} />
         </AuthContext.Provider>
       );
@@ -138,5 +138,41 @@ describe('PaywallScreen', () => {
     });
 
     expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
+  });
+
+  it('optimistically flips entitlement to premium after purchase before syncEntitlement resolves', async () => {
+    let resolveSync;
+    syncEntitlement.mockReturnValue(new Promise((resolve) => { resolveSync = resolve; }));
+    Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { pro: {} } } });
+
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({
+      authContext,
+      navigation,
+      route: { params: { intent: 'store' } },
+    });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledWith(expect.objectContaining({ isPremium: true }));
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSync({ status: 200, data: { is_premium: true, premium_tier: 1 } });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
   });
 });

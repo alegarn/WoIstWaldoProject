@@ -41,7 +41,11 @@ export function useAuthContext() {
   return useContext(AuthContext);
 }
 
-function configureCreatorBilling({ userId }) {
+let customerInfoListener = null;
+let syncEntitlementTimer = null;
+const SYNC_ENTITLEMENT_DEBOUNCE_MS = 1000;
+
+function configureCreatorBilling({ userId, authContextRef }) {
   if (!userId) {
     return;
   }
@@ -68,6 +72,42 @@ function configureCreatorBilling({ userId }) {
     }
 
     Purchases.configure({ apiKey, appUserID: `user:${userId}` });
+
+    if (typeof Purchases.addCustomerInfoUpdateListener === 'function') {
+      const handleCustomerInfoUpdate = () => {
+        if (syncEntitlementTimer) {
+          clearTimeout(syncEntitlementTimer);
+        }
+
+        syncEntitlementTimer = setTimeout(async () => {
+          syncEntitlementTimer = null;
+
+          try {
+            const context = authContextRef?.current;
+            if (!context) {
+              return;
+            }
+
+            const { syncEntitlement } = require('../services/billing/billingApi');
+            const response = await syncEntitlement(context);
+            const entitlement = response?.data;
+
+            if (entitlement) {
+              context.setEntitlement({
+                isPremium: entitlement.is_premium,
+                premiumTier: entitlement.premium_tier,
+                premiumExpiresAt: entitlement.premium_expires_at,
+              });
+            }
+          } catch (error) {
+            console.warn('customerInfo listener sync failed', error?.message ?? error);
+          }
+        }, SYNC_ENTITLEMENT_DEBOUNCE_MS);
+      };
+
+      customerInfoListener = handleCustomerInfoUpdate;
+      Purchases.addCustomerInfoUpdateListener(handleCustomerInfoUpdate);
+    }
   } catch (error) {
     console.warn('configureCreatorBilling failed', error?.message ?? error);
   }
@@ -76,6 +116,20 @@ function configureCreatorBilling({ userId }) {
 async function teardownCreatorBilling() {
   try {
     const Purchases = require('react-native-purchases').Purchases;
+
+    if (syncEntitlementTimer) {
+      clearTimeout(syncEntitlementTimer);
+      syncEntitlementTimer = null;
+    }
+
+    if (customerInfoListener && typeof Purchases?.removeCustomerInfoUpdateListener === 'function') {
+      try {
+        Purchases.removeCustomerInfoUpdateListener(customerInfoListener);
+      } catch (error) {
+        console.warn('removeCustomerInfoUpdateListener failed', error?.message ?? error);
+      }
+      customerInfoListener = null;
+    }
 
     if (typeof Purchases?.logOut === 'function') {
       await Purchases.logOut();
@@ -103,6 +157,7 @@ export default function AuthContextProvider({ children }) {
 
   const logoutRef = useRef(logout);
   const isLoggingOutRef = useRef(false);
+  const authContextRef = useRef(null);
 
   useEffect(() => {
     logoutRef.current = logout;
@@ -183,7 +238,7 @@ export default function AuthContextProvider({ children }) {
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(false);
 
-    configureCreatorBilling({ userId });
+    configureCreatorBilling({ userId, authContextRef });
 
     await saveIsTutorialFinished(isTutorialFinished);    
 
@@ -326,6 +381,10 @@ export default function AuthContextProvider({ children }) {
     turnTutorialOn: turnTutorialOn,
     updateTutorialStatus: updateTutorialStatus
   };
+
+  useEffect(() => {
+    authContextRef.current = value;
+  });
 
   return (
     <AuthContext.Provider value={value}>
