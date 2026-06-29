@@ -34,7 +34,7 @@
     "react": "19.2.3",
     "react-native": "0.85.3",
     "react-native-gesture-handler": "~2.31.1",
-    "react-native-google-mobile-ads": "^16.3.4",
+    "react-native-google-mobile-ads": "^16.4.0",
     "react-native-purchases": "^8.4.0",
     "react-native-reanimated-table": "^0.0.2",
     "react-native-safe-area-context": "~5.7.0",
