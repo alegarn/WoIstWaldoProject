@@ -10,6 +10,13 @@ jest.mock('react-native', () => ({
   },
 }));
 
+jest.mock('../components/UI/IconButton', () => {
+  const React = require('react');
+  return function MockIconButton({ onPress }) {
+    return React.createElement('Pressable', { onPress, testID: 'guess-description.chevron' });
+  };
+});
+
 jest.mock('../constants/theme', () => ({
   GlobalStyle: {
     color: {
