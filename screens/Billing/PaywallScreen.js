@@ -19,6 +19,10 @@ const TIER_LABELS = {
   'premium-plus-extension': 'Premium+ Extension',
 };
 
+const TIER_LOOKUP = [...Object.entries(TIER_TEST_IDS)]
+  .map(([key, testId]) => [key.replaceAll('-', '_'), testId])
+  .sort((a, b) => b[0].length - a[0].length);
+
 function getPurchasesModule() {
   try {
     return require('react-native-purchases').default;
@@ -33,6 +37,15 @@ function pickPackageId(pkg) {
 
 function pickPackagePrice(pkg) {
   return pkg?.product?.priceString ?? pkg?.priceString ?? '';
+}
+
+function tierTestIdForPackage(pkg) {
+  const id = pickPackageId(pkg)?.replaceAll('-', '_');
+  if (!id) return null;
+  for (const [key, testId] of TIER_LOOKUP) {
+    if (id === key || id.startsWith(key + '_')) return testId;
+  }
+  return null;
 }
 
 export default function PaywallScreen({ navigation, route }) {
@@ -139,16 +152,18 @@ export default function PaywallScreen({ navigation, route }) {
         keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
         renderItem={({ item }) => {
-          const id = pickPackageId(item);
-          const tierKey = Object.keys(TIER_TEST_IDS).find((key) => id && id.includes(key.replaceAll('-', '_'))) ?? 'premium';
+          const tierTestId = tierTestIdForPackage(item) ?? 'paywall.tier.premium';
+          const tierKey = Object.keys(TIER_TEST_IDS).find(
+            (key) => TIER_TEST_IDS[key] === tierTestId
+          ) ?? 'premium';
           return (
-            <View style={styles.tierCard} testID={TIER_TEST_IDS[tierKey] ?? 'paywall.tier.premium'}>
+            <View style={styles.tierCard} testID={tierTestId}>
               <Text style={styles.tierTitle}>{TIER_LABELS[tierKey] ?? 'Premium'}</Text>
               <Text style={styles.tierPrice}>{pickPackagePrice(item)}</Text>
               <BigButton
                 text="Subscribe"
                 onPress={() => handlePurchase(item)}
-                testID={`${TIER_TEST_IDS[tierKey] ?? 'paywall.tier.premium'}.subscribe`}
+                testID={`${tierTestId}.subscribe`}
               />
             </View>
           );

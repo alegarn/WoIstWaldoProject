@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import { usePrivateFeed } from '../../hooks/usePrivateFeed';
@@ -82,5 +82,85 @@ describe('usePrivateFeed', () => {
 
     expect(result.current.images).toHaveLength(1);
     expect(result.current.error).toBeTruthy();
+  });
+
+  it('does not emit a React state-update warning when refresh resolves after unmount', async () => {
+    let resolveRefresh;
+    fetchPrivateFeedPage.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRefresh = resolve;
+    }));
+
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result, unmount } = renderHook(
+      () => usePrivateFeed({ groupId: 'g-123' }),
+      { wrapper: Wrapper }
+    );
+
+    await act(async () => {
+      result.current.refresh();
+    });
+
+    unmount();
+
+    await act(async () => {
+      resolveRefresh({ status: 200, data: { images: [{ id: 'late' }], nextCursor: null } });
+    });
+
+    const reactWarningCalls = consoleError.mock.calls.filter((args) =>
+      typeof args[0] === 'string' && /state update on an unmounted component|Can't perform a React state update/i.test(args[0])
+    );
+
+    expect(reactWarningCalls).toHaveLength(0);
+
+    consoleError.mockRestore();
+  });
+
+  it('loadMore guards against overlapping invocations and avoids duplicate rows', async () => {
+    fetchPrivateFeedPage.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [{ id: 'pi-1' }], nextCursor: 'cursor-2' },
+    });
+
+    const firstPageExtra = { status: 200, data: { images: [{ id: 'pi-2' }], nextCursor: null } };
+    const secondPageExtra = { status: 200, data: { images: [{ id: 'pi-3' }], nextCursor: null } };
+
+    let resolveFirst;
+    let resolveSecond;
+    fetchPrivateFeedPage.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }));
+    fetchPrivateFeedPage.mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
+
+    const { result } = renderHook(
+      () => usePrivateFeed({ groupId: 'g-123' }),
+      { wrapper: Wrapper }
+    );
+
+    await waitFor(() => expect(result.current.images).toEqual([{ id: 'pi-1' }]));
+
+    await act(async () => {
+      result.current.loadMore();
+    });
+
+    await act(async () => {
+      result.current.loadMore();
+    });
+
+    await act(async () => {
+      resolveFirst(firstPageExtra);
+    });
+
+    await act(async () => {
+      resolveSecond(secondPageExtra);
+    });
+
+    const calls = fetchPrivateFeedPage.mock.calls.filter((call) =>
+      call[1] && call[1].cursor === 'cursor-2'
+    );
+
+    expect(calls).toHaveLength(1);
+
+    const ids = result.current.images.map((image) => image.id);
+    const unique = new Set(ids);
+    expect(unique.size).toBe(ids.length);
   });
 });

@@ -46,6 +46,7 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { Alert } from 'react-native';
 
 import CreateGroupScreen from '../../screens/Groups/CreateGroupScreen';
 import { AuthContext } from '../../store/auth-context';
@@ -54,6 +55,7 @@ import { createGroup } from '../../services/groups/groupApi';
 describe('CreateGroupScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     mockUseGroupsHub.mockReturnValue({
       data: { owned: [], joined: [], pendingInvites: [] },
       isLoading: false,
@@ -61,6 +63,10 @@ describe('CreateGroupScreen', () => {
       refresh: jest.fn(),
     });
     mockUseActiveGroup.mockReturnValue({ setActive: jest.fn() });
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
   });
 
   async function renderScreen({ authContext = {}, navigation = { replace: jest.fn(), navigate: jest.fn() } } = {}) {
@@ -120,5 +126,35 @@ describe('CreateGroupScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
       scope: { kind: 'private', groupId: 'g-new' },
     });
+  });
+
+  it('surfaces an Alert and resets isSubmitting when createGroup rejects', async () => {
+    createGroup.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
+      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
+      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'create-group.button.submit' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+    expect(modalProps.confirmTestID).toBe('create-group.confirm.ok');
+
+    await act(async () => {
+      await modalProps.onPress();
+      await Promise.resolve();
+    });
+
+    expect(Alert.alert).toHaveBeenCalled();
+
+    expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
   });
 });

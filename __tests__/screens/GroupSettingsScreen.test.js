@@ -72,14 +72,21 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { Alert } from 'react-native';
 
 import GroupSettingsScreen from '../../screens/Groups/GroupSettingsScreen';
 import { listGroupCategories } from '../../services/groups/groupCategoriesApi';
+import { updateGroupSettings } from '../../services/groups/groupApi';
 
 describe('GroupSettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     listGroupCategories.mockResolvedValue({ status: 200, data: [] });
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
   });
 
   async function renderScreen({ scope = { kind: 'private', groupId: 'g-3' }, groupsData, navigation = { replace: jest.fn() } } = {}) {
@@ -132,5 +139,27 @@ describe('GroupSettingsScreen', () => {
     });
 
     expect(navigation.replace).toHaveBeenCalledWith('GroupsListScreen');
+  });
+
+  it('surfaces an Alert and resets isSavingSettings when updateGroupSettings rejects', async () => {
+    updateGroupSettings.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
+
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Alert.alert).toHaveBeenCalled();
+
+    const saveButtonProps = renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props;
+    expect(saveButtonProps.text).toBe('Save');
   });
 });

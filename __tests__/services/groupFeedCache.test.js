@@ -44,6 +44,7 @@ jest.mock('expo-file-system', () => {
 });
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { File, Paths } from 'expo-file-system';
 import {
   readGroupFeedCache,
   writeGroupFeedCache,
@@ -114,5 +115,41 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
     expect(keys).not.toContain('groupFeed:g-3:all:any');
     expect(keys).not.toContain('groupFeed:g-3:all:any:cursor');
     expect(keys).toContain('public_guess_cache');
+  });
+
+  it('purgeAllPrivateCaches deletes only private-* file URIs and leaves public-* file URIs alone', async () => {
+    const listedUris = [
+      'file:///cache/private-img-1.png',
+      'file:///cache/public-img-2.png',
+      'file:///cache/private-img-3.jpg',
+    ];
+
+    const cacheDir = Paths.cache;
+    const originalList = cacheDir.list;
+    const deletedUris = [];
+
+    File.mockImplementation(function MockFile(uri) {
+      this.uri = typeof uri === 'string' ? uri : uri?.uri;
+      this.exists = true;
+      this.delete = jest.fn(() => { deletedUris.push(this.uri); });
+    });
+    cacheDir.list = () => listedUris;
+
+    try {
+      await purgeAllPrivateCaches();
+    } finally {
+      cacheDir.list = originalList;
+      File.mockImplementation(function MockFile(uri) {
+        this.uri = typeof uri === 'string' ? uri : uri?.uri;
+        this.exists = true;
+        this.delete = jest.fn();
+      });
+    }
+
+    expect(deletedUris).toEqual(expect.arrayContaining([
+      'file:///cache/private-img-1.png',
+      'file:///cache/private-img-3.jpg',
+    ]));
+    expect(deletedUris).not.toContain('file:///cache/public-img-2.png');
   });
 });

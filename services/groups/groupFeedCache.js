@@ -103,6 +103,24 @@ export async function clearAllGroupFeedCaches() {
   }
 }
 
+// Private group feed images are written under Paths.cache with a `private-`
+// basename prefix (see services/groups/groupFeedApi.js extractBase64) so the
+// purge below can target them without touching public cache files written by
+// utils/imagesRequests.js. Pre-existing private entries written before the
+// prefix was introduced are intentionally left alone and will age out.
+const PRIVATE_CACHE_PREFIX = 'private-';
+
+function isPrivateCacheUri(uri) {
+  if (typeof uri !== 'string') {
+    return false;
+  }
+
+  const segments = uri.split('/');
+  const name = segments[segments.length - 1];
+
+  return name.startsWith(PRIVATE_CACHE_PREFIX);
+}
+
 export async function purgeAllPrivateCaches() {
   await clearAllGroupFeedCaches();
 
@@ -114,7 +132,7 @@ export async function purgeAllPrivateCaches() {
     if (Array.isArray(entries)) {
       for (const entry of entries) {
         const uri = typeof entry === 'string' ? entry : entry?.uri;
-        if (typeof uri === 'string') {
+        if (isPrivateCacheUri(uri)) {
           deleteFileIfPresent(uri);
         }
       }

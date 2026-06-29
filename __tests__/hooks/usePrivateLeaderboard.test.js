@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import { usePrivateLeaderboard } from '../../hooks/usePrivateLeaderboard';
@@ -108,5 +108,40 @@ describe('usePrivateLeaderboard', () => {
 
     expect(result.current.rows).toEqual([]);
     expect(result.current.error).toEqual({ error: 'boom' });
+  });
+
+  it('does not emit a React state-update warning when refresh resolves after unmount', async () => {
+    let resolveRefresh;
+    fetchPrivateLeaderboard.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRefresh = resolve;
+    }));
+
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result, unmount } = renderHook(
+      () => usePrivateLeaderboard({ groupId: 'g-7', limit: 20 }),
+      { wrapper: Wrapper }
+    );
+
+    await act(async () => {
+      result.current.refresh();
+    });
+
+    unmount();
+
+    await act(async () => {
+      resolveRefresh({
+        status: 200,
+        data: { rows: [{ user_id: 'u-late', total_score: 1 }], nextCursor: null },
+      });
+    });
+
+    const reactWarningCalls = consoleError.mock.calls.filter((args) =>
+      typeof args[0] === 'string' && /state update on an unmounted component|Can't perform a React state update/i.test(args[0])
+    );
+
+    expect(reactWarningCalls).toHaveLength(0);
+
+    consoleError.mockRestore();
   });
 });

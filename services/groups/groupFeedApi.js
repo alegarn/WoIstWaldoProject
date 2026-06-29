@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { File, Paths } from 'expo-file-system';
+import { fromByteArray } from 'base64-js';
 import Image from '../../models/image';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
@@ -51,7 +52,7 @@ async function extractBase64(imageData, filename) {
   const fileExtension = extensionMatch ? extensionMatch[1] : 'png';
 
   await ensureDirExists();
-  const imageFile = new File(Paths.cache, `${filename}.${fileExtension}`);
+  const imageFile = new File(Paths.cache, `private-${filename}.${fileExtension}`);
   imageFile.write(base64Data, { encoding: 'base64' });
 
   return imageFile.uri;
@@ -79,7 +80,7 @@ function normalizePrivateImage(row, filePath) {
   const image = new Image(
     filePath,
     safeRow.name,
-    safeRow.description,
+    safeRow.description ?? safeRow.full_description,
     safeRow.image_height,
     safeRow.image_width,
     safeRow.is_portrait,
@@ -150,16 +151,36 @@ export async function downloadPrivateImage(context, { groupId, imageId }) {
     return null;
   }
 
-  const downloadConfig = usesBackendStorage(presignedUrl) ? { headers: setStorageDownloadHeaders(token) } : {};
-  const imageData = await axios.get(presignedUrl, downloadConfig)
-    .then((response) => response.data)
+  const downloadConfig = usesBackendStorage(presignedUrl)
+    ? { headers: setStorageDownloadHeaders(token) }
+    : { responseType: 'arraybuffer', timeout: 15000 };
+  const downloadResponse = await axios.get(presignedUrl, downloadConfig)
+    .then((response) => response)
     .catch(() => null);
 
-  if (!imageData) {
+  const downloadedData = downloadResponse?.data;
+  if (!downloadedData) {
     return null;
   }
 
-  return extractBase64(imageData, imageId);
+  let dataUrl;
+  if (typeof downloadedData === 'string') {
+    dataUrl = downloadedData;
+  } else {
+    const bytes = downloadedData instanceof ArrayBuffer
+      ? new Uint8Array(downloadedData)
+      : ArrayBuffer.isView(downloadedData)
+        ? new Uint8Array(downloadedData.buffer, downloadedData.byteOffset, downloadedData.byteLength)
+        : null;
+    if (!bytes) {
+      return null;
+    }
+    const contentType = downloadResponse.headers?.['content-type']?.split(';')[0] || 'image/png';
+    dataUrl = `data:${contentType};base64,${fromByteArray(bytes)}`;
+  }
+
+  const extracted = extractBase64(dataUrl, imageId);
+  return extracted || null;
 }
 
 export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey } = {}) {

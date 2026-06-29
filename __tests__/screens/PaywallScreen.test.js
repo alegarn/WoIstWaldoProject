@@ -70,15 +70,26 @@ describe('PaywallScreen', () => {
     return renderer;
   }
 
-  it('renders one tier card per available package (each carrying a paywall.tier.* testID and a .subscribe button)', async () => {
+  it('renders one distinct tier testID per available package (premium, premium-plus, premium-plus-extension)', async () => {
     const renderer = await renderScreen();
 
-    const subscribeButtons = renderer.root.findAll((node) =>
-      typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
-    );
+    const premiumCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium' });
+    const premiumPlusCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus' });
+    const premiumPlusExtensionCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension' });
 
-    expect(subscribeButtons).toHaveLength(PACKAGES.length);
-    expect(subscribeButtons.every((node) => node.props.testID.startsWith('paywall.tier.'))).toBe(true);
+    expect(premiumCards.length).toBeGreaterThanOrEqual(1);
+    expect(premiumPlusCards.length).toBeGreaterThanOrEqual(1);
+    expect(premiumPlusExtensionCards.length).toBeGreaterThanOrEqual(1);
+
+    const subscribeByTier = {
+      'paywall.tier.premium.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium.subscribe' }),
+      'paywall.tier.premium-plus.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus.subscribe' }),
+      'paywall.tier.premium-plus-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension.subscribe' }),
+    };
+
+    expect(subscribeByTier['paywall.tier.premium.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.premium-plus.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.premium-plus-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
   });
 
   it('calls Purchases.purchasePackage then syncEntitlement and routes after a tier subscribe tap', async () => {

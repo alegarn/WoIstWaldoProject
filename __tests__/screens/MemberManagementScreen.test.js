@@ -148,4 +148,55 @@ describe('MemberManagementScreen', () => {
       membershipId: 'm-2',
     }));
   });
+
+  it('disables the remove trigger during an in-flight removeMember and surfaces only one API call', async () => {
+    let resolveRemove;
+    removeMember.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRemove = resolve;
+    }));
+
+    const renderer = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+      members: [{ id: 'm-2', user_id: 'u-2', username: 'waldo', role: 'member' }],
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'member-mgmt.button.remove' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    const confirmModalCall = mockCenteredModal.mock.calls
+      .map(([props]) => props)
+      .filter((props) => props.confirmTestID === 'members.remove.confirm.ok' && props.isModalVisible)
+      .pop();
+
+    let confirmPromise;
+    await act(async () => {
+      confirmPromise = confirmModalCall.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const removeButtonDuringFlight = renderer.root.findAllByProps({ testID: 'member-mgmt.button.remove' })[0];
+    expect(removeButtonDuringFlight.props.disabled).toBe(true);
+
+    const removeModalCalls = mockCenteredModal.mock.calls
+      .map(([props]) => props)
+      .filter((props) => props.confirmTestID === 'members.remove.confirm.ok');
+    const latestRemoveModalCall = removeModalCalls[removeModalCalls.length - 1];
+    expect(latestRemoveModalCall.isModalVisible).toBe(false);
+
+    await act(async () => {
+      resolveRemove({ status: 204, data: null });
+      await confirmPromise;
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(removeMember).toHaveBeenCalledTimes(1);
+  });
 });

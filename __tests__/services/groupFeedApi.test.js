@@ -159,4 +159,40 @@ describe('services/groups/groupFeedApi', () => {
     expect(response.images).toHaveLength(1);
     expect(response.images[0].imageFile).toEqual(expect.stringContaining('img-1'));
   });
+
+  it('downloadPrivateImage requests an S3 presigned URL as arraybuffer and returns a base64 data URL', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
+      })
+      .mockResolvedValueOnce({
+        data: new ArrayBuffer(8),
+        headers: { 'content-type': 'image/jpeg' },
+      });
+
+    const fileUri = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
+
+    expect(axios.get).toHaveBeenNthCalledWith(
+      2,
+      'https://s3.amazonaws.com/bucket/private/img-1.jpg',
+      expect.objectContaining({ responseType: 'arraybuffer' })
+    );
+
+    expect(typeof fileUri).toBe('string');
+    expect(fileUri).toEqual(expect.stringContaining('img-1'));
+  });
+
+  it('downloadPrivateImage returns null instead of throwing when the presign download rejects', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
+      })
+      .mockRejectedValueOnce(new Error('network down'));
+
+    const result = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
+
+    expect(result).toBeNull();
+  });
 });

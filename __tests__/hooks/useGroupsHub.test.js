@@ -1,4 +1,4 @@
-import { renderHook, waitFor } from '@testing-library/react-native';
+import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React from 'react';
 
 import { useGroupsHub } from '../../hooks/useGroupsHub';
@@ -73,5 +73,37 @@ describe('useGroupsHub', () => {
 
     expect(fetchGroups).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
+  });
+
+  it('does not emit a React state-update warning when refresh resolves after unmount', async () => {
+    let resolveRefresh;
+    fetchGroups.mockReturnValueOnce(new Promise((resolve) => {
+      resolveRefresh = resolve;
+    }));
+
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const { result, unmount } = renderHook(() => useGroupsHub(), { wrapper: makeWrapper() });
+
+    await act(async () => {
+      result.current.refresh();
+    });
+
+    unmount();
+
+    await act(async () => {
+      resolveRefresh({
+        status: 200,
+        data: { owned: [{ id: 'g-late' }], joined: [], pendingInvites: [] },
+      });
+    });
+
+    const reactWarningCalls = consoleError.mock.calls.filter((args) =>
+      typeof args[0] === 'string' && /state update on an unmounted component|Can't perform a React state update/i.test(args[0])
+    );
+
+    expect(reactWarningCalls).toHaveLength(0);
+
+    consoleError.mockRestore();
   });
 });

@@ -25,8 +25,10 @@ export function useActiveGroup() {
   }, [token, userId, setActiveGroupId, setPrivateMode]);
 
   const clear = useCallback(() => {
+    setActiveGroup({ token, userId }, null).catch(() => {});
+    setActiveGroupId(null);
     return setPrivateMode(false);
-  }, [setPrivateMode]);
+  }, [token, userId, setActiveGroupId, setPrivateMode]);
 
   const scope = useMemo(
     () => (isPrivateMode && activeGroupId)

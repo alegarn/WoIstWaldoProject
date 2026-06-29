@@ -26,6 +26,7 @@ jest.mock('../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { Alert } from 'react-native';
 
 import JoinByCodeScreen from '../screens/Groups/JoinByCodeScreen';
 import { AuthContext } from '../store/auth-context';
@@ -36,8 +37,13 @@ describe('JoinByCodeScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     setActive = jest.fn().mockResolvedValue({ status: 200 });
     mockUseActiveGroup.mockReturnValue({ setActive });
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
   });
 
   async function flushEffects() {
@@ -135,5 +141,18 @@ describe('JoinByCodeScreen', () => {
       scope: { kind: 'private', groupId: 'group-5' },
     });
     expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('surfaces the join-code.error message and resets isSubmitting when joinByCode rejects', async () => {
+    joinByCode.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
+
+    const { renderer } = await renderScreen();
+
+    await submitCode(renderer, 'BOOM422');
+
+    expect(joinByCode).toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'join-code.error' }).props.children.length).toBeGreaterThan(0);
+    expect(setActive).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'join-code.button.submit' })).toBeTruthy();
   });
 });
