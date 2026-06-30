@@ -29,7 +29,7 @@ export default function CreateGroupScreen({ navigation }) {
     return (
       <View style={styles.lockedContainer}>
         <Text style={styles.lockedMessage}>
-          Group creation is a Premium+ feature.
+          Group creation is a Private Group feature.
         </Text>
         <BigButton
           text="Unlock group creation"

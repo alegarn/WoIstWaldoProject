@@ -12,9 +12,9 @@ import {
 } from '../../utils/purchases';
 
 function tierLabel(tier) {
-  if (tier >= 3) return 'Premium+ Extension';
-  if (tier === 2) return 'Premium+';
-  if (tier === 1) return 'Premium';
+  if (tier >= 3) return 'Extended Group';
+  if (tier === 2) return 'Private Group';
+  if (tier === 1) return 'No-ads';
   return 'Free';
 }
 

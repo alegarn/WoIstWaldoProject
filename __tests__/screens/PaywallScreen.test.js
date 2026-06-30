@@ -27,6 +27,7 @@ jest.mock('../../store/auth-context', () => {
 });
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import PaywallScreen from '../../screens/Billing/PaywallScreen';
@@ -34,17 +35,15 @@ import { AuthContext } from '../../store/auth-context';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import Purchases from 'react-native-purchases';
 
-const PACKAGES = [
-  { identifier: '$rc_custom_a', product: { identifier: 'extendedGroup', priceString: '$4.99' } },
-  { identifier: '$rc_custom_b', product: { identifier: 'privateGroup', priceString: '$9.99' } },
-  { identifier: '$rc_custom_c', product: { identifier: 'noAds', priceString: '$2.99' } },
-];
-
 describe('PaywallScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Purchases.getOfferings.mockResolvedValue({
-      current: { availablePackages: PACKAGES },
+      all: {
+        no_ads_offering: { availablePackages: [ { identifier: '$rc_custom_c', product: { identifier: 'no_ads', priceString: '$2.99' } } ] },
+        private_group_creator_offering: { availablePackages: [ { identifier: '$rc_custom_b', product: { identifier: 'private_group_creator', priceString: '$9.99' } } ] },
+        private_group_extension_offering: { availablePackages: [ { identifier: '$rc_custom_a', product: { identifier: 'private_group_extension', priceString: '$4.99' } } ] },
+      },
     });
     Purchases.purchasePackage.mockResolvedValue({});
     Purchases.restorePurchases.mockResolvedValue({
@@ -70,11 +69,11 @@ describe('PaywallScreen', () => {
     return renderer;
   }
 
-  it('renders one distinct tier testID per available package (extended-group, private-group, no-ads)', async () => {
+  it('renders one distinct tier testID per available package (private-group-extension, private-group-creator, no-ads)', async () => {
     const renderer = await renderScreen();
 
-    const extendedGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.extended-group' });
-    const privateGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group' });
+    const extendedGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension' });
+    const privateGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator' });
     const noAdsCards = renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads' });
 
     expect(extendedGroupCards.length).toBeGreaterThanOrEqual(1);
@@ -82,13 +81,13 @@ describe('PaywallScreen', () => {
     expect(noAdsCards.length).toBeGreaterThanOrEqual(1);
 
     const subscribeByTier = {
-      'paywall.tier.extended-group.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.extended-group.subscribe' }),
-      'paywall.tier.private-group.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group.subscribe' }),
+      'paywall.tier.private-group-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension.subscribe' }),
+      'paywall.tier.private-group-creator.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator.subscribe' }),
       'paywall.tier.no-ads.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads.subscribe' }),
     };
 
-    expect(subscribeByTier['paywall.tier.extended-group.subscribe'].length).toBeGreaterThanOrEqual(1);
-    expect(subscribeByTier['paywall.tier.private-group.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.private-group-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.private-group-creator.subscribe'].length).toBeGreaterThanOrEqual(1);
     expect(subscribeByTier['paywall.tier.no-ads.subscribe'].length).toBeGreaterThanOrEqual(1);
   });
 
@@ -143,7 +142,7 @@ describe('PaywallScreen', () => {
   it('optimistically flips entitlement to premium after purchase before syncEntitlement resolves', async () => {
     let resolveSync;
     syncEntitlement.mockReturnValue(new Promise((resolve) => { resolveSync = resolve; }));
-    Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { pro: {} } } });
+    Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { private_group_creator: {} } } });
 
     const navigation = { replace: jest.fn() };
     const authContext = { setEntitlement: jest.fn() };
@@ -174,5 +173,35 @@ describe('PaywallScreen', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
+  });
+
+  it('surfaces Alert.alert and still navigates when syncEntitlement returns a non-200 status', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    syncEntitlement.mockResolvedValue({ status: 502, data: { error: 'revenuecat_unavailable' } });
+
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({
+      authContext,
+      navigation,
+      route: { params: { intent: 'create-group' } },
+    });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
+
+    alertSpy.mockRestore();
   });
 });

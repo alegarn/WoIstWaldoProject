@@ -6,6 +6,7 @@ import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import TierCard from '../../components/UI/TierCard';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
+import { BILLING_TIERS } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   getPurchasesModule,
@@ -14,74 +15,9 @@ import {
   restoreAndSync,
 } from '../../utils/purchases';
 
-const TIER_CONFIG = {
-  extendedGroup: {
-    testId: 'paywall.tier.extended-group',
-    label: 'Extended Group',
-    eyebrow: 'EXTENDED',
-    image: require('../../assets/categories/all-image-cat.webp'),
-    features: ['Host larger group games', '10 more player slots', 'All core game modes'],
-    priceSuffix: '/month',
-    isSubscription: true,
-    ctaText: 'Subscribe',
-    featured: false,
-  },
-  privateGroup: {
-    testId: 'paywall.tier.private-group',
-    label: 'Private Group',
-    eyebrow: 'PRIVATE',
-    image: require('../../assets/home/WoIstWaldo-character-hide.webp'),
-    features: ['Invite-only private rooms', 'You stop seeing mandatory ads', '10 members per room'],
-    priceSuffix: '/month',
-    isSubscription: true,
-    ctaText: 'Subscribe',
-    featured: true,
-  },
-  noAds: {
-    testId: 'paywall.tier.no-ads',
-    label: 'No Ads',
-    eyebrow: 'AD-FREE',
-    image: require('../../assets/home/WoIstWaldo-character-stats.webp'),
-    features: ['Remove all ads', 'Uninterrupted play', 'Faster rounds'],
-    priceSuffix: '/month',
-    isSubscription: true,
-    ctaText: 'Subscribe',
-    featured: false,
-  },
-};
-
-function pickPackageId(pkg) {
-  return pkg?.identifier ?? pkg?.product?.identifier ?? pkg?.id;
-}
-
-function pickPackagePrice(pkg) {
-  return pkg?.product?.priceString ?? pkg?.priceString ?? '';
-}
-
-function tierConfigForPackage(pkg) {
-  const candidates = [pkg?.product?.identifier, pickPackageId(pkg)];
-  for (const id of candidates) {
-    if (id && TIER_CONFIG[id]) {
-      return TIER_CONFIG[id];
-    }
-  }
-  return {
-    testId: 'paywall.tier.unknown',
-    label: 'Subscribe',
-    eyebrow: 'TIER',
-    image: undefined,
-    features: ['Unlock premium features'],
-    priceSuffix: '/month',
-    isSubscription: true,
-    ctaText: 'Subscribe',
-    featured: false,
-  };
-}
-
 export default function PaywallScreen({ navigation, route }) {
   const authContext = useContext(AuthContext);
   const intent = route?.params?.intent;
-  const [offerings, setOfferings] = useState(null);
   const [packages, setPackages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -95,9 +31,13 @@ export default function PaywallScreen({ navigation, route }) {
     }
     try {
       const result = await Purchases.getOfferings();
-      setOfferings(result);
-      const current = result?.current;
-      setPackages(current?.availablePackages ?? []);
+      const all = result?.all ?? {};
+      const resolved = BILLING_TIERS.map((tier) => {
+        const offering = all[tier.offeringId] ?? result?.getOffering?.(tier.offeringId);
+        const pkg = offering?.availablePackages?.[0];
+        return pkg ? { pkg, tier } : null;
+      }).filter(Boolean);
+      setPackages(resolved);
     } catch (error) {
       Alert.alert('Could not load offerings', error?.message ?? '');
     } finally {
@@ -111,13 +51,20 @@ export default function PaywallScreen({ navigation, route }) {
 
   const applySyncAndRoute = useCallback(async () => {
     const response = await syncEntitlement(authContext);
+    const ok = response?.status === 200;
     const entitlement = response?.data;
-    if (entitlement) {
+    if (ok && entitlement) {
       authContext.setEntitlement({
         isPremium: entitlement.is_premium,
         premiumTier: entitlement.premium_tier,
         premiumExpiresAt: entitlement.premium_expires_at,
       });
+    }
+    if (!ok) {
+      Alert.alert(
+        'Purchase recorded',
+        "We couldn't confirm your purchase with the server yet. Open this screen again or tap 'Restore purchases' shortly to refresh your plan.",
+      );
     }
     if (intent === 'create-group') {
       navigation.replace('CreateGroupScreen');
@@ -189,21 +136,22 @@ export default function PaywallScreen({ navigation, route }) {
   );
 
   const renderItem = ({ item }) => {
-    const cfg = tierConfigForPackage(item);
+    const { pkg, tier } = item;
+    const price = pkg?.product?.priceString ?? pkg?.priceString ?? '';
     return (
       <TierCard
-        testID={cfg.testId}
-        image={cfg.image}
-        eyebrow={cfg.eyebrow}
-        title={cfg.label}
-        price={pickPackagePrice(item)}
-        priceSuffix={cfg.priceSuffix}
-        isSubscription={cfg.isSubscription}
-        features={cfg.features}
-        ctaText={cfg.ctaText}
-        featured={cfg.featured}
-        accessibilityLabel={`Subscribe to ${cfg.label}`}
-        onCta={() => handlePurchase(item)}
+        testID={tier.testId}
+        image={tier.image}
+        eyebrow={tier.eyebrow}
+        title={tier.label}
+        price={price}
+        priceSuffix={tier.priceSuffix}
+        isSubscription={tier.isSubscription}
+        features={tier.features}
+        ctaText={tier.ctaText}
+        featured={tier.featured}
+        accessibilityLabel={`Subscribe to ${tier.label}`}
+        onCta={() => handlePurchase(pkg)}
       />
     );
   };
@@ -216,7 +164,7 @@ export default function PaywallScreen({ navigation, route }) {
     <View style={styles.container}>
       <FlatList
         data={packages}
-        keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
+        keyExtractor={(item, index) => item?.tier?.key ?? `tier-${index}`}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
         ListFooterComponent={renderFooter}
