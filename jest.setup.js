@@ -17,17 +17,15 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 jest.mock('react-native-purchases', () => ({
   __esModule: true,
   default: {
-    getOfferings: jest.fn(),
-    purchasePackage: jest.fn(),
-    restorePurchases: jest.fn(),
-    getCustomerInfo: jest.fn(),
-  },
-  Purchases: {
+    LOG_LEVEL: { DEBUG: 0, VERBOSE: 1, INFO: 2, WARN: 3, ERROR: 4 },
     configure: jest.fn(),
     logOut: jest.fn(),
     setLogLevel: jest.fn(),
     addCustomerInfoUpdateListener: jest.fn(),
     removeCustomerInfoUpdateListener: jest.fn(),
+    getOfferings: jest.fn(),
+    purchasePackage: jest.fn(),
+    restorePurchases: jest.fn(),
+    getCustomerInfo: jest.fn(),
   },
-  LOG_LEVEL: { DEBUG: 0, VERBOSE: 1, INFO: 2, WARN: 3, ERROR: 4 },
 }));

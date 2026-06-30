@@ -13,21 +13,11 @@ import {
   restoreAndSync,
 } from '../../utils/purchases';
 
-const TIER_TEST_IDS = {
-  premium: 'paywall.tier.premium',
-  'premium-plus': 'paywall.tier.premium-plus',
-  'premium-plus-extension': 'paywall.tier.premium-plus-extension',
+const TIER_CONFIG = {
+  extendedGroup: { testId: 'paywall.tier.extended-group', label: 'Extended Group' },
+  privateGroup: { testId: 'paywall.tier.private-group', label: 'Private Group' },
+  noAds: { testId: 'paywall.tier.no-ads', label: 'No Ads' },
 };
-
-const TIER_LABELS = {
-  premium: 'Premium',
-  'premium-plus': 'Premium+',
-  'premium-plus-extension': 'Premium+ Extension',
-};
-
-const TIER_LOOKUP = [...Object.entries(TIER_TEST_IDS)]
-  .map(([key, testId]) => [key.replaceAll('-', '_'), testId])
-  .sort((a, b) => b[0].length - a[0].length);
 
 function pickPackageId(pkg) {
   return pkg?.identifier ?? pkg?.product?.identifier ?? pkg?.id;
@@ -37,13 +27,14 @@ function pickPackagePrice(pkg) {
   return pkg?.product?.priceString ?? pkg?.priceString ?? '';
 }
 
-function tierTestIdForPackage(pkg) {
-  const id = pickPackageId(pkg)?.replaceAll('-', '_');
-  if (!id) return null;
-  for (const [key, testId] of TIER_LOOKUP) {
-    if (id === key || id.startsWith(key + '_')) return testId;
+function tierConfigForPackage(pkg) {
+  const candidates = [pkg?.product?.identifier, pickPackageId(pkg)];
+  for (const id of candidates) {
+    if (id && TIER_CONFIG[id]) {
+      return TIER_CONFIG[id];
+    }
   }
-  return null;
+  return { testId: 'paywall.tier.unknown', label: 'Subscribe' };
 }
 
 export default function PaywallScreen({ navigation, route }) {
@@ -152,13 +143,10 @@ export default function PaywallScreen({ navigation, route }) {
         keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
         renderItem={({ item }) => {
-          const tierTestId = tierTestIdForPackage(item) ?? 'paywall.tier.premium';
-          const tierKey = Object.keys(TIER_TEST_IDS).find(
-            (key) => TIER_TEST_IDS[key] === tierTestId
-          ) ?? 'premium';
+          const { testId: tierTestId, label } = tierConfigForPackage(item);
           return (
             <View style={styles.tierCard} testID={tierTestId}>
-              <Text style={styles.tierTitle}>{TIER_LABELS[tierKey] ?? 'Premium'}</Text>
+              <Text style={styles.tierTitle}>{label}</Text>
               <Text style={styles.tierPrice}>{pickPackagePrice(item)}</Text>
               <BigButton
                 text="Subscribe"

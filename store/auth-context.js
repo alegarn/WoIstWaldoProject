@@ -51,11 +51,11 @@ function configureCreatorBilling({ userId, authContextRef }) {
   }
 
   try {
-    const { Purchases, LOG_LEVEL } = require('react-native-purchases');
+    const Purchases = require('react-native-purchases').default;
     const Platform = require('react-native').Platform;
 
     if (__DEV__) {
-      Purchases.setLogLevel(LOG_LEVEL.VERBOSE);
+      Purchases.setLogLevel(Purchases.LOG_LEVEL.VERBOSE);
     }
 
     const platformKey = Platform.OS === 'ios'
@@ -115,7 +115,7 @@ function configureCreatorBilling({ userId, authContextRef }) {
 
 async function teardownCreatorBilling() {
   try {
-    const Purchases = require('react-native-purchases').Purchases;
+    const Purchases = require('react-native-purchases').default;
 
     if (syncEntitlementTimer) {
       clearTimeout(syncEntitlementTimer);
@@ -201,6 +201,8 @@ export default function AuthContextProvider({ children }) {
     if (isTutorialFinished) {
       setIsTutorialFinished(isTutorialFinished);
     };
+
+    configureCreatorBilling({ userId, authContextRef });
 
     setIsAuthenticated(!!token);
   };

@@ -35,9 +35,9 @@ import { syncEntitlement } from '../../services/billing/billingApi';
 import Purchases from 'react-native-purchases';
 
 const PACKAGES = [
-  { identifier: 'premium_monthly', product: { priceString: '$4.99' } },
-  { identifier: 'premium_plus_monthly', product: { priceString: '$9.99' } },
-  { identifier: 'premium_plus_extension_monthly', product: { priceString: '$2.99' } },
+  { identifier: '$rc_custom_a', product: { identifier: 'extendedGroup', priceString: '$4.99' } },
+  { identifier: '$rc_custom_b', product: { identifier: 'privateGroup', priceString: '$9.99' } },
+  { identifier: '$rc_custom_c', product: { identifier: 'noAds', priceString: '$2.99' } },
 ];
 
 describe('PaywallScreen', () => {
@@ -70,26 +70,26 @@ describe('PaywallScreen', () => {
     return renderer;
   }
 
-  it('renders one distinct tier testID per available package (premium, premium-plus, premium-plus-extension)', async () => {
+  it('renders one distinct tier testID per available package (extended-group, private-group, no-ads)', async () => {
     const renderer = await renderScreen();
 
-    const premiumCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium' });
-    const premiumPlusCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus' });
-    const premiumPlusExtensionCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension' });
+    const extendedGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.extended-group' });
+    const privateGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group' });
+    const noAdsCards = renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads' });
 
-    expect(premiumCards.length).toBeGreaterThanOrEqual(1);
-    expect(premiumPlusCards.length).toBeGreaterThanOrEqual(1);
-    expect(premiumPlusExtensionCards.length).toBeGreaterThanOrEqual(1);
+    expect(extendedGroupCards.length).toBeGreaterThanOrEqual(1);
+    expect(privateGroupCards.length).toBeGreaterThanOrEqual(1);
+    expect(noAdsCards.length).toBeGreaterThanOrEqual(1);
 
     const subscribeByTier = {
-      'paywall.tier.premium.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium.subscribe' }),
-      'paywall.tier.premium-plus.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus.subscribe' }),
-      'paywall.tier.premium-plus-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension.subscribe' }),
+      'paywall.tier.extended-group.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.extended-group.subscribe' }),
+      'paywall.tier.private-group.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group.subscribe' }),
+      'paywall.tier.no-ads.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads.subscribe' }),
     };
 
-    expect(subscribeByTier['paywall.tier.premium.subscribe'].length).toBeGreaterThanOrEqual(1);
-    expect(subscribeByTier['paywall.tier.premium-plus.subscribe'].length).toBeGreaterThanOrEqual(1);
-    expect(subscribeByTier['paywall.tier.premium-plus-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.extended-group.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.private-group.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.no-ads.subscribe'].length).toBeGreaterThanOrEqual(1);
   });
 
   it('calls Purchases.purchasePackage then syncEntitlement and routes after a tier subscribe tap', async () => {

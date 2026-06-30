@@ -21,7 +21,7 @@ import AuthContextProvider, { AuthContext } from '../store/auth-context';
 import { emptyImageList } from '../utils/storageDatum';
 import { syncEntitlement } from '../services/billing/billingApi';
 
-const { Purchases } = require('react-native-purchases');
+const Purchases = require('react-native-purchases').default;
 
 function AuthContextProbe({ onValue }) {
   const value = useContext(AuthContext);
