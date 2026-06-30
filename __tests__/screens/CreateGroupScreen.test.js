@@ -51,6 +51,13 @@ import { Alert } from 'react-native';
 import CreateGroupScreen from '../../screens/Groups/CreateGroupScreen';
 import { AuthContext } from '../../store/auth-context';
 import { createGroup } from '../../services/groups/groupApi';
+import { DEFAULT_COLOR_PALETTE } from '../../components/UI/ColorPalettePicker';
+
+// Pick non-default swatches so the test exercises an actual selection change.
+const PRIMARY_PICK = DEFAULT_COLOR_PALETTE[2];
+const SECONDARY_PICK = DEFAULT_COLOR_PALETTE[3];
+const PRIMARY_SWATCH_TEST_ID = `create-group.color-primary.swatch.${PRIMARY_PICK.hex.replace('#', '')}`;
+const SECONDARY_SWATCH_TEST_ID = `create-group.color-secondary.swatch.${SECONDARY_PICK.hex.replace('#', '')}`;
 
 describe('CreateGroupScreen', () => {
   beforeEach(() => {
@@ -107,8 +114,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
-      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
     });
 
     await act(async () => {
@@ -126,7 +133,7 @@ describe('CreateGroupScreen', () => {
 
     expect(createGroup).toHaveBeenCalledWith(
       expect.objectContaining({ premiumTier: 2 }),
-      { name: 'Waldos', primaryColor: '#111111', secondaryColor: '#eeeeee' }
+      { name: 'Waldos', primaryColor: PRIMARY_PICK.hex, secondaryColor: SECONDARY_PICK.hex }
     );
     expect(setActive).toHaveBeenCalledWith('g-new');
     expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
@@ -142,8 +149,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
-      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
     });
 
     await act(async () => {

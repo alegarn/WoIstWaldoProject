@@ -7,6 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import BigButton from '../../components/UI/BigButton';
 import Button from '../../components/UI/Button';
+import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
@@ -236,21 +237,17 @@ export default function GroupSettingsScreen({ navigation }) {
               style={styles.input}
               testID="group-settings.input.name"
             />
-            <Text style={styles.title}>Primary color</Text>
-            <TextInput
-              accessibilityLabel="Primary color"
+            <ColorPalettePicker
+              label="Primary color"
               value={primaryColor}
-              onChangeText={setPrimaryColor}
-              style={styles.input}
-              testID="group-settings.input.color-primary"
+              onValueChange={setPrimaryColor}
+              testIDPrefix="group-settings.color-primary"
             />
-            <Text style={styles.title}>Secondary color</Text>
-            <TextInput
-              accessibilityLabel="Secondary color"
+            <ColorPalettePicker
+              label="Secondary color"
               value={secondaryColor}
-              onChangeText={setSecondaryColor}
-              style={styles.input}
-              testID="group-settings.input.color-secondary"
+              onValueChange={setSecondaryColor}
+              testIDPrefix="group-settings.color-secondary"
             />
             <BigButton
               text={isSavingSettings ? 'Saving...' : 'Save'}
