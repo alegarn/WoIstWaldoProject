@@ -165,7 +165,11 @@ function AuthenticatedStack({ authContext }) {
             headerShown: true,
             headerRight: ({ tintColor }) => (
               <>
-                <HomeHeaderRight navigation={navigation} tintColor={tintColor} />
+                <HomeHeaderRight
+                  navigation={navigation}
+                  tintColor={tintColor}
+                  onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
+                />
                 <IconButton
                   accessibilityLabel="Open settings"
                   icon="settings"

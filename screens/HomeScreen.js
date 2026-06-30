@@ -12,7 +12,6 @@ import { isTutorialFinished } from '../utils/tutorialHandler';
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
-import IconButton from '../components/UI/IconButton';
 
 const HideImage = require('../assets/home/WoIstWaldo-character-hide.webp');
 const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -163,6 +162,12 @@ export default function HomeScreen({ navigation, route }) {
     }, [context.isTutorialFinished]
   );
 
+  useEffect(() => {
+    if (route?.params?.tutorialToken) {
+      setIsTutorial(true);
+    }
+  }, [route?.params?.tutorialToken]);
+
 
   useFocusEffect(() => {
     handleOrientation("portrait");
@@ -217,17 +222,8 @@ export default function HomeScreen({ navigation, route }) {
         }
 
       </View>
-      <IconButton
-        accessibilityLabel="Open tutorial"
-        icon={"book"}
-        color={"white"}
-        size={24}
-        style={styles.tutorialButton}
-        onPress={() => setIsTutorial(true)}
-        testID="home.button.tutorial"
-      />
   </>
-    
+
   );
 }
 
@@ -237,11 +233,5 @@ const styles = StyleSheet.create({
     backgroundColor: GlobalStyle.color.primaryColor900,
     padding: 10,
     gap: 10, // Use gap for spacing between cards
-  },
-  tutorialButton: {
-    position: "absolute",
-    top: 15,
-    right: 15,
-    zIndex: 1
   },
 })
