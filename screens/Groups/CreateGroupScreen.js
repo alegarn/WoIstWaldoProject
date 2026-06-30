@@ -14,7 +14,7 @@ import { createGroup } from '../../services/groups/groupApi';
 
 export default function CreateGroupScreen({ navigation }) {
   const authContext = useContext(AuthContext);
-  const { data } = useGroupsHub();
+  const { data, isLoading } = useGroupsHub();
   const { setActive } = useActiveGroup();
 
   const [name, setName] = useState('');
@@ -24,9 +24,42 @@ export default function CreateGroupScreen({ navigation }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
 
   const owned = data?.owned ?? [];
-  const canCreateGroup = (authContext?.premiumTier ?? 0) >= 2 && owned.length === 0;
+  const isPremiumPlus = (authContext?.premiumTier ?? 0) >= 2;
+  const alreadyOwns = owned.length > 0;
 
-  if (!canCreateGroup) {
+  if (isLoading && !data) {
+    return <LoadingOverlay message="Loading..." />;
+  }
+
+  if (alreadyOwns) {
+    const goToGroup = async () => {
+      const groupId = owned[0]?.id;
+      if (!groupId) return;
+      await setActive(groupId);
+      navigation.replace('PrivateHomeScreen', {
+        scope: { kind: 'private', groupId },
+      });
+    };
+
+    return (
+      <View style={styles.lockedContainer}>
+        <Text
+          style={styles.lockedMessage}
+          testID="create-group.message.already-owns"
+        >
+          You can only create 1 group.
+        </Text>
+        <BigButton
+          text="Go to my group"
+          onPress={goToGroup}
+          testID="create-group.button.go-to-group"
+          accessibilityLabel="Go to my group"
+        />
+      </View>
+    );
+  }
+
+  if (!isPremiumPlus) {
     return (
       <View style={styles.lockedContainer}>
         <Text style={styles.lockedMessage}>

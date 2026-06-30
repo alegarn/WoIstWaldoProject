@@ -94,7 +94,7 @@ describe('useActiveGroup', () => {
     };
   }
 
-  it('clear() clears the active group both server-side and locally', async () => {
+  it('clear() flips to public view but retains the active group id', async () => {
     setActiveGroup.mockResolvedValue({
       status: 204,
       data: { active_group_id: null },
@@ -112,13 +112,10 @@ describe('useActiveGroup', () => {
       await getLatestValue().clear();
     });
 
-    expect(setActiveGroup).toHaveBeenCalledWith(
-      { token: 'Bearer token-1', userId: 'user-1' },
-      null
-    );
-    expect(setActiveGroupIdCalls).toEqual([null]);
+    expect(setActiveGroup).not.toHaveBeenCalled();
+    expect(setActiveGroupIdCalls).toEqual([]);
     expect(setPrivateModeCalls).toEqual([false]);
-    expect(getLatestValue().activeGroupId).toBeNull();
+    expect(getLatestValue().activeGroupId).toBe('group-7');
     expect(getLatestValue().scope).toEqual({ kind: 'public' });
   });
 

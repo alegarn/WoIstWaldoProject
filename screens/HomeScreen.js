@@ -175,6 +175,10 @@ export default function HomeScreen({ navigation, route }) {
     void verifyLoginInfos();
   });
 
+  useFocusEffect(() => {
+    context.setPrivateMode?.(false);
+  });
+
   return (
     <>
       <View style={styles.homeContainer}>
