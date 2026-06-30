@@ -3,6 +3,7 @@ import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 
 import BigButton from '../../components/UI/BigButton';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
+import TierCard from '../../components/UI/TierCard';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { syncEntitlement } from '../../services/billing/billingApi';
@@ -14,9 +15,39 @@ import {
 } from '../../utils/purchases';
 
 const TIER_CONFIG = {
-  extendedGroup: { testId: 'paywall.tier.extended-group', label: 'Extended Group' },
-  privateGroup: { testId: 'paywall.tier.private-group', label: 'Private Group' },
-  noAds: { testId: 'paywall.tier.no-ads', label: 'No Ads' },
+  extendedGroup: {
+    testId: 'paywall.tier.extended-group',
+    label: 'Extended Group',
+    eyebrow: 'EXTENDED',
+    image: require('../../assets/categories/all-image-cat.webp'),
+    features: ['Host larger group games', '10 more player slots', 'All core game modes'],
+    priceSuffix: '/month',
+    isSubscription: true,
+    ctaText: 'Subscribe',
+    featured: false,
+  },
+  privateGroup: {
+    testId: 'paywall.tier.private-group',
+    label: 'Private Group',
+    eyebrow: 'PRIVATE',
+    image: require('../../assets/home/WoIstWaldo-character-hide.webp'),
+    features: ['Invite-only private rooms', 'You stop seeing mandatory ads', '10 members per room'],
+    priceSuffix: '/month',
+    isSubscription: true,
+    ctaText: 'Subscribe',
+    featured: true,
+  },
+  noAds: {
+    testId: 'paywall.tier.no-ads',
+    label: 'No Ads',
+    eyebrow: 'AD-FREE',
+    image: require('../../assets/home/WoIstWaldo-character-stats.webp'),
+    features: ['Remove all ads', 'Uninterrupted play', 'Faster rounds'],
+    priceSuffix: '/month',
+    isSubscription: true,
+    ctaText: 'Subscribe',
+    featured: false,
+  },
 };
 
 function pickPackageId(pkg) {
@@ -34,7 +65,17 @@ function tierConfigForPackage(pkg) {
       return TIER_CONFIG[id];
     }
   }
-  return { testId: 'paywall.tier.unknown', label: 'Subscribe' };
+  return {
+    testId: 'paywall.tier.unknown',
+    label: 'Subscribe',
+    eyebrow: 'TIER',
+    image: undefined,
+    features: ['Unlock premium features'],
+    priceSuffix: '/month',
+    isSubscription: true,
+    ctaText: 'Subscribe',
+    featured: false,
+  };
 }
 
 export default function PaywallScreen({ navigation, route }) {
@@ -132,6 +173,41 @@ export default function PaywallScreen({ navigation, route }) {
     }
   };
 
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.eyebrow}>STORE</Text>
+      <Text style={styles.headline}>Find your plan</Text>
+      <Text style={styles.sub}>Unlock more ways to play. Pick the tier that fits.</Text>
+      <View style={styles.rule} />
+    </View>
+  );
+
+  const renderFooter = () => (
+    <Text style={styles.legal}>
+      Auto-renews monthly. Cancel anytime from your store settings.
+    </Text>
+  );
+
+  const renderItem = ({ item }) => {
+    const cfg = tierConfigForPackage(item);
+    return (
+      <TierCard
+        testID={cfg.testId}
+        image={cfg.image}
+        eyebrow={cfg.eyebrow}
+        title={cfg.label}
+        price={pickPackagePrice(item)}
+        priceSuffix={cfg.priceSuffix}
+        isSubscription={cfg.isSubscription}
+        features={cfg.features}
+        ctaText={cfg.ctaText}
+        featured={cfg.featured}
+        accessibilityLabel={`Subscribe to ${cfg.label}`}
+        onCta={() => handlePurchase(item)}
+      />
+    );
+  };
+
   if (isLoading || isPurchasing) {
     return <LoadingOverlay message={isPurchasing ? 'Processing purchase...' : 'Loading offerings...'} />;
   }
@@ -141,41 +217,84 @@ export default function PaywallScreen({ navigation, route }) {
       <FlatList
         data={packages}
         keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
-        renderItem={({ item }) => {
-          const { testId: tierTestId, label } = tierConfigForPackage(item);
-          return (
-            <View style={styles.tierCard} testID={tierTestId}>
-              <Text style={styles.tierTitle}>{label}</Text>
-              <Text style={styles.tierPrice}>{pickPackagePrice(item)}</Text>
-              <BigButton
-                text="Subscribe"
-                onPress={() => handlePurchase(item)}
-                testID={`${tierTestId}.subscribe`}
-              />
-            </View>
-          );
-        }}
+        ListFooterComponent={renderFooter}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        style={styles.list}
       />
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
           No active subscription found.
         </Text>
       )}
-      <BigButton
-        text="Restore purchases"
-        onPress={handleRestore}
-        testID="paywall.button.restore"
-      />
+      <View style={styles.restoreWrap}>
+        <BigButton
+          text="Restore purchases"
+          onPress={handleRestore}
+          testID="paywall.button.restore"
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 16 },
-  tierCard: { backgroundColor: GlobalStyle.color.primaryColor800, padding: 16, marginVertical: 8, borderRadius: 8, alignItems: 'center', gap: 8 },
-  tierTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  tierPrice: { color: '#ffd700', fontSize: 18 },
-  empty: { color: '#fff', textAlign: 'center', marginTop: 20 },
-  error: { color: GlobalStyle.color.error500, textAlign: 'center', marginTop: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    padding: 16,
+  },
+  header: {
+    marginBottom: 8,
+  },
+  eyebrow: {
+    color: GlobalStyle.color.quaternaryColor,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  headline: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  sub: {
+    color: GlobalStyle.color.secondaryColor,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  rule: {
+    height: 1,
+    backgroundColor: GlobalStyle.color.tertiaryColor,
+    marginVertical: 12,
+  },
+  empty: {
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  legal: {
+    color: GlobalStyle.color.quaternaryColor,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  error: {
+    color: GlobalStyle.color.error500,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  restoreWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
 });
