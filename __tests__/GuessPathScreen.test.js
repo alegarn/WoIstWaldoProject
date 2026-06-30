@@ -1,6 +1,7 @@
 const mockGuessCategoryCard = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
+const mockUseGroupsHub = jest.fn();
 
 jest.mock('../components/UI/GuessCategoryCard', () => {
   return function MockGuessCategoryCard(props) {
@@ -23,6 +24,10 @@ jest.mock('../components/UI/IconButton', () => {
   };
 });
 
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => mockUseGroupsHub(),
+}));
+
 jest.mock('../utils/categoryRequests', () => ({
   getCategories: jest.fn(),
 }));
@@ -34,6 +39,11 @@ jest.mock('../utils/storageDatum', () => ({
 
 jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
+}));
+
+jest.mock('../services/groups/groupCategoriesApi', () => ({
+  listGroupCategories: jest.fn(),
+  createGroupCategory: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -56,10 +66,18 @@ import {
   saveSessionLanguageFilter,
 } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
+import {
+  createGroupCategory,
+  listGroupCategories,
+} from '../services/groups/groupCategoriesApi';
 
 const CATEGORIES = [
   { id: '1', key: 'nature', name: 'Nature', thumbnailUrl: 'x', count: 5 },
   { id: '2', key: 'city', name: 'City', thumbnailUrl: 'y', count: 3 },
+];
+
+const PRIVATE_CREATED_CATEGORIES = [
+  { id: 'c-new', key: 'c-new', name: 'NewCat' },
 ];
 
 describe('GuessPathScreen', () => {
@@ -77,8 +95,11 @@ describe('GuessPathScreen', () => {
     });
     isE2EMode.mockReturnValue(false);
     getCategories.mockResolvedValue({ data: CATEGORIES });
+    listGroupCategories.mockResolvedValue({ status: 200, data: [] });
+    createGroupCategory.mockResolvedValue({ status: 201, data: {} });
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
+    mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn() };
   });
 
@@ -124,6 +145,13 @@ describe('GuessPathScreen', () => {
   function getDetailsButtonProps() {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.details'
+    );
+    return call?.[0];
+  }
+
+  function getAddCategoryButtonProps() {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === 'guess-path.button.add-category'
     );
     return call?.[0];
   }
@@ -264,5 +292,109 @@ describe('GuessPathScreen', () => {
     await renderScreen();
 
     expect(mockTutorialOverlay).not.toHaveBeenCalled();
+  });
+
+  it('does not render the add-category affordance in public scope even when the user owns groups', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+
+    await renderScreen();
+
+    expect(getAddCategoryButtonProps()).toBeUndefined();
+  });
+
+  it('does not render the add-category affordance for a non-owner member in private scope', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [],
+        joined: [{ id: 'g-1', role: 'member' }],
+      },
+      refresh: jest.fn(),
+    });
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(getAddCategoryButtonProps()).toBeUndefined();
+  });
+
+  it('renders the add-category affordance for the owner in private scope and creates a category on submit', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    listGroupCategories
+      .mockResolvedValueOnce({ status: 200, data: [] })
+      .mockResolvedValue({ status: 200, data: PRIVATE_CREATED_CATEGORIES });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const addButtonProps = getAddCategoryButtonProps();
+    expect(addButtonProps).toBeDefined();
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.add-category.input.name' })
+    ).toThrow();
+
+    await act(async () => {
+      addButtonProps.onPress();
+      await flushEffects();
+    });
+
+    const nameInput = renderer.root.findByProps({
+      testID: 'guess-path.add-category.input.name',
+    });
+    expect(nameInput).toBeTruthy();
+
+    await act(async () => {
+      nameInput.props.onChangeText('NewCat');
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.create',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(createGroupCategory).toHaveBeenCalledWith(
+      contextValue,
+      'g-1',
+      { name: 'NewCat' }
+    );
+    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+    expect(listGroupCategories).toHaveBeenLastCalledWith(contextValue, 'g-1');
+
+    const renderedKeys = mockGuessCategoryCard.mock.calls.map(
+      ([props]) => props.category.id
+    );
+    expect(renderedKeys).toContain('c-new');
+  });
+
+  it('closes the create-category modal without creating when cancel is tapped', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getAddCategoryButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.cancel',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(createGroupCategory).not.toHaveBeenCalled();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.add-category.input.name' })
+    ).toThrow();
   });
 });
