@@ -110,6 +110,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20 },
   title: { color: '#fff', fontSize: 22, fontWeight: '700' },
   tier: { color: '#ffd700', fontSize: 24, marginTop: 8 },
-  button: { marginTop: 16, backgroundColor: GlobalStyle.color.primaryColor100 },
+  button: { marginTop: 16, backgroundColor: GlobalStyle.color.primaryColor100, alignSelf: 'center' },
   error: { color: GlobalStyle.color.error500, marginTop: 12 },
 });

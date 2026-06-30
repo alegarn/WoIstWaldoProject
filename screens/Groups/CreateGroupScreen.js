@@ -4,6 +4,7 @@ import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
 import BigButton from '../../components/UI/BigButton';
 import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
+import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
@@ -95,22 +96,18 @@ export default function CreateGroupScreen({ navigation }) {
         testID="create-group.input.name"
       />
 
-      <Text style={styles.label}>Primary color</Text>
-      <TextInput
-        accessibilityLabel="Primary color"
+      <ColorPalettePicker
+        label="Primary color"
         value={primaryColor}
-        onChangeText={setPrimaryColor}
-        style={styles.input}
-        testID="create-group.input.color-primary"
+        onValueChange={setPrimaryColor}
+        testIDPrefix="create-group.color-primary"
       />
 
-      <Text style={styles.label}>Secondary color</Text>
-      <TextInput
-        accessibilityLabel="Secondary color"
+      <ColorPalettePicker
+        label="Secondary color"
         value={secondaryColor}
-        onChangeText={setSecondaryColor}
-        style={styles.input}
-        testID="create-group.input.color-secondary"
+        onValueChange={setSecondaryColor}
+        testIDPrefix="create-group.color-secondary"
       />
 
       <Button
@@ -144,5 +141,5 @@ const styles = StyleSheet.create({
   lockedMessage: { color: GlobalStyle.color.win, fontSize: 18, textAlign: 'center', marginBottom: 20 },
   label: { color: '#fff', fontSize: 16, marginTop: 12 },
   input: { backgroundColor: '#fff', color: '#000', padding: 10, marginTop: 4, borderRadius: 4 },
-  button: { marginTop: 24, backgroundColor: GlobalStyle.color.primaryColor100 },
+  button: { marginTop: 24, backgroundColor: GlobalStyle.color.primaryColor100, alignSelf: 'center' },
 });
