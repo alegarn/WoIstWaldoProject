@@ -1,10 +1,14 @@
-import { View, Alert } from 'react-native';
+import { useState } from 'react';
+import { View, Modal, Pressable, Text, StyleSheet, Alert } from 'react-native';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 import IconButton from '../../components/UI/IconButton';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
+import { GlobalStyle } from '../../constants/theme';
 
-export function HomeHeaderRight({ navigation, tintColor }) {
+export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
+  const [menuOpen, setMenuOpen] = useState(false);
   const { scope, activeGroupId, setActive, clear } = useActiveGroup();
   const { data } = useGroupsHub();
   const owned = data?.owned ?? [];
@@ -36,36 +40,110 @@ export function HomeHeaderRight({ navigation, tintColor }) {
     });
   };
 
+  const select = (action) => () => {
+    setMenuOpen(false);
+    action();
+  };
+
+  const items = [
+    {
+      key: 'groups',
+      label: 'Groups',
+      icon: 'people',
+      testID: 'home.menu.groups',
+      onPress: select(() => navigation.navigate('GroupsListScreen')),
+    },
+    {
+      key: 'store',
+      label: 'Store',
+      icon: 'diamond-outline',
+      testID: 'home.menu.store',
+      onPress: select(() => navigation.navigate('PaywallScreen', { intent: 'store' })),
+    },
+    {
+      key: 'scope-toggle',
+      label: isPrivate ? 'Switch to public' : 'Switch to private',
+      icon: isPrivate ? 'earth' : 'people-outline',
+      testID: 'home.menu.scope-toggle',
+      disabled: !canToggleScope,
+      onPress: select(toggleScope),
+    },
+    {
+      key: 'tutorial',
+      label: 'Tutorial',
+      icon: 'book',
+      testID: 'home.menu.tutorial',
+      onPress: select(() => onStartTutorial?.()),
+    },
+  ];
+
   return (
     <View style={{ flexDirection: 'row' }}>
       <IconButton
-        accessibilityLabel="Toggle public/private scope"
-        icon={isPrivate ? 'earth' : 'people'}
+        accessibilityLabel="More options"
+        icon="ellipsis-vertical"
         color={tintColor}
         size={24}
-        disabled={!canToggleScope}
-        onPress={toggleScope}
-        testID="home.header.scope-toggle"
+        onPress={() => setMenuOpen(true)}
+        testID="home.header.other-options"
         style={{ marginRight: 20 }}
       />
-      <IconButton
-        accessibilityLabel="Open private groups list"
-        icon="star"
-        color={tintColor}
-        size={24}
-        onPress={() => navigation.navigate('GroupsListScreen')}
-        testID="home.header.groups-star"
-        style={{ marginRight: 20 }}
-      />
-      <IconButton
-        accessibilityLabel="Open store"
-        icon="diamond-outline"
-        color={tintColor}
-        size={24}
-        style={{ marginRight: 20 }}
-        onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
-        testID="home.header.store"
-      />
+      <Modal
+        transparent
+        animationType="fade"
+        visible={menuOpen}
+        onRequestClose={() => setMenuOpen(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setMenuOpen(false)}>
+          <View style={styles.menu}>
+            {items.map((item) => (
+              <Pressable
+                key={item.key}
+                style={[styles.row, item.disabled && styles.rowDisabled]}
+                onPress={item.onPress}
+                disabled={item.disabled}
+                accessibilityRole="button"
+                accessibilityLabel={item.label}
+                accessibilityState={item.disabled ? { disabled: true } : undefined}
+                testID={item.testID}
+              >
+                <Ionicons name={item.icon} size={20} color={tintColor} />
+                <Text style={styles.label}>{item.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  backdrop: {
+    flex: 1,
+  },
+  menu: {
+    position: 'absolute',
+    top: 60,
+    right: 12,
+    backgroundColor: GlobalStyle.color.primaryColor700,
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    minWidth: 180,
+  },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+  },
+  rowDisabled: {
+    opacity: 0.35,
+  },
+  label: {
+    color: 'white',
+    marginLeft: 12,
+    fontSize: 16,
+  },
+});

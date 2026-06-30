@@ -53,7 +53,14 @@ describe('HomeHeaderRight', () => {
   }
 
   function getToggle(renderer) {
-    return renderer.root.findByProps({ testID: 'home.header.scope-toggle' });
+    return renderer.root.findByProps({ testID: 'home.menu.scope-toggle' });
+  }
+
+  function openMenu(renderer) {
+    const overflow = renderer.root.findByProps({ testID: 'home.header.other-options' });
+    act(() => {
+      overflow.props.onPress();
+    });
   }
 
   it('invokes setActive with the active group id when toggling from public to private scope', async () => {
@@ -70,6 +77,8 @@ describe('HomeHeaderRight', () => {
         joined: [],
       },
     });
+
+    openMenu(renderer);
 
     await act(async () => {
       await getToggle(renderer).props.onPress();
@@ -97,6 +106,8 @@ describe('HomeHeaderRight', () => {
         joined: [],
       },
     });
+
+    openMenu(renderer);
 
     await act(async () => {
       await getToggle(renderer).props.onPress();
