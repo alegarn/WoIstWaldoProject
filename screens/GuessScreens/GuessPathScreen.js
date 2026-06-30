@@ -1,11 +1,13 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 
@@ -13,6 +15,7 @@ import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import IconButton from '../../components/UI/IconButton';
+import CenteredModal from '../../components/UI/CenteredModal';
 import { LANGUAGES } from '../../constants/languages';
 import { getCategories } from '../../utils/categoryRequests';
 import {
@@ -21,8 +24,12 @@ import {
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
+import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
-import { listGroupCategories } from '../../services/groups/groupCategoriesApi';
+import {
+  createGroupCategory,
+  listGroupCategories,
+} from '../../services/groups/groupCategoriesApi';
 
 const RECENT_ALL_CATEGORY = {
   id: 'all',
@@ -36,15 +43,22 @@ const NAVIGATION_ANY_LANGUAGE = 'any';
 
 export default function GuessPathScreen({ navigation, route }) {
   const context = useContext(AuthContext);
+  const { data: groupsHubData } = useGroupsHub();
   const [categories, setCategories] = useState([]);
   const [sessionLanguage, setSessionLanguage] = useState(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [isAddCategoryVisible, setIsAddCategoryVisible] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState('');
+  const [isCreatingCategory, setIsCreatingCategory] = useState(false);
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
+  const isOwner = isPrivateScope && (groupsHubData?.owned ?? []).some(
+    (g) => g.id === scope.groupId
+  );
 
   function normalizePrivateCategory(category) {
     return {
@@ -54,28 +68,21 @@ export default function GuessPathScreen({ navigation, route }) {
     };
   }
 
-  useEffect(() => {
-    let cancelled = false;
+  const reloadCategories = useCallback(async () => {
+    const response = isPrivateScope
+      ? await listGroupCategories(context, scope.groupId)
+      : await getCategories({ context });
 
-    async function loadCategories() {
-      const response = isPrivateScope
-        ? await listGroupCategories(context, scope.groupId)
-        : await getCategories({ context });
-      if (cancelled) {
-        return;
-      }
-      if (response?.data) {
-        setCategories((response.data ?? []).map((category) => (
-          isPrivateScope ? normalizePrivateCategory(category) : category
-        )));
-      }
+    if (response?.data) {
+      setCategories((response.data ?? []).map((category) => (
+        isPrivateScope ? normalizePrivateCategory(category) : category
+      )));
     }
-
-    loadCategories();
-    return () => {
-      cancelled = true;
-    };
   }, [context, isPrivateScope, scope?.groupId]);
+
+  useEffect(() => {
+    reloadCategories();
+  }, [reloadCategories]);
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +123,36 @@ export default function GuessPathScreen({ navigation, route }) {
     setIsFilterModalVisible(false);
   };
 
+  const handleOpenAddCategory = () => {
+    setNewCategoryName('');
+    setIsAddCategoryVisible(true);
+  };
+
+  const handleCloseAddCategory = () => {
+    setIsAddCategoryVisible(false);
+    setNewCategoryName('');
+  };
+
+  const handleCreateCategory = async () => {
+    if (isCreatingCategory) {
+      return;
+    }
+    const trimmed = newCategoryName.trim();
+    if (!trimmed) {
+      return;
+    }
+    setIsCreatingCategory(true);
+    const response = await createGroupCategory(context, scope.groupId, { name: trimmed });
+    setIsCreatingCategory(false);
+    if (response?.status === 200 || response?.status === 201) {
+      setIsAddCategoryVisible(false);
+      setNewCategoryName('');
+      await reloadCategories();
+    } else {
+      Alert.alert('Error', 'Could not create category.');
+    }
+  };
+
   const gridData = [RECENT_ALL_CATEGORY, ...categories];
 
   return (
@@ -138,14 +175,26 @@ export default function GuessPathScreen({ navigation, route }) {
 
       <View style={styles.gridContainer}>
         <View style={styles.header}>
-          <IconButton
-            icon="ellipsis-horizontal"
-            color="GlobalStyle.color.tertiaryColor900"
-            size={24}
-            onPress={() => setIsFilterModalVisible(true)}
-            testID="guess-path.button.details"
-            accessibilityLabel="Open language filter"
-          />
+          <View style={styles.headerActions}>
+            {isOwner && (
+              <IconButton
+                icon="add-circle-outline"
+                color="GlobalStyle.color.tertiaryColor900"
+                size={24}
+                onPress={handleOpenAddCategory}
+                testID="guess-path.button.add-category"
+                accessibilityLabel="Add category"
+              />
+            )}
+            <IconButton
+              icon="ellipsis-horizontal"
+              color="GlobalStyle.color.tertiaryColor900"
+              size={24}
+              onPress={() => setIsFilterModalVisible(true)}
+              testID="guess-path.button.details"
+              accessibilityLabel="Open language filter"
+            />
+          </View>
         </View>
         <FlatList
           data={gridData}
@@ -211,6 +260,27 @@ export default function GuessPathScreen({ navigation, route }) {
           </ScrollView>
         </View>
       </Modal>
+
+      <CenteredModal
+        isModalVisible={isAddCategoryVisible}
+        onCancel={handleCloseAddCategory}
+        onPress={handleCreateCategory}
+        testIDPrefix="guess-path.add-category"
+        confirmTestID="guess-path.add-category.button.create"
+        cancelTestID="guess-path.add-category.button.cancel"
+        confirmLabel={isCreatingCategory ? 'Creating...' : 'Create'}
+        cancelLabel="Cancel"
+      >
+        <TextInput
+          testID="guess-path.add-category.input.name"
+          accessibilityLabel="New category name"
+          placeholder="New category"
+          value={newCategoryName}
+          onChangeText={setNewCategoryName}
+          editable={!isCreatingCategory}
+          style={styles.categoryInput}
+        />
+      </CenteredModal>
     </>
   );
 }
@@ -245,6 +315,19 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     paddingHorizontal: 12,
     paddingVertical: 8,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  categoryInput: {
+    borderWidth: 1,
+    borderColor: '#DDD',
+    borderRadius: 4,
+    padding: 10,
+    minWidth: 200,
+    color: '#000',
   },
   gridContent: {
     padding: 12,
