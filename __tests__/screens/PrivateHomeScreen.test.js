@@ -1,5 +1,6 @@
 const mockHomeCard = jest.fn(() => null);
 const mockBigButton = jest.fn(() => null);
+const mockIconButton = jest.fn(() => null);
 const mockUseActiveGroup = jest.fn();
 const mockUseGroupsHub = jest.fn();
 
@@ -28,6 +29,13 @@ jest.mock('../../components/UI/BigButton', () => {
   };
 });
 
+jest.mock('../../components/UI/IconButton', () => {
+  return function MockIconButton(props) {
+    mockIconButton(props);
+    return null;
+  };
+});
+
 jest.mock('../../hooks/useActiveGroup', () => ({
   useActiveGroup: () => mockUseActiveGroup(),
 }));
@@ -38,6 +46,7 @@ jest.mock('../../hooks/useGroupsHub', () => ({
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { Share, Alert } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
 import { handleOrientation } from '../../utils/orientation';
@@ -45,28 +54,40 @@ import { handleOrientation } from '../../utils/orientation';
 describe('PrivateHomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
   });
 
-  async function renderScreen({ scope = { kind: 'private', groupId: 'g-7' }, clear = jest.fn(), groupsData = { owned: [], joined: [] } } = {}) {
-    mockUseActiveGroup.mockReturnValue({ scope, clear });
+  async function renderScreen({
+    scope = { kind: 'private', groupId: 'g-7' },
+    groupsData = { owned: [], joined: [] },
+  } = {}) {
+    mockUseActiveGroup.mockReturnValue({ scope });
     mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
+
+    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
     let renderer;
     await act(async () => {
       renderer = create(
         <PrivateHomeScreen
-          navigation={{ navigate: jest.fn(), setOptions: jest.fn() }}
+          navigation={navigation}
           route={{ params: { scope } }}
         />
       );
       await Promise.resolve();
     });
 
-    return renderer;
+    return { renderer, navigation };
   }
 
-  it('renders the active group name in private-home.title and shows the back-to-public button', async () => {
-    const renderer = await renderScreen({
+  function lastSetOptions(navigation) {
+    const calls = navigation.setOptions.mock.calls;
+    return calls[calls.length - 1][0];
+  }
+
+  it('renders the active group name in private-home.title and forces portrait orientation', async () => {
+    const { renderer } = await renderScreen({
       scope: { kind: 'private', groupId: 'g-7' },
       groupsData: {
         owned: [{ id: 'g-7', name: 'Waldos Of The World', role: 'owner' }],
@@ -76,40 +97,97 @@ describe('PrivateHomeScreen', () => {
 
     const titleNode = renderer.root.findByProps({ testID: 'private-home.title' });
     expect(titleNode.props.children).toBe('Waldos Of The World');
-    expect(renderer.root.findByProps({ testID: 'private-home.button.back-to-public' })).toBeTruthy();
     expect(handleOrientation).toHaveBeenCalledWith('portrait');
   });
 
-  it('clears the active scope and routes back to HomeScreen when the back-to-public button is pressed', async () => {
-    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
-    const clear = jest.fn().mockResolvedValue(undefined);
-
-    mockUseActiveGroup.mockReturnValue({
-      scope: { kind: 'private', groupId: 'g-7' },
-      clear,
-    });
-    mockUseGroupsHub.mockReturnValue({
-      data: { owned: [{ id: 'g-7', name: 'Waldos', role: 'owner' }], joined: [] },
-      refresh: jest.fn(),
+  it('does not render the legacy back-to-public button', async () => {
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-7', name: 'Waldos', role: 'owner' }],
+        joined: [],
+      },
     });
 
-    let renderer;
-    await act(async () => {
-      renderer = create(
-        <PrivateHomeScreen
-          navigation={navigation}
-          route={{ params: { scope: { kind: 'private', groupId: 'g-7' } } }}
-        />
+    expect(() => renderer.root.findByProps({ testID: 'private-home.button.back-to-public' })).toThrow();
+  });
+
+  describe('owner', () => {
+    const ownerData = {
+      owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', joining_code: 'WALDO42' }],
+      joined: [],
+    };
+
+    it('exposes the settings gear via headerRight', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
+
+      const options = lastSetOptions(navigation);
+      expect(options.title).toBe('Waldos');
+      expect(options.headerRight).toBeInstanceOf(Function);
+
+      let headerRoot;
+      await act(async () => {
+        headerRoot = create(options.headerRight());
+      });
+
+      const gear = headerRoot.root.findByProps({ testID: 'private-home.button.settings' });
+      expect(gear.props.accessibilityLabel).toBe('Group settings');
+    });
+
+    it('navigates to GroupSettingsScreen when the gear is pressed', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
+
+      const options = lastSetOptions(navigation);
+      let headerRoot;
+      await act(async () => {
+        headerRoot = create(options.headerRight());
+      });
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.settings' }).props.onPress();
+      });
+
+      expect(navigation.navigate).toHaveBeenCalledWith('GroupSettingsScreen');
+    });
+
+    it('renders the share-code button', async () => {
+      const { renderer } = await renderScreen({ groupsData: ownerData });
+
+      const button = renderer.root.findByProps({ testID: 'private-home.button.share-code' });
+      expect(button.props.text).toBe('Share invite code');
+    });
+
+    it('shares the joining code via Share.share when the share-code button is pressed', async () => {
+      const { renderer } = await renderScreen({ groupsData: ownerData });
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'private-home.button.share-code' }).props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(Share.share).toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining('WALDO42') })
       );
-      await Promise.resolve();
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('non-owner member', () => {
+    const memberData = {
+      owned: [],
+      joined: [{ id: 'g-7', name: 'Waldos', role: 'member', joining_code: 'WALDO42' }],
+    };
+
+    it('does not expose a settings gear via headerRight', async () => {
+      const { navigation } = await renderScreen({ groupsData: memberData });
+
+      const options = lastSetOptions(navigation);
+      expect(options.headerRight).toBeUndefined();
     });
 
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'private-home.button.back-to-public' }).props.onPress();
-      await Promise.resolve();
-    });
+    it('does not render the share-code button', async () => {
+      const { renderer } = await renderScreen({ groupsData: memberData });
 
-    expect(clear).toHaveBeenCalledTimes(1);
-    expect(navigation.navigate).toHaveBeenCalledWith('HomeScreen');
+      expect(() => renderer.root.findByProps({ testID: 'private-home.button.share-code' })).toThrow();
+    });
   });
 });

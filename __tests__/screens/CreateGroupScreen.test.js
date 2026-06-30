@@ -1,8 +1,16 @@
 const mockButton = jest.fn(() => null);
+const mockBigButton = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
 const mockUseGroupsHub = jest.fn();
 const mockUseActiveGroup = jest.fn();
+
+jest.mock('../../components/UI/BigButton', () => {
+  return function MockBigButton(props) {
+    mockBigButton(props);
+    return null;
+  };
+});
 
 jest.mock('../../components/UI/Button', () => {
   return function MockButton(props) {
@@ -169,5 +177,38 @@ describe('CreateGroupScreen', () => {
     expect(Alert.alert).toHaveBeenCalled();
 
     expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
+  });
+
+  it('shows the already-owns message without the unlock CTA when a Premium+ user owns a group', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    const setActive = jest.fn().mockResolvedValue(undefined);
+    mockUseActiveGroup.mockReturnValue({ setActive });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' })
+    ).toThrow();
+
+    const goToGroupProps = renderer.root.findByProps({ testID: 'create-group.button.go-to-group' }).props;
+    expect(goToGroupProps).toBeTruthy();
+
+    await act(async () => {
+      await goToGroupProps.onPress();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-owned');
+    expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-owned' },
+    });
   });
 });

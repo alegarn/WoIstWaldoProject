@@ -1,9 +1,10 @@
 import { useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Share, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
 import HomeCard from '../../components/UI/HomeCard';
 import BigButton from '../../components/UI/BigButton';
+import IconButton from '../../components/UI/IconButton';
 import { GlobalStyle } from '../../constants/theme';
 import { handleOrientation } from '../../utils/orientation';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
@@ -15,18 +16,33 @@ const RankingImage = require('../../assets/home/WoIstWaldo-character-stats.webp'
 
 export default function PrivateHomeScreen({ navigation, route }) {
   const routeScope = route?.params?.scope;
-  const { scope, clear } = useActiveGroup();
+  const { scope } = useActiveGroup();
   const activeScope = routeScope ?? scope;
   const { data, refresh } = useGroupsHub();
   const group = activeScope?.kind === 'private'
     ? [...(data?.owned ?? []), ...(data?.joined ?? [])].find((g) => g.id === activeScope.groupId)
     : null;
   const isLocked = group?.locked === true;
+  const isOwner = group?.role === 'owner';
   const groupId = activeScope?.kind === 'private' ? activeScope.groupId : null;
 
   useEffect(() => {
-    navigation.setOptions({ title: group?.name ?? '' });
-  }, [navigation, group?.name]);
+    navigation.setOptions({
+      title: group?.name ?? '',
+      headerRight: isOwner
+        ? () => (
+          <IconButton
+            icon="settings-outline"
+            color="#fff"
+            size={26}
+            onPress={() => navigation.navigate('GroupSettingsScreen')}
+            testID="private-home.button.settings"
+            accessibilityLabel="Group settings"
+          />
+        )
+        : undefined,
+    });
+  }, [navigation, group?.name, isOwner]);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,6 +60,20 @@ export default function PrivateHomeScreen({ navigation, route }) {
     navigation.navigate(target, {
       scope: { kind: 'private', groupId },
     });
+
+  const shareCode = useCallback(async () => {
+    const code = group?.joining_code;
+    if (!code) {
+      Alert.alert('No invite code available.');
+      return;
+    }
+    const message = `Join my private Waldo group! Code: ${code}`;
+    try {
+      await Share.share({ message });
+    } catch (_) {
+      Alert.alert('Invite code', message);
+    }
+  }, [group?.joining_code]);
 
   return (
     <View
@@ -83,14 +113,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
         heightPercent={20}
         testID="private-home.button.ranking"
       />
-      <BigButton
-        text="Back to public"
-        onPress={() => {
-          clear();
-          navigation.navigate('HomeScreen');
-        }}
-        testID="private-home.button.back-to-public"
-      />
+      {isOwner && (
+        <BigButton
+          text="Share invite code"
+          onPress={shareCode}
+          testID="private-home.button.share-code"
+        />
+      )}
     </View>
   );
 }

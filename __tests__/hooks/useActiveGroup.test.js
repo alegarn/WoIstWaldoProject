@@ -59,7 +59,7 @@ describe('useActiveGroup — scope derivation', () => {
     expect(result.current.scope).toEqual({ kind: 'private', groupId: 'group-123' });
   });
 
-  it('reverts to {kind:"public"} after clear()', async () => {
+  it('reverts to {kind:"public"} after clear() while retaining activeGroupId', async () => {
     setActiveGroup.mockResolvedValue({
       status: 200,
       data: { active_group_id: 'group-123' },
@@ -79,6 +79,8 @@ describe('useActiveGroup — scope derivation', () => {
       await result.current.clear();
     });
 
+    expect(setActiveGroup).toHaveBeenCalledTimes(1);
     expect(result.current.scope).toEqual({ kind: 'public' });
+    expect(result.current.activeGroupId).toBe('group-123');
   });
 });
