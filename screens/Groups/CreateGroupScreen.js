@@ -14,7 +14,7 @@ import { createGroup } from '../../services/groups/groupApi';
 
 export default function CreateGroupScreen({ navigation }) {
   const authContext = useContext(AuthContext);
-  const { data } = useGroupsHub();
+  const { data, isLoading } = useGroupsHub();
   const { setActive } = useActiveGroup();
 
   const [name, setName] = useState('');
@@ -27,7 +27,11 @@ export default function CreateGroupScreen({ navigation }) {
   const isPremiumPlus = (authContext?.premiumTier ?? 0) >= 2;
   const alreadyOwns = owned.length > 0;
 
-  if (isPremiumPlus && alreadyOwns) {
+  if (isLoading && !data) {
+    return <LoadingOverlay message="Loading..." />;
+  }
+
+  if (alreadyOwns) {
     const goToGroup = async () => {
       const groupId = owned[0]?.id;
       if (!groupId) return;
@@ -43,7 +47,7 @@ export default function CreateGroupScreen({ navigation }) {
           style={styles.lockedMessage}
           testID="create-group.message.already-owns"
         >
-          You already own a group.
+          You can only create 1 group.
         </Text>
         <BigButton
           text="Go to my group"

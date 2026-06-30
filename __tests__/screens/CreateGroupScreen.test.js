@@ -211,4 +211,24 @@ describe('CreateGroupScreen', () => {
       scope: { kind: 'private', groupId: 'g-owned' },
     });
   });
+
+  it('shows the already-owns message without the unlock CTA even when the user is not Premium+', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    mockUseActiveGroup.mockReturnValue({ setActive: jest.fn().mockResolvedValue(undefined) });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 0 }, navigation });
+
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' }).props.children).toBe('You can only create 1 group.');
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' })
+    ).toThrow();
+  });
 });

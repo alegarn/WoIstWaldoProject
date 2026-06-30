@@ -62,7 +62,7 @@ describe('PrivateHomeScreen', () => {
     scope = { kind: 'private', groupId: 'g-7' },
     groupsData = { owned: [], joined: [] },
   } = {}) {
-    mockUseActiveGroup.mockReturnValue({ scope });
+    mockUseActiveGroup.mockReturnValue({ scope, clear: jest.fn() });
     mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
 
     const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
@@ -84,6 +84,15 @@ describe('PrivateHomeScreen', () => {
   function lastSetOptions(navigation) {
     const calls = navigation.setOptions.mock.calls;
     return calls[calls.length - 1][0];
+  }
+
+  async function renderHeader(navigation) {
+    const options = lastSetOptions(navigation);
+    let headerRoot;
+    await act(async () => {
+      headerRoot = create(options.headerRight());
+    });
+    return headerRoot;
   }
 
   it('renders the active group name in private-home.title and forces portrait orientation', async () => {
@@ -124,10 +133,7 @@ describe('PrivateHomeScreen', () => {
       expect(options.title).toBe('Waldos');
       expect(options.headerRight).toBeInstanceOf(Function);
 
-      let headerRoot;
-      await act(async () => {
-        headerRoot = create(options.headerRight());
-      });
+      const headerRoot = await renderHeader(navigation);
 
       const gear = headerRoot.root.findByProps({ testID: 'private-home.button.settings' });
       expect(gear.props.accessibilityLabel).toBe('Group settings');
@@ -136,11 +142,7 @@ describe('PrivateHomeScreen', () => {
     it('navigates to GroupSettingsScreen when the gear is pressed', async () => {
       const { navigation } = await renderScreen({ groupsData: ownerData });
 
-      const options = lastSetOptions(navigation);
-      let headerRoot;
-      await act(async () => {
-        headerRoot = create(options.headerRight());
-      });
+      const headerRoot = await renderHeader(navigation);
 
       await act(async () => {
         headerRoot.root.findByProps({ testID: 'private-home.button.settings' }).props.onPress();
@@ -149,18 +151,22 @@ describe('PrivateHomeScreen', () => {
       expect(navigation.navigate).toHaveBeenCalledWith('GroupSettingsScreen');
     });
 
-    it('renders the share-code button', async () => {
-      const { renderer } = await renderScreen({ groupsData: ownerData });
+    it('renders the share-code icon in the header', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
 
-      const button = renderer.root.findByProps({ testID: 'private-home.button.share-code' });
-      expect(button.props.text).toBe('Share invite code');
+      const headerRoot = await renderHeader(navigation);
+
+      const button = headerRoot.root.findByProps({ testID: 'private-home.button.share-code' });
+      expect(button.props.accessibilityLabel).toBe('Share invite code');
     });
 
-    it('shares the joining code via Share.share when the share-code button is pressed', async () => {
-      const { renderer } = await renderScreen({ groupsData: ownerData });
+    it('shares the joining code via Share.share when the share-code icon is pressed', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
+
+      const headerRoot = await renderHeader(navigation);
 
       await act(async () => {
-        renderer.root.findByProps({ testID: 'private-home.button.share-code' }).props.onPress();
+        headerRoot.root.findByProps({ testID: 'private-home.button.share-code' }).props.onPress();
         await Promise.resolve();
       });
 
@@ -168,6 +174,15 @@ describe('PrivateHomeScreen', () => {
         expect.objectContaining({ message: expect.stringContaining('WALDO42') })
       );
       expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it('renders the switch-to-public icon in the header', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
+
+      const headerRoot = await renderHeader(navigation);
+
+      const button = headerRoot.root.findByProps({ testID: 'private-home.button.switch-to-public' });
+      expect(button.props.accessibilityLabel).toBe('Switch to public');
     });
   });
 
@@ -177,17 +192,21 @@ describe('PrivateHomeScreen', () => {
       joined: [{ id: 'g-7', name: 'Waldos', role: 'member', joining_code: 'WALDO42' }],
     };
 
-    it('does not expose a settings gear via headerRight', async () => {
+    it('renders the switch-to-public icon but no owner-only icons', async () => {
       const { navigation } = await renderScreen({ groupsData: memberData });
 
       const options = lastSetOptions(navigation);
-      expect(options.headerRight).toBeUndefined();
-    });
+      expect(options.headerRight).toBeInstanceOf(Function);
 
-    it('does not render the share-code button', async () => {
-      const { renderer } = await renderScreen({ groupsData: memberData });
+      const headerRoot = await renderHeader(navigation);
 
-      expect(() => renderer.root.findByProps({ testID: 'private-home.button.share-code' })).toThrow();
+      const switchButton = headerRoot.root.findByProps({
+        testID: 'private-home.button.switch-to-public',
+      });
+      expect(switchButton.props.accessibilityLabel).toBe('Switch to public');
+
+      expect(() => headerRoot.root.findByProps({ testID: 'private-home.button.share-code' })).toThrow();
+      expect(() => headerRoot.root.findByProps({ testID: 'private-home.button.settings' })).toThrow();
     });
   });
 });

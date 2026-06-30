@@ -15,8 +15,7 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
   const joined = data?.joined ?? [];
   const isPrivate = scope.kind === 'private';
   const hasAnyMembership = owned.length > 0 || joined.length > 0;
-  const hasActiveGroup = !!activeGroupId;
-  const canToggleScope = isPrivate ? hasAnyMembership : hasAnyMembership && hasActiveGroup;
+  const canToggleScope = hasAnyMembership;
 
   const toggleScope = () => {
     if (isPrivate) {
@@ -25,19 +24,20 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
       return;
     }
 
-    if (!activeGroupId) {
+    if (activeGroupId) {
+      setActive(activeGroupId).then((response) => {
+        if (response?.status === 200 || response?.status === 204) {
+          navigation.navigate('PrivateHomeScreen', {
+            scope: { kind: 'private', groupId: activeGroupId },
+          });
+        }
+      }).catch((err) => {
+        Alert.alert('Error', err?.message ?? 'Could not switch scope.');
+      });
       return;
     }
 
-    setActive(activeGroupId).then((response) => {
-      if (response?.status === 200 || response?.status === 204) {
-        navigation.navigate('PrivateHomeScreen', {
-          scope: { kind: 'private', groupId: activeGroupId },
-        });
-      }
-    }).catch((err) => {
-      Alert.alert('Error', err?.message ?? 'Could not switch scope.');
-    });
+    navigation.navigate('GroupsListScreen');
   };
 
   const select = (action) => () => {
