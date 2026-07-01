@@ -159,7 +159,34 @@ describe('auth utilities', () => {
         guessPathDone: true,
         hidePathDone: true,
       },
+      isPremium: null,
+      premiumTier: null,
+      premiumExpiresAt: null,
+      isGroupOwner: null,
+      activeGroupId: null,
+      isPrivateMode: null,
     });
+  });
+
+  it('rehydrates the persisted entitlement and group fields as parsed values', async () => {
+    mockStoredValues({
+      ...storedSession,
+      isPremium: JSON.stringify(true),
+      premiumTier: JSON.stringify(2),
+      premiumExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
+      isGroupOwner: JSON.stringify(true),
+      activeGroupId: JSON.stringify(77),
+      isPrivateMode: JSON.stringify(false),
+    });
+
+    const authState = await getStoredAuthState();
+
+    expect(authState.isPremium).toBe(true);
+    expect(authState.premiumTier).toBe(2);
+    expect(authState.premiumExpiresAt).toBe('2026-12-31T23:59:59Z');
+    expect(authState.isGroupOwner).toBe(true);
+    expect(authState.activeGroupId).toBe(77);
+    expect(authState.isPrivateMode).toBe(false);
   });
 
   it('skips rehydration when the persisted token is invalid', async () => {

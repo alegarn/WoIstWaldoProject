@@ -73,6 +73,11 @@ describe('LoginScreen', () => {
 					username: 'waldo',
 					finished_tutorial: true,
 					score_id: 'score-1',
+					is_premium: false,
+					premium_tier: 0,
+					premium_expires_at: null,
+					is_group_owner: false,
+					active_group_id: null,
 				},
 			},
 		});
@@ -97,6 +102,58 @@ describe('LoginScreen', () => {
 			username: 'waldo',
 			isTutorialFinished: true,
 			scoreId: 'score-1',
+			isPremium: false,
+			premiumTier: 0,
+			premiumExpiresAt: null,
+			isGroupOwner: false,
+			activeGroupId: null,
+		});
+	});
+
+	it('forwards premium + group entitlement fields from the login response to authenticate', async () => {
+		const authenticate = jest.fn();
+		login.mockResolvedValue({
+			status: 200,
+			headers: {
+				authorization: 'Bearer premium-token',
+			},
+			data: {
+				data: {
+					id: '42',
+					email: 'waldo@example.com',
+					username: 'waldo',
+					finished_tutorial: true,
+					score_id: 'score-1',
+					is_premium: true,
+					premium_tier: 2,
+					premium_expires_at: '2099-01-01T00:00:00Z',
+					is_group_owner: true,
+					active_group_id: 'group-7',
+				},
+			},
+		});
+
+		await renderScreen({ authenticate });
+
+		await act(async () => {
+			await getAuthContentProps().onAuthenticate({
+				email: 'waldo@example.com',
+				password: 'secret',
+			});
+		});
+
+		expect(authenticate).toHaveBeenCalledWith({
+			token: 'Bearer premium-token',
+			userId: '42',
+			email: 'waldo@example.com',
+			username: 'waldo',
+			isTutorialFinished: true,
+			scoreId: 'score-1',
+			isPremium: true,
+			premiumTier: 2,
+			premiumExpiresAt: '2099-01-01T00:00:00Z',
+			isGroupOwner: true,
+			activeGroupId: 'group-7',
 		});
 	});
 
