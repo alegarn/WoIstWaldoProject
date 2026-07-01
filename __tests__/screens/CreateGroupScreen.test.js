@@ -60,12 +60,18 @@ import CreateGroupScreen from '../../screens/Groups/CreateGroupScreen';
 import { AuthContext } from '../../store/auth-context';
 import { createGroup } from '../../services/groups/groupApi';
 import { DEFAULT_COLOR_PALETTE } from '../../components/UI/ColorPalettePicker';
+import { generateShades } from '../../utils/colorShades';
 
-// Pick non-default swatches so the test exercises an actual selection change.
-const PRIMARY_PICK = DEFAULT_COLOR_PALETTE[2];
-const SECONDARY_PICK = DEFAULT_COLOR_PALETTE[3];
-const PRIMARY_SWATCH_TEST_ID = `create-group.color-primary.swatch.${PRIMARY_PICK.hex.replace('#', '')}`;
-const SECONDARY_SWATCH_TEST_ID = `create-group.color-secondary.swatch.${SECONDARY_PICK.hex.replace('#', '')}`;
+// The screen's default values equal these base colors, so their derivative
+// rows are auto-expanded on first render. Pick non-base shades to exercise a
+// real selection change (tapping a base only expands, it does not select).
+const PRIMARY_BASE = DEFAULT_COLOR_PALETTE[0];
+const PRIMARY_SHADE = generateShades(PRIMARY_BASE.hex, 10)[1];
+const PRIMARY_SHADE_TEST_ID = `create-group.color-primary.shade.${PRIMARY_BASE.hex.replace('#', '')}.${PRIMARY_SHADE.replace('#', '')}`;
+
+const SECONDARY_BASE = DEFAULT_COLOR_PALETTE[1];
+const SECONDARY_SHADE = generateShades(SECONDARY_BASE.hex, 10)[8];
+const SECONDARY_SHADE_TEST_ID = `create-group.color-secondary.shade.${SECONDARY_BASE.hex.replace('#', '')}.${SECONDARY_SHADE.replace('#', '')}`;
 
 describe('CreateGroupScreen', () => {
   beforeEach(() => {
@@ -122,8 +128,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
-      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: PRIMARY_SHADE_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SHADE_TEST_ID }).props.onPress();
     });
 
     await act(async () => {
@@ -141,7 +147,7 @@ describe('CreateGroupScreen', () => {
 
     expect(createGroup).toHaveBeenCalledWith(
       expect.objectContaining({ premiumTier: 2 }),
-      { name: 'Waldos', primaryColor: PRIMARY_PICK.hex, secondaryColor: SECONDARY_PICK.hex }
+      { name: 'Waldos', primaryColor: PRIMARY_SHADE, secondaryColor: SECONDARY_SHADE }
     );
     expect(setActive).toHaveBeenCalledWith('g-new');
     expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
@@ -157,8 +163,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
-      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: PRIMARY_SHADE_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SHADE_TEST_ID }).props.onPress();
     });
 
     await act(async () => {

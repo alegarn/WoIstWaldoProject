@@ -12,13 +12,20 @@ function LoginScreen() {
   const authContext = useContext(AuthContext);
 
   const handleAuthDataSaving = async (response, email) => {
+    const data = response.data.data;
+
     await authContext.authenticate({
       token: response.headers.authorization,
-      userId: response.data.data.id,
-      email: response.data.data.email ?? email,
-      username: response.data.data.username ?? '',
-      isTutorialFinished: response.data.data.finished_tutorial,
-      scoreId: response.data.data.score_id
+      userId: data.id,
+      email: data.email ?? email,
+      username: data.username ?? '',
+      isTutorialFinished: data.finished_tutorial,
+      scoreId: data.score_id,
+      isPremium: data.is_premium,
+      premiumTier: data.premium_tier,
+      premiumExpiresAt: data.premium_expires_at,
+      isGroupOwner: data.is_group_owner,
+      activeGroupId: data.active_group_id,
     });
 
     return true;

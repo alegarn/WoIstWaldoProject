@@ -74,6 +74,11 @@ describe('SignupScreen', () => {
           username: 'new-user',
           score_id: 'score-1',
           finished_tutorial: false,
+          is_premium: false,
+          premium_tier: 0,
+          premium_expires_at: null,
+          is_group_owner: false,
+          active_group_id: null,
         },
       },
     });
@@ -102,6 +107,11 @@ describe('SignupScreen', () => {
       username: 'new-user',
       isTutorialFinished: false,
       scoreId: 'score-1',
+      isPremium: false,
+      premiumTier: 0,
+      premiumExpiresAt: null,
+      isGroupOwner: false,
+      activeGroupId: null,
     });
   });
 

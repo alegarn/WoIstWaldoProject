@@ -76,32 +76,34 @@ export default function SubscriptionManagementScreen({ navigation }) {
         </Text>
       )}
 
-      {(authContext?.premiumTier ?? 0) < 3 && (
+      <View style={styles.buttonGroup}>
+        {(authContext?.premiumTier ?? 0) < 3 && (
+          <Button
+            accessibilityLabel="Upgrade"
+            onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+            style={styles.button}
+            testID="subscription-manage.button.upgrade"
+          >
+            Upgrade
+          </Button>
+        )}
         <Button
-          accessibilityLabel="Upgrade"
-          onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+          accessibilityLabel="Restore purchases"
+          onPress={handleRestore}
           style={styles.button}
-          testID="subscription-manage.button.upgrade"
+          testID="subscription-manage.button.restore"
         >
-          Upgrade
+          Restore purchases
         </Button>
-      )}
-      <Button
-        accessibilityLabel="Restore purchases"
-        onPress={handleRestore}
-        style={styles.button}
-        testID="subscription-manage.button.restore"
-      >
-        Restore purchases
-      </Button>
-      <Button
-        accessibilityLabel="Manage subscription"
-        onPress={handleManage}
-        style={styles.button}
-        testID="subscription-manage.button.manage"
-      >
-        Manage subscription
-      </Button>
+        <Button
+          accessibilityLabel="Manage subscription"
+          onPress={handleManage}
+          style={styles.button}
+          testID="subscription-manage.button.manage"
+        >
+          Manage subscription
+        </Button>
+      </View>
     </View>
   );
 }
@@ -110,6 +112,16 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20 },
   title: { color: '#fff', fontSize: 22, fontWeight: '700' },
   tier: { color: '#ffd700', fontSize: 24, marginTop: 8 },
-  button: { marginTop: 16, backgroundColor: GlobalStyle.color.primaryColor100, alignSelf: 'center' },
+  buttonGroup: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  button: {
+    width: '80%',
+    marginVertical: 8,
+    backgroundColor: GlobalStyle.color.primaryColor100,
+  },
   error: { color: GlobalStyle.color.error500, marginTop: 12 },
 });
