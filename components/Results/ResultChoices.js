@@ -20,13 +20,23 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
         hidePathDone: context.isTutorialFinished?.hidePathDone 
       });
     
-    navigation.reset({
-      index: 0,
-      routes: [{ 
-        name: isPrivateScope ? 'PrivateHomeScreen' : 'HomeScreen', 
-        params: isPrivateScope ? { scope: routeParams.scope, isTutorial } : { isTutorial: isTutorial } 
-      }],
-    });
+    if (isPrivateScope) {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: routeParams.scope, isTutorial } },
+        ],
+      });
+    } else {
+      navigation.reset({
+        index: 0,
+        routes: [{
+          name: 'HomeScreen',
+          params: { isTutorial: isTutorial },
+        }],
+      });
+    }
   };
 
 
@@ -40,13 +50,27 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
       return;
     }
 
-    navigation.reset({
-      index: 1,
-      routes: [{ 
-        name: 'GuessPathScreen', 
-        params: isPrivateScope ? { isTutorial: isTutorial, scope: routeParams.scope } : { isTutorial: isTutorial } 
-      }],
-    });
+    if (isPrivateScope) {
+      navigation.reset({
+        index: 2,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: routeParams.scope } },
+          { name: 'GuessPathScreen', params: { isTutorial, scope: routeParams.scope } },
+        ],
+      });
+    } else {
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          {
+            name: 'GuessPathScreen',
+            params: { isTutorial: isTutorial },
+          },
+        ],
+      });
+    }
   };
 
   // Visual hierarchy:

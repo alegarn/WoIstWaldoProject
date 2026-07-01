@@ -78,7 +78,10 @@ describe('ResultChoices', () => {
     expect(retryGuess).toHaveBeenCalledTimes(1);
     expect(navigation.reset).toHaveBeenCalledWith({
       index: 1,
-      routes: [{ name: 'GuessPathScreen', params: { isTutorial: false } }],
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: false } },
+      ],
     });
   });
 
@@ -107,8 +110,11 @@ describe('ResultChoices', () => {
 
     expect(updateTutorialStatus).not.toHaveBeenCalled();
     expect(navigation.reset).toHaveBeenCalledWith({
-      index: 0,
-      routes: [{ name: 'PrivateHomeScreen', params: { scope, isTutorial: false } }],
+      index: 1,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope, isTutorial: false } },
+      ],
     });
   });
 
@@ -136,8 +142,12 @@ describe('ResultChoices', () => {
     });
 
     expect(navigation.reset).toHaveBeenCalledWith({
-      index: 1,
-      routes: [{ name: 'GuessPathScreen', params: { isTutorial: false, scope } }],
+      index: 2,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope } },
+        { name: 'GuessPathScreen', params: { isTutorial: false, scope } },
+      ],
     });
   });
 
