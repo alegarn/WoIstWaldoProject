@@ -95,6 +95,8 @@ export default function PrivateHomeScreen({ navigation, route }) {
   useEffect(() => {
     navigation.setOptions({
       title: group?.name ?? '',
+      headerStyle: { backgroundColor: group?.primary_color || GlobalStyle.color.primaryColor900 },
+      headerTintColor: '#fff',
       headerRight: () => (
         <View style={{ flexDirection: 'row' }}>
           <IconButton
@@ -109,6 +111,17 @@ export default function PrivateHomeScreen({ navigation, route }) {
             accessibilityLabel="Switch to public"
             style={{ marginRight: 12 }}
           />
+          {isOwner && (
+            <IconButton
+              icon="color-palette-outline"
+              color="#fff"
+              size={26}
+              onPress={openColorEditor}
+              testID="private-home.button.customize-colors"
+              accessibilityLabel="Customize group colors"
+              style={{ marginRight: 12 }}
+            />
+          )}
           {isOwner && (
             <IconButton
               icon="person-add-outline"
@@ -133,7 +146,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         </View>
       ),
     });
-  }, [navigation, group?.name, group?.joining_code, isOwner, clear, shareCode]);
+  }, [navigation, group?.name, group?.primary_color, group?.joining_code, isOwner, clear, shareCode, openColorEditor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -180,8 +193,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
       <Text
         style={styles.title}
         testID="private-home.title"
-        accessibilityLabel={isOwner ? `${group?.name ?? ''}. Long press to edit group colors.` : undefined}
-        onLongPress={isOwner ? openColorEditor : undefined}
       >
         {group?.name ?? ''}
       </Text>
