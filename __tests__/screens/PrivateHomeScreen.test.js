@@ -159,7 +159,7 @@ describe('PrivateHomeScreen', () => {
 
   describe('owner', () => {
     const ownerData = {
-      owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', joining_code: 'WALDO42' }],
+      owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', joining_code: 'WALDO42', primary_color: '#6528F7' }],
       joined: [],
     };
 
@@ -222,25 +222,35 @@ describe('PrivateHomeScreen', () => {
       expect(button.props.accessibilityLabel).toBe('Switch to public');
     });
 
-    it('lets the owner change colors via a hidden long-press on the title (no visible button)', async () => {
+    it('wires the header background to the group primary_color', async () => {
+      const { navigation } = await renderScreen({ groupsData: ownerData });
+
+      const options = lastSetOptions(navigation);
+      expect(options.headerStyle.backgroundColor).toBe('#6528F7');
+      expect(options.headerTintColor).toBe('#fff');
+    });
+
+    it('lets the owner customize colors via the header button', async () => {
       updateGroupSettings.mockResolvedValue({ status: 200 });
-      const { renderer } = await renderScreen({ groupsData: ownerData });
+      const { navigation } = await renderScreen({ groupsData: ownerData });
 
-      // No visible color button anywhere in the UI.
-      expect(() => renderer.root.findByProps({ testID: 'private-home.color-editor.confirm.ok' })).toThrow();
+      const headerRoot = await renderHeader(navigation);
 
-      // Hidden trigger: long-press the title (owner only).
+      // Editor not visible initially.
+      expect(() => headerRoot.root.findByProps({ testID: 'private-home.color-editor.confirm.ok' })).toThrow();
+
+      // Open editor via header customize button.
       await act(async () => {
-        renderer.root.findByProps({ testID: 'private-home.title' }).props.onLongPress();
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
       });
 
-      // Editor opened -> both pickers rendered.
-      const pickerCalls = mockColorPalettePicker.mock.calls;
-      expect(pickerCalls.length).toBe(2);
+      // Editor opened -> two color pickers rendered.
+      expect(mockColorPalettePicker.mock.calls.length).toBeGreaterThanOrEqual(2);
 
+      const colorCalls = mockColorPalettePicker.mock.calls;
       await act(async () => {
-        pickerCalls[0][0].onValueChange('#111111'); // primary
-        pickerCalls[1][0].onValueChange('#EEEEEE'); // secondary
+        colorCalls[colorCalls.length - 2][0].onValueChange('#111111'); // primary
+        colorCalls[colorCalls.length - 1][0].onValueChange('#EEEEEE'); // secondary
       });
 
       const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
@@ -260,6 +270,7 @@ describe('PrivateHomeScreen', () => {
       const lastModalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
       expect(lastModalProps.isModalVisible).toBe(false);
     });
+
   });
 
   describe('non-owner member', () => {
@@ -285,12 +296,12 @@ describe('PrivateHomeScreen', () => {
       expect(() => headerRoot.root.findByProps({ testID: 'private-home.button.settings' })).toThrow();
     });
 
-    it('does not expose the hidden color editor (title has no onLongPress)', async () => {
-      const { renderer } = await renderScreen({ groupsData: memberData });
+    it('does not expose the customize colors button for non-owners', async () => {
+      const { navigation } = await renderScreen({ groupsData: memberData });
 
-      const title = renderer.root.findByProps({ testID: 'private-home.title' });
-      expect(title.props.onLongPress).toBeUndefined();
-      expect(title.props.accessibilityLabel).toBeUndefined();
+      const headerRoot = await renderHeader(navigation);
+
+      expect(() => headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' })).toThrow();
     });
   });
 
