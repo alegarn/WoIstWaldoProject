@@ -53,7 +53,14 @@ describe('HomeHeaderRight', () => {
   }
 
   function getToggle(renderer) {
-    return renderer.root.findByProps({ testID: 'home.header.scope-toggle' });
+    return renderer.root.findByProps({ testID: 'home.menu.scope-toggle' });
+  }
+
+  function openMenu(renderer) {
+    const overflow = renderer.root.findByProps({ testID: 'home.header.other-options' });
+    act(() => {
+      overflow.props.onPress();
+    });
   }
 
   it('invokes setActive with the active group id when toggling from public to private scope', async () => {
@@ -70,6 +77,8 @@ describe('HomeHeaderRight', () => {
         joined: [],
       },
     });
+
+    openMenu(renderer);
 
     await act(async () => {
       await getToggle(renderer).props.onPress();
@@ -98,6 +107,8 @@ describe('HomeHeaderRight', () => {
       },
     });
 
+    openMenu(renderer);
+
     await act(async () => {
       await getToggle(renderer).props.onPress();
       await Promise.resolve();
@@ -107,5 +118,52 @@ describe('HomeHeaderRight', () => {
     expect(setActive).toHaveBeenCalledWith('g-9');
     expect(Alert.alert).toHaveBeenCalled();
     expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the toggle enabled when the user has a membership but no active group', () => {
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [],
+        joined: [{ id: 'g-2', role: 'member' }],
+      },
+    });
+
+    openMenu(renderer);
+
+    const toggle = getToggle(renderer);
+    expect(toggle.props.disabled).toBe(false);
+  });
+
+  it('navigates to GroupsListScreen when toggling from public to private without an active group', async () => {
+    const setActive = jest.fn();
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [],
+        joined: [{ id: 'g-2', role: 'member' }],
+      },
+    });
+
+    openMenu(renderer);
+
+    await act(async () => {
+      await getToggle(renderer).props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(setActive).not.toHaveBeenCalled();
+    expect(navigation.navigate).toHaveBeenCalledWith('GroupsListScreen');
+    expect(navigation.navigate).not.toHaveBeenCalledWith('PrivateHomeScreen', expect.anything());
   });
 });

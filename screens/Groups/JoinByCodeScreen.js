@@ -100,5 +100,5 @@ const styles = StyleSheet.create({
   label: { color: '#fff', fontSize: 18, marginTop: 12 },
   input: { backgroundColor: '#fff', color: '#000', padding: 10, marginTop: 4, borderRadius: 4 },
   errorText: { color: GlobalStyle.color.error500, fontSize: 14, marginTop: 8 },
-  button: { marginTop: 24, backgroundColor: GlobalStyle.color.primaryColor100 },
+  button: { marginTop: 24, backgroundColor: GlobalStyle.color.primaryColor100, alignSelf: 'center' },
 });

@@ -8,12 +8,20 @@ jest.mock('../utils/storageDatum', () => ({
   emptyImageList: jest.fn().mockResolvedValue(undefined),
 }));
 
+jest.mock('../services/billing/billingApi', () => ({
+  __esModule: true,
+  syncEntitlement: jest.fn(),
+}));
+
 import React, { useContext, useEffect } from 'react';
 import { act, create } from 'react-test-renderer';
 import * as SecureStore from 'expo-secure-store';
 
 import AuthContextProvider, { AuthContext } from '../store/auth-context';
 import { emptyImageList } from '../utils/storageDatum';
+import { syncEntitlement } from '../services/billing/billingApi';
+
+const Purchases = require('react-native-purchases').default;
 
 function AuthContextProbe({ onValue }) {
   const value = useContext(AuthContext);
@@ -36,10 +44,16 @@ describe('AuthContextProvider', () => {
     SecureStore.getItemAsync.mockResolvedValue(null);
     SecureStore.setItemAsync.mockResolvedValue(undefined);
     SecureStore.deleteItemAsync.mockResolvedValue(undefined);
+    process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = 'test-ios-key';
+    syncEntitlement.mockResolvedValue({
+      status: 200,
+      data: { is_premium: true, premium_tier: 2, premium_expires_at: '2027-01-01T00:00:00Z' },
+    });
   });
 
   afterEach(() => {
     consoleSpy.mockRestore();
+    delete process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY;
   });
 
   async function renderProvider() {
@@ -186,5 +200,87 @@ describe('AuthContextProvider', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('isTutorialFinished');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('scoreId');
     expect(emptyImageList).toHaveBeenCalledTimes(1);
+  });
+
+  it('registers a RevenueCat customer info listener on authenticate', async () => {
+    await renderProvider();
+
+    Purchases.addCustomerInfoUpdateListener.mockClear();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+      });
+    });
+
+    expect(Purchases.addCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    expect(typeof Purchases.addCustomerInfoUpdateListener.mock.calls[0][0]).toBe('function');
+  });
+
+  it('debounces customer info listener updates into a single syncEntitlement call', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+      });
+    });
+
+    const listener = Purchases.addCustomerInfoUpdateListener.mock.calls.at(-1)[0];
+    syncEntitlement.mockClear();
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        listener({});
+        listener({});
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(syncEntitlement).toHaveBeenCalledTimes(1);
+      expect(latestContext.isPremium).toBe(true);
+      expect(latestContext.premiumTier).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('removes the registered customer info listener on logout', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+      });
+    });
+
+    const registeredListener = Purchases.addCustomerInfoUpdateListener.mock.calls.at(-1)[0];
+
+    Purchases.removeCustomerInfoUpdateListener.mockClear();
+
+    await act(async () => {
+      await latestContext.logout();
+    });
+
+    expect(Purchases.removeCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
+    expect(Purchases.removeCustomerInfoUpdateListener.mock.calls[0][0]).toBe(registeredListener);
   });
 });

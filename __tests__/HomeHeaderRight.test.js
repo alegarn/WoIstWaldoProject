@@ -48,12 +48,19 @@ describe('HomeHeaderRight', () => {
       renderer = create(<HomeHeaderRight navigation={navigation} tintColor="#fff" />);
     });
 
-    const storeProps = getIconButtonProps('home.header.store');
-    expect(storeProps).toBeTruthy();
-    expect(storeProps.testID).toBe('home.header.store');
+    const overflowProps = getIconButtonProps('home.header.other-options');
+    expect(overflowProps).toBeTruthy();
+    expect(overflowProps.testID).toBe('home.header.other-options');
 
     await act(async () => {
-      storeProps.onPress();
+      overflowProps.onPress();
+    });
+
+    const storeRow = renderer.root.findByProps({ testID: 'home.menu.store' });
+    expect(storeRow).toBeTruthy();
+
+    await act(async () => {
+      storeRow.props.onPress();
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });

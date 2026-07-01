@@ -3,55 +3,21 @@ import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 
 import BigButton from '../../components/UI/BigButton';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
+import TierCard from '../../components/UI/TierCard';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
+import { BILLING_TIERS } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
-
-const TIER_TEST_IDS = {
-  premium: 'paywall.tier.premium',
-  'premium-plus': 'paywall.tier.premium-plus',
-  'premium-plus-extension': 'paywall.tier.premium-plus-extension',
-};
-
-const TIER_LABELS = {
-  premium: 'Premium',
-  'premium-plus': 'Premium+',
-  'premium-plus-extension': 'Premium+ Extension',
-};
-
-const TIER_LOOKUP = [...Object.entries(TIER_TEST_IDS)]
-  .map(([key, testId]) => [key.replaceAll('-', '_'), testId])
-  .sort((a, b) => b[0].length - a[0].length);
-
-function getPurchasesModule() {
-  try {
-    return require('react-native-purchases').default;
-  } catch (error) {
-    return null;
-  }
-}
-
-function pickPackageId(pkg) {
-  return pkg?.identifier ?? pkg?.product?.identifier ?? pkg?.id;
-}
-
-function pickPackagePrice(pkg) {
-  return pkg?.product?.priceString ?? pkg?.priceString ?? '';
-}
-
-function tierTestIdForPackage(pkg) {
-  const id = pickPackageId(pkg)?.replaceAll('-', '_');
-  if (!id) return null;
-  for (const [key, testId] of TIER_LOOKUP) {
-    if (id === key || id.startsWith(key + '_')) return testId;
-  }
-  return null;
-}
+import {
+  getPurchasesModule,
+  hasActiveEntitlement,
+  applyEntitlementToContext,
+  restoreAndSync,
+} from '../../utils/purchases';
 
 export default function PaywallScreen({ navigation, route }) {
   const authContext = useContext(AuthContext);
   const intent = route?.params?.intent;
-  const [offerings, setOfferings] = useState(null);
   const [packages, setPackages] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
@@ -65,9 +31,13 @@ export default function PaywallScreen({ navigation, route }) {
     }
     try {
       const result = await Purchases.getOfferings();
-      setOfferings(result);
-      const current = result?.current;
-      setPackages(current?.availablePackages ?? []);
+      const all = result?.all ?? {};
+      const resolved = BILLING_TIERS.map((tier) => {
+        const offering = all[tier.offeringId] ?? result?.getOffering?.(tier.offeringId);
+        const pkg = offering?.availablePackages?.[0];
+        return pkg ? { pkg, tier } : null;
+      }).filter(Boolean);
+      setPackages(resolved);
     } catch (error) {
       Alert.alert('Could not load offerings', error?.message ?? '');
     } finally {
@@ -81,13 +51,20 @@ export default function PaywallScreen({ navigation, route }) {
 
   const applySyncAndRoute = useCallback(async () => {
     const response = await syncEntitlement(authContext);
+    const ok = response?.status === 200;
     const entitlement = response?.data;
-    if (entitlement) {
+    if (ok && entitlement) {
       authContext.setEntitlement({
         isPremium: entitlement.is_premium,
         premiumTier: entitlement.premium_tier,
         premiumExpiresAt: entitlement.premium_expires_at,
       });
+    }
+    if (!ok) {
+      Alert.alert(
+        'Purchase recorded',
+        "We couldn't confirm your purchase with the server yet. Open this screen again or tap 'Restore purchases' shortly to refresh your plan.",
+      );
     }
     if (intent === 'create-group') {
       navigation.replace('CreateGroupScreen');
@@ -103,7 +80,16 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setIsPurchasing(true);
     try {
-      await Purchases.purchasePackage(pkg);
+      const customerInfo = await Purchases.purchasePackage(pkg);
+      if (hasActiveEntitlement(customerInfo)) {
+        try {
+          authContext.setEntitlement({
+            isPremium: true,
+            premiumTier: undefined,
+            premiumExpiresAt: undefined,
+          });
+        } catch (_) {}
+      }
       await applySyncAndRoute();
     } catch (error) {
       if (error?.userCancelled) {
@@ -122,23 +108,52 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setRestoreError(false);
     try {
-      const info = await Purchases.restorePurchases();
-      const response = await syncEntitlement(authContext);
-      const entitlement = response?.data;
-      const hasEntitlement = !!entitlement?.is_premium || (!!info && Object.keys(info.entitlements?.active ?? {}).length > 0);
-      if (!hasEntitlement) {
+      const result = await restoreAndSync(authContext);
+      if (!result.hasEntitlement) {
         setRestoreError(true);
         return;
       }
-      authContext.setEntitlement({
-        isPremium: entitlement.is_premium,
-        premiumTier: entitlement.premium_tier,
-        premiumExpiresAt: entitlement.premium_expires_at,
-      });
+      applyEntitlementToContext(authContext, result.entitlement);
     } catch (error) {
       setRestoreError(true);
       Alert.alert('Restore failed', error?.message ?? '');
     }
+  };
+
+  const renderHeader = () => (
+    <View style={styles.header}>
+      <Text style={styles.eyebrow}>STORE</Text>
+      <Text style={styles.headline}>Find your plan</Text>
+      <Text style={styles.sub}>Unlock more ways to play. Pick the tier that fits.</Text>
+      <View style={styles.rule} />
+    </View>
+  );
+
+  const renderFooter = () => (
+    <Text style={styles.legal}>
+      Auto-renews monthly. Cancel anytime from your store settings.
+    </Text>
+  );
+
+  const renderItem = ({ item }) => {
+    const { pkg, tier } = item;
+    const price = pkg?.product?.priceString ?? pkg?.priceString ?? '';
+    return (
+      <TierCard
+        testID={tier.testId}
+        image={tier.image}
+        eyebrow={tier.eyebrow}
+        title={tier.label}
+        price={price}
+        priceSuffix={tier.priceSuffix}
+        isSubscription={tier.isSubscription}
+        features={tier.features}
+        ctaText={tier.ctaText}
+        featured={tier.featured}
+        accessibilityLabel={`Subscribe to ${tier.label}`}
+        onCta={() => handlePurchase(pkg)}
+      />
+    );
   };
 
   if (isLoading || isPurchasing) {
@@ -149,45 +164,85 @@ export default function PaywallScreen({ navigation, route }) {
     <View style={styles.container}>
       <FlatList
         data={packages}
-        keyExtractor={(item, index) => pickPackageId(item) ?? `package-${index}`}
+        keyExtractor={(item, index) => item?.tier?.key ?? `tier-${index}`}
+        ListHeaderComponent={renderHeader}
         ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
-        renderItem={({ item }) => {
-          const tierTestId = tierTestIdForPackage(item) ?? 'paywall.tier.premium';
-          const tierKey = Object.keys(TIER_TEST_IDS).find(
-            (key) => TIER_TEST_IDS[key] === tierTestId
-          ) ?? 'premium';
-          return (
-            <View style={styles.tierCard} testID={tierTestId}>
-              <Text style={styles.tierTitle}>{TIER_LABELS[tierKey] ?? 'Premium'}</Text>
-              <Text style={styles.tierPrice}>{pickPackagePrice(item)}</Text>
-              <BigButton
-                text="Subscribe"
-                onPress={() => handlePurchase(item)}
-                testID={`${tierTestId}.subscribe`}
-              />
-            </View>
-          );
-        }}
+        ListFooterComponent={renderFooter}
+        renderItem={renderItem}
+        contentContainerStyle={styles.listContent}
+        style={styles.list}
       />
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
           No active subscription found.
         </Text>
       )}
-      <BigButton
-        text="Restore purchases"
-        onPress={handleRestore}
-        testID="paywall.button.restore"
-      />
+      <View style={styles.restoreWrap}>
+        <BigButton
+          text="Restore purchases"
+          onPress={handleRestore}
+          testID="paywall.button.restore"
+        />
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 16 },
-  tierCard: { backgroundColor: GlobalStyle.color.primaryColor800, padding: 16, marginVertical: 8, borderRadius: 8, alignItems: 'center', gap: 8 },
-  tierTitle: { color: '#fff', fontSize: 22, fontWeight: '700' },
-  tierPrice: { color: '#ffd700', fontSize: 18 },
-  empty: { color: '#fff', textAlign: 'center', marginTop: 20 },
-  error: { color: GlobalStyle.color.error500, textAlign: 'center', marginTop: 8 },
+  container: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+  },
+  list: {
+    flex: 1,
+  },
+  listContent: {
+    padding: 16,
+  },
+  header: {
+    marginBottom: 8,
+  },
+  eyebrow: {
+    color: GlobalStyle.color.quaternaryColor,
+    fontSize: 12,
+    fontWeight: '700',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
+  },
+  headline: {
+    color: '#fff',
+    fontSize: 30,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  sub: {
+    color: GlobalStyle.color.secondaryColor,
+    fontSize: 14,
+    marginTop: 4,
+  },
+  rule: {
+    height: 1,
+    backgroundColor: GlobalStyle.color.tertiaryColor,
+    marginVertical: 12,
+  },
+  empty: {
+    color: '#fff',
+    textAlign: 'center',
+    marginTop: 20,
+  },
+  legal: {
+    color: GlobalStyle.color.quaternaryColor,
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 12,
+  },
+  error: {
+    color: GlobalStyle.color.error500,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+  restoreWrap: {
+    paddingHorizontal: 16,
+    marginBottom: 16,
+  },
 });

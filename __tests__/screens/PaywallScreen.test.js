@@ -27,6 +27,7 @@ jest.mock('../../store/auth-context', () => {
 });
 
 import React from 'react';
+import { Alert } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import PaywallScreen from '../../screens/Billing/PaywallScreen';
@@ -34,17 +35,15 @@ import { AuthContext } from '../../store/auth-context';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import Purchases from 'react-native-purchases';
 
-const PACKAGES = [
-  { identifier: 'premium_monthly', product: { priceString: '$4.99' } },
-  { identifier: 'premium_plus_monthly', product: { priceString: '$9.99' } },
-  { identifier: 'premium_plus_extension_monthly', product: { priceString: '$2.99' } },
-];
-
 describe('PaywallScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     Purchases.getOfferings.mockResolvedValue({
-      current: { availablePackages: PACKAGES },
+      all: {
+        no_ads_offering: { availablePackages: [ { identifier: '$rc_custom_c', product: { identifier: 'no_ads', priceString: '$2.99' } } ] },
+        private_group_creator_offering: { availablePackages: [ { identifier: '$rc_custom_b', product: { identifier: 'private_group_creator', priceString: '$9.99' } } ] },
+        private_group_extension_offering: { availablePackages: [ { identifier: '$rc_custom_a', product: { identifier: 'private_group_extension', priceString: '$4.99' } } ] },
+      },
     });
     Purchases.purchasePackage.mockResolvedValue({});
     Purchases.restorePurchases.mockResolvedValue({
@@ -60,7 +59,7 @@ describe('PaywallScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ ...authContext, setEntitlement: jest.fn() }}>
+        <AuthContext.Provider value={{ setEntitlement: jest.fn(), ...authContext }}>
           <PaywallScreen navigation={navigation} route={route} />
         </AuthContext.Provider>
       );
@@ -70,26 +69,26 @@ describe('PaywallScreen', () => {
     return renderer;
   }
 
-  it('renders one distinct tier testID per available package (premium, premium-plus, premium-plus-extension)', async () => {
+  it('renders one distinct tier testID per available package (private-group-extension, private-group-creator, no-ads)', async () => {
     const renderer = await renderScreen();
 
-    const premiumCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium' });
-    const premiumPlusCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus' });
-    const premiumPlusExtensionCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension' });
+    const extendedGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension' });
+    const privateGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator' });
+    const noAdsCards = renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads' });
 
-    expect(premiumCards.length).toBeGreaterThanOrEqual(1);
-    expect(premiumPlusCards.length).toBeGreaterThanOrEqual(1);
-    expect(premiumPlusExtensionCards.length).toBeGreaterThanOrEqual(1);
+    expect(extendedGroupCards.length).toBeGreaterThanOrEqual(1);
+    expect(privateGroupCards.length).toBeGreaterThanOrEqual(1);
+    expect(noAdsCards.length).toBeGreaterThanOrEqual(1);
 
     const subscribeByTier = {
-      'paywall.tier.premium.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium.subscribe' }),
-      'paywall.tier.premium-plus.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus.subscribe' }),
-      'paywall.tier.premium-plus-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium-plus-extension.subscribe' }),
+      'paywall.tier.private-group-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension.subscribe' }),
+      'paywall.tier.private-group-creator.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator.subscribe' }),
+      'paywall.tier.no-ads.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads.subscribe' }),
     };
 
-    expect(subscribeByTier['paywall.tier.premium.subscribe'].length).toBeGreaterThanOrEqual(1);
-    expect(subscribeByTier['paywall.tier.premium-plus.subscribe'].length).toBeGreaterThanOrEqual(1);
-    expect(subscribeByTier['paywall.tier.premium-plus-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.private-group-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.private-group-creator.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.no-ads.subscribe'].length).toBeGreaterThanOrEqual(1);
   });
 
   it('calls Purchases.purchasePackage then syncEntitlement and routes after a tier subscribe tap', async () => {
@@ -138,5 +137,71 @@ describe('PaywallScreen', () => {
     });
 
     expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
+  });
+
+  it('optimistically flips entitlement to premium after purchase before syncEntitlement resolves', async () => {
+    let resolveSync;
+    syncEntitlement.mockReturnValue(new Promise((resolve) => { resolveSync = resolve; }));
+    Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { private_group_creator: {} } } });
+
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({
+      authContext,
+      navigation,
+      route: { params: { intent: 'store' } },
+    });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledWith(expect.objectContaining({ isPremium: true }));
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveSync({ status: 200, data: { is_premium: true, premium_tier: 1 } });
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  });
+
+  it('surfaces Alert.alert and still navigates when syncEntitlement returns a non-200 status', async () => {
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    syncEntitlement.mockResolvedValue({ status: 502, data: { error: 'revenuecat_unavailable' } });
+
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({
+      authContext,
+      navigation,
+      route: { params: { intent: 'create-group' } },
+    });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).not.toHaveBeenCalled();
+    expect(alertSpy).toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
+
+    alertSpy.mockRestore();
   });
 });

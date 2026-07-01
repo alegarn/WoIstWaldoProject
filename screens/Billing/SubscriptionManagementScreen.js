@@ -5,20 +5,16 @@ import Button from '../../components/UI/Button';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
-import { syncEntitlement } from '../../services/billing/billingApi';
-
-function getPurchasesModule() {
-  try {
-    return require('react-native-purchases').default;
-  } catch (error) {
-    return null;
-  }
-}
+import {
+  getPurchasesModule,
+  applyEntitlementToContext,
+  restoreAndSync,
+} from '../../utils/purchases';
 
 function tierLabel(tier) {
-  if (tier >= 3) return 'Premium+ Extension';
-  if (tier === 2) return 'Premium+';
-  if (tier === 1) return 'Premium';
+  if (tier >= 3) return 'Extended Group';
+  if (tier === 2) return 'Private Group';
+  if (tier === 1) return 'No-ads';
   return 'Free';
 }
 
@@ -41,17 +37,11 @@ export default function SubscriptionManagementScreen({ navigation }) {
     setIsWorking(true);
     setRestoreError(false);
     try {
-      await Purchases.restorePurchases();
-      const response = await syncEntitlement(authContext);
-      const entitlement = response?.data;
-      if (!entitlement?.is_premium) {
+      const result = await restoreAndSync(authContext);
+      if (!result.hasEntitlement) {
         setRestoreError(true);
       } else {
-        authContext.setEntitlement({
-          isPremium: entitlement.is_premium,
-          premiumTier: entitlement.premium_tier,
-          premiumExpiresAt: entitlement.premium_expires_at,
-        });
+        applyEntitlementToContext(authContext, result.entitlement);
       }
     } catch (error) {
       setRestoreError(true);
@@ -120,6 +110,6 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20 },
   title: { color: '#fff', fontSize: 22, fontWeight: '700' },
   tier: { color: '#ffd700', fontSize: 24, marginTop: 8 },
-  button: { marginTop: 16, backgroundColor: GlobalStyle.color.primaryColor100 },
+  button: { marginTop: 16, backgroundColor: GlobalStyle.color.primaryColor100, alignSelf: 'center' },
   error: { color: GlobalStyle.color.error500, marginTop: 12 },
 });

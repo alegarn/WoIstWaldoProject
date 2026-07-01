@@ -1,8 +1,16 @@
 const mockButton = jest.fn(() => null);
+const mockBigButton = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
 const mockUseGroupsHub = jest.fn();
 const mockUseActiveGroup = jest.fn();
+
+jest.mock('../../components/UI/BigButton', () => {
+  return function MockBigButton(props) {
+    mockBigButton(props);
+    return null;
+  };
+});
 
 jest.mock('../../components/UI/Button', () => {
   return function MockButton(props) {
@@ -51,6 +59,13 @@ import { Alert } from 'react-native';
 import CreateGroupScreen from '../../screens/Groups/CreateGroupScreen';
 import { AuthContext } from '../../store/auth-context';
 import { createGroup } from '../../services/groups/groupApi';
+import { DEFAULT_COLOR_PALETTE } from '../../components/UI/ColorPalettePicker';
+
+// Pick non-default swatches so the test exercises an actual selection change.
+const PRIMARY_PICK = DEFAULT_COLOR_PALETTE[2];
+const SECONDARY_PICK = DEFAULT_COLOR_PALETTE[3];
+const PRIMARY_SWATCH_TEST_ID = `create-group.color-primary.swatch.${PRIMARY_PICK.hex.replace('#', '')}`;
+const SECONDARY_SWATCH_TEST_ID = `create-group.color-secondary.swatch.${SECONDARY_PICK.hex.replace('#', '')}`;
 
 describe('CreateGroupScreen', () => {
   beforeEach(() => {
@@ -107,8 +122,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
-      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
     });
 
     await act(async () => {
@@ -126,7 +141,7 @@ describe('CreateGroupScreen', () => {
 
     expect(createGroup).toHaveBeenCalledWith(
       expect.objectContaining({ premiumTier: 2 }),
-      { name: 'Waldos', primaryColor: '#111111', secondaryColor: '#eeeeee' }
+      { name: 'Waldos', primaryColor: PRIMARY_PICK.hex, secondaryColor: SECONDARY_PICK.hex }
     );
     expect(setActive).toHaveBeenCalledWith('g-new');
     expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
@@ -142,8 +157,8 @@ describe('CreateGroupScreen', () => {
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
-      renderer.root.findByProps({ testID: 'create-group.input.color-primary' }).props.onChangeText('#111111');
-      renderer.root.findByProps({ testID: 'create-group.input.color-secondary' }).props.onChangeText('#eeeeee');
+      renderer.root.findByProps({ testID: PRIMARY_SWATCH_TEST_ID }).props.onPress();
+      renderer.root.findByProps({ testID: SECONDARY_SWATCH_TEST_ID }).props.onPress();
     });
 
     await act(async () => {
@@ -162,5 +177,58 @@ describe('CreateGroupScreen', () => {
     expect(Alert.alert).toHaveBeenCalled();
 
     expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
+  });
+
+  it('shows the already-owns message without the unlock CTA when a Premium+ user owns a group', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    const setActive = jest.fn().mockResolvedValue(undefined);
+    mockUseActiveGroup.mockReturnValue({ setActive });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' })
+    ).toThrow();
+
+    const goToGroupProps = renderer.root.findByProps({ testID: 'create-group.button.go-to-group' }).props;
+    expect(goToGroupProps).toBeTruthy();
+
+    await act(async () => {
+      await goToGroupProps.onPress();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-owned');
+    expect(navigation.replace).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-owned' },
+    });
+  });
+
+  it('shows the already-owns message without the unlock CTA even when the user is not Premium+', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    mockUseActiveGroup.mockReturnValue({ setActive: jest.fn().mockResolvedValue(undefined) });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { premiumTier: 0 }, navigation });
+
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' }).props.children).toBe('You can only create 1 group.');
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' })
+    ).toThrow();
   });
 });
