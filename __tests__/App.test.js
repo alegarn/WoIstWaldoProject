@@ -92,7 +92,7 @@ jest.mock('../store/auth-context', () => {
 
 jest.mock('../utils/auth', () => ({
   bootstrapStoredAuthSession: jest.fn(),
-  getUserName: jest.fn(),
+  validateStoredSession: jest.fn(),
 }));
 
 jest.mock('../utils/e2eMode', () => ({
@@ -109,7 +109,7 @@ import { act, create } from 'react-test-renderer';
 
 import { Root } from '../App';
 import { AuthContext } from '../store/auth-context';
-import { bootstrapStoredAuthSession, getUserName } from '../utils/auth';
+import { bootstrapStoredAuthSession, validateStoredSession } from '../utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from '../utils/e2eMode';
 import { getOnboardingCompleted } from '../utils/storageDatum';
 
@@ -121,7 +121,7 @@ describe('App Root', () => {
     getOnboardingCompleted.mockResolvedValue(true);
     isE2EMode.mockReturnValue(false);
     bootstrapStoredAuthSession.mockResolvedValue(false);
-    getUserName.mockResolvedValue({ status: 200, data: { username: 'waldo' } });
+    validateStoredSession.mockResolvedValue({ status: 200, data: { is_tutorial_finished: true } });
   });
 
   async function flushEffects() {
@@ -331,14 +331,14 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(getUserName).toHaveBeenCalledTimes(1);
-    expect(getUserName).toHaveBeenCalledWith({ context: contextValue });
+    expect(validateStoredSession).toHaveBeenCalledTimes(1);
+    expect(validateStoredSession).toHaveBeenCalledWith({ context: contextValue });
     expect(contextValue.logout).not.toHaveBeenCalled();
   });
 
   it('logs out when the restored token is rejected by the backend with 401', async () => {
     bootstrapStoredAuthSession.mockResolvedValue(true);
-    getUserName.mockResolvedValue({ status: 401, data: { errors: ['Unauthorized'] } });
+    validateStoredSession.mockResolvedValue({ status: 401, data: { errors: ['Unauthorized'] } });
 
     const contextValue = {
       IsAuthenticated: true,
@@ -349,13 +349,13 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(validateStoredSession).toHaveBeenCalledTimes(1);
     expect(contextValue.logout).toHaveBeenCalledTimes(1);
   });
 
   it('keeps the session when the restored token validation call fails without an auth rejection', async () => {
     bootstrapStoredAuthSession.mockResolvedValue(true);
-    getUserName.mockRejectedValue(new Error('network down'));
+    validateStoredSession.mockRejectedValue(new Error('network down'));
 
     const contextValue = {
       IsAuthenticated: true,
@@ -366,7 +366,7 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(getUserName).toHaveBeenCalledTimes(1);
+    expect(validateStoredSession).toHaveBeenCalledTimes(1);
     expect(contextValue.logout).not.toHaveBeenCalled();
   });
 
@@ -383,7 +383,7 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(getUserName).not.toHaveBeenCalled();
+    expect(validateStoredSession).not.toHaveBeenCalled();
     expect(contextValue.logout).not.toHaveBeenCalled();
   });
 
@@ -399,7 +399,7 @@ describe('App Root', () => {
 
     await renderRoot(contextValue);
 
-    expect(getUserName).not.toHaveBeenCalled();
+    expect(validateStoredSession).not.toHaveBeenCalled();
     expect(contextValue.logout).not.toHaveBeenCalled();
   });
 });
