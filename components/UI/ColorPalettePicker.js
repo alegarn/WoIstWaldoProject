@@ -1,11 +1,13 @@
+import { useMemo, useState } from 'react';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
 
+import { generateShades } from '../../utils/colorShades';
+
 /**
- * Curated default swatches. Exported so callers/tests can reference the
- * exact hex values instead of hardcoding duplicates.
+ * Curated base colors. Exported so callers/tests reference exact hexes.
  *
- * Open/Closed: pass a custom `palette` prop to extend or replace without
- * editing this component.
+ * Open/Closed: pass a custom `palette` prop (list of {name, hex} bases) to
+ * extend or replace without editing this component.
  */
 export const DEFAULT_COLOR_PALETTE = [
   { name: 'Purple', hex: '#6528F7' },
@@ -22,17 +24,27 @@ export const DEFAULT_COLOR_PALETTE = [
   { name: 'Slate', hex: '#3D4358' },
 ];
 
+const SHADE_COUNT = 10;
+
+function noHash(hex) {
+  return hex.replace('#', '');
+}
+
 /**
- * Single Responsibility: render labelled swatches and report the picked hex.
- * Knows nothing about groups, persistence, or screens.
+ * Single Responsibility: render base swatches + their derivatives, report the
+ * picked hex. Knows nothing about groups, persistence, or screens.
+ *
+ * UX: tapping a BASE swatch expands that base's derivative row (10 shades,
+ * including the base itself). Tapping a SHADE calls onValueChange(hex).
  *
  * Props:
- * - label: optional heading text above the grid.
+ * - label: optional heading text.
  * - value: currently selected hex string (e.g. "#6528F7").
- * - onValueChange: called with the picked hex when a swatch is tapped.
- * - palette: swatches [{ name, hex }]; defaults to DEFAULT_COLOR_PALETTE.
- * - testIDPrefix: swatches get testID `${testIDPrefix}.swatch.${hexWithoutHash}`.
- * - accessibilityLabel: optional, applied to the grid container.
+ * - onValueChange: called with the picked hex when a shade is tapped.
+ * - palette: bases [{ name, hex }]; defaults to DEFAULT_COLOR_PALETTE.
+ * - testIDPrefix: bases -> `${prefix}.swatch.${hexNoHash}`;
+ *                 shades -> `${prefix}.shade.${baseHexNoHash}.${shadeHexNoHash}`.
+ * - accessibilityLabel: optional, applied to the base grid.
  */
 export default function ColorPalettePicker({
   label,
@@ -42,31 +54,83 @@ export default function ColorPalettePicker({
   testIDPrefix = 'color-palette-picker',
   accessibilityLabel,
 }) {
-  const normalizedValue = typeof value === 'string' ? value.toLowerCase() : value;
+  const normalizedValue = typeof value === 'string' ? value.toUpperCase() : value;
+
+  // base -> shades. Memoized so it stays stable across renders for a given palette.
+  const basesWithShades = useMemo(
+    () =>
+      palette.map((base) => ({
+        name: base.name,
+        hex: base.hex.toUpperCase(),
+        shades: generateShades(base.hex, SHADE_COUNT),
+      })),
+    [palette],
+  );
+
+  // Auto-expand the base whose family contains the current value, so the user
+  // sees their selection's shades on first render.
+  const initialBaseHex = useMemo(() => {
+    if (!normalizedValue) return null;
+    const match = basesWithShades.find(
+      (b) => b.hex === normalizedValue || b.shades.includes(normalizedValue),
+    );
+    return match ? match.hex : null;
+  }, [basesWithShades, normalizedValue]);
+
+  const [expandedBaseHex, setExpandedBaseHex] = useState(initialBaseHex);
+  const expanded = basesWithShades.find((b) => b.hex === expandedBaseHex) || null;
 
   return (
     <View style={styles.container}>
       {label ? <Text style={styles.label}>{label}</Text> : null}
       <View style={styles.grid} accessibilityLabel={accessibilityLabel}>
-        {palette.map((swatch) => {
-          const selected = normalizedValue === swatch.hex.toLowerCase();
+        {basesWithShades.map((base) => {
+          const selected = base.shades.includes(normalizedValue);
+          const isExpanded = base.hex === expandedBaseHex;
           return (
             <Pressable
-              key={swatch.hex}
-              testID={`${testIDPrefix}.swatch.${swatch.hex.replace('#', '')}`}
-              accessibilityLabel={swatch.name}
+              key={base.hex}
+              testID={`${testIDPrefix}.swatch.${noHash(base.hex)}`}
+              accessibilityLabel={base.name}
               accessibilityRole="button"
-              accessibilityState={selected ? { selected: true } : undefined}
-              onPress={() => onValueChange?.(swatch.hex)}
+              accessibilityState={{ selected, expanded: isExpanded }}
+              onPress={() => setExpandedBaseHex(base.hex)}
               style={[
                 styles.swatch,
-                { backgroundColor: swatch.hex },
+                { backgroundColor: base.hex },
                 selected && styles.selected,
+                isExpanded && styles.expandedBase,
               ]}
             />
           );
         })}
       </View>
+
+      {expanded && (
+        <View
+          style={styles.shadeGrid}
+          testID={`${testIDPrefix}.shades.${noHash(expanded.hex)}`}
+        >
+          {expanded.shades.map((shadeHex) => {
+            const selected = shadeHex === normalizedValue;
+            return (
+              <Pressable
+                key={shadeHex}
+                testID={`${testIDPrefix}.shade.${noHash(expanded.hex)}.${noHash(shadeHex)}`}
+                accessibilityLabel={`${expanded.name} shade`}
+                accessibilityRole="button"
+                accessibilityState={selected ? { selected: true } : undefined}
+                onPress={() => onValueChange?.(shadeHex)}
+                style={[
+                  styles.shade,
+                  { backgroundColor: shadeHex },
+                  selected && styles.selected,
+                ]}
+              />
+            );
+          })}
+        </View>
+      )}
     </View>
   );
 }
@@ -76,5 +140,16 @@ const styles = StyleSheet.create({
   label: { color: '#fff', fontSize: 16, marginBottom: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   swatch: { width: 40, height: 40, borderRadius: 8 },
+  expandedBase: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' },
+  shadeGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+    padding: 8,
+    borderRadius: 8,
+    backgroundColor: 'rgba(0,0,0,0.25)',
+  },
+  shade: { width: 32, height: 32, borderRadius: 6 },
   selected: { borderWidth: 3, borderColor: '#fff' },
 });
