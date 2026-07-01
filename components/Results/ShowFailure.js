@@ -59,6 +59,9 @@ export default function ShowFailure({ navigation, route }) {
       screenHeight: screenHeight,
       screenWidth: screenWidth,
       isTutorial: isTutorial,
+      listId: listId,
+      category: category,
+      language: language,
     };
 
     if (isPrivateScope) {

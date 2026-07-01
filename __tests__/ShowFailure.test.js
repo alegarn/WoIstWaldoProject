@@ -97,7 +97,13 @@ describe('ShowFailure', () => {
 
     expect(navigation.replace).toHaveBeenCalledWith(
       'GuessScreen',
-      expect.objectContaining({ pictureId: 'image-1', isTutorial: true })
+      expect.objectContaining({
+        pictureId: 'image-1',
+        isTutorial: true,
+        category: route.params.category,
+        language: 'en',
+        listId: 42,
+      })
     );
     expect(navigation.reset).not.toHaveBeenCalled();
   });
@@ -133,7 +139,14 @@ describe('ShowFailure', () => {
 
     expect(navigation.replace).toHaveBeenCalledWith(
       'GuessScreen',
-      expect.objectContaining({ pictureId: 'image-1', isTutorial: false, scope })
+      expect.objectContaining({
+        pictureId: 'image-1',
+        isTutorial: false,
+        scope,
+        category: route.params.category,
+        language: 'en',
+        listId: 42,
+      })
     );
 
     await act(async () => {

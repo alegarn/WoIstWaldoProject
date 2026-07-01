@@ -27,12 +27,10 @@ export async function navigateToNextGuess(navigation, { category, language, curr
       : { name: 'GuessFeedScreen', params: { category, language } };
 
     navigation.reset({
-      index: 2,
-      routes: [
-        homeRoute,
-        guessPathRoute,
-        feedRoute,
-      ],
+      index: isPrivateScope ? 3 : 2,
+      routes: isPrivateScope
+        ? [{ name: 'HomeScreen' }, homeRoute, guessPathRoute, feedRoute]
+        : [homeRoute, guessPathRoute, feedRoute],
     });
     return;
   }
@@ -59,15 +57,17 @@ export async function navigateToNextGuess(navigation, { category, language, curr
   }
 
   navigation.reset({
-    index: 3,
-    routes: [
-      homeRoute,
-      guessPathRoute,
-      feedRoute,
-      {
-        name: 'GuessScreen',
-        params: guessParams,
-      },
-    ],
+    index: isPrivateScope ? 4 : 3,
+    routes: isPrivateScope
+      ? [{ name: 'HomeScreen' }, homeRoute, guessPathRoute, feedRoute, { name: 'GuessScreen', params: guessParams }]
+      : [
+        homeRoute,
+        guessPathRoute,
+        feedRoute,
+        {
+          name: 'GuessScreen',
+          params: guessParams,
+        },
+      ],
   });
 }

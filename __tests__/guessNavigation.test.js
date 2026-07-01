@@ -83,4 +83,72 @@ describe('navigateToNextGuess', () => {
       ],
     });
   });
+
+  it('resets to a 5-route stack rooted at HomeScreen when private scope has a next card', async () => {
+    const navigation = { reset: jest.fn() };
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const category = { key: 'city' };
+    getNextImage.mockResolvedValueOnce({
+      listId: 7,
+      imageFile: 'file:///cache/7.jpg',
+      touchLocation: { x: 0.4, y: 0.6 },
+    });
+
+    await navigateToNextGuess(navigation, {
+      category,
+      language: 'fr',
+      currentListId: 5,
+      isTutorial: true,
+      scope,
+    });
+
+    expect(navigation.reset).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 4,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope } },
+        { name: 'GuessPathScreen', params: { isTutorial: true, scope } },
+        { name: 'GuessFeedScreen', params: { category, language: 'fr', scope } },
+        {
+          name: 'GuessScreen',
+          params: expect.objectContaining({
+            listId: 7,
+            imageFile: 'file:///cache/7.jpg',
+            hiddenLocation: { x: 0.4, y: 0.6 },
+            category,
+            language: 'fr',
+            isTutorial: true,
+            scope,
+          }),
+        },
+      ],
+    });
+  });
+
+  it('resets to a 4-route feed stack rooted at HomeScreen when private scope deck is exhausted', async () => {
+    const navigation = { reset: jest.fn() };
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const category = { key: 'nature' };
+    getNextImage.mockResolvedValueOnce(null);
+
+    await navigateToNextGuess(navigation, {
+      category,
+      language: 'de',
+      currentListId: 9,
+      isTutorial: false,
+      scope,
+    });
+
+    expect(navigation.reset).toHaveBeenCalledTimes(1);
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 3,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope } },
+        { name: 'GuessPathScreen', params: { isTutorial: false, scope } },
+        { name: 'GuessFeedScreen', params: { category, language: 'de', scope } },
+      ],
+    });
+  });
 });
