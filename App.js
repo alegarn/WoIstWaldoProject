@@ -62,9 +62,9 @@ import { getUserConsent } from './utils/adHandling';
 import {
   bootstrapStoredAuthSession,
   getStoredAuthState,
-  getUserName,
   hasCompleteAuthState,
   isPersistedBearerToken,
+  validateStoredSession,
 } from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
 import { getOnboardingCompleted } from './utils/storageDatum';
@@ -551,7 +551,7 @@ export function Root() {
         return;
       }
 
-      if (typeof getUserName !== 'function') {
+      if (typeof validateStoredSession !== 'function') {
         return;
       }
 
@@ -559,7 +559,7 @@ export function Root() {
         // Cheap authed call: confirms the stored token is still server-valid.
         // Only auth rejection should clear the session here. Network/server
         // failures should not force-log the user out on app launch.
-        const result = await getUserName({ context: authContext });
+        const result = await validateStoredSession({ context: authContext });
 
         if (cancelled) {
           return;

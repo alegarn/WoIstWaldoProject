@@ -23,8 +23,8 @@ export async function navigateToNextGuess(navigation, { category, language, curr
       ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
       : { name: 'GuessPathScreen', params: { isTutorial } };
     const feedRoute = isPrivateScope
-      ? { name: 'GuessFeedScreen', params: { category, language, scope } }
-      : { name: 'GuessFeedScreen', params: { category, language } };
+      ? { name: 'GuessFeedScreen', params: { category, language, scope, skipInstructions: true } }
+      : { name: 'GuessFeedScreen', params: { category, language, skipInstructions: true } };
 
     navigation.reset({
       index: isPrivateScope ? 3 : 2,
@@ -50,6 +50,7 @@ export async function navigateToNextGuess(navigation, { category, language, curr
     category,
     language,
     isTutorial,
+    skipInstructions: true,
   };
 
   if (isPrivateScope) {
