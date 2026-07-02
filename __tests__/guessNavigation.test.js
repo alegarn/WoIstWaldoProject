@@ -45,6 +45,7 @@ describe('navigateToNextGuess', () => {
             category,
             language: 'fr',
             isTutorial: true,
+            skipInstructions: true,
           },
         },
       ],
@@ -79,7 +80,7 @@ describe('navigateToNextGuess', () => {
       routes: [
         { name: 'HomeScreen' },
         { name: 'GuessPathScreen', params: { isTutorial: false } },
-        { name: 'GuessFeedScreen', params: { category, language: 'de' } },
+        { name: 'GuessFeedScreen', params: { category, language: 'de', skipInstructions: true } },
       ],
     });
   });
@@ -147,7 +148,7 @@ describe('navigateToNextGuess', () => {
         { name: 'HomeScreen' },
         { name: 'PrivateHomeScreen', params: { scope } },
         { name: 'GuessPathScreen', params: { isTutorial: false, scope } },
-        { name: 'GuessFeedScreen', params: { category, language: 'de', scope } },
+        { name: 'GuessFeedScreen', params: { category, language: 'de', scope, skipInstructions: true } },
       ],
     });
   });

@@ -18,12 +18,12 @@ const DEFAULT_LANGUAGE = 'en';
 // GuessFeedScreen is currently the only caller in the authenticated stack, but we
 // still pass them explicitly so the cache namespace + filter plumbing stays explicit.
 export default function GuessFeedScreen({ navigation, route }) {
-  const { category, language: routeLanguage } = route.params || {};
+  const { category, language: routeLanguage, skipInstructions } = route.params || {};
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   const [language, setLanguage] = useState(routeLanguage || null);
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(!skipInstructions);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
