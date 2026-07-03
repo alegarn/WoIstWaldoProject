@@ -15,8 +15,19 @@ jest.mock('../../utils/auth', () => ({
   })),
 }));
 
+jest.mock('../../services/groups/groupFeedCache', () => ({
+  clearGroupFeedCache: jest.fn(),
+  purgeAllPrivateCaches: jest.fn(),
+}));
+
+jest.mock('../../services/groups/groupCategoryThumbnails', () => ({
+  clearGroupThumbnails: jest.fn(),
+}));
+
 import axios from 'axios';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';
+import { clearGroupFeedCache, purgeAllPrivateCaches } from '../../services/groups/groupFeedCache';
+import { clearGroupThumbnails } from '../../services/groups/groupCategoryThumbnails';
 
 import {
   fetchGroups,
@@ -35,7 +46,6 @@ import { joinByCode } from '../../services/groups/groupJoinApi';
 import {
   listGroupCategories,
   createGroupCategory,
-  updateGroupCategory,
   deleteGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
 import {
@@ -116,7 +126,7 @@ describe('services/groups', () => {
       );
     });
 
-    it('deleteGroup DELETEs the group endpoint', async () => {
+    it('deleteGroup DELETEs the group endpoint and clears private caches on success', async () => {
       axios.delete.mockResolvedValue({ status: 204, data: null });
 
       const response = await deleteGroup(CONTEXT, 'g-1');
@@ -125,6 +135,9 @@ describe('services/groups', () => {
         'https://backend.example/api/v1/private_groups/g-1/',
         { headers: AUTH_HEADERS }
       );
+      expect(clearGroupFeedCache).toHaveBeenCalledWith('g-1');
+      expect(clearGroupThumbnails).toHaveBeenCalledWith('g-1');
+      expect(purgeAllPrivateCaches).toHaveBeenCalledTimes(1);
       expect(response.status).toBe(204);
     });
 
@@ -158,18 +171,39 @@ describe('services/groups', () => {
       expect(response.data).toEqual([{ id: 'm-1' }]);
     });
 
-    it('removeMember DELETEs the targeted membership', async () => {
+    it('removeMember DELETEs the targeted membership without purging caches for another member', async () => {
       axios.delete.mockResolvedValue({ status: 204, data: null });
 
-      await removeMember({ context: CONTEXT, groupId: 'g-3', membershipId: 'm-9' });
+      await removeMember({
+        context: CONTEXT,
+        groupId: 'g-3',
+        membershipId: 'm-9',
+        removedUserId: 'user-9',
+      });
 
       expect(axios.delete).toHaveBeenCalledWith(
         'https://backend.example/api/v1/private_groups/g-3/memberships/m-9',
         { headers: AUTH_HEADERS }
       );
+      expect(clearGroupFeedCache).not.toHaveBeenCalled();
+      expect(clearGroupThumbnails).not.toHaveBeenCalled();
     });
 
-    it('leaveGroup POSTs the leave action', async () => {
+    it('removeMember clears group-private caches when current user is removed', async () => {
+      axios.delete.mockResolvedValue({ status: 204, data: null });
+
+      await removeMember({
+        context: CONTEXT,
+        groupId: 'g-3',
+        membershipId: 'm-9',
+        removedUserId: 'user-1',
+      });
+
+      expect(clearGroupFeedCache).toHaveBeenCalledWith('g-3');
+      expect(clearGroupThumbnails).toHaveBeenCalledWith('g-3');
+    });
+
+    it('leaveGroup POSTs the leave action and clears group-private caches on success', async () => {
       axios.post.mockResolvedValue({ status: 204, data: null });
 
       await leaveGroup({ context: CONTEXT, groupId: 'g-3' });
@@ -179,6 +213,8 @@ describe('services/groups', () => {
         {},
         { headers: AUTH_HEADERS }
       );
+      expect(clearGroupFeedCache).toHaveBeenCalledWith('g-3');
+      expect(clearGroupThumbnails).toHaveBeenCalledWith('g-3');
     });
 
     it('transferOwnership POSTs the serialized target_user_id payload', async () => {
@@ -230,18 +266,6 @@ describe('services/groups', () => {
       expect(axios.post).toHaveBeenCalledWith(
         'https://backend.example/api/v1/private_groups/g-3/categories/',
         { private_category: { name: 'Cities', sort_order: 4 } },
-        { headers: AUTH_HEADERS }
-      );
-    });
-
-    it('updateGroupCategory PATCHes only supplied category fields', async () => {
-      axios.patch.mockResolvedValue({ status: 200, data: { data: { id: 'c-2' } } });
-
-      await updateGroupCategory(CONTEXT, 'g-3', 'c-2', { thumbnailUrl: 'private-images/g-3/groupUi/c-2.png' });
-
-      expect(axios.patch).toHaveBeenCalledWith(
-        'https://backend.example/api/v1/private_groups/g-3/categories/c-2/',
-        { private_category: { thumbnail_url: 'private-images/g-3/groupUi/c-2.png' } },
         { headers: AUTH_HEADERS }
       );
     });

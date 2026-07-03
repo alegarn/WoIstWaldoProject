@@ -20,6 +20,7 @@ import {
   updateGroupCategory,
   deleteGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
+import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategoryThumbnails';
 import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
 
@@ -141,7 +142,6 @@ export default function GroupSettingsScreen({ navigation }) {
         contentType: `image/${fileExtension}`,
         contentLength: asset.fileSize ?? 0,
         [uiKind.flag]: true,
-        categoryId: category?.id,
       });
       if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
         Alert.alert(`Error ${presignResponse?.status ?? ''}`, 'Could not prepare upload.');
@@ -157,10 +157,20 @@ export default function GroupSettingsScreen({ navigation }) {
       });
       if (uploadResponse?.status === 200 || uploadResponse?.status === 204) {
         if (category?.id) {
-          await updateGroupCategory(authContext, groupId, category.id, {
-            thumbnailUrl: `private-images/${groupId}/groupUi/${uploadPlan.imageId}.${fileExtension}`,
+          if (category.thumbnail_image_id) {
+            deleteCategoryThumbnailFile(groupId, category.thumbnail_image_id);
+          }
+
+          const updateResponse = await updateGroupCategory(authContext, groupId, category.id, {
+            thumbnailImageId: uploadPlan.imageId,
           });
-          await loadCategories();
+
+          if (updateResponse?.status === 200 || updateResponse?.status === 204) {
+            await loadCategories();
+          } else {
+            Alert.alert(`Error ${updateResponse?.status ?? ''}`, 'Could not update category.');
+            return;
+          }
         }
         Alert.alert('Uploaded', `${uiKind.label} updated.`);
         refresh();

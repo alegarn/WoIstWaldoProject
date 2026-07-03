@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
+import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
   FlatList,
@@ -30,6 +31,7 @@ import {
   createGroupCategory,
   listGroupCategories,
 } from '../../services/groups/groupCategoriesApi';
+import { resolveCategoryThumbnail } from '../../services/groups/groupCategoryThumbnails';
 
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 export { RECENT_ALL_CATEGORY };
@@ -56,11 +58,14 @@ export default function GuessPathScreen({ navigation, route }) {
     (g) => g.id === scope.groupId
   );
 
-  function normalizePrivateCategory(category) {
+  function normalizePrivateCategory(category, resolvedThumbnailUrl = null) {
     return {
       ...category,
       key: category?.key ?? category?.id,
-      thumbnailUrl: category?.thumbnailUrl ?? category?.thumbnail_url ?? null,
+      thumbnailUrl: resolvedThumbnailUrl
+        ?? category?.thumbnailUrl
+        ?? category?.thumbnail_url
+        ?? null,
     };
   }
 
@@ -70,15 +75,34 @@ export default function GuessPathScreen({ navigation, route }) {
       : await getCategories({ context });
 
     if (response?.data) {
-      setCategories((response.data ?? []).map((category) => (
-        isPrivateScope ? normalizePrivateCategory(category) : category
-      )));
+      if (isPrivateScope) {
+        const privateCategories = response.data ?? [];
+        const resolvedThumbnailUrls = await Promise.all(
+          privateCategories.map((category) => (
+            category?.thumbnail_image_id
+              ? resolveCategoryThumbnail(context, {
+                groupId: scope.groupId,
+                category,
+              })
+              : Promise.resolve(null)
+          ))
+        );
+
+        setCategories(privateCategories.map((category, index) => (
+          normalizePrivateCategory(category, resolvedThumbnailUrls[index])
+        )));
+        return;
+      }
+
+      setCategories(response.data ?? []);
     }
   }, [context, isPrivateScope, scope?.groupId]);
 
-  useEffect(() => {
-    reloadCategories();
-  }, [reloadCategories]);
+  useFocusEffect(
+    useCallback(() => {
+      reloadCategories();
+    }, [reloadCategories])
+  );
 
   useEffect(() => {
     let cancelled = false;

@@ -152,4 +152,36 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
     ]));
     expect(deletedUris).not.toContain('file:///cache/public-img-2.png');
   });
+
+  it('purgeAllPrivateCaches also deletes private-thumb-{groupId}-{imageId} files via the existing private- prefix sweep', async () => {
+    const listedUris = [
+      'file:///cache/private-thumb-group-7-image-9.webp',
+      'file:///cache/public-thumb-group-7-image-9.webp',
+    ];
+
+    const cacheDir = Paths.cache;
+    const originalList = cacheDir.list;
+    const deletedUris = [];
+
+    File.mockImplementation(function MockFile(uri) {
+      this.uri = typeof uri === 'string' ? uri : uri?.uri;
+      this.exists = true;
+      this.delete = jest.fn(() => { deletedUris.push(this.uri); });
+    });
+    cacheDir.list = () => listedUris;
+
+    try {
+      await purgeAllPrivateCaches();
+    } finally {
+      cacheDir.list = originalList;
+      File.mockImplementation(function MockFile(uri) {
+        this.uri = typeof uri === 'string' ? uri : uri?.uri;
+        this.exists = true;
+        this.delete = jest.fn();
+      });
+    }
+
+    expect(deletedUris).toContain('file:///cache/private-thumb-group-7-image-9.webp');
+    expect(deletedUris).not.toContain('file:///cache/public-thumb-group-7-image-9.webp');
+  });
 });

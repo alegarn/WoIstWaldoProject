@@ -2,6 +2,25 @@ const mockGuessCategoryCard = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockUseGroupsHub = jest.fn();
+const mockFocusEffects = new Set();
+
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+
+  return {
+    useFocusEffect: (callback) => {
+      React.useEffect(() => {
+        mockFocusEffects.add(callback);
+        const cleanup = callback();
+
+        return () => {
+          mockFocusEffects.delete(callback);
+          cleanup?.();
+        };
+      }, [callback]);
+    },
+  };
+});
 
 jest.mock('../components/UI/GuessCategoryCard', () => {
   return function MockGuessCategoryCard(props) {
@@ -46,6 +65,10 @@ jest.mock('../services/groups/groupCategoriesApi', () => ({
   createGroupCategory: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupCategoryThumbnails', () => ({
+  resolveCategoryThumbnail: jest.fn(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -70,10 +93,28 @@ import {
   createGroupCategory,
   listGroupCategories,
 } from '../services/groups/groupCategoriesApi';
+import { resolveCategoryThumbnail } from '../services/groups/groupCategoryThumbnails';
 
 const CATEGORIES = [
   { id: '1', key: 'nature', name: 'Nature', thumbnailUrl: 'x', count: 5 },
   { id: '2', key: 'city', name: 'City', thumbnailUrl: 'y', count: 3 },
+];
+
+const PRIVATE_THUMBNAIL_CATEGORIES = [
+  {
+    id: 'c-1',
+    key: 'c-1',
+    name: 'Cats',
+    thumbnail_image_id: 'thumb-1',
+    thumbnail_url: 'https://example.com/thumb-1.webp',
+  },
+  {
+    id: 'c-2',
+    key: 'c-2',
+    name: 'Dogs',
+    thumbnail_image_id: 'thumb-2',
+    thumbnail_url: 'https://example.com/thumb-2.webp',
+  },
 ];
 
 const PRIVATE_CREATED_CATEGORIES = [
@@ -87,6 +128,7 @@ describe('GuessPathScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFocusEffects.clear();
     jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
@@ -97,6 +139,7 @@ describe('GuessPathScreen', () => {
     getCategories.mockResolvedValue({ data: CATEGORIES });
     listGroupCategories.mockResolvedValue({ status: 200, data: [] });
     createGroupCategory.mockResolvedValue({ status: 201, data: {} });
+    resolveCategoryThumbnail.mockResolvedValue(null);
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
@@ -115,6 +158,13 @@ describe('GuessPathScreen', () => {
     await Promise.resolve();
     await Promise.resolve();
     await Promise.resolve();
+  }
+
+  async function triggerFocusEffects() {
+    await act(async () => {
+      [...mockFocusEffects].forEach((callback) => callback());
+      await flushEffects();
+    });
   }
 
   async function renderScreen(route = { params: {} }) {
@@ -370,6 +420,82 @@ describe('GuessPathScreen', () => {
       ([props]) => props.category.id
     );
     expect(renderedKeys).toContain('c-new');
+  });
+
+  it('prefers resolved local private thumbnail uris and falls back to presigned urls', async () => {
+    listGroupCategories.mockResolvedValue({
+      status: 200,
+      data: PRIVATE_THUMBNAIL_CATEGORIES,
+    });
+    resolveCategoryThumbnail
+      .mockResolvedValueOnce('file:///cache/private-thumb-g-1-thumb-1.webp')
+      .mockResolvedValueOnce(null);
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(resolveCategoryThumbnail).toHaveBeenCalledTimes(2);
+    expect(resolveCategoryThumbnail).toHaveBeenNthCalledWith(1, contextValue, {
+      groupId: 'g-1',
+      category: PRIVATE_THUMBNAIL_CATEGORIES[0],
+    });
+    expect(resolveCategoryThumbnail).toHaveBeenNthCalledWith(2, contextValue, {
+      groupId: 'g-1',
+      category: PRIVATE_THUMBNAIL_CATEGORIES[1],
+    });
+    expect(getCardPropsByKey('c-1')).toEqual(
+      expect.objectContaining({
+        thumbnailUrl: 'file:///cache/private-thumb-g-1-thumb-1.webp',
+      })
+    );
+    expect(getCardPropsByKey('c-2')).toEqual(
+      expect.objectContaining({
+        thumbnailUrl: 'https://example.com/thumb-2.webp',
+      })
+    );
+  });
+
+  it('refetches private categories on focus and resolves thumbnails for categories added on the server', async () => {
+    const initialCategory = {
+      id: 'c-1',
+      key: 'c-1',
+      name: 'Cats',
+      thumbnail_image_id: 'thumb-1',
+      thumbnail_url: 'https://example.com/thumb-1.webp',
+    };
+    const newServerCategory = {
+      id: 'c-2',
+      key: 'c-2',
+      name: 'Dogs',
+      thumbnail_image_id: 'thumb-2',
+      thumbnail_url: 'https://example.com/thumb-2.webp',
+    };
+    let serverCategories = [initialCategory];
+
+    listGroupCategories.mockImplementation(async () => ({
+      status: 200,
+      data: serverCategories,
+    }));
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(listGroupCategories).toHaveBeenCalledTimes(1);
+    expect(getCardPropsByKey('c-2')).toBeUndefined();
+
+    serverCategories = [initialCategory, newServerCategory];
+
+    await triggerFocusEffects();
+
+    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+    expect(listGroupCategories).toHaveBeenLastCalledWith(contextValue, 'g-1');
+    expect(getCardPropsByKey('c-2')).toEqual(
+      expect.objectContaining({
+        category: expect.objectContaining({ id: 'c-2', name: 'Dogs' }),
+      })
+    );
+    expect(resolveCategoryThumbnail).toHaveBeenCalledWith(contextValue, {
+      groupId: 'g-1',
+      category: newServerCategory,
+    });
   });
 
   it('closes the create-category modal without creating when cancel is tapped', async () => {

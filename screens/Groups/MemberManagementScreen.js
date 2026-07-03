@@ -65,6 +65,7 @@ export default function MemberManagementScreen() {
       context: authContext,
       groupId,
       membershipId: removeTarget.id,
+      removedUserId: removeTarget.user_id ?? removeTarget.userId,
     });
     setIsWorking(false);
     setRemoveTarget(null);
