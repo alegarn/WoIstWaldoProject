@@ -31,12 +31,8 @@ import {
   listGroupCategories,
 } from '../../services/groups/groupCategoriesApi';
 
-const RECENT_ALL_CATEGORY = {
-  id: 'all',
-  key: 'all',
-  name: 'Recent/All',
-  count: undefined,
-};
+import { RECENT_ALL_CATEGORY } from '../../constants/categories';
+export { RECENT_ALL_CATEGORY };
 
 const DEFAULT_LANGUAGE = 'en';
 const NAVIGATION_ANY_LANGUAGE = 'any';

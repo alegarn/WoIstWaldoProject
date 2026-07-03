@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
+import { readGroupFeedCache } from "../services/groups/groupFeedCache";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
@@ -55,6 +56,32 @@ export async function getLocalImages(categoryKey, language) {
  */
 export async function getNextImage(categoryKey, language, currentListId) {
   const images = await getLocalImages(categoryKey, language);
+  if (!Array.isArray(images) || images.length === 0) {
+    return null;
+  }
+
+  if (Number.isFinite(currentListId)) {
+    return images.find((image) => image?.listId > currentListId) ?? null;
+  }
+
+  return images[0];
+};
+
+/**
+ * Scope-aware next-card reader. Public scope delegates to getNextImage; private
+ * scope reads the group feed cache instead (mirrors SwipeImage's derivation:
+ * categoryId is undefined for "all", otherwise the numeric category id).
+ * Read-only.
+ */
+export async function getNextImageForScope({ category, language, currentListId, scope }) {
+  const isPrivate = scope?.kind === 'private' && scope?.groupId;
+  if (!isPrivate) {
+    return getNextImage(category?.key || 'all', language, currentListId);
+  }
+
+  const categoryId = category?.key === 'all' ? undefined : category?.id;
+  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+  const images = cache?.images;
   if (!Array.isArray(images) || images.length === 0) {
     return null;
   }
