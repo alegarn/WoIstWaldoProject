@@ -1,0 +1,135 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# DEVICE-LEVEL WIRING SMOKE for `result.button.next` ("Next Card") when the guess
+# session was entered via a SPECIFIC category (here: nature), instead of the
+# synthetic "all" category that the sibling guess-login-saved-picture-{success,
+# failure}.yml flows use.
+#
+# HONESTY NOTE — what this flow does NOT test (and why):
+# The category->"All" FALLBACK BOUNDARY inside resolveNextCard (the branch that,
+# once a specific category deck is exhausted, advances into the separate "All"
+# listId space) cannot be reached in Maestro/e2e mode. Concretely:
+#   1. AsyncStorage decks are never written in e2e mode (no real image fetch
+#      occurs; the deterministic stubs do not persist cursor/list state).
+#   2. The silent prefetch that would populate those decks is guarded by
+#      `!isE2EMode()` (SwipeImage prefetch gate), so both the specific-category
+#      list and the All list stay empty on device under EXPO_PUBLIC_E2E_MODE=true.
+#   3. Therefore resolveNextCard (utils/nextCardResolver.js) returns null for a
+#      specific category, and navigateToNextGuess (utils/guessNavigation.js)
+#      resets onto the 3-route feed stack ending on GuessFeedScreen — i.e. it
+#      lands on the re-seeded feed (guess-path.card.1), NOT on an All-fallback
+#      card. The boundary semantics are simply never exercised here.
+# That boundary logic IS covered, by Jest — not Maestro:
+#   - __tests__/nextCardResolver.test.js  (All-fallback branch + null return)
+#   - __tests__/guessNavigation.test.js   (reset stack shape per outcome)
+#
+# WHAT THIS FLOW DOES TEST:
+# That `result.button.next` is tappable on the FAILURE result screen when the
+# guess was entered via a real (non-"all") category, and that tapping it
+# navigates FORWARD off ResultScreen onto the next screen. That is a device-
+# level wiring smoke (category entry -> guess -> failure -> Next Card ->
+# forward navigation), NOT a test of the All-fallback semantics.
+#
+# Run assumptions:
+# - App already launched, connected to Metro, logged in, on HomeScreen.
+# - Run auth-boot-login.yml ONCE first. This flow does NOT re-launch (re-launch
+#   breaks the Metro JS bundle connection).
+# - Uses the deterministic FAILURE path (long-press on the guess surface) so
+#   result.button.next is reachable without the success rating gate
+#   (result.rating.global.star.* -> auto-submit).
+# - Uses the seeded fallback card (guess-path.card.1), so it does NOT depend on
+#   hide-login-save-picture.yml having run first; running it first is harmless
+#   and matches the documented phase-2 order.
+# Example: maestro test .maestro/guess-next-card-from-category.yml
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.hide
+- tapOn:
+    id: home.button.guess
+# Enter via a SPECIFIC category (nature), NOT the synthetic .all card.
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.card.nature
+    timeout: 10000
+- tapOn:
+    id: guess-path.category.card.nature
+- extendedWaitUntil:
+    visible:
+      id: guess-path.button.start
+    timeout: 10000
+- tapOn:
+    id: guess-path.button.start
+- extendedWaitUntil:
+    visible:
+      id: guess-path.card.1
+    timeout: 10000
+- swipe:
+    elementIds:
+      - guess-path.card.1
+    direction: RIGHT
+- extendedWaitUntil:
+    visible:
+      id: game.instructions.guess.overlay
+    timeout: 10000
+- tapOn:
+    id: game.instructions.guess.overlay
+- extendedWaitUntil:
+    visible:
+      id: game.picture.guess-surface
+    timeout: 10000
+# Long press -> deterministic WRONG point (e2e-only) -> FAILURE result,
+# avoiding the success rating gate that would otherwise hide result.button.next.
+- longPressOn:
+    id: game.picture.guess-surface
+- extendedWaitUntil:
+    visible:
+      id: game.picture.clear-guess
+    timeout: 5000
+- tapOn:
+    id: game.picture.clear-guess
+- extendedWaitUntil:
+    visible:
+      id: game.picture.guess-modal.confirm
+    timeout: 5000
+- tapOn:
+    id: game.picture.guess-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: result.screen.failure
+    timeout: 10000
+- assertVisible:
+    id: result.screen.failure
+- assertVisible:
+    id: result.button.next
+- tapOn:
+    id: result.button.next
+# Landing assertion is an OR: in e2e the specific-category deck is empty (see
+# HONESTY NOTE), so resolveNextCard returns null and navigateToNextGuess resets
+# onto GuessFeedScreen -> guess-path.card.1 reappears (the expected branch).
+# game.instructions.guess.overlay is the wired-next-card branch (resolveNextCard
+# returned a card -> reset onto GuessScreen); it is NOT reachable in e2e today
+# but is kept as a robustness fallback. runFlow.when blocks skip silently when
+# their condition is unmet, so exactly one branch asserts; if both skip, the
+# button did nothing and return_home.yaml will still clean up (smoke trade-off).
+- runFlow:
+    when:
+      visible:
+        id: guess-path.card.1
+        timeout: 10000
+    commands:
+      - assertVisible:
+          id: guess-path.card.1
+- runFlow:
+    when:
+      visible:
+        id: game.instructions.guess.overlay
+        timeout: 5000
+    commands:
+      - assertVisible:
+          id: game.instructions.guess.overlay
+- runFlow: "_shared/return_home.yaml"

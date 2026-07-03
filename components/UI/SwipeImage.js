@@ -7,12 +7,12 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getImages } from '../../utils/imagesRequests';
-import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, emptyImageList, removeImageFromList, updateImageList, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
 import { readGroupFeedCache, writeGroupFeedCache } from '../../services/groups/groupFeedCache';
+import { fetchCardBatch, persistCardBatch } from '../../services/cardDeck';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
@@ -34,6 +34,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
   const asyncImagesAreLoadingRef = useRef(false);
   asyncImagesAreLoadingRef.current = asyncImagesAreLoading;
+
+  const allDeckWarmedRef = useRef(false);
 
   // Functions __________________________________________________________________
 
@@ -58,15 +60,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
-      if (isPrivateScope) {
-        await writeGroupFeedCache(
-          privateGroupId,
-          { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang },
-          { images: updatedImageList, nextCursor: null },
-        );
-      } else {
-        await storeImageList(updatedImageList, categoryKey, lang);
-      }
+      await persistCardBatch({
+        cards: updatedImageList,
+        categoryKey,
+        categoryId: category?.id,
+        language: lang,
+        scope,
+      });
       setImageList(updatedImageList);
 
       if (updatedImageList?.length > 0) {
@@ -82,15 +82,18 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
-        const newImageList = isPrivateScope
-          ? [...currentImageList, ...updatedImageList]
-          : await updateImageList(updatedImageList, categoryKey, lang);
+        let newImageList;
         if (isPrivateScope) {
-          await writeGroupFeedCache(
-            privateGroupId,
-            { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang },
-            { images: newImageList, nextCursor: null },
-          );
+          newImageList = [...currentImageList, ...updatedImageList];
+          await persistCardBatch({
+            cards: newImageList,
+            categoryKey,
+            categoryId: category?.id,
+            language: lang,
+            scope,
+          });
+        } else {
+          newImageList = await updateImageList(updatedImageList, categoryKey, lang);
         }
         setImageList(newImageList);
         return true
@@ -98,17 +101,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
       return false
     };
-  }, [category?.id, categoryKey, isPrivateScope, lang, privateGroupId]);
+  }, [category?.id, categoryKey, isPrivateScope, lang, scope]);
 
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
-    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
-    const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
-    const response = await getImages(pictureId, context, {
-      category_id: category?.id === 'all' ? undefined : category?.id,
-      category_key: category?.key || 'all',
+    const response = await fetchCardBatch({
+      categoryKey,
+      categoryId: category?.id,
       language,
       scope,
+      authContext: context,
+      pictureIdOverride,
     });
 
     if (response.isError === true) {
@@ -120,7 +123,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData, category, language, categoryKey, lang]);
+  }, [context, handleData, category, language, categoryKey]);
 
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
@@ -211,9 +214,21 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       if (updatedImageList?.length < 4 && !asyncImagesAreLoadingRef.current) {
         await handleImagesLoading();
       }
+
+      if (updatedImageList?.length < 4
+        && !asyncImagesAreLoadingRef.current
+        && !isE2EMode()
+        && !allDeckWarmedRef.current) {
+        allDeckWarmedRef.current = true;
+        fetchCardBatch({ categoryKey: 'all', language, scope, authContext: context })
+          .then((r) => (r && !r.isError && r.images?.length
+            ? persistCardBatch({ cards: r.images, categoryKey: 'all', language, scope })
+            : null))
+          .catch(() => {});
+      }
       return null;
     },
-    [category?.id, deleteImage, handleImagesLoading, isPrivateScope, lang, privateGroupId]
+    [category?.id, context, deleteImage, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]
   );
 
   // Effects __________________________________________________________________

@@ -4,6 +4,10 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   removeItem: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupFeedCache', () => ({
+  readGroupFeedCache: jest.fn(),
+}));
+
 const mockDelete = jest.fn();
 let mockFileExists = true;
 
@@ -28,6 +32,7 @@ jest.mock('expo-file-system', () => {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
+import { readGroupFeedCache } from '../services/groups/groupFeedCache';
 
 import {
   clearE2EHiddenGuessCard,
@@ -38,6 +43,7 @@ import {
   getLastImageUuid,
   getLocalImages,
   getNextImage,
+  getNextImageForScope,
   getOnboardingCompleted,
   getPreferredLanguage,
   getSessionLanguageFilter,
@@ -60,6 +66,7 @@ describe('storageDatum utilities', () => {
     mockFileExists = true;
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
+    readGroupFeedCache.mockReset();
   });
 
   it('reads the local image list and returns null when none is stored', async () => {
@@ -271,5 +278,104 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
     expect(await getNextImage('all', 'any')).toBeNull();
+  });
+
+  describe('getNextImageForScope', () => {
+    it('delegates to getNextImage on the public path and returns the next card', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      ]));
+
+      const card = await getNextImageForScope({ category: { key: 'all' }, language: 'any', currentListId: 1, scope: { kind: 'public' } });
+
+      expect(card).toEqual({ listId: 2, imageFile: 'file:///cache/2.jpg' });
+      expect(readGroupFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('returns null on the public path when the deck is exhausted', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      ]));
+
+      const card = await getNextImageForScope({ category: { key: 'all' }, language: 'any', currentListId: 5, scope: { kind: 'public' } });
+
+      expect(card).toBeNull();
+    });
+
+    it('reads the private group feed cache and returns the next card for a private scope', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [
+          { listId: 1, imageFile: 'file:///cache/p1.jpg' },
+          { listId: 2, imageFile: 'file:///cache/p2.jpg' },
+        ],
+        nextCursor: null,
+      });
+
+      const card = await getNextImageForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        currentListId: 1,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(card).toEqual({ listId: 2, imageFile: 'file:///cache/p2.jpg' });
+      expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr' });
+    });
+
+    it('returns null for a private scope when no card has a greater listId', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [{ listId: 1, imageFile: 'file:///cache/p1.jpg' }],
+        nextCursor: null,
+      });
+
+      const card = await getNextImageForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        currentListId: 9,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(card).toBeNull();
+    });
+
+    it('returns null for a private scope when the cache is empty or missing', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+      const cardEmpty = await getNextImageForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        currentListId: 1,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+      expect(cardEmpty).toBeNull();
+
+      readGroupFeedCache.mockResolvedValueOnce(null);
+      const cardMissing = await getNextImageForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        currentListId: 1,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+      expect(cardMissing).toBeNull();
+    });
+
+    it('returns the first image for a private scope when currentListId is not finite', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [
+          { listId: 7, imageFile: 'file:///cache/p7.jpg' },
+          { listId: 8, imageFile: 'file:///cache/p8.jpg' },
+        ],
+        nextCursor: null,
+      });
+
+      const card = await getNextImageForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        currentListId: undefined,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(card).toEqual({ listId: 7, imageFile: 'file:///cache/p7.jpg' });
+    });
   });
 });
