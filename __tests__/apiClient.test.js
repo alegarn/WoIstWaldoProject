@@ -15,6 +15,7 @@ import axios from 'axios';
 import {
   installAxiosUnauthorizedHandler,
   isAuthEndpoint,
+  isImageStorageEndpoint,
   setUnauthorizedHandler,
 } from '../utils/apiClient';
 
@@ -47,6 +48,33 @@ describe('utils/apiClient', () => {
       expect(isAuthEndpoint(null)).toBe(false);
       expect(isAuthEndpoint(undefined)).toBe(false);
       expect(isAuthEndpoint(42)).toBe(false);
+    });
+  });
+
+  describe('isImageStorageEndpoint', () => {
+    it('flags local_image_storage download URLs', () => {
+      expect(
+        isImageStorageEndpoint(
+          'https://api.example/api/v1/local_image_storage/42'
+        )
+      ).toBe(true);
+    });
+
+    it('does not flag regular api endpoints or auth endpoints', () => {
+      expect(
+        isImageStorageEndpoint('https://api.example/api/v1/categories')
+      ).toBe(false);
+      expect(isImageStorageEndpoint('https://api.example/auth/sign_in')).toBe(
+        false
+      );
+      expect(isImageStorageEndpoint('https://api.example/auth')).toBe(false);
+    });
+
+    it('treats empty values and non-strings as non-image-storage', () => {
+      expect(isImageStorageEndpoint('')).toBe(false);
+      expect(isImageStorageEndpoint(null)).toBe(false);
+      expect(isImageStorageEndpoint(undefined)).toBe(false);
+      expect(isImageStorageEndpoint(42)).toBe(false);
     });
   });
 
@@ -94,6 +122,24 @@ describe('utils/apiClient', () => {
 
       await expect(onRejected(signInError)).rejects.toEqual(signInError);
       await expect(onRejected(signUpError)).rejects.toEqual(signUpError);
+
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it('never invokes the handler for image-storage 401s but still rejects', async () => {
+      const handler = jest.fn();
+      setUnauthorizedHandler(handler);
+
+      const onRejected = getInstalledRejectionHandler();
+
+      const error = {
+        response: { status: 401 },
+        config: {
+          url: 'https://api.example/api/v1/local_image_storage/42',
+        },
+      };
+
+      await expect(onRejected(error)).rejects.toEqual(error);
 
       expect(handler).not.toHaveBeenCalled();
     });

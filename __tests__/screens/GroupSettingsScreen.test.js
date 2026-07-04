@@ -59,6 +59,10 @@ jest.mock('../../services/groups/groupUploadApi', () => ({
   preparePrivateUpload: jest.fn(),
 }));
 
+jest.mock('../../services/groups/groupCategoryThumbnails', () => ({
+  deleteCategoryThumbnailFile: jest.fn(),
+}));
+
 jest.mock('../../utils/imagesRequests', () => ({
   performImageUpload: jest.fn(),
 }));
@@ -73,10 +77,22 @@ jest.mock('../../store/auth-context', () => {
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { Alert } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 
 import GroupSettingsScreen from '../../screens/Groups/GroupSettingsScreen';
-import { listGroupCategories } from '../../services/groups/groupCategoriesApi';
+import {
+  listGroupCategories,
+  updateGroupCategory,
+} from '../../services/groups/groupCategoriesApi';
 import { updateGroupSettings } from '../../services/groups/groupApi';
+import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
+import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategoryThumbnails';
+import { performImageUpload } from '../../utils/imagesRequests';
+
+async function flushEffects() {
+  await Promise.resolve();
+  await Promise.resolve();
+}
 
 describe('GroupSettingsScreen', () => {
   beforeEach(() => {
@@ -98,8 +114,7 @@ describe('GroupSettingsScreen', () => {
       renderer = create(
         <GroupSettingsScreen navigation={navigation} />
       );
-      await Promise.resolve();
-      await Promise.resolve();
+      await flushEffects();
     });
     return { renderer, navigation };
   }
@@ -161,5 +176,106 @@ describe('GroupSettingsScreen', () => {
 
     const saveButtonProps = renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props;
     expect(saveButtonProps.text).toBe('Save');
+  });
+
+  it('launches picker and prepares category thumbnail upload without categoryId payload', async () => {
+    const category = { id: 'cat-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///thumb.png', fileSize: 42 }],
+    });
+    preparePrivateUpload.mockResolvedValue({ status: 400, data: {} });
+
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.uploader.category-thumbnail' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+      allowsEditing: false,
+      mediaTypes: ['images'],
+      quality: 0.5,
+    });
+
+    const uploadArgs = preparePrivateUpload.mock.calls[0][0];
+    expect(uploadArgs).toMatchObject({
+      context: {},
+      groupId: 'g-3',
+      kind: 'category-thumbnail',
+      fileExtension: 'png',
+      contentType: 'image/png',
+      contentLength: 42,
+      isCategoryThumbnail: true,
+    });
+    expect(uploadArgs).not.toHaveProperty('categoryId');
+  });
+
+  it('updates category thumbnail with thumbnailImageId and reloads categories after successful upload', async () => {
+    const category = { id: 'cat-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///thumb.webp', fileSize: 42 }],
+    });
+    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
+    performImageUpload.mockResolvedValue({ status: 200 });
+    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.uploader.category-thumbnail' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(updateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+      thumbnailImageId: 'img-9',
+    });
+    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it('deletes previous local thumbnail before updating category on re-upload', async () => {
+    const category = { id: 'cat-1', name: 'Cats', thumbnail_image_id: 'old-thumb' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///thumb.jpg', fileSize: 42 }],
+    });
+    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-new' } });
+    performImageUpload.mockResolvedValue({ status: 200 });
+    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.uploader.category-thumbnail' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-3', 'old-thumb');
+    expect(deleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
+      updateGroupCategory.mock.invocationCallOrder[0],
+    );
+    expect(updateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+      thumbnailImageId: 'img-new',
+    });
   });
 });

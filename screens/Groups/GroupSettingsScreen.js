@@ -20,8 +20,10 @@ import {
   updateGroupCategory,
   deleteGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
+import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategoryThumbnails';
 import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
+import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
 
 const UI_KINDS = [
   { kind: 'home-background', flag: 'isHomeBackground', label: 'Home background' },
@@ -120,7 +122,7 @@ export default function GroupSettingsScreen({ navigation }) {
     }
   };
 
-  const pickAndUpload = async (uiKind, category) => {
+  const pickAndUpload = async (uiKind) => {
     setActiveUploadKind(uiKind.kind);
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
@@ -141,7 +143,6 @@ export default function GroupSettingsScreen({ navigation }) {
         contentType: `image/${fileExtension}`,
         contentLength: asset.fileSize ?? 0,
         [uiKind.flag]: true,
-        categoryId: category?.id,
       });
       if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
         Alert.alert(`Error ${presignResponse?.status ?? ''}`, 'Could not prepare upload.');
@@ -156,17 +157,44 @@ export default function GroupSettingsScreen({ navigation }) {
         context: authContext,
       });
       if (uploadResponse?.status === 200 || uploadResponse?.status === 204) {
-        if (category?.id) {
-          await updateGroupCategory(authContext, groupId, category.id, {
-            thumbnailUrl: `private-images/${groupId}/groupUi/${uploadPlan.imageId}.${fileExtension}`,
-          });
-          await loadCategories();
-        }
         Alert.alert('Uploaded', `${uiKind.label} updated.`);
         refresh();
       } else {
         Alert.alert(`Error ${uploadResponse?.status ?? ''}`, 'Upload failed.');
       }
+    } finally {
+      setActiveUploadKind(null);
+    }
+  };
+
+  // Category thumbnails swap via the shared helper (same flow used by GuessPathScreen
+  // pencil + create-with-thumbnail). Old local cache file purged before the PATCH
+  // so a failed update does not leave stale bytes for the new imageId.
+  const swapCategoryThumbnail = async (category) => {
+    if (!category?.id) {
+      return;
+    }
+    setActiveUploadKind('category-thumbnail');
+    try {
+      const uploaded = await uploadCategoryThumbnail({ context: authContext, groupId });
+      if (!uploaded) {
+        return;
+      }
+      if (category.thumbnail_image_id) {
+        deleteCategoryThumbnailFile(groupId, category.thumbnail_image_id);
+      }
+      const updateResponse = await updateGroupCategory(authContext, groupId, category.id, {
+        thumbnailImageId: uploaded.imageId,
+      });
+      if (updateResponse?.status === 200 || updateResponse?.status === 204) {
+        await loadCategories();
+        Alert.alert('Uploaded', 'Category thumbnail updated.');
+        refresh();
+      } else {
+        Alert.alert(`Error ${updateResponse?.status ?? ''}`, 'Could not update category.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not update thumbnail.');
     } finally {
       setActiveUploadKind(null);
     }
@@ -309,7 +337,7 @@ export default function GroupSettingsScreen({ navigation }) {
                 Save
               </Button>
               <Button
-                onPress={() => pickAndUpload({ kind: 'category-thumbnail', flag: 'isCategoryThumbnail', label: 'Category thumbnail' }, item)}
+                onPress={() => swapCategoryThumbnail(item)}
                 testID="group-settings.uploader.category-thumbnail"
               >
                 Thumb

@@ -1,7 +1,17 @@
 import axios from 'axios';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
+import { clearGroupFeedCache, purgeAllPrivateCaches } from './groupFeedCache';
+import { clearGroupThumbnails } from './groupCategoryThumbnails';
 
 const BASE_URL = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups`;
+
+async function clearDeletedGroupCaches(groupId) {
+  await Promise.allSettled([
+    clearGroupFeedCache(groupId),
+    clearGroupThumbnails(groupId),
+    purgeAllPrivateCaches(),
+  ]);
+}
 
 function normalizeGroupRow(row, userId) {
   if (!row || typeof row !== 'object') {
@@ -81,7 +91,13 @@ export async function deleteGroup(context, groupId) {
   const config = { headers: setHeaders({ token }) };
 
   return axios.delete(`${BASE_URL}/${groupId}/`, config)
-    .then((response) => ({ status: response.status, data: response.data }))
+    .then(async (response) => {
+      if (response?.status === 200 || response?.status === 204) {
+        await clearDeletedGroupCaches(groupId);
+      }
+
+      return { status: response.status, data: response.data };
+    })
     .catch(mapRequestError);
 }
 

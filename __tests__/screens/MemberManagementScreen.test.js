@@ -146,6 +146,7 @@ describe('MemberManagementScreen', () => {
     expect(removeMember).toHaveBeenCalledWith(expect.objectContaining({
       groupId: 'g-3',
       membershipId: 'm-2',
+      removedUserId: 'u-2',
     }));
   });
 

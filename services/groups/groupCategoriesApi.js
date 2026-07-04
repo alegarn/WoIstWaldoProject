@@ -14,28 +14,25 @@ export async function listGroupCategories(context, groupId) {
     .catch(mapRequestError);
 }
 
-export async function createGroupCategory(context, groupId, { name, sortOrder } = {}) {
+export async function createGroupCategory(context, groupId, { name, sortOrder, thumbnailImageId } = {}) {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
-  const body = {
-    private_category: {
-      name,
-      sort_order: sortOrder,
-    },
-  };
+  const private_category = { name, sort_order: sortOrder };
+  if (thumbnailImageId !== undefined) private_category.thumbnail_image_id = thumbnailImageId;
+  const body = { private_category };
 
   return axios.post(`${categoriesUrl(groupId)}/`, body, config)
     .then((response) => ({ status: response.status, data: response.data?.data ?? response.data }))
     .catch(mapRequestError);
 }
 
-export async function updateGroupCategory(context, groupId, categoryId, { name, sortOrder, thumbnailUrl } = {}) {
+export async function updateGroupCategory(context, groupId, categoryId, { name, sortOrder, thumbnailImageId } = {}) {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
   const private_category = {};
   if (name !== undefined) private_category.name = name;
   if (sortOrder !== undefined) private_category.sort_order = sortOrder;
-  if (thumbnailUrl !== undefined) private_category.thumbnail_url = thumbnailUrl;
+  if (thumbnailImageId !== undefined) private_category.thumbnail_image_id = thumbnailImageId;
   const body = { private_category };
 
   return axios.patch(`${categoriesUrl(groupId)}/${categoryId}/`, body, config)

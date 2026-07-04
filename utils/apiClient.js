@@ -11,6 +11,14 @@ export function isAuthEndpoint(url) {
   return url.endsWith('/auth/sign_in') || url.endsWith('/auth');
 }
 
+export function isImageStorageEndpoint(url) {
+  if (typeof url !== 'string' || url === '') {
+    return false;
+  }
+
+  return url.includes('/local_image_storage/');
+}
+
 export function setUnauthorizedHandler(handler) {
   unauthorizedHandler = typeof handler === 'function' ? handler : null;
 }
@@ -31,6 +39,7 @@ export function installAxiosUnauthorizedHandler() {
       if (
         status === 401 &&
         !isAuthEndpoint(requestUrl) &&
+        !isImageStorageEndpoint(requestUrl) &&
         typeof unauthorizedHandler === 'function'
       ) {
         try {
@@ -40,9 +49,6 @@ export function installAxiosUnauthorizedHandler() {
         }
       }
 
-      // devise-jwt + JTIMatcher has no refresh-token mechanism: a 401 here means
-      // the token was revoked server-side (re-login elsewhere, reseed, etc.) and
-      // the user must re-authenticate. No silent refresh is possible.
       return Promise.reject(error);
     }
   );
