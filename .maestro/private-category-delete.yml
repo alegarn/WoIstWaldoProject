@@ -1,0 +1,135 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# PRIVATE CATEGORY DELETE (destructive device smoke).
+# Assesses the owner-only Delete-categories path end-to-end: manage → delete mode →
+# tap a card's trash → confirm the system Alert → the category is removed and the
+# grid reloads (manage mode stays active).
+#
+# DESTRUCTIVE — BACKEND MUTATION: category CRUD is NOT stubbed by e2e mode (only
+# image upload / ranking / score / guess-card are). Tapping confirm issues a real
+# DELETE /private_groups/:id/categories/:id against the configured backend and
+# permanently removes one category (plus its thumbnail image row + storage object).
+# The test account loses one category each run — ensure the owned group has enough
+# categories to absorb repeated runs, or reseed between runs.
+#
+# PRECONDITIONS (NOT seeded by the public e2e suite — must hold on device):
+#  - Account is logged in and OWNS the active private group.
+#  - That group has AT LEAST 2 owner-created categories (so after deleting one, at
+#    least one trash icon remains to assert the reload against, and the grid is not
+#    emptied).
+#  - App is on HomeScreen at flow start (run auth-boot-login.yml once first).
+#  - EXPO_PUBLIC_E2E_MODE=true in the bundle.
+#
+# HONESTY NOTE:
+#  - Per-card trash testID embeds the category UUID (guess-path.category.delete.{uuid}).
+#    This flow taps the FIRST match via regex (.*) — i.e. deletes the first deletable
+#    category in sort order, not a named one. A precise "this specific category was
+#    deleted" assertion is not feasible in Maestro with dynamic UUIDs; the handler
+#    unit tests (__tests__/GuessPathScreen.test.js) cover that precisely.
+#  - The confirm dialog is a React Native Alert.alert (SYSTEM dialog). Maestro taps
+#    its button by visible text (^Delete$), not by testID.
+#  - Private-stack cleanup is inlined (see smoke flow for the same rationale).
+#
+# Example: maestro test .maestro/private-category-delete.yml
+
+# --- fail fast: must be on public HomeScreen ---
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.guess
+
+# --- switch to private scope (open first group if no active group) ---
+- tapOn:
+    id: home.header.other-options
+- extendedWaitUntil:
+    visible:
+      id: home.menu.scope-toggle
+    timeout: 5000
+- tapOn:
+    id: home.menu.scope-toggle
+- runFlow:
+    when:
+      visible:
+        id: groups-list.container
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: groups-list.button.open.*
+      - extendedWaitUntil:
+          visible:
+            id: private-home.title
+          timeout: 10000
+- extendedWaitUntil:
+    visible:
+      id: private-home.title
+    timeout: 10000
+
+# --- enter private GuessPathScreen ---
+- tapOn:
+    id: private-home.button.find
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.grid
+    timeout: 10000
+
+# --- manage → delete mode ---
+- tapOn:
+    id: guess-path.button.manage
+- extendedWaitUntil:
+    visible:
+      id: guess-path.manage.option.delete
+    timeout: 5000
+- tapOn:
+    id: guess-path.manage.option.delete
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.delete.*
+    timeout: 5000
+
+# --- tap the first trash, then confirm the system Alert (^Delete$ exact) ---
+- tapOn:
+    id: guess-path.category.delete.*
+- extendedWaitUntil:
+    visible:
+      text: ^Delete$
+    timeout: 5000
+- tapOn:
+    text: ^Delete$
+
+# --- assert the grid reloaded and manage mode stayed active (a trash icon is still
+#     visible for the remaining categories). Proves DELETE succeeded + reloadCategories
+#     ran. Requires the >=2 categories precondition so one trash remains. ---
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.delete.*
+    timeout: 10000
+- assertVisible:
+    id: guess-path.category.delete.*
+
+# --- exit manage mode ---
+- tapOn:
+    id: guess-path.button.manage-done
+
+# --- cleanup: private stack → public HomeScreen ---
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+- runFlow:
+    when:
+      visible:
+        id: private-home.button.switch-to-public
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: private-home.button.switch-to-public
+- extendedWaitUntil:
+    visible:
+      id: home.button.ranking
+    timeout: 10000
