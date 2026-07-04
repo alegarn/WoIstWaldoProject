@@ -30,6 +30,7 @@ import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
 import {
   createGroupCategory,
+  deleteGroupCategory,
   listGroupCategories,
   updateGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
@@ -54,8 +55,11 @@ export default function GuessPathScreen({ navigation, route }) {
   const [isAddCategoryVisible, setIsAddCategoryVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [isDeletingCategory, setIsDeletingCategory] = useState(false);
   const [newCategoryThumbnailImageId, setNewCategoryThumbnailImageId] = useState(null);
   const [isPickingCreateThumbnail, setIsPickingCreateThumbnail] = useState(false);
+  const [manageMode, setManageMode] = useState(null);
+  const [isManageModalVisible, setIsManageModalVisible] = useState(false);
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
@@ -108,6 +112,7 @@ export default function GuessPathScreen({ navigation, route }) {
 
   useFocusEffect(
     useCallback(() => {
+      setManageMode(null);
       reloadCategories();
     }, [reloadCategories])
   );
@@ -228,6 +233,39 @@ export default function GuessPathScreen({ navigation, route }) {
     }
   };
 
+  const handleDeleteCategory = async (item) => {
+    Alert.alert(
+      'Delete category?',
+      `"${item.name}" will be removed.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            if (isDeletingCategory) {
+              return;
+            }
+            setIsDeletingCategory(true);
+            try {
+              const response = await deleteGroupCategory(context, scope.groupId, item.id);
+              if (response?.status === 200 || response?.status === 204) {
+                if (item.thumbnail_image_id) {
+                  deleteCategoryThumbnailFile(scope.groupId, item.thumbnail_image_id);
+                }
+                await reloadCategories();
+              } else {
+                Alert.alert(`Error ${response?.status ?? ''}`, 'Could not delete category.');
+              }
+            } finally {
+              setIsDeletingCategory(false);
+            }
+          },
+        },
+      ],
+    );
+  };
+
   const gridData = [RECENT_ALL_CATEGORY, ...categories];
 
   return (
@@ -261,6 +299,16 @@ export default function GuessPathScreen({ navigation, route }) {
                 accessibilityLabel="Add category"
               />
             )}
+            {isOwner && (
+              <IconButton
+                icon="options-outline"
+                color="GlobalStyle.color.tertiaryColor900"
+                size={24}
+                onPress={() => setIsManageModalVisible(true)}
+                testID="guess-path.button.manage"
+                accessibilityLabel="Manage categories"
+              />
+            )}
             <IconButton
               icon="ellipsis-horizontal"
               color="GlobalStyle.color.tertiaryColor900"
@@ -271,6 +319,21 @@ export default function GuessPathScreen({ navigation, route }) {
             />
           </View>
         </View>
+        {manageMode !== null && (
+          <View style={styles.manageBanner}>
+            <Text style={styles.manageBannerText}>
+              {manageMode === 'update' ? 'Updating images' : 'Deleting categories'}
+            </Text>
+            <Button
+              onPress={() => setManageMode(null)}
+              testID="guess-path.button.manage-done"
+              accessibilityLabel="Done managing"
+              thin={true}
+            >
+              Done
+            </Button>
+          </View>
+        )}
         <FlatList
           data={gridData}
           numColumns={2}
@@ -287,7 +350,7 @@ export default function GuessPathScreen({ navigation, route }) {
                 onPress={() => handleCategoryPress(item)}
                 testIDPrefix="guess-path.category"
               />
-              {isOwner && item.id !== 'all' && (
+              {isOwner && item.id !== 'all' && manageMode === 'update' && (
                 <IconButton
                   icon="create-outline"
                   color="#FFFFFF"
@@ -295,6 +358,18 @@ export default function GuessPathScreen({ navigation, route }) {
                   onPress={() => handleEditCategoryThumbnail(item)}
                   testID={`guess-path.category.edit.${item.id}`}
                   accessibilityLabel={`Edit ${item.name} thumbnail`}
+                  style={styles.cardEditButton}
+                />
+              )}
+              {isOwner && item.id !== 'all' && manageMode === 'delete' && (
+                <IconButton
+                  icon="trash-outline"
+                  color="#FF3B30"
+                  size={18}
+                  onPress={() => handleDeleteCategory(item)}
+                  disabled={isDeletingCategory}
+                  testID={`guess-path.category.delete.${item.id}`}
+                  accessibilityLabel={`Delete ${item.name}`}
                   style={styles.cardEditButton}
                 />
               )}
@@ -378,6 +453,54 @@ export default function GuessPathScreen({ navigation, route }) {
           </Button>
         </View>
       </CenteredModal>
+
+      <Modal
+        visible={isManageModalVisible}
+        onRequestClose={() => setIsManageModalVisible(false)}
+        animationType="slide"
+        transparent={false}
+      >
+        <View style={styles.modalContainer} testID="guess-path.manage">
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Manage categories</Text>
+            <Pressable
+              onPress={() => setIsManageModalVisible(false)}
+              testID="guess-path.manage.close"
+              accessibilityRole="button"
+              accessibilityLabel="Close manage categories"
+              style={styles.modalCloseButton}
+            >
+              <Text style={styles.modalCloseText}>Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView>
+            <Pressable
+              onPress={() => {
+                setManageMode('update');
+                setIsManageModalVisible(false);
+              }}
+              testID="guess-path.manage.option.update"
+              accessibilityRole="button"
+              accessibilityLabel="Update category images"
+              style={styles.option}
+            >
+              <Text style={styles.optionText}>Update images</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => {
+                setManageMode('delete');
+                setIsManageModalVisible(false);
+              }}
+              testID="guess-path.manage.option.delete"
+              accessibilityRole="button"
+              accessibilityLabel="Delete categories"
+              style={styles.option}
+            >
+              <Text style={styles.optionText}>Delete categories</Text>
+            </Pressable>
+          </ScrollView>
+        </View>
+      </Modal>
     </>
   );
 }
@@ -417,6 +540,18 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  manageBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(29, 19, 61, 0.08)',
+  },
+  manageBannerText: {
+    fontSize: 14,
+    color: 'GlobalStyle.color.tertiaryColor900',
   },
   categoryInput: {
     borderWidth: 1,

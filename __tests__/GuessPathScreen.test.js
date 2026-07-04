@@ -64,6 +64,7 @@ jest.mock('../services/groups/groupCategoriesApi', () => ({
   listGroupCategories: jest.fn(),
   createGroupCategory: jest.fn(),
   updateGroupCategory: jest.fn(),
+  deleteGroupCategory: jest.fn(),
 }));
 
 jest.mock('../services/groups/groupCategoryThumbnails', () => ({
@@ -84,7 +85,7 @@ jest.mock('../store/auth-context', () => {
 });
 
 import React from 'react';
-import { Dimensions } from 'react-native';
+import { Alert, Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import GuessPathScreen from '../screens/GuessScreens/GuessPathScreen';
@@ -97,6 +98,7 @@ import {
 import { isE2EMode } from '../utils/e2eMode';
 import {
   createGroupCategory,
+  deleteGroupCategory,
   listGroupCategories,
   updateGroupCategory,
 } from '../services/groups/groupCategoriesApi';
@@ -140,6 +142,7 @@ describe('GuessPathScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFocusEffects.clear();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
@@ -151,6 +154,7 @@ describe('GuessPathScreen', () => {
     listGroupCategories.mockResolvedValue({ status: 200, data: [] });
     createGroupCategory.mockResolvedValue({ status: 201, data: {} });
     updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+    deleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
     resolveCategoryThumbnail.mockResolvedValue(null);
     deleteCategoryThumbnailFile.mockReturnValue(undefined);
     uploadCategoryThumbnail.mockResolvedValue(null);
@@ -165,6 +169,7 @@ describe('GuessPathScreen', () => {
       mountedRenderers.splice(0).forEach((renderer) => renderer.unmount());
     });
 
+    Alert.alert.mockRestore();
     Dimensions.get.mockRestore();
   });
 
@@ -225,6 +230,27 @@ describe('GuessPathScreen', () => {
       ([props]) => props.testID === `guess-path.category.edit.${categoryId}`
     );
     return call?.[0];
+  }
+
+  function getManageButtonProps() {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === 'guess-path.button.manage'
+    );
+    return call?.[0];
+  }
+
+  function getDeleteButtonProps(categoryId) {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === `guess-path.category.delete.${categoryId}`
+    );
+    return call?.[0];
+  }
+
+  function invokeAlertDelete() {
+    expect(Alert.alert).toHaveBeenCalled();
+    const buttons = Alert.alert.mock.calls[Alert.alert.mock.calls.length - 1][2];
+    const deleteButton = buttons.find((b) => b.text === 'Delete');
+    return deleteButton.onPress;
   }
 
   it('fetches categories on mount with the auth context', async () => {
@@ -608,6 +634,16 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.update' }).props.onPress();
+      await flushEffects();
+    });
+
     const pencilProps = renderer.root.findByProps({
       testID: 'guess-path.category.edit.c-1',
     }).props;
@@ -648,5 +684,333 @@ describe('GuessPathScreen', () => {
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.category.edit.c-1' })
     ).toThrow();
+  });
+
+  it('owner default mode: manage button present, no per-card edit or delete icons', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(getManageButtonProps()).toBeDefined();
+    expect(getPencilEditButtonProps('c-1')).toBeUndefined();
+    expect(getDeleteButtonProps('c-1')).toBeUndefined();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.category.edit.c-1' })
+    ).toThrow();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.category.delete.c-1' })
+    ).toThrow();
+  });
+
+  it('owner taps manage then Update images: modal opens then closes, pencil appears on non-all card only', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.manage' })
+    ).toThrow();
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.update' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' })
+    ).toBeTruthy();
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.update' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(getPencilEditButtonProps('c-1')).toBeDefined();
+    expect(getPencilEditButtonProps('all')).toBeUndefined();
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.category.edit.c-1' })
+    ).toBeTruthy();
+  });
+
+  it('owner taps Delete categories: trash appears on non-all card only', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(getDeleteButtonProps('c-1')).toBeDefined();
+    expect(getDeleteButtonProps('all')).toBeUndefined();
+  });
+
+  it('trash press confirms via Alert, deletes category, purges thumbnail file and reloads', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = {
+      id: 'c-1',
+      key: 'c-1',
+      name: 'Cats',
+      thumbnail_image_id: 'thumb-1',
+    };
+    listGroupCategories
+      .mockResolvedValueOnce({ status: 200, data: [category] })
+      .mockResolvedValue({ status: 200, data: [] });
+    deleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    const trashProps = getDeleteButtonProps('c-1');
+
+    await act(async () => {
+      trashProps.onPress();
+      await flushEffects();
+    });
+
+    const deleteOnPress = invokeAlertDelete();
+
+    await act(async () => {
+      await deleteOnPress();
+      await flushEffects();
+    });
+
+    expect(deleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
+    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'thumb-1');
+    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it('delete error branch: reload NOT called and Alert error path triggered', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    deleteGroupCategory.mockResolvedValue({ status: 500, data: {} });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const initialCalls = listGroupCategories.mock.calls.length;
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    const trashProps = getDeleteButtonProps('c-1');
+
+    await act(async () => {
+      trashProps.onPress();
+      await flushEffects();
+    });
+
+    const deleteOnPress = invokeAlertDelete();
+
+    await act(async () => {
+      await deleteOnPress();
+      await flushEffects();
+    });
+
+    expect(deleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
+    expect(listGroupCategories).toHaveBeenCalledTimes(initialCalls);
+    expect(Alert.alert).toHaveBeenLastCalledWith(
+      'Error 500',
+      'Could not delete category.'
+    );
+  });
+
+  it('non-owner: manage button absent and no per-card icons', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [],
+        joined: [{ id: 'g-1', role: 'member' }],
+      },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(getManageButtonProps()).toBeUndefined();
+    expect(getPencilEditButtonProps('c-1')).toBeUndefined();
+    expect(getDeleteButtonProps('c-1')).toBeUndefined();
+  });
+
+  it('manage banner hidden by default, visible after picking a mode, hidden again after Done', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.button.manage-done' })
+    ).toThrow();
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.button.manage-done' })
+    ).toBeTruthy();
+    expect(getDeleteButtonProps('c-1')).toBeDefined();
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.button.manage-done' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.button.manage-done' })
+    ).toThrow();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.category.delete.c-1' })
+    ).toThrow();
+  });
+
+  it('useFocusEffect re-focus resets manageMode so the trash icon disappears', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(getDeleteButtonProps('c-1')).toBeDefined();
+
+    await triggerFocusEffects();
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.category.delete.c-1' })
+    ).toThrow();
+  });
+
+  it('does not fire a second delete when the trash icon is tapped while a delete is in flight', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    let resolveFirstDelete;
+    deleteGroupCategory.mockImplementation(
+      () => new Promise((resolve) => { resolveFirstDelete = resolve; })
+    );
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getManageButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.manage.option.delete' }).props.onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      getDeleteButtonProps('c-1').onPress();
+      await flushEffects();
+    });
+    const firstDeleteOnPress = invokeAlertDelete();
+
+    await act(async () => {
+      firstDeleteOnPress();
+      await flushEffects();
+    });
+
+    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
+
+    const trashCalls = mockIconButton.mock.calls.filter(
+      ([props]) => props.testID === 'guess-path.category.delete.c-1'
+    );
+    const latestTrashProps = trashCalls[trashCalls.length - 1][0];
+
+    await act(async () => {
+      latestTrashProps.onPress();
+      await flushEffects();
+    });
+    const secondDeleteOnPress = invokeAlertDelete();
+
+    await act(async () => {
+      secondDeleteOnPress();
+      await flushEffects();
+    });
+
+    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolveFirstDelete({ status: 204, data: {} });
+      await flushEffects();
+    });
+
+    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
   });
 });
