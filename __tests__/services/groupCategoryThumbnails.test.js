@@ -235,4 +235,73 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
     expect(() => clearGroupThumbnails('g-1')).not.toThrow();
   });
+
+  it('sends Authorization and HTTP_AUTHORIZATION headers when the thumbnail URL points at backend storage', async () => {
+    const originalBackendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
+    process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example.com/';
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: 'data:image/png;base64,AAEC',
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    try {
+      const uri = await resolveCategoryThumbnail(
+        { ...CONTEXT, scoreId: 's-1' },
+        {
+          groupId: 'g-backend',
+          category: {
+            thumbnail_image_id: 't-backend',
+            thumbnail_url:
+              'https://backend.example.com/api/v1/local_image_storage/thumbs/t-backend.png',
+          },
+        }
+      );
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://backend.example.com/api/v1/local_image_storage/thumbs/t-backend.png',
+        {
+          headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
+          timeout: 15000,
+        }
+      );
+      expect(uri).toEqual(expect.stringContaining('private-thumb-g-backend-t-backend.png'));
+      expect(File.__state.writtenUris).toHaveLength(1);
+      expect(File.__state.writtenUris[0]).toEqual({
+        uri: expect.stringContaining('private-thumb-g-backend-t-backend.png'),
+        data: 'AAEC',
+        options: { encoding: 'base64' },
+      });
+    } finally {
+      process.env.EXPO_PUBLIC_APP_BACKEND_URL = originalBackendUrl;
+    }
+  });
+
+  it('returns the presigned URL without writing when backend response is not a valid data URL', async () => {
+    const originalBackendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
+    process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example.com/';
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: new Uint8Array([0, 1, 2]),
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    try {
+      const uri = await resolveCategoryThumbnail(CONTEXT, {
+        groupId: 'g-backend',
+        category: {
+          thumbnail_image_id: 't-bad',
+          thumbnail_url:
+            'https://backend.example.com/api/v1/local_image_storage/thumbs/t-bad.png',
+        },
+      });
+
+      expect(uri).toBe(
+        'https://backend.example.com/api/v1/local_image_storage/thumbs/t-bad.png'
+      );
+      expect(File.__state.writtenUris).toHaveLength(0);
+    } finally {
+      process.env.EXPO_PUBLIC_APP_BACKEND_URL = originalBackendUrl;
+    }
+  });
 });

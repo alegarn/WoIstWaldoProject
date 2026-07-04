@@ -16,6 +16,7 @@ import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import IconButton from '../../components/UI/IconButton';
+import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
 import { LANGUAGES } from '../../constants/languages';
 import { getCategories } from '../../utils/categoryRequests';
@@ -30,8 +31,13 @@ import { AuthContext } from '../../store/auth-context';
 import {
   createGroupCategory,
   listGroupCategories,
+  updateGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
-import { resolveCategoryThumbnail } from '../../services/groups/groupCategoryThumbnails';
+import {
+  resolveCategoryThumbnail,
+  deleteCategoryThumbnailFile,
+} from '../../services/groups/groupCategoryThumbnails';
+import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
 
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 export { RECENT_ALL_CATEGORY };
@@ -48,6 +54,8 @@ export default function GuessPathScreen({ navigation, route }) {
   const [isAddCategoryVisible, setIsAddCategoryVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
+  const [newCategoryThumbnailImageId, setNewCategoryThumbnailImageId] = useState(null);
+  const [isPickingCreateThumbnail, setIsPickingCreateThumbnail] = useState(false);
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
@@ -145,12 +153,14 @@ export default function GuessPathScreen({ navigation, route }) {
 
   const handleOpenAddCategory = () => {
     setNewCategoryName('');
+    setNewCategoryThumbnailImageId(null);
     setIsAddCategoryVisible(true);
   };
 
   const handleCloseAddCategory = () => {
     setIsAddCategoryVisible(false);
     setNewCategoryName('');
+    setNewCategoryThumbnailImageId(null);
   };
 
   const handleCreateCategory = async () => {
@@ -162,14 +172,59 @@ export default function GuessPathScreen({ navigation, route }) {
       return;
     }
     setIsCreatingCategory(true);
-    const response = await createGroupCategory(context, scope.groupId, { name: trimmed });
+    const response = await createGroupCategory(context, scope.groupId, {
+      name: trimmed,
+      thumbnailImageId: newCategoryThumbnailImageId ?? undefined,
+    });
     setIsCreatingCategory(false);
     if (response?.status === 200 || response?.status === 201) {
       setIsAddCategoryVisible(false);
       setNewCategoryName('');
+      setNewCategoryThumbnailImageId(null);
       await reloadCategories();
     } else {
       Alert.alert('Error', 'Could not create category.');
+    }
+  };
+
+  const handlePickCreateThumbnail = async () => {
+    if (isPickingCreateThumbnail) {
+      return;
+    }
+    setIsPickingCreateThumbnail(true);
+    try {
+      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId });
+      if (uploaded) {
+        setNewCategoryThumbnailImageId(uploaded.imageId);
+      }
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not pick thumbnail.');
+    } finally {
+      setIsPickingCreateThumbnail(false);
+    }
+  };
+
+  // Per-card thumbnail swap from the grid (owner only). Old local cache file purged
+  // before the PATCH so a failed update does not leave stale bytes for the new imageId.
+  const handleEditCategoryThumbnail = async (category) => {
+    try {
+      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId });
+      if (!uploaded) {
+        return;
+      }
+      if (category.thumbnail_image_id) {
+        deleteCategoryThumbnailFile(scope.groupId, category.thumbnail_image_id);
+      }
+      const response = await updateGroupCategory(context, scope.groupId, category.id, {
+        thumbnailImageId: uploaded.imageId,
+      });
+      if (response?.status === 200 || response?.status === 204) {
+        await reloadCategories();
+      } else {
+        Alert.alert('Error', 'Could not update thumbnail.');
+      }
+    } catch (err) {
+      Alert.alert('Error', err?.message ?? 'Could not update thumbnail.');
     }
   };
 
@@ -232,6 +287,17 @@ export default function GuessPathScreen({ navigation, route }) {
                 onPress={() => handleCategoryPress(item)}
                 testIDPrefix="guess-path.category"
               />
+              {isOwner && item.id !== 'all' && (
+                <IconButton
+                  icon="create-outline"
+                  color="#FFFFFF"
+                  size={18}
+                  onPress={() => handleEditCategoryThumbnail(item)}
+                  testID={`guess-path.category.edit.${item.id}`}
+                  accessibilityLabel={`Edit ${item.name} thumbnail`}
+                  style={styles.cardEditButton}
+                />
+              )}
             </View>
           )}
         />
@@ -291,15 +357,26 @@ export default function GuessPathScreen({ navigation, route }) {
         confirmLabel={isCreatingCategory ? 'Creating...' : 'Create'}
         cancelLabel="Cancel"
       >
-        <TextInput
-          testID="guess-path.add-category.input.name"
-          accessibilityLabel="New category name"
-          placeholder="New category"
-          value={newCategoryName}
-          onChangeText={setNewCategoryName}
-          editable={!isCreatingCategory}
-          style={styles.categoryInput}
-        />
+        <View style={styles.addCategoryBody}>
+          <TextInput
+            testID="guess-path.add-category.input.name"
+            accessibilityLabel="New category name"
+            placeholder="New category"
+            value={newCategoryName}
+            onChangeText={setNewCategoryName}
+            editable={!isCreatingCategory}
+            style={styles.categoryInput}
+          />
+          <Button
+            onPress={handlePickCreateThumbnail}
+            testID="guess-path.add-category.button.pick-thumbnail"
+            accessibilityLabel="Pick category thumbnail"
+            disabled={isPickingCreateThumbnail || isCreatingCategory}
+            thin={true}
+          >
+            {newCategoryThumbnailImageId ? 'Thumbnail ready' : 'Add thumbnail (optional)'}
+          </Button>
+        </View>
       </CenteredModal>
     </>
   );
@@ -349,6 +426,10 @@ const styles = StyleSheet.create({
     minWidth: 200,
     color: '#000',
   },
+  addCategoryBody: {
+    gap: 10,
+    minWidth: 200,
+  },
   gridContent: {
     padding: 12,
     gap: 12,
@@ -358,6 +439,16 @@ const styles = StyleSheet.create({
   },
   gridItem: {
     flex: 1,
+    position: 'relative',
+  },
+  cardEditButton: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderRadius: 12,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
   },
   modalContainer: {
     flex: 1,

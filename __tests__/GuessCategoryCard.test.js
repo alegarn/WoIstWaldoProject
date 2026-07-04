@@ -22,7 +22,7 @@ describe('GuessCategoryCard', () => {
     name: 'Nature',
   };
 
-  const thumbnailUrl = { uri: 'file:///nature.jpg' };
+  const thumbnailUrl = 'file:///nature.jpg';
 
   async function renderCard(overrides = {}) {
     let renderer;
@@ -89,7 +89,7 @@ describe('GuessCategoryCard', () => {
 
     const image = renderer.root.findByType('ImageBackground');
 
-    expect(image.props.source).toBe('https://example/x.png');
+    expect(image.props.source).toEqual({ uri: 'https://example/x.png' });
   });
 
   it('renders the fallback view when the key is unknown and thumbnailUrl is missing', async () => {

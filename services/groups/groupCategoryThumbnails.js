@@ -1,6 +1,11 @@
 import axios from 'axios';
 import { File, Paths } from 'expo-file-system';
 import { fromByteArray } from 'base64-js';
+import {
+  usesBackendStorage,
+  setStorageDownloadHeaders,
+  getBackendHeaders,
+} from '../../utils/imagesRequests';
 
 const THUMB_PREFIX = 'private-thumb-';
 const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg'];
@@ -45,6 +50,12 @@ function bytesFromArrayBufferLike(data) {
   return null;
 }
 
+function extractBase64FromDataUrl(value) {
+  if (typeof value !== 'string') return null;
+  const match = value.match(/^data:image\/(?:png|jpe?g|gif|webp|heic|heif);base64,([\s\S]*)$/);
+  return match ? match[1] : null;
+}
+
 export async function resolveCategoryThumbnail(context, { groupId, category } = {}) {
   const imageId = category?.thumbnail_image_id;
   if (!imageId) return null;
@@ -65,25 +76,34 @@ export async function resolveCategoryThumbnail(context, { groupId, category } = 
   }
 
   let response;
+  let base64ToWrite = null;
   try {
-    response = await axios.get(presignedUrl, {
-      responseType: 'arraybuffer',
-      timeout: 15000,
-    });
+    if (usesBackendStorage(presignedUrl)) {
+      const { token } = await getBackendHeaders(context);
+      response = await axios.get(presignedUrl, {
+        headers: setStorageDownloadHeaders(token),
+        timeout: 15000,
+      });
+      base64ToWrite = extractBase64FromDataUrl(response?.data);
+    } else {
+      response = await axios.get(presignedUrl, {
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      });
+      const bytes = bytesFromArrayBufferLike(response?.data);
+      base64ToWrite = bytes ? fromByteArray(bytes) : null;
+    }
   } catch {
     return presignedUrl;
   }
 
-  if (!response?.data) return presignedUrl;
+  if (!base64ToWrite) return presignedUrl;
 
-  const bytes = bytesFromArrayBufferLike(response.data);
-  if (!bytes) return presignedUrl;
-
-  const finalExt = ext || extFromContentType(response.headers?.['content-type']);
+  const finalExt = ext || extFromContentType(response?.headers?.['content-type']);
 
   try {
     const file = new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${imageId}.${finalExt}`);
-    file.write(fromByteArray(bytes), { encoding: 'base64' });
+    file.write(base64ToWrite, { encoding: 'base64' });
     return file.uri;
   } catch {
     return presignedUrl;

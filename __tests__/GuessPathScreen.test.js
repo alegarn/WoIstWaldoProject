@@ -63,10 +63,16 @@ jest.mock('../utils/e2eMode', () => ({
 jest.mock('../services/groups/groupCategoriesApi', () => ({
   listGroupCategories: jest.fn(),
   createGroupCategory: jest.fn(),
+  updateGroupCategory: jest.fn(),
 }));
 
 jest.mock('../services/groups/groupCategoryThumbnails', () => ({
   resolveCategoryThumbnail: jest.fn(),
+  deleteCategoryThumbnailFile: jest.fn(),
+}));
+
+jest.mock('../services/groups/categoryThumbnailUpload', () => ({
+  uploadCategoryThumbnail: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -92,8 +98,13 @@ import { isE2EMode } from '../utils/e2eMode';
 import {
   createGroupCategory,
   listGroupCategories,
+  updateGroupCategory,
 } from '../services/groups/groupCategoriesApi';
-import { resolveCategoryThumbnail } from '../services/groups/groupCategoryThumbnails';
+import {
+  resolveCategoryThumbnail,
+  deleteCategoryThumbnailFile,
+} from '../services/groups/groupCategoryThumbnails';
+import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
 
 const CATEGORIES = [
   { id: '1', key: 'nature', name: 'Nature', thumbnailUrl: 'x', count: 5 },
@@ -139,7 +150,10 @@ describe('GuessPathScreen', () => {
     getCategories.mockResolvedValue({ data: CATEGORIES });
     listGroupCategories.mockResolvedValue({ status: 200, data: [] });
     createGroupCategory.mockResolvedValue({ status: 201, data: {} });
+    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
     resolveCategoryThumbnail.mockResolvedValue(null);
+    deleteCategoryThumbnailFile.mockReturnValue(undefined);
+    uploadCategoryThumbnail.mockResolvedValue(null);
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
@@ -202,6 +216,13 @@ describe('GuessPathScreen', () => {
   function getAddCategoryButtonProps() {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.add-category'
+    );
+    return call?.[0];
+  }
+
+  function getPencilEditButtonProps(categoryId) {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === `guess-path.category.edit.${categoryId}`
     );
     return call?.[0];
   }
@@ -521,6 +542,111 @@ describe('GuessPathScreen', () => {
     expect(createGroupCategory).not.toHaveBeenCalled();
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.add-category.input.name' })
+    ).toThrow();
+  });
+
+  it('creates a category with thumbnailImageId when a thumbnail is picked in the modal', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    uploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-7' });
+    listGroupCategories
+      .mockResolvedValueOnce({ status: 200, data: [] })
+      .mockResolvedValue({ status: 200, data: PRIVATE_CREATED_CATEGORIES });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getAddCategoryButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.pick-thumbnail',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.input.name',
+      }).props.onChangeText('NewCat');
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.create',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(uploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
+    expect(createGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', {
+      name: 'NewCat',
+      thumbnailImageId: 'img-7',
+    });
+  });
+
+  it('renders a pencil edit affordance on owned category cards and swaps the thumbnail on press', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    const category = {
+      id: 'c-1',
+      key: 'c-1',
+      name: 'Cats',
+      thumbnail_image_id: 'old-thumb',
+      thumbnail_url: 'https://example.com/old.webp',
+    };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    resolveCategoryThumbnail.mockResolvedValue('file:///cache/old.webp');
+    uploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-new' });
+    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const pencilProps = renderer.root.findByProps({
+      testID: 'guess-path.category.edit.c-1',
+    }).props;
+    expect(pencilProps).toBeTruthy();
+    expect(pencilProps.accessibilityLabel).toBe('Edit Cats thumbnail');
+
+    await act(async () => {
+      pencilProps.onPress();
+      await flushEffects();
+    });
+
+    expect(uploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
+    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'old-thumb');
+    expect(deleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
+      updateGroupCategory.mock.invocationCallOrder[0],
+    );
+    expect(updateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1', {
+      thumbnailImageId: 'img-new',
+    });
+    // reloadCategories fired after successful swap.
+    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not render the pencil edit affordance for non-owner members', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [],
+        joined: [{ id: 'g-1', role: 'member' }],
+      },
+      refresh: jest.fn(),
+    });
+    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(getPencilEditButtonProps('c-1')).toBeUndefined();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.category.edit.c-1' })
     ).toThrow();
   });
 });
