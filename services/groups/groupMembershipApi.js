@@ -2,6 +2,7 @@ import axios from 'axios';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { clearGroupFeedCache } from './groupFeedCache';
 import { clearGroupThumbnails } from './groupCategoryThumbnails';
+import { clearGroupHomeBackgrounds } from './groupHomeBackgrounds';
 
 const BASE_URL = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups`;
 
@@ -9,6 +10,7 @@ async function clearDepartedGroupCaches(groupId) {
   await Promise.allSettled([
     clearGroupFeedCache(groupId),
     clearGroupThumbnails(groupId),
+    clearGroupHomeBackgrounds(groupId),
   ]);
 }
 

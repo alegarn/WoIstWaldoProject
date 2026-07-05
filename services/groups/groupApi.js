@@ -2,6 +2,7 @@ import axios from 'axios';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { clearGroupFeedCache, purgeAllPrivateCaches } from './groupFeedCache';
 import { clearGroupThumbnails } from './groupCategoryThumbnails';
+import { clearGroupHomeBackgrounds } from './groupHomeBackgrounds';
 
 const BASE_URL = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups`;
 
@@ -9,6 +10,7 @@ async function clearDeletedGroupCaches(groupId) {
   await Promise.allSettled([
     clearGroupFeedCache(groupId),
     clearGroupThumbnails(groupId),
+    clearGroupHomeBackgrounds(groupId),
     purgeAllPrivateCaches(),
   ]);
 }
@@ -72,17 +74,36 @@ export async function createGroup(context, { name, primaryColor, secondaryColor 
     .catch(mapRequestError);
 }
 
-export async function updateGroupSettings(context, groupId, { name, primaryColor, secondaryColor } = {}) {
+export async function updateGroupSettings(context, groupId, {
+  name,
+  primaryColor,
+  secondaryColor,
+  hideBgImageId,
+  findBgImageId,
+  rankingBgImageId,
+} = {}) {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
   const private_group = {};
   if (name !== undefined) private_group.name = name;
   if (primaryColor !== undefined) private_group.primary_color = primaryColor;
   if (secondaryColor !== undefined) private_group.secondary_color = secondaryColor;
+  if (hideBgImageId !== undefined) private_group.hide_bg_image_id = hideBgImageId;
+  if (findBgImageId !== undefined) private_group.find_bg_image_id = findBgImageId;
+  if (rankingBgImageId !== undefined) private_group.ranking_bg_image_id = rankingBgImageId;
   const body = { private_group };
 
   return axios.patch(`${BASE_URL}/${groupId}/`, body, config)
     .then((response) => ({ status: response.status, data: unwrapData(response.data) }))
+    .catch(mapRequestError);
+}
+
+export async function deletePrivateImage(context, groupId, imageId) {
+  const { token } = await getBackendHeaders(context);
+  const config = { headers: setHeaders({ token }) };
+
+  return axios.delete(`${BASE_URL}/${groupId}/images/${imageId}`, config)
+    .then((response) => ({ status: response.status, data: response.data }))
     .catch(mapRequestError);
 }
 
