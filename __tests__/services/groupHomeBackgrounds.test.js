@@ -13,6 +13,7 @@ jest.mock('expo-file-system', () => {
     createdUris: [],
     writtenUris: [],
     writeError: null,
+    listings: {},
   };
 
   function joinArgs(args) {
@@ -50,6 +51,7 @@ jest.mock('expo-file-system', () => {
     this.create = jest.fn(() => {
       state.createdUris.push(this.uri);
     });
+    this.list = jest.fn(() => state.listings[this.uri] || []);
   });
 
   const cacheStore = {
@@ -64,6 +66,7 @@ jest.mock('expo-file-system', () => {
     state.createdUris.length = 0;
     state.writtenUris.length = 0;
     state.writeError = null;
+    state.listings = {};
     cacheStore.list = () => [];
     cacheStore.create = jest.fn();
     File.mockClear();
@@ -79,7 +82,8 @@ jest.mock('expo-file-system', () => {
     }
   };
 
-  return { File, Paths };
+  const Directory = File;
+  return { File, Directory, Paths };
 });
 
 jest.mock('../../utils/imagesRequests', () => ({
@@ -100,6 +104,7 @@ import {
   deleteHomeBackgroundFile,
   clearGroupHomeBackgrounds,
 } from '../../services/groups/groupHomeBackgrounds';
+import { usesBackendStorage } from '../../utils/imagesRequests';
 
 const CONTEXT = { token: 'Bearer t', userId: 'u-1' };
 
@@ -108,6 +113,8 @@ describe('services/groups/groupHomeBackgrounds', () => {
     axios.get.mockReset();
     fromByteArray.mockClear();
     File.__reset();
+    usesBackendStorage.mockReset();
+    usesBackendStorage.mockReturnValue(false);
   });
 
   it('exports the three slot keys', () => {
@@ -184,6 +191,62 @@ describe('services/groups/groupHomeBackgrounds', () => {
     expect(File.__state.writtenUris).toHaveLength(0);
   });
 
+  it('downloads from backend storage with text + data-url prefix stripping and writes the cached file', async () => {
+    usesBackendStorage.mockReturnValue(true);
+    File.__state.existsOverride = false;
+    const dataUrl = 'data:image/jpeg;base64,ChQe';
+    axios.get.mockResolvedValue({
+      data: dataUrl,
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-2',
+      slot: 'hide',
+      imageId: 'img-be-1',
+      fileExtension: 'jpeg',
+      url: 'https://api.example.com/storage/home/img-be-1.jpeg',
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://api.example.com/storage/home/img-be-1.jpeg',
+      {
+        headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
+        responseType: 'text',
+        timeout: 15000,
+      }
+    );
+    expect(fromByteArray).not.toHaveBeenCalled();
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg')
+    );
+    expect(File.__state.writtenUris).toHaveLength(1);
+    expect(File.__state.writtenUris[0]).toEqual({
+      uri: expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg'),
+      data: 'ChQe',
+      options: { encoding: 'base64' },
+    });
+  });
+
+  it('returns null instead of the remote url when a backend-storage download fails', async () => {
+    usesBackendStorage.mockReturnValue(true);
+    File.__state.existsOverride = false;
+    axios.get.mockRejectedValue(new Error('401'));
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-2',
+      slot: 'find',
+      imageId: 'img-be-2',
+      fileExtension: 'png',
+      url: 'https://api.example.com/storage/home/img-be-2.png',
+    });
+
+    expect(uri).toBeNull();
+    expect(File.__state.writtenUris).toHaveLength(0);
+  });
+
   it('returns null when imageId or slot is missing', async () => {
     const uri = await resolveHomeBackground({
       context: CONTEXT,
@@ -224,5 +287,28 @@ describe('services/groups/groupHomeBackgrounds', () => {
 
     expect(() => clearGroupHomeBackgrounds('g-1')).not.toThrow();
     expect(File.__state.deletedUris).toHaveLength(0);
+  });
+
+  it('clearGroupHomeBackgrounds deletes each cached child file before deleting the directory', () => {
+    File.__state.existsOverride = true;
+    const groupDirUri = 'file:///cache/private-home-bg/g-1';
+    File.__state.listings[groupDirUri] = [
+      'file:///cache/private-home-bg/g-1/hide-img-1.png',
+      'file:///cache/private-home-bg/g-1/find-img-2.jpeg',
+      'file:///cache/private-home-bg/g-1/ranking-img-3.webp',
+    ];
+
+    clearGroupHomeBackgrounds('g-1');
+
+    const deleted = File.__state.deletedUris;
+    expect(deleted).toEqual(
+      expect.arrayContaining([
+        'file:///cache/private-home-bg/g-1/hide-img-1.png',
+        'file:///cache/private-home-bg/g-1/find-img-2.jpeg',
+        'file:///cache/private-home-bg/g-1/ranking-img-3.webp',
+        groupDirUri,
+      ])
+    );
+    expect(deleted[deleted.length - 1]).toBe(groupDirUri);
   });
 });

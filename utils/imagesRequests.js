@@ -367,7 +367,7 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
     const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
       .then((response) => {
         if (response.status === 200) {
-          console.log("post img base64 ok", response);
+          console.log("post img base64 ok", Object.keys(response).filter((key) => key !== 'data'));
         };
         return response;
       })

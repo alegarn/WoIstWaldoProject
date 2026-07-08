@@ -1,5 +1,6 @@
 import * as ImagePicker from 'expo-image-picker';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { File } from 'expo-file-system';
 
 import { preparePrivateUpload } from './groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
@@ -27,7 +28,17 @@ export async function uploadHomeBackground({ context, groupId }) {
     compress: 0.7,
     format: SaveFormat.JPEG,
   });
-  const fileExtension = 'jpg';
+  const fileExtension = 'jpeg';
+
+  let contentLength = asset.fileSize ?? 0;
+  try {
+    const renderedSize = new File(saved.uri).size;
+    if (renderedSize) {
+      contentLength = renderedSize;
+    }
+  } catch {
+    // fall back to original asset size
+  }
 
   const presignResponse = await preparePrivateUpload({
     context,
@@ -35,7 +46,7 @@ export async function uploadHomeBackground({ context, groupId }) {
     kind: 'home-button-background',
     fileExtension,
     contentType: `image/${fileExtension}`,
-    contentLength: asset.fileSize ?? 0,
+    contentLength,
     isHomeButtonBackground: true,
   });
   if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
@@ -47,7 +58,7 @@ export async function uploadHomeBackground({ context, groupId }) {
     plan: uploadPlan,
     fileUrl: saved.uri,
     fileExtension,
-    contentLength: asset.fileSize ?? 0,
+    contentLength,
     context,
   });
   if (uploadResponse?.status !== 200 && uploadResponse?.status !== 204) {

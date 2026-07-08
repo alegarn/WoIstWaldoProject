@@ -63,6 +63,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     maxWidth: '80%',
+    maxHeight: '85%',
   },
   modalText: {
     fontSize: 18,

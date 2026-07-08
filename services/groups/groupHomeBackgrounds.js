@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { File, Paths } from 'expo-file-system';
+import { File, Directory, Paths } from 'expo-file-system';
 import { fromByteArray } from 'base64-js';
 import {
   usesBackendStorage,
@@ -13,7 +13,7 @@ const HOME_BG_DIR = 'private-home-bg';
 const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg'];
 
 function groupDir(groupId) {
-  return new File(Paths.cache, HOME_BG_DIR, String(groupId));
+  return new Directory(Paths.cache, HOME_BG_DIR, String(groupId));
 }
 
 function localHomeBgFile(groupId, slot, imageId, ext) {
@@ -38,8 +38,17 @@ function localHomeBgExists(groupId, slot, imageId, ext) {
 }
 
 function ensureGroupDir(groupId) {
+  const dir = groupDir(groupId);
   try {
-    groupDir(groupId).create({ idempotent: true, intermediates: true });
+    dir.create({ idempotent: true, intermediates: true });
+    return;
+  } catch {
+    // A prior build may have created a FILE at this path; clear it and retry.
+  }
+  try {
+    const stale = new File(Paths.cache, HOME_BG_DIR, String(groupId));
+    if (stale.exists) stale.delete();
+    dir.create({ idempotent: true, intermediates: true });
   } catch {
     // best-effort
   }
@@ -93,13 +102,15 @@ export async function resolveHomeBackground({
 
   ensureGroupDir(groupId);
 
+  const isBackend = usesBackendStorage(url);
   let response;
   let base64ToWrite = null;
   try {
-    if (usesBackendStorage(url)) {
+    if (isBackend) {
       const { token } = await getBackendHeaders(context);
       response = await axios.get(url, {
         headers: setStorageDownloadHeaders(token),
+        responseType: 'text',
         timeout: 15000,
       });
       base64ToWrite = extractBase64FromDataUrl(response?.data);
@@ -111,21 +122,21 @@ export async function resolveHomeBackground({
       const bytes = bytesFromArrayBufferLike(response?.data);
       base64ToWrite = bytes ? fromByteArray(bytes) : null;
     }
-  } catch {
-    return url;
+  } catch (err) {
+    return isBackend ? null : url;
   }
 
-  if (!base64ToWrite) return url;
+  if (!base64ToWrite) return isBackend ? null : url;
 
   const finalExt = ext || extFromContentType(response?.headers?.['content-type']);
-  if (!finalExt) return url;
+  if (!finalExt) return isBackend ? null : url;
 
   try {
     const file = localHomeBgFile(groupId, slot, imageId, finalExt);
     file.write(base64ToWrite, { encoding: 'base64' });
     return file.uri;
-  } catch {
-    return url;
+  } catch (err) {
+    return isBackend ? null : url;
   }
 }
 
@@ -143,7 +154,24 @@ export function deleteHomeBackgroundFile(groupId, slot, imageId) {
 export function clearGroupHomeBackgrounds(groupId) {
   try {
     const dir = groupDir(groupId);
-    if (dir?.exists) dir.delete();
+    if (!dir?.exists) return;
+
+    const entries = typeof dir.list === 'function' ? dir.list() : [];
+    if (Array.isArray(entries)) {
+      for (const entry of entries) {
+        const uri = typeof entry === 'string' ? entry : entry?.uri;
+        const name = typeof uri === 'string' ? uri.split('/').pop() : '';
+        if (!name) continue;
+        try {
+          const child = new File(Paths.cache, HOME_BG_DIR, String(groupId), name);
+          if (child?.exists) child.delete();
+        } catch {
+          // best-effort
+        }
+      }
+    }
+
+    dir.delete();
   } catch {
     // best-effort
   }

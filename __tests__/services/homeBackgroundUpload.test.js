@@ -6,12 +6,20 @@ const mockManipulate = jest.fn();
 const mockResize = jest.fn();
 const mockRenderAsync = jest.fn();
 const mockSaveAsync = jest.fn();
+const mockFileSizeFor = jest.fn();
 
 jest.mock('expo-image-manipulator', () => ({
   ImageManipulator: {
     manipulate: (...args) => mockManipulate(...args),
   },
   SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+}));
+
+jest.mock('expo-file-system', () => ({
+  File: function File(uri) {
+    this.uri = uri;
+    this.size = mockFileSizeFor(uri);
+  },
 }));
 
 jest.mock('../../services/groups/groupUploadApi', () => ({
@@ -54,6 +62,9 @@ describe('services/groups/homeBackgroundUpload', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetManipulatorChain();
+    mockFileSizeFor.mockImplementation((uri) =>
+      uri === 'file:///tmp/manipulated.jpg' ? 150_000 : undefined
+    );
   });
 
   it('returns null when the picker is cancelled', async () => {
@@ -97,16 +108,16 @@ describe('services/groups/homeBackgroundUpload', () => {
       context: CONTEXT,
       groupId: 'g-1',
       kind: 'home-button-background',
-      fileExtension: 'jpg',
-      contentType: 'image/jpg',
-      contentLength: 2_000_000,
+      fileExtension: 'jpeg',
+      contentType: 'image/jpeg',
+      contentLength: 150_000,
       isHomeButtonBackground: true,
     });
     expect(performImageUpload).toHaveBeenCalledWith({
       plan: { imageId: 'img-9', url: 'https://upload.example/' },
       fileUrl: 'file:///tmp/manipulated.jpg',
-      fileExtension: 'jpg',
-      contentLength: 2_000_000,
+      fileExtension: 'jpeg',
+      contentLength: 150_000,
       context: CONTEXT,
     });
     expect(result).toEqual({ imageId: 'img-9' });

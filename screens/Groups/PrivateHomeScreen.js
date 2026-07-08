@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Share, Alert, ScrollView } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 
@@ -55,6 +55,12 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const [isLockedOwnerModalVisible, setIsLockedOwnerModalVisible] = useState(isLocked && isOwner);
   const [bgUris, setBgUris] = useState({});
   const [savingSlot, setSavingSlot] = useState({});
+  const savingSlotRef = useRef({});
+
+  const setSaving = useCallback((slot, value) => {
+    savingSlotRef.current = { ...savingSlotRef.current, [slot]: value };
+    setSavingSlot((prev) => ({ ...prev, [slot]: value }));
+  }, []);
 
   useEffect(() => {
     setIsLockedOwnerModalVisible(isLocked && isOwner);
@@ -146,13 +152,17 @@ export default function PrivateHomeScreen({ navigation, route }) {
 
   const chooseSlotBackground = useCallback(async (slot) => {
     if (!groupId) return;
+    if (savingSlotRef.current[slot]) return;
     const settingsKey = SLOT_SETTINGS_KEY[slot];
     const prevImageId = group?.home_button_backgrounds?.[slot]?.image_id;
-    setSavingSlot((prev) => ({ ...prev, [slot]: true }));
+    setSaving(slot, true);
     try {
       const { imageId } = await uploadHomeBackground({ context: authContext, groupId });
       if (!imageId) return;
-      await updateGroupSettings(authContext, groupId, { [settingsKey]: imageId });
+      const response = await updateGroupSettings(authContext, groupId, { [settingsKey]: imageId });
+      if (response?.status !== 200 && response?.status !== 204) {
+        throw new Error(`PATCH failed with status ${response?.status}`);
+      }
       if (prevImageId) {
         await deletePrivateImage(authContext, groupId, prevImageId);
         deleteHomeBackgroundFile(groupId, slot, prevImageId);
@@ -161,27 +171,31 @@ export default function PrivateHomeScreen({ navigation, route }) {
     } catch (err) {
       Alert.alert('Error', err?.message ?? 'Could not update background.');
     } finally {
-      setSavingSlot((prev) => ({ ...prev, [slot]: false }));
+      setSaving(slot, false);
     }
-  }, [authContext, groupId, group, refresh]);
+  }, [authContext, groupId, group, refresh, setSaving]);
 
   const removeSlotBackground = useCallback(async (slot) => {
     if (!groupId) return;
+    if (savingSlotRef.current[slot]) return;
     const settingsKey = SLOT_SETTINGS_KEY[slot];
     const prevImageId = group?.home_button_backgrounds?.[slot]?.image_id;
     if (!prevImageId) return;
-    setSavingSlot((prev) => ({ ...prev, [slot]: true }));
+    setSaving(slot, true);
     try {
-      await updateGroupSettings(authContext, groupId, { [settingsKey]: null });
+      const response = await updateGroupSettings(authContext, groupId, { [settingsKey]: null });
+      if (response?.status !== 200 && response?.status !== 204) {
+        throw new Error(`PATCH failed with status ${response?.status}`);
+      }
       await deletePrivateImage(authContext, groupId, prevImageId);
       deleteHomeBackgroundFile(groupId, slot, prevImageId);
       await refresh();
     } catch (err) {
       Alert.alert('Error', err?.message ?? 'Could not remove background.');
     } finally {
-      setSavingSlot((prev) => ({ ...prev, [slot]: false }));
+      setSaving(slot, false);
     }
-  }, [authContext, groupId, group, refresh]);
+  }, [authContext, groupId, group, refresh, setSaving]);
 
   useEffect(() => {
     navigation.setOptions({
