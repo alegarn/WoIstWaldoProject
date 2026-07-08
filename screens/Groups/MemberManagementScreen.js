@@ -15,6 +15,17 @@ import {
   transferOwnership,
 } from '../../services/groups/groupMembershipApi';
 
+export function transferErrorMessageFor(response) {
+  const reason = response?.data?.error;
+  if (reason === 'recipient_not_creator') {
+    return 'This member needs to hold a "Group Creator" tier before transfer to own the group.';
+  }
+  if (reason === 'recipient_not_member') {
+    return 'This member is no longer in the group.';
+  }
+  return response?.data?.message ?? 'Could not transfer ownership. Please try again.';
+}
+
 export default function MemberManagementScreen() {
   const authContext = useContext(AuthContext);
   const { scope } = useActiveGroup();
@@ -90,7 +101,7 @@ export default function MemberManagementScreen() {
       await loadMembers();
       refresh();
     } else {
-      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not transfer ownership.');
+      Alert.alert('Cannot transfer ownership', transferErrorMessageFor(response));
     }
   };
 
