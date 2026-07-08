@@ -163,7 +163,7 @@ describe('RankingScreen', () => {
       await getTableProps().onPress('waldo');
     });
 
-    expect(getUserScores).toHaveBeenCalledWith({ username: 'waldo', context: contextValue });
+    expect(getUserScores).toHaveBeenCalledWith({ username: 'waldo', context: contextValue, scope: 'initial' });
     expect(Alert.alert).toHaveBeenCalledWith(
       'Complementary Scores of waldo',
       expect.stringContaining('Total Score: 25')

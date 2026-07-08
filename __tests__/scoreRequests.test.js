@@ -119,6 +119,55 @@ describe('scoreRequests utilities', () => {
     expect(response).toEqual({ status: 401, message: 'Unauthorized' });
   });
 
+  it('sends group_id when a private scope is provided to getUserScores', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        total: { total_score: 3, total_hide_score: 0, total_guess_score: 3 },
+        hide_info: { hide_count: 0 },
+        guess_info: { guess_count: 3 },
+      },
+    });
+
+    await getUserScores({
+      username: 'waldo',
+      context: { token: 'Bearer token' },
+      scope: { kind: 'private', groupId: 'g-9' },
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_user_scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { username: 'waldo', group_id: 'g-9' },
+      }
+    );
+  });
+
+  it('does not send group_id when getUserScores is called without a scope', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        total: { total_score: 0 },
+        hide_info: { hide_count: 0 },
+        guess_info: { guess_count: 0 },
+      },
+    });
+
+    await getUserScores({
+      username: 'waldo',
+      context: { token: 'Bearer token' },
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_user_scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { username: 'waldo' },
+      }
+    );
+  });
+
   it('returns seeded leaderboard rows in e2e mode without calling axios', async () => {
     isE2EMode.mockReturnValue(true);
 
