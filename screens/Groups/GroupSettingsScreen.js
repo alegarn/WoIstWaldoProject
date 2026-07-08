@@ -322,11 +322,12 @@ export default function GroupSettingsScreen({ navigation }) {
               placeholder="New category"
               style={styles.input}
             />
-            <BigButton
-              text="Add"
+            <Button
               onPress={addCategory}
               testID="group-settings.category.add"
-            />
+            >
+              Add
+            </Button>
           </View>
           {categories.map((item) => (
             <View key={item.id} style={styles.categoryRow} testID={`group-settings.category.row.${item.id}`}>
