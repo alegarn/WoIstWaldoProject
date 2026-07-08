@@ -34,7 +34,7 @@ const UI_KINDS = [
 export default function GroupSettingsScreen({ navigation }) {
   const authContext = useContext(AuthContext);
   const { scope } = useActiveGroup();
-  const { data, refresh } = useGroupsHub();
+  const { data, isLoading, refresh } = useGroupsHub();
 
   const groupId = scope?.kind === 'private' ? scope.groupId : null;
   const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
@@ -91,13 +91,13 @@ export default function GroupSettingsScreen({ navigation }) {
   }, [loadCategories]);
 
   useEffect(() => {
-    if (!groupId || isOwner) {
-      return;
-    }
+    if (!groupId) return;
+    if (isLoading) return;
+    if (isOwner) return;
     navigation.replace('GroupsListScreen');
-  }, [groupId, isOwner, navigation]);
+  }, [groupId, isOwner, isLoading, navigation]);
 
-  if (!groupId || !isOwner) {
+  if (!groupId || isLoading || !isOwner) {
     return <LoadingOverlay message="Checking ownership..." />;
   }
 
@@ -256,6 +256,15 @@ export default function GroupSettingsScreen({ navigation }) {
       contentContainerStyle={styles.content}
       ListHeaderComponent={(
         <>
+          <View style={styles.section}>
+            <Text style={styles.title}>Members</Text>
+            <BigButton
+              text="Manage members"
+              onPress={() => navigation.navigate('MemberManagementScreen')}
+              testID="group-settings.button.members"
+            />
+          </View>
+
           <View style={styles.section}>
             <Text style={styles.title}>Group name</Text>
             <TextInput

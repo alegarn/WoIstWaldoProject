@@ -107,7 +107,7 @@ describe('GroupSettingsScreen', () => {
 
   async function renderScreen({ scope = { kind: 'private', groupId: 'g-3' }, groupsData, navigation = { replace: jest.fn() } } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope });
-    mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
+    mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading: false, refresh: jest.fn() });
 
     let renderer;
     await act(async () => {
@@ -132,6 +132,49 @@ describe('GroupSettingsScreen', () => {
     expect(renderer.root.findByProps({ testID: 'group-settings.uploader.home-background' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.uploader.button-image' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.category.editor' })).toBeTruthy();
+  });
+
+  it('renders the Members entry that navigates to MemberManagementScreen when pressed', async () => {
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+
+    const { renderer } = await renderScreen({
+      navigation,
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    const membersButton = renderer.root.findByProps({ testID: 'group-settings.button.members' });
+    expect(membersButton).toBeTruthy();
+    expect(membersButton.props.text).toBe('Manage members');
+
+    await act(async () => {
+      membersButton.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('MemberManagementScreen');
+  });
+
+  it('does not redirect and shows LoadingOverlay while hub is still loading, even when user is the owner', async () => {
+    const navigation = { replace: jest.fn() };
+
+    mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-3' } });
+    mockUseGroupsHub.mockReturnValue({
+      data: null,
+      isLoading: true,
+      refresh: jest.fn(),
+    });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(<GroupSettingsScreen navigation={navigation} />);
+      await flushEffects();
+    });
+
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(mockLoadingOverlay).toHaveBeenCalled();
+    expect(() => renderer.root.findByProps({ testID: 'group-settings.button.members' })).toThrow();
   });
 
   it('redirects to GroupsListScreen when the current user is not the owner', async () => {
