@@ -156,7 +156,7 @@ export async function getRankingData(context, { scope, top, window, page, after,
   return response;
 };
 
-export async function getUserScores({username, context}) {
+export async function getUserScores({username, context, scope}) {
   if (isE2EMode()) {
     return {
       status: 200,
@@ -167,9 +167,13 @@ export async function getUserScores({username, context}) {
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_scores`;
   const headers = setHeaders({ token, uid, expiry, access_token, client });
+  const params = { username };
+  if (isPrivateScope(scope)) {
+    params.group_id = scope.groupId;
+  }
   const config = {
     headers: headers,
-    params: { username },
+    params,
   };
   const response = await axios.get(url, config).then((response) => {
     return { status: response.status, data: response.data };

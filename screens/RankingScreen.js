@@ -46,7 +46,7 @@ export default function RankingScreen({ route, navigation }) {
   } : null;
 
   const showSpecificDatum = useCallback(async (username) => {
-    const response = await getUserScores({username, context: context});
+    const response = await getUserScores({username, context: context, scope: rankingScope});
     if (response?.status !== 200) {
       if (response?.status === 404) {
         Alert.alert("User not found", `No scores found for ${username}.`);
@@ -74,7 +74,7 @@ export default function RankingScreen({ route, navigation }) {
     infoString += `Guessed Images Count: ${guessInfo.guess_count}\n`;
 
     Alert.alert("Complementary Scores of " + username, infoString);
-  }, [context]);
+  }, [context, rankingScope]);
 
   function handleError(message, status) {
     if (status === 401) {
