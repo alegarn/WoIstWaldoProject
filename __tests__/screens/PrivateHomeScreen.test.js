@@ -19,6 +19,11 @@ jest.mock('../../utils/orientation', () => ({
   handleOrientation: jest.fn(),
 }));
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 jest.mock('../../components/UI/HomeCard', () => {
   return function MockHomeCard(props) {
     mockHomeCard(props);
@@ -248,7 +253,7 @@ describe('PrivateHomeScreen', () => {
 
     it('lets the owner customize colors via the header button', async () => {
       updateGroupSettings.mockResolvedValue({ status: 200 });
-      const { navigation } = await renderScreen({ groupsData: ownerData });
+      const { renderer, navigation } = await renderScreen({ groupsData: ownerData });
 
       const headerRoot = await renderHeader(navigation);
 
@@ -273,14 +278,15 @@ describe('PrivateHomeScreen', () => {
       expect(modalProps.confirmTestID).toBe('private-home.color-editor.confirm.ok');
 
       await act(async () => {
-        await modalProps.onPress();
+        renderer.root.findByProps({ testID: 'private-home.button.save-colors' }).props.onPress();
+        await Promise.resolve();
         await Promise.resolve();
       });
 
       expect(updateGroupSettings).toHaveBeenCalledWith(
         expect.anything(),
         'g-7',
-        { primaryColor: '#111111', secondaryColor: '#EEEEEE' },
+        { name: 'Waldos', primaryColor: '#111111', secondaryColor: '#EEEEEE' },
       );
 
       const lastModalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];

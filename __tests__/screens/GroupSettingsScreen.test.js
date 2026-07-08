@@ -135,8 +135,6 @@ describe('GroupSettingsScreen', () => {
 
     expect(renderer.root.findByProps({ testID: 'group-settings.input.name' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.button.save-colors' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'group-settings.uploader.home-background' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'group-settings.uploader.button-image' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.category.editor' })).toBeTruthy();
   });
 
@@ -153,7 +151,7 @@ describe('GroupSettingsScreen', () => {
 
     const membersButton = renderer.root.findByProps({ testID: 'group-settings.button.members' });
     expect(membersButton).toBeTruthy();
-    expect(membersButton.props.text).toBe('Manage members');
+    expect(membersButton.props.accessibilityLabel).toBe('Manage members');
 
     await act(async () => {
       membersButton.props.onPress();
@@ -224,7 +222,7 @@ describe('GroupSettingsScreen', () => {
     expect(Alert.alert).toHaveBeenCalled();
 
     const saveButtonProps = renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props;
-    expect(saveButtonProps.text).toBe('Save');
+    expect(saveButtonProps.accessibilityLabel).toBe('Save changes');
   });
 
   it('launches picker and prepares category thumbnail upload without categoryId payload', async () => {

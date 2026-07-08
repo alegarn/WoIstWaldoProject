@@ -1,12 +1,12 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Share, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Share, Alert, ScrollView, Image, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import CenteredModal from '../../components/UI/CenteredModal';
-import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import HomeCard from '../../components/UI/HomeCard';
 import IconButton from '../../components/UI/IconButton';
-import BigButton from '../../components/UI/BigButton';
+import GroupIdentitySection from '../../components/Groups/Settings/GroupIdentitySection';
 import LockedGroupOwnerModal from '../../components/Groups/LockedGroupOwnerModal';
 import LockedGroupMemberBanner from '../../components/Groups/LockedGroupMemberBanner';
 import { GlobalStyle } from '../../constants/theme';
@@ -49,9 +49,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const groupId = activeScope?.kind === 'private' ? activeScope.groupId : null;
 
   const [isColorEditorVisible, setIsColorEditorVisible] = useState(false);
-  const [editorPrimary, setEditorPrimary] = useState(group?.primary_color ?? GlobalStyle.color.primaryColor);
-  const [editorSecondary, setEditorSecondary] = useState(group?.secondary_color ?? GlobalStyle.color.secondaryColor);
-  const [isSavingColors, setIsSavingColors] = useState(false);
   const [isLockedOwnerModalVisible, setIsLockedOwnerModalVisible] = useState(isLocked && isOwner);
   const [bgUris, setBgUris] = useState({});
   const [savingSlot, setSavingSlot] = useState({});
@@ -65,11 +62,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
   useEffect(() => {
     setIsLockedOwnerModalVisible(isLocked && isOwner);
   }, [isLocked, isOwner, groupId]);
-
-  useEffect(() => {
-    setEditorPrimary(group?.primary_color ?? GlobalStyle.color.primaryColor);
-    setEditorSecondary(group?.secondary_color ?? GlobalStyle.color.secondaryColor);
-  }, [group?.primary_color, group?.secondary_color]);
 
   useEffect(() => {
     let mounted = true;
@@ -127,28 +119,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const closeColorEditor = useCallback(() => {
     setIsColorEditorVisible(false);
   }, []);
-
-  const saveColors = useCallback(async () => {
-    if (!groupId) return;
-    setIsSavingColors(true);
-    try {
-      const response = await updateGroupSettings(authContext, groupId, {
-        primaryColor: editorPrimary,
-        secondaryColor: editorSecondary,
-      });
-      if (response?.status === 200 || response?.status === 204) {
-        Alert.alert('Saved', 'Group colors updated.');
-        setIsColorEditorVisible(false);
-        await refresh();
-      } else {
-        Alert.alert(`Error ${response?.status ?? ''}`, 'Could not save colors.');
-      }
-    } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not save colors.');
-    } finally {
-      setIsSavingColors(false);
-    }
-  }, [authContext, groupId, editorPrimary, editorSecondary, refresh]);
 
   const chooseSlotBackground = useCallback(async (slot) => {
     if (!groupId) return;
@@ -335,47 +305,76 @@ export default function PrivateHomeScreen({ navigation, route }) {
 
       <CenteredModal
         isModalVisible={isColorEditorVisible}
-        onPress={saveColors}
+        onPress={closeColorEditor}
         onCancel={closeColorEditor}
         testIDPrefix="private-home.color-editor"
         confirmTestID="private-home.color-editor.confirm.ok"
         cancelTestID="private-home.color-editor.confirm.cancel"
-        confirmLabel={isSavingColors ? 'Saving...' : 'Save'}
+        confirmLabel="Done"
         cancelLabel="Cancel"
       >
         <ScrollView keyboardShouldPersistTaps="handled">
-          <ColorPalettePicker
-            label="Primary color"
-            value={editorPrimary}
-            onValueChange={setEditorPrimary}
-            testIDPrefix="private-home.color-primary"
+          <GroupIdentitySection
+            groupId={groupId}
+            initialName={group?.name ?? ''}
+            initialPrimaryColor={group?.primary_color ?? GlobalStyle.color.primaryColor}
+            initialSecondaryColor={group?.secondary_color ?? GlobalStyle.color.secondaryColor}
+            onRefresh={refresh}
+            onSaved={closeColorEditor}
+            testIDPrefix="private-home"
           />
-          <ColorPalettePicker
-            label="Secondary color"
-            value={editorSecondary}
-            onValueChange={setEditorSecondary}
-            testIDPrefix="private-home.color-secondary"
-          />
-          <Text style={styles.sectionTitle}>Button backgrounds</Text>
+          <Text style={styles.bgSectionTitle}>Button backgrounds</Text>
+          <Text style={styles.bgSectionCaption}>
+            Custom images behind each homescreen button.
+          </Text>
           {BACKGROUND_SLOTS.map(({ slot, label }) => {
             const slotData = group?.home_button_backgrounds?.[slot];
+            const uri = bgUris[slot];
+            const isSaving = !!savingSlot[slot];
             return (
-              <View key={slot} style={styles.slotRow}>
-                <Text style={styles.slotLabel}>{label}</Text>
-                <BigButton
-                  text={savingSlot[slot] ? 'Saving...' : 'Choose image'}
-                  onPress={() => chooseSlotBackground(slot)}
-                  testID={`private-home.button-bg.${slot}.choose`}
-                  accessibilityLabel={`Choose ${label} background`}
-                />
-                {slotData && (
-                  <BigButton
-                    text="Remove"
-                    onPress={() => removeSlotBackground(slot)}
-                    testID={`private-home.button-bg.${slot}.remove`}
-                    accessibilityLabel={`Remove ${label} background`}
-                  />
+              <View key={slot} style={styles.bgSlotCard} testID={`private-home.button-bg.${slot}.row`}>
+                {uri ? (
+                  <Image source={{ uri }} style={styles.bgThumb} />
+                ) : (
+                  <View style={[styles.bgThumb, styles.bgThumbFallback]}>
+                    <Ionicons name="image-outline" size={18} color={GlobalStyle.color.secondaryColor} />
+                  </View>
                 )}
+                <View style={styles.bgSlotInfo}>
+                  <Text style={styles.bgSlotLabel}>{label}</Text>
+                  <Text style={styles.bgSlotStatus}>
+                    {slotData ? 'Custom image' : 'Default'}
+                  </Text>
+                </View>
+                <View style={styles.bgSlotActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${label} background`}
+                    onPress={() => chooseSlotBackground(slot)}
+                    disabled={isSaving}
+                    testID={`private-home.button-bg.${slot}.choose`}
+                    style={({ pressed }) => [
+                      styles.bgChooseChip,
+                      pressed && styles.pressed,
+                      isSaving && styles.bgChooseBusy,
+                    ]}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={15} color="#fff" />
+                    <Text style={styles.bgChooseChipText}>{isSaving ? 'Saving…' : 'Choose'}</Text>
+                  </Pressable>
+                  {slotData && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${label} background`}
+                      onPress={() => removeSlotBackground(slot)}
+                      testID={`private-home.button-bg.${slot}.remove`}
+                      style={({ pressed }) => [styles.bgRemoveChip, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#E03A3A" />
+                      <Text style={styles.bgRemoveChipText}>Remove</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             );
           })}
@@ -397,7 +396,34 @@ const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, gap: 10 },
   title: { fontSize: 22, fontWeight: '700', textAlign: 'center', color: '#fff' },
   lockBadge: { fontSize: 14, color: '#ffd700', textAlign: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8, color: '#333' },
-  slotRow: { alignItems: 'center', marginBottom: 8 },
-  slotLabel: { fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 },
+  pressed: { opacity: 0.7 },
+
+  // Button backgrounds (inside the white customize modal)
+  bgSectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 4, color: GlobalStyle.color.primaryColor800 },
+  bgSectionCaption: { fontSize: 12, color: '#6B6680', marginBottom: 10 },
+  bgSlotCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+    backgroundColor: '#F5F2FC', borderRadius: 10, padding: 10,
+    borderWidth: 1, borderColor: 'rgba(101,40,247,0.14)',
+  },
+  bgThumb: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(101,40,247,0.08)' },
+  bgThumbFallback: { alignItems: 'center', justifyContent: 'center' },
+  bgSlotInfo: { flex: 1 },
+  bgSlotLabel: { fontSize: 15, fontWeight: '600', color: GlobalStyle.color.primaryColor800 },
+  bgSlotStatus: { fontSize: 12, color: '#6B6680', marginTop: 1 },
+  bgSlotActions: { alignItems: 'flex-end', gap: 6 },
+  bgChooseChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: GlobalStyle.color.primaryColor, borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  bgChooseChipText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+  bgChooseBusy: { opacity: 0.6 },
+  bgRemoveChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(224,58,58,0.08)', borderRadius: 8,
+    borderWidth: 1, borderColor: 'rgba(224,58,58,0.35)',
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  bgRemoveChipText: { color: '#E03A3A', fontSize: 13, fontWeight: '600' },
 });
