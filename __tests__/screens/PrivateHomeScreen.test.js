@@ -70,6 +70,17 @@ jest.mock('../../components/Groups/LockedGroupMemberBanner', () => {
 
 jest.mock('../../services/groups/groupApi', () => ({
   updateGroupSettings: jest.fn(),
+  deletePrivateImage: jest.fn(),
+}));
+
+jest.mock('../../services/groups/groupHomeBackgrounds', () => ({
+  resolveHomeBackground: jest.fn(),
+  deleteHomeBackgroundFile: jest.fn(),
+  SLOTS: ['hide', 'find', 'ranking'],
+}));
+
+jest.mock('../../services/groups/homeBackgroundUpload', () => ({
+  uploadHomeBackground: jest.fn(),
 }));
 
 jest.mock('../../hooks/useActiveGroup', () => ({
@@ -86,13 +97,18 @@ import { Share, Alert } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
 import { handleOrientation } from '../../utils/orientation';
-import { updateGroupSettings } from '../../services/groups/groupApi';
+import { updateGroupSettings, deletePrivateImage } from '../../services/groups/groupApi';
+import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
+import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
 
 describe('PrivateHomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    resolveHomeBackground.mockResolvedValue(null);
+    uploadHomeBackground.mockResolvedValue(null);
+    deletePrivateImage.mockResolvedValue({ status: 200 });
   });
 
   async function renderScreen({
@@ -411,6 +427,254 @@ describe('PrivateHomeScreen', () => {
       expect(visibleOwnerModals).toHaveLength(0);
 
       expect(mockLockedGroupMemberBanner.mock.calls).toHaveLength(0);
+    });
+  });
+
+  describe('home button backgrounds', () => {
+    const hideSlot = {
+      image_id: 'img-hide',
+      file_extension: 'png',
+      url: 'https://example.com/hide.png',
+    };
+
+    function lastHomeCardProps(testID) {
+      const calls = mockHomeCard.mock.calls.filter(
+        ([props]) => props && props.testID === testID
+      );
+      return calls[calls.length - 1][0];
+    }
+
+    it('passes the resolved uri to the Hide HomeCard when a hide background is present', async () => {
+      resolveHomeBackground.mockResolvedValue('file:///private-home-bg/g-7/hide-img-hide.png');
+
+      await renderScreen({
+        groupsData: {
+          owned: [{
+            id: 'g-7',
+            name: 'Waldos',
+            role: 'owner',
+            home_button_backgrounds: { hide: hideSlot },
+          }],
+          joined: [],
+        },
+      });
+
+      expect(resolveHomeBackground).toHaveBeenCalledWith(
+        expect.objectContaining({
+          groupId: 'g-7',
+          slot: 'hide',
+          imageId: 'img-hide',
+          fileExtension: 'png',
+          url: 'https://example.com/hide.png',
+        })
+      );
+
+      expect(lastHomeCardProps('private-home.button.hide').backgroundImage).toEqual({
+        uri: 'file:///private-home-bg/g-7/hide-img-hide.png',
+      });
+    });
+
+    it('falls back to the bundled asset when no background is set for the slot', async () => {
+      const bundledHide = require('../../assets/home/WoIstWaldo-character-hide.webp');
+
+      await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner' }],
+          joined: [],
+        },
+      });
+
+      expect(resolveHomeBackground).not.toHaveBeenCalled();
+
+      expect(lastHomeCardProps('private-home.button.hide').backgroundImage).toBe(bundledHide);
+    });
+
+    it('runs updateGroupSettings then deletePrivateImage in order when the owner chooses a new hide background', async () => {
+      updateGroupSettings.mockResolvedValue({ status: 200 });
+      uploadHomeBackground.mockResolvedValue({ imageId: 'img-new' });
+
+      const { renderer, navigation } = await renderScreen({
+        groupsData: {
+          owned: [{
+            id: 'g-7',
+            name: 'Waldos',
+            role: 'owner',
+            home_button_backgrounds: { hide: hideSlot },
+          }],
+          joined: [],
+        },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      const chooseButton = renderer.root.findByProps({ testID: 'private-home.button-bg.hide.choose' });
+
+      await act(async () => {
+        await chooseButton.props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(uploadHomeBackground).toHaveBeenCalledWith(
+        expect.objectContaining({ groupId: 'g-7' })
+      );
+      expect(updateGroupSettings).toHaveBeenCalledWith(
+        expect.anything(),
+        'g-7',
+        { hideBgImageId: 'img-new' }
+      );
+      expect(deletePrivateImage).toHaveBeenCalledWith(expect.anything(), 'g-7', 'img-hide');
+      expect(deleteHomeBackgroundFile).toHaveBeenCalledWith('g-7', 'hide', 'img-hide');
+
+      const updateOrder = updateGroupSettings.mock.invocationCallOrder[0];
+      const deleteOrder = deletePrivateImage.mock.invocationCallOrder[0];
+      expect(updateOrder).toBeLessThan(deleteOrder);
+    });
+
+    it('guards against double-tap re-entry on the Choose button (uploads once)', async () => {
+      let resolveUpload;
+      uploadHomeBackground.mockImplementation(
+        () => new Promise((resolve) => { resolveUpload = resolve; })
+      );
+
+      const { renderer, navigation } = await renderScreen({
+        groupsData: {
+          owned: [{
+            id: 'g-7',
+            name: 'Waldos',
+            role: 'owner',
+            home_button_backgrounds: { hide: hideSlot },
+          }],
+          joined: [],
+        },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      const chooseButton = renderer.root.findByProps({ testID: 'private-home.button-bg.hide.choose' });
+
+      let firstCall;
+      await act(async () => {
+        firstCall = chooseButton.props.onPress();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        chooseButton.props.onPress();
+        await Promise.resolve();
+      });
+
+      await act(async () => {
+        resolveUpload({ imageId: 'img-new' });
+        await firstCall;
+        await Promise.resolve();
+      });
+
+      expect(uploadHomeBackground).toHaveBeenCalledTimes(1);
+    });
+
+    it('does NOT call deletePrivateImage or deleteHomeBackgroundFile when the Choose PATCH fails (non-2xx)', async () => {
+      updateGroupSettings.mockResolvedValue({ status: 422 });
+      uploadHomeBackground.mockResolvedValue({ imageId: 'img-new' });
+
+      const { renderer, navigation } = await renderScreen({
+        groupsData: {
+          owned: [{
+            id: 'g-7',
+            name: 'Waldos',
+            role: 'owner',
+            home_button_backgrounds: { hide: hideSlot },
+          }],
+          joined: [],
+        },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      const chooseButton = renderer.root.findByProps({ testID: 'private-home.button-bg.hide.choose' });
+
+      await act(async () => {
+        await chooseButton.props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(updateGroupSettings).toHaveBeenCalledWith(
+        expect.anything(),
+        'g-7',
+        { hideBgImageId: 'img-new' }
+      );
+      expect(deletePrivateImage).not.toHaveBeenCalled();
+      expect(deleteHomeBackgroundFile).not.toHaveBeenCalled();
+      expect(Alert.alert).toHaveBeenCalledWith('Error', expect.any(String));
+    });
+
+    it('runs updateGroupSettings(null) then deletePrivateImage then deleteHomeBackgroundFile then refresh on Remove', async () => {
+      updateGroupSettings.mockResolvedValue({ status: 200 });
+      const refresh = jest.fn();
+
+      mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-7' }, clear: jest.fn() });
+      mockUseGroupsHub.mockReturnValue({
+        data: {
+          owned: [{
+            id: 'g-7',
+            name: 'Waldos',
+            role: 'owner',
+            home_button_backgrounds: { hide: hideSlot },
+          }],
+        },
+        refresh,
+      });
+
+      const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+      let renderer;
+      await act(async () => {
+        renderer = create(
+          <PrivateHomeScreen
+            navigation={navigation}
+            route={{ params: { scope: { kind: 'private', groupId: 'g-7' } } }}
+          />
+        );
+        await Promise.resolve();
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      const removeButton = renderer.root.findByProps({ testID: 'private-home.button-bg.hide.remove' });
+
+      await act(async () => {
+        await removeButton.props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(updateGroupSettings).toHaveBeenCalledWith(
+        expect.anything(),
+        'g-7',
+        { hideBgImageId: null }
+      );
+      expect(deletePrivateImage).toHaveBeenCalledWith(expect.anything(), 'g-7', 'img-hide');
+      expect(deleteHomeBackgroundFile).toHaveBeenCalledWith('g-7', 'hide', 'img-hide');
+      expect(refresh).toHaveBeenCalled();
+
+      const updateOrder = updateGroupSettings.mock.invocationCallOrder[0];
+      const deleteOrder = deletePrivateImage.mock.invocationCallOrder[0];
+      const fileDeleteOrder = deleteHomeBackgroundFile.mock.invocationCallOrder[0];
+      expect(updateOrder).toBeLessThan(deleteOrder);
+      expect(deleteOrder).toBeLessThan(fileDeleteOrder);
     });
   });
 });

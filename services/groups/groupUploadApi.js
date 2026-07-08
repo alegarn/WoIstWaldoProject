@@ -14,6 +14,8 @@ function mapUploadKind(kind) {
     case 'button-image':
     case 'category-thumbnail':
       return 'groupUi';
+    case 'home-button-background':
+      return 'homeUi';
     default:
       return kind;
   }
@@ -30,6 +32,7 @@ export async function preparePrivateUpload({
   isButtonBackground,
   isButtonImage,
   isCategoryThumbnail,
+  isHomeButtonBackground,
   categoryId,
   description,
   imageHeight,
@@ -54,6 +57,7 @@ export async function preparePrivateUpload({
   if (isButtonBackground) privateImage.is_button_background = true;
   if (isButtonImage) privateImage.is_button_image = true;
   if (isCategoryThumbnail) privateImage.is_category_thumbnail = true;
+  if (isHomeButtonBackground) privateImage.is_home_button_background = true;
   if (categoryId) privateImage.category_id = categoryId;
   if (description !== undefined) privateImage.description = description;
   if (imageHeight !== undefined) privateImage.image_height = imageHeight;

@@ -24,16 +24,22 @@ jest.mock('../../services/groups/groupCategoryThumbnails', () => ({
   clearGroupThumbnails: jest.fn(),
 }));
 
+jest.mock('../../services/groups/groupHomeBackgrounds', () => ({
+  clearGroupHomeBackgrounds: jest.fn(),
+}));
+
 import axios from 'axios';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';
 import { clearGroupFeedCache, purgeAllPrivateCaches } from '../../services/groups/groupFeedCache';
 import { clearGroupThumbnails } from '../../services/groups/groupCategoryThumbnails';
+import { clearGroupHomeBackgrounds } from '../../services/groups/groupHomeBackgrounds';
 
 import {
   fetchGroups,
   createGroup,
   updateGroupSettings,
   deleteGroup,
+  deletePrivateImage,
   setActiveGroup,
 } from '../../services/groups/groupApi';
 import {
@@ -126,6 +132,52 @@ describe('services/groups', () => {
       );
     });
 
+    it('updateGroupSettings PATCHes hide_bg_image_id and null-clears when null is supplied', async () => {
+      axios.patch.mockResolvedValue({ status: 200, data: { id: 'g-1' } });
+
+      await updateGroupSettings(CONTEXT, 'g-1', {
+        hideBgImageId: 'img-1',
+        findBgImageId: 'img-2',
+        rankingBgImageId: 'img-3',
+      });
+
+      expect(axios.patch).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-1/',
+        {
+          private_group: {
+            hide_bg_image_id: 'img-1',
+            find_bg_image_id: 'img-2',
+            ranking_bg_image_id: 'img-3',
+          },
+        },
+        { headers: AUTH_HEADERS }
+      );
+    });
+
+    it('updateGroupSettings sends null to clear a slot', async () => {
+      axios.patch.mockResolvedValue({ status: 200, data: { id: 'g-1' } });
+
+      await updateGroupSettings(CONTEXT, 'g-1', { hideBgImageId: null });
+
+      expect(axios.patch).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-1/',
+        { private_group: { hide_bg_image_id: null } },
+        { headers: AUTH_HEADERS }
+      );
+    });
+
+    it('deletePrivateImage DELETEs the nested private image endpoint', async () => {
+      axios.delete.mockResolvedValue({ status: 204, data: null });
+
+      const response = await deletePrivateImage(CONTEXT, 'g-1', 'img-7');
+
+      expect(axios.delete).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-1/images/img-7',
+        { headers: AUTH_HEADERS }
+      );
+      expect(response.status).toBe(204);
+    });
+
     it('deleteGroup DELETEs the group endpoint and clears private caches on success', async () => {
       axios.delete.mockResolvedValue({ status: 204, data: null });
 
@@ -137,6 +189,7 @@ describe('services/groups', () => {
       );
       expect(clearGroupFeedCache).toHaveBeenCalledWith('g-1');
       expect(clearGroupThumbnails).toHaveBeenCalledWith('g-1');
+      expect(clearGroupHomeBackgrounds).toHaveBeenCalledWith('g-1');
       expect(purgeAllPrivateCaches).toHaveBeenCalledTimes(1);
       expect(response.status).toBe(204);
     });
