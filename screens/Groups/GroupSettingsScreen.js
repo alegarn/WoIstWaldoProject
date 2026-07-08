@@ -1,12 +1,12 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import {
-  View, Text, TextInput, FlatList, StyleSheet, Alert,
+  View, Text, TextInput, FlatList, StyleSheet, Alert, Image, Pressable,
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import BigButton from '../../components/UI/BigButton';
-import Button from '../../components/UI/Button';
 import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
@@ -20,7 +20,7 @@ import {
   updateGroupCategory,
   deleteGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
-import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategoryThumbnails';
+import { deleteCategoryThumbnailFile, resolveCategoryThumbnail } from '../../services/groups/groupCategoryThumbnails';
 import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
 import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
@@ -51,6 +51,7 @@ export default function GroupSettingsScreen({ navigation }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [activeUploadKind, setActiveUploadKind] = useState(null);
   const [categoryDrafts, setCategoryDrafts] = useState({});
+  const [thumbnailUris, setThumbnailUris] = useState({});
 
   useEffect(() => {
     if (group) {
@@ -78,6 +79,19 @@ export default function GroupSettingsScreen({ navigation }) {
       setCategoryDrafts(
         nextCategories.reduce((accumulator, category) => {
           accumulator[category.id] = category.name ?? '';
+          return accumulator;
+        }, {}),
+      );
+      const resolved = await Promise.all(
+        nextCategories.map((category) => (
+          category?.thumbnail_image_id
+            ? resolveCategoryThumbnail(authContext, { groupId, category })
+            : Promise.resolve(null)
+        )),
+      );
+      setThumbnailUris(
+        nextCategories.reduce((accumulator, category, index) => {
+          accumulator[category.id] = resolved[index];
           return accumulator;
         }, {}),
       );
@@ -311,56 +325,138 @@ export default function GroupSettingsScreen({ navigation }) {
       keyExtractor={(item) => String(item.id)}
       ListFooterComponent={(
         <View style={styles.section} testID="group-settings.category.editor">
-          <Text style={styles.title}>Categories</Text>
-          {categoriesLoading && <Text style={styles.muted}>Loading categories...</Text>}
-          {categoriesError && <Text style={styles.muted}>Could not load categories.</Text>}
-          <View style={styles.addRow}>
+          <View style={styles.categoryHeader}>
+            <View style={styles.categoryHeadingText}>
+              <Text style={styles.title}>Categories</Text>
+              <Text style={styles.caption}>
+                Players use these to sort hides and guesses.
+              </Text>
+            </View>
+            <View style={styles.countBadge} testID="group-settings.category.count">
+              <Text style={styles.countBadgeText}>{categories.length}</Text>
+            </View>
+          </View>
+
+          <View style={styles.addComposer} testID="group-settings.category.add-composer">
+            <View style={styles.addGlyph}>
+              <Ionicons name="add" size={18} color="#fff" />
+            </View>
             <TextInput
               accessibilityLabel="New category name"
               value={newCategoryName}
               onChangeText={setNewCategoryName}
-              placeholder="New category"
-              style={styles.input}
+              placeholder="New category name"
+              placeholderTextColor="rgba(255,255,255,0.4)"
+              style={styles.addInput}
+              testID="group-settings.category.add-input"
             />
-            <Button
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Add category"
               onPress={addCategory}
               testID="group-settings.category.add"
+              style={({ pressed }) => [styles.addChip, pressed && styles.pressed]}
             >
-              Add
-            </Button>
+              <Ionicons name="add-circle-outline" size={16} color="#fff" />
+              <Text style={styles.addChipText}>Add</Text>
+            </Pressable>
           </View>
-          {categories.map((item) => (
-            <View key={item.id} style={styles.categoryRow} testID={`group-settings.category.row.${item.id}`}>
-              <View style={styles.categoryLabel}>
-                <TextInput
-                  accessibilityLabel={`Category ${item.name}`}
-                  value={categoryDrafts[item.id] ?? item.name}
-                  onChangeText={(value) => setCategoryDrafts((current) => ({ ...current, [item.id]: value }))}
-                  style={styles.input}
-                  testID={`group-settings.category.row.${item.id}.name`}
-                />
-              </View>
-              <Button
-                onPress={() => saveCategory(item)}
-                testID={`group-settings.category.row.${item.id}.save`}
+
+          {categoriesLoading && <Text style={styles.muted}>Loading categories…</Text>}
+
+          {categoriesError && (
+            <View style={styles.errorRow}>
+              <Text style={styles.errorText}>Couldn't load categories.</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Try loading categories again"
+                onPress={loadCategories}
+                testID="group-settings.category.retry"
+                style={({ pressed }) => [styles.retryChip, pressed && styles.pressed]}
               >
-                Save
-              </Button>
-              <Button
-                onPress={() => swapCategoryThumbnail(item)}
-                testID="group-settings.uploader.category-thumbnail"
-              >
-                Thumb
-              </Button>
-              <Button
-                cancel
-                onPress={() => removeCategory(item)}
-                testID={`group-settings.category.row.${item.id}.delete`}
-              >
-                Delete
-              </Button>
+                <Text style={styles.retryChipText}>Try again</Text>
+              </Pressable>
             </View>
-          ))}
+          )}
+
+          {!categoriesLoading && !categoriesError && categories.length === 0 && (
+            <View style={styles.emptyState}>
+              <Ionicons name="pricetags-outline" size={28} color="rgba(255,255,255,0.35)" />
+              <Text style={styles.emptyTitle}>No categories yet</Text>
+              <Text style={styles.emptyHint}>Add your first category above.</Text>
+            </View>
+          )}
+
+          <View style={styles.categoryList}>
+            {categories.map((item) => {
+              const draft = categoryDrafts[item.id] ?? item.name ?? '';
+              const savedName = (item.name ?? '').trim();
+              const isDirty = draft.trim().length > 0 && draft.trim() !== savedName;
+              const thumbUri = thumbnailUris[item.id];
+              const initial = (draft.trim()[0] ?? savedName[0] ?? '?').toUpperCase();
+              return (
+                <View key={item.id} style={styles.categoryCard} testID={`group-settings.category.row.${item.id}`}>
+                  <View style={styles.categoryTop}>
+                    {thumbUri ? (
+                      <Image source={{ uri: thumbUri }} style={styles.thumb} />
+                    ) : (
+                      <View style={[styles.thumb, styles.thumbFallback]}>
+                        <Text style={styles.thumbInitial}>{initial}</Text>
+                      </View>
+                    )}
+                    <TextInput
+                      accessibilityLabel={`Category ${item.name}`}
+                      value={draft}
+                      onChangeText={(value) => setCategoryDrafts((current) => ({ ...current, [item.id]: value }))}
+                      style={styles.categoryNameInput}
+                      testID={`group-settings.category.row.${item.id}.name`}
+                      placeholder="Untitled category"
+                      placeholderTextColor="rgba(255,255,255,0.35)"
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Delete ${item.name}`}
+                      onPress={() => removeCategory(item)}
+                      testID={`group-settings.category.row.${item.id}.delete`}
+                      style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="trash-outline" size={18} color="#E03A3A" />
+                    </Pressable>
+                  </View>
+
+                  <View style={styles.categoryDivider} />
+
+                  <View style={styles.categoryActions}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Save ${item.name}`}
+                      onPress={() => saveCategory(item)}
+                      testID={`group-settings.category.row.${item.id}.save`}
+                      disabled={!isDirty}
+                      style={({ pressed }) => [
+                        styles.actionChip,
+                        pressed && styles.pressed,
+                        !isDirty && styles.actionChipDisabled,
+                      ]}
+                    >
+                      <Ionicons name="create-outline" size={15} color="#fff" />
+                      <Text style={styles.actionChipText}>Rename</Text>
+                    </Pressable>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Change ${item.name} thumbnail`}
+                      onPress={() => swapCategoryThumbnail(item)}
+                      testID="group-settings.uploader.category-thumbnail"
+                      style={({ pressed }) => [styles.actionChip, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="image-outline" size={15} color="#fff" />
+                      <Text style={styles.actionChipText}>Thumbnail</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
         </View>
       )}
     />
@@ -374,9 +470,87 @@ const styles = StyleSheet.create({
   title: { color: '#fff', fontSize: 18, fontWeight: '700', marginTop: 8 },
   input: { backgroundColor: '#fff', color: '#000', padding: 8, marginTop: 4, borderRadius: 4 },
   row: { marginVertical: 4 },
-  categoryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 8, backgroundColor: GlobalStyle.color.primaryColor800, borderRadius: 6, marginVertical: 4 },
-  categoryLabel: { flex: 1 },
-  categoryText: { color: '#fff', fontSize: 16 },
-  addRow: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 8 },
-  muted: { color: '#bbb', fontSize: 14 },
+  muted: { color: '#bbb', fontSize: 14, marginTop: 8 },
+  pressed: { opacity: 0.7 },
+
+  // --- Categories section ---
+  categoryHeader: {
+    flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', marginTop: 4,
+  },
+  categoryHeadingText: { flex: 1, marginRight: 12 },
+  caption: { color: 'rgba(255,255,255,0.55)', fontSize: 13, marginTop: 2 },
+  countBadge: {
+    minWidth: 26, height: 26, paddingHorizontal: 8, borderRadius: 13,
+    backgroundColor: GlobalStyle.color.primaryColor, alignItems: 'center', justifyContent: 'center',
+    marginTop: 6,
+  },
+  countBadgeText: { color: '#fff', fontSize: 13, fontWeight: '700' },
+
+  addComposer: {
+    flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8,
+    backgroundColor: GlobalStyle.color.primaryColor700, borderRadius: 10,
+    paddingHorizontal: 10, paddingVertical: 6,
+    borderWidth: 1, borderColor: 'rgba(160,118,249,0.22)',
+  },
+  addGlyph: {
+    width: 28, height: 28, borderRadius: 14,
+    backgroundColor: GlobalStyle.color.primaryColor,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  addInput: { flex: 1, color: '#fff', fontSize: 15, paddingVertical: 6, paddingHorizontal: 4 },
+  addChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: GlobalStyle.color.primaryColor, borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
+  addChipText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
+  errorRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 10, gap: 8,
+  },
+  errorText: { color: '#F37C13', fontSize: 13, flexShrink: 1 },
+  retryChip: {
+    borderWidth: 1, borderColor: 'rgba(160,118,249,0.4)', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 6,
+  },
+  retryChipText: { color: GlobalStyle.color.secondaryColor, fontSize: 13, fontWeight: '600' },
+
+  emptyState: { alignItems: 'center', paddingVertical: 24, gap: 6 },
+  emptyTitle: { color: '#fff', fontSize: 15, fontWeight: '600' },
+  emptyHint: { color: 'rgba(255,255,255,0.5)', fontSize: 13 },
+
+  categoryList: { marginTop: 8, gap: 10 },
+  categoryCard: {
+    backgroundColor: GlobalStyle.color.primaryColor700, borderRadius: 12,
+    borderWidth: 1, borderColor: 'rgba(160,118,249,0.18)', padding: 10,
+  },
+  categoryTop: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  thumb: { width: 44, height: 44, borderRadius: 10, backgroundColor: GlobalStyle.color.primaryColor600 },
+  thumbFallback: {
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(160,118,249,0.18)',
+    borderWidth: 1, borderColor: 'rgba(160,118,249,0.35)',
+  },
+  thumbInitial: { color: GlobalStyle.color.secondaryColor, fontSize: 18, fontWeight: '700' },
+  categoryNameInput: {
+    flex: 1, color: '#fff', fontSize: 16, fontWeight: '600',
+    paddingVertical: 6, paddingHorizontal: 8, borderRadius: 6,
+    backgroundColor: 'rgba(0,0,0,0.18)',
+  },
+  iconButton: {
+    width: 36, height: 36, borderRadius: 10,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: 'rgba(224,58,58,0.12)',
+  },
+  categoryDivider: { height: 1, backgroundColor: 'rgba(160,118,249,0.18)', marginVertical: 10 },
+  categoryActions: { flexDirection: 'row', gap: 8 },
+  actionChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    borderWidth: 1, borderColor: 'rgba(160,118,249,0.35)', borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 7,
+    backgroundColor: 'rgba(101,40,247,0.12)',
+  },
+  actionChipDisabled: { opacity: 0.4 },
+  actionChipText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });

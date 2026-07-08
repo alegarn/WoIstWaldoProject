@@ -15,6 +15,11 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 jest.mock('../../components/UI/BigButton', () => {
   return function MockBigButton(props) {
     mockBigButton(props);
@@ -61,6 +66,7 @@ jest.mock('../../services/groups/groupUploadApi', () => ({
 
 jest.mock('../../services/groups/groupCategoryThumbnails', () => ({
   deleteCategoryThumbnailFile: jest.fn(),
+  resolveCategoryThumbnail: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock('../../utils/imagesRequests', () => ({
