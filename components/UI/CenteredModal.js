@@ -64,6 +64,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     maxWidth: '80%',
     maxHeight: '85%',
+    overflow: 'hidden',
   },
   modalText: {
     fontSize: 18,
@@ -72,6 +73,8 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     marginBottom: 10,
+    flexShrink: 1,
+    width: '100%',
   },
   buttonContainer: {
     flexDirection: 'row',
