@@ -3,6 +3,9 @@ import { FlatList, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import TableComponent from '../components/UI/TableComponent';
+import { GlobalStyle } from '../constants/theme';
+import { PrivateGroupThemeProvider } from '../store/privateGroupTheme-context';
+import { getPrivateGroupTheme } from '../utils/privateGroupTheme';
 
 describe('TableComponent', () => {
   const data = {
@@ -66,5 +69,32 @@ describe('TableComponent', () => {
     expect(flatList.props.maxToRenderPerBatch).toBe(5);
     expect(flatList.props.updateCellsBatchingPeriod).toBe(100);
     expect(flatList.props.removeClippedSubviews).toBeTruthy();
+  });
+
+  it('uses the public palette container background when no private group theme is present', async () => {
+    const renderer = await renderTable();
+    const container = renderer.root.findByProps({ testID: 'ranking.table' });
+
+    expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(
+      GlobalStyle.color.primaryColor800
+    );
+  });
+
+  it('uses the active private group theme container background when wrapped in a provider', async () => {
+    const group = { primary_color: '#198868', secondary_color: '#FFCC00' };
+    const expectedTheme = getPrivateGroupTheme({ primaryColor: '#198868' });
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <PrivateGroupThemeProvider group={group}>
+          <TableComponent data={data} onPress={jest.fn()} />
+        </PrivateGroupThemeProvider>
+      );
+    });
+
+    const container = renderer.root.findByProps({ testID: 'ranking.table' });
+
+    expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
   });
 });

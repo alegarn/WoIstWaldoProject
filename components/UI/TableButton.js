@@ -1,9 +1,12 @@
 import { Pressable, Text, View , StyleSheet} from "react-native";
 import { GlobalStyle } from "../../constants/theme";
+import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
   export default function TableButton({ onPress, buttonWidth, buttonHeight, buttonBorderRadius, testID, accessibilityLabel }) {
+    const theme = usePrivateGroupTheme();
+    const fill = theme ? theme.primaryColor : GlobalStyle.color.primaryColor;
     return(
-      <View style={[styles.btn, { width: buttonWidth, height: buttonHeight, borderRadius: buttonBorderRadius }]}>
+      <View style={[styles.btn, { width: buttonWidth, height: buttonHeight, borderRadius: buttonBorderRadius, backgroundColor: fill }]}>
         <Pressable
           accessibilityLabel={accessibilityLabel}
           onPress={onPress}
@@ -20,7 +23,6 @@ const styles = StyleSheet.create({
     opacity: 0.75,
   },
   btn: {
-    backgroundColor: GlobalStyle.color.primaryColor,
     alignSelf: "center",
     borderWidth: 1,
     borderColor: 'rgba(160, 118, 249, 0.5)',

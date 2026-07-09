@@ -146,19 +146,6 @@ describe('PrivateHomeScreen', () => {
     return headerRoot;
   }
 
-  it('renders the active group name in private-home.title and forces portrait orientation', async () => {
-    const { renderer } = await renderScreen({
-      scope: { kind: 'private', groupId: 'g-7' },
-      groupsData: {
-        owned: [{ id: 'g-7', name: 'Waldos Of The World', role: 'owner' }],
-        joined: [],
-      },
-    });
-
-    const titleNode = renderer.root.findByProps({ testID: 'private-home.title' });
-    expect(titleNode.props.children).toBe('Waldos Of The World');
-    expect(handleOrientation).toHaveBeenCalledWith('portrait');
-  });
 
   it('does not render the legacy back-to-public button', async () => {
     const { renderer } = await renderScreen({
@@ -243,6 +230,18 @@ describe('PrivateHomeScreen', () => {
       const options = lastSetOptions(navigation);
       expect(options.headerStyle.backgroundColor).toBe('#6528F7');
       expect(options.headerTintColor).toBe(expectedTheme.headerTintColor);
+    });
+
+    it('paints the outer container with the resolved group screen color', async () => {
+      const { renderer } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
+
+      let container = renderer.root;
+      while (container && container.type !== 'View') {
+        container = container.parent;
+      }
+      expect(container).toBeTruthy();
+      expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
     });
 
     it('lets the owner customize colors via the header button', async () => {

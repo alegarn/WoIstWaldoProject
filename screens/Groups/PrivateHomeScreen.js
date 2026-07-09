@@ -18,6 +18,7 @@ import { updateGroupSettings, deletePrivateImage } from '../../services/groups/g
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
+import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
 
 const HideImage = require('../../assets/home/WoIstWaldo-character-hide.webp');
 const FindImage = require('../../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -267,15 +268,10 @@ export default function PrivateHomeScreen({ navigation, route }) {
     <View
       style={[
         styles.container,
-        { backgroundColor: groupTheme.primaryColor },
+        { backgroundColor: groupTheme.screen },
       ]}
     >
-      <Text
-        style={[styles.title, { color: groupTheme.headerTintColor }]}
-        testID="private-home.title"
-      >
-        {group?.name ?? ''}
-      </Text>
+      <PrivateGroupThemeProvider group={group}>
       {isLocked && (
         <Text testID="private-home.lock-badge" style={styles.lockBadge}>
           Locked by owner
@@ -417,6 +413,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         onTransfer={transferOwnership}
         onDismiss={dismissLockedOwnerModal}
       />
+      </PrivateGroupThemeProvider>
     </View>
   );
 }
