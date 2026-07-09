@@ -1,9 +1,10 @@
 import { StyleSheet, Text, Pressable, Animated, ImageBackground, View } from 'react-native';
 import { useRef } from 'react';
-import { GlobalStyle } from '../../constants/theme';
+import { useAccentColor } from '../../store/privateGroupTheme-context';
 
 const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID, accessibilityState, pointerEvents }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
+  const accentColor = useAccentColor();
 
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
@@ -24,7 +25,7 @@ const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID, acces
   };
 
   const Content = (
-    <View style={[styles.innerContainer, !backgroundImage && styles.noBackground]}>
+    <View style={[styles.innerContainer, !backgroundImage && { backgroundColor: accentColor }]}>
       <Text style={styles.text}>{text}</Text>
     </View>
   );
@@ -83,9 +84,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)', // Slightly darker overlay for better text contrast
-  },
-  noBackground: {
-    backgroundColor: GlobalStyle.color.primaryColor500,
   },
   text: {
     color: 'white',

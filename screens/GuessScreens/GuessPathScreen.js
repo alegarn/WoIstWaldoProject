@@ -28,6 +28,7 @@ import { isE2EMode } from '../../utils/e2eMode';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import {
   createGroupCategory,
   deleteGroupCategory,
@@ -69,6 +70,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const isOwner = isPrivateScope && (groupsHubData?.owned ?? []).some(
     (g) => g.id === scope.groupId
   );
+  const { group, theme } = useScopedPrivateGroupTheme(routeScope);
 
   function normalizePrivateCategory(category, resolvedThumbnailUrl = null) {
     return {
@@ -133,6 +135,16 @@ export default function GuessPathScreen({ navigation, route }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!theme) {
+      return;
+    }
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
 
   const resolvedLanguage = sessionLanguage ?? DEFAULT_LANGUAGE;
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
@@ -269,6 +281,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const gridData = [RECENT_ALL_CATEGORY, ...categories];
 
   return (
+    <PrivateGroupThemeProvider group={group}>
     <>
       {isE2EMode() && (
         <Pressable
@@ -502,6 +515,7 @@ export default function GuessPathScreen({ navigation, route }) {
         </View>
       </Modal>
     </>
+    </PrivateGroupThemeProvider>
   );
 }
 

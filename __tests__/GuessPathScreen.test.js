@@ -161,7 +161,7 @@ describe('GuessPathScreen', () => {
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
-    navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn() };
+    navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
   });
 
   afterEach(async () => {

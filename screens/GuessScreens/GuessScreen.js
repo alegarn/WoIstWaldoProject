@@ -1,14 +1,26 @@
+import { useEffect } from 'react';
 import { Dimensions } from 'react-native';
 
 import GuessPicture from "../../components/Picture/GuessPicture";
 
 import { isOnTarget } from "../../utils/targetLocation";
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 export default function GuessScreen({ navigation, route }) {
 
   const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, skipInstructions } = route.params;
   const isPrivate = scope?.kind === 'private';
+
+  const { group, theme } = useScopedPrivateGroupTheme(scope);
+
+  useEffect(() => {
+    if (!theme) return;
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -50,6 +62,7 @@ export default function GuessScreen({ navigation, route }) {
 
 
   return(
+    <PrivateGroupThemeProvider group={group}>
     <>
     <GuessPicture
       navigation={navigation}
@@ -73,5 +86,6 @@ export default function GuessScreen({ navigation, route }) {
         />
       }
     </>  
+    </PrivateGroupThemeProvider>
   );
 };
