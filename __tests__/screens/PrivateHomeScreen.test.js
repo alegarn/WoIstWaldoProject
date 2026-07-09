@@ -97,6 +97,7 @@ import { handleOrientation } from '../../utils/orientation';
 import { updateGroupSettings, deletePrivateImage } from '../../services/groups/groupApi';
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 describe('PrivateHomeScreen', () => {
   beforeEach(() => {
@@ -237,15 +238,17 @@ describe('PrivateHomeScreen', () => {
 
     it('wires the header background to the group primary_color', async () => {
       const { navigation } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
 
       const options = lastSetOptions(navigation);
       expect(options.headerStyle.backgroundColor).toBe('#6528F7');
-      expect(options.headerTintColor).toBe('#fff');
+      expect(options.headerTintColor).toBe(expectedTheme.headerTintColor);
     });
 
     it('lets the owner customize colors via the header button', async () => {
       updateGroupSettings.mockResolvedValue({ status: 200 });
       const { renderer, navigation } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
 
       const headerRoot = await renderHeader(navigation);
 
@@ -262,7 +265,7 @@ describe('PrivateHomeScreen', () => {
         .find((node) => node.props.style);
 
       expect(identitySection).toBeTruthy();
-      expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe('#F5F2FC');
+      expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe(expectedTheme.lightPanel);
 
       const nameInput = renderer.root.findByProps({ testID: 'private-home.input.name' });
       expect(StyleSheet.flatten(nameInput.props.style).backgroundColor).toBe('#FFFFFF');
@@ -273,6 +276,8 @@ describe('PrivateHomeScreen', () => {
       const colorCalls = mockColorPalettePicker.mock.calls;
       expect(colorCalls[colorCalls.length - 2][0].appearance).toBe('light');
       expect(colorCalls[colorCalls.length - 1][0].appearance).toBe('light');
+      expect(colorCalls[colorCalls.length - 2][0].themeColors.label).toBe(expectedTheme.lightText);
+      expect(colorCalls[colorCalls.length - 1][0].themeColors.shadeGrid).toBe(expectedTheme.lightAccentWash);
 
       await act(async () => {
         colorCalls[colorCalls.length - 2][0].onValueChange('#111111'); // primary
@@ -336,7 +341,7 @@ describe('PrivateHomeScreen', () => {
     it('shows the owner modal (visible) and no member banner when owner views a locked group', async () => {
       const { navigation } = await renderScreen({
         groupsData: {
-          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true }],
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true, primary_color: '#198868', secondary_color: '#FFCC00' }],
           joined: [],
         },
       });
@@ -345,6 +350,8 @@ describe('PrivateHomeScreen', () => {
       const lastOwnerModal = ownerModalCalls[ownerModalCalls.length - 1];
       expect(lastOwnerModal.visible).toBe(true);
       expect(lastOwnerModal.groupName).toBe('Waldos');
+      expect(lastOwnerModal.primaryColor).toBe('#198868');
+      expect(lastOwnerModal.secondaryColor).toBe('#FFCC00');
 
       const bannerCalls = mockLockedGroupMemberBanner.mock.calls.map(([props]) => props);
       expect(bannerCalls).toHaveLength(0);
@@ -412,13 +419,15 @@ describe('PrivateHomeScreen', () => {
       await renderScreen({
         groupsData: {
           owned: [],
-          joined: [{ id: 'g-7', name: 'Waldos', role: 'member', locked: true }],
+          joined: [{ id: 'g-7', name: 'Waldos', role: 'member', locked: true, primary_color: '#198868', secondary_color: '#FFCC00' }],
         },
       });
 
       const bannerCalls = mockLockedGroupMemberBanner.mock.calls.map(([props]) => props);
       expect(bannerCalls.length).toBeGreaterThanOrEqual(1);
       expect(bannerCalls[bannerCalls.length - 1].groupName).toBe('Waldos');
+      expect(bannerCalls[bannerCalls.length - 1].primaryColor).toBe('#198868');
+      expect(bannerCalls[bannerCalls.length - 1].secondaryColor).toBe('#FFCC00');
 
       const ownerModalCalls = mockLockedGroupOwnerModal.mock.calls.map(([props]) => props);
       const visibleOwnerModals = ownerModalCalls.filter((props) => props.visible);

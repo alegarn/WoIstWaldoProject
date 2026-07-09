@@ -17,8 +17,10 @@ export default function SettingsSection({
   headerRight,
   children,
   appearance = 'dark',
+  primaryColor,
+  secondaryColor,
 }) {
-  const t = getSettingsTokens(appearance);
+  const t = getSettingsTokens({ appearance, primaryColor, secondaryColor });
   const showHeader = title || caption || typeof count === 'number' || headerRight;
   return (
     <View style={[styles.section, { backgroundColor: t.panel }]} testID={testID}>

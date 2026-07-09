@@ -55,10 +55,11 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 import MemberManagementScreen from '../../screens/Groups/MemberManagementScreen';
 import { listMembers, removeMember, transferOwnership } from '../../services/groups/groupMembershipApi';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 describe('MemberManagementScreen', () => {
   beforeEach(() => {
@@ -114,6 +115,36 @@ describe('MemberManagementScreen', () => {
 
     expect(renderer.root.findAllByProps({ testID: 'member-leave' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ testID: 'member-mgmt.button.remove' })).toHaveLength(0);
+  });
+
+  it('uses the active group palette for the screen and member rows', async () => {
+    const group = {
+      id: 'g-3',
+      role: 'owner',
+      name: 'Mine',
+      primary_color: '#198868',
+      secondary_color: '#FFCC00',
+    };
+    const theme = getPrivateGroupTheme({
+      primaryColor: group.primary_color,
+      secondaryColor: group.secondary_color,
+    });
+
+    const renderer = await renderScreen({
+      groupsData: {
+        owned: [group],
+        joined: [],
+      },
+      members: [{ id: 'm-2', user_id: 'u-2', username: 'waldo', role: 'member' }],
+    });
+
+    const screen = renderer.root.findByProps({ testID: 'member-mgmt.screen' });
+    expect(StyleSheet.flatten(screen.props.style).backgroundColor).toBe(theme.screen);
+
+    const row = renderer.root.findByProps({ testID: 'member-mgmt.row.m-2' });
+    const rowStyle = StyleSheet.flatten(row.props.style);
+    expect(rowStyle.backgroundColor).toBe(theme.surface);
+    expect(rowStyle.borderColor).toBe(theme.hairline);
   });
 
   it('removes the targeted member when the confirm modal is accepted', async () => {

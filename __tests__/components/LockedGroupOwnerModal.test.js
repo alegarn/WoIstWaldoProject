@@ -1,12 +1,13 @@
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { StyleSheet } from 'react-native';
 
 jest.mock('../../components/UI/Button', () => {
   const React = require('react');
   const { Text } = require('react-native');
-  return function MockButton({ children, onPress, testID }) {
+  return function MockButton({ children, onPress, testID, style, textStyle }) {
     return (
-      <Text testID={testID} onPress={onPress}>
+      <Text testID={testID} onPress={onPress} style={[style, textStyle]}>
         {children}
       </Text>
     );
@@ -14,6 +15,7 @@ jest.mock('../../components/UI/Button', () => {
 });
 
 import LockedGroupOwnerModal from '../../components/Groups/LockedGroupOwnerModal';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 describe('LockedGroupOwnerModal', () => {
   function render(props) {
@@ -62,5 +64,23 @@ describe('LockedGroupOwnerModal', () => {
     expect(content.props.children.some((node) =>
       typeof node?.props?.children === 'string' && node.props.children.includes('this group')
     )).toBe(true);
+  });
+
+  it('uses the private group palette for the modal surface and primary action', () => {
+    const theme = getPrivateGroupTheme({ primaryColor: '#198868', secondaryColor: '#FFCC00' });
+    const renderer = render({
+      visible: true,
+      groupName: 'Waldos',
+      primaryColor: '#198868',
+      secondaryColor: '#FFCC00',
+    });
+
+    const content = renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.content' });
+    const contentStyle = StyleSheet.flatten(content.props.style);
+    expect(contentStyle.borderColor).toBe(theme.lightHairlineStrong);
+
+    const renewButton = renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.button.renew' });
+    expect(StyleSheet.flatten(renewButton.props.style).backgroundColor).toBe(theme.primaryColor);
+    expect(StyleSheet.flatten(renewButton.props.textStyle).color).toBe(theme.accentText);
   });
 });

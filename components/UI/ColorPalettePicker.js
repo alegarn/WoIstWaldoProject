@@ -69,8 +69,12 @@ export default function ColorPalettePicker({
   testIDPrefix = 'color-palette-picker',
   accessibilityLabel,
   appearance = 'dark',
+  themeColors,
 }) {
-  const theme = appearanceThemes[appearance] ?? appearanceThemes.dark;
+  const theme = {
+    ...(appearanceThemes[appearance] ?? appearanceThemes.dark),
+    ...(themeColors ?? {}),
+  };
   const normalizedValue = typeof value === 'string' ? value.toUpperCase() : value;
 
   // base -> shades. Memoized so it stays stable across renders for a given palette.

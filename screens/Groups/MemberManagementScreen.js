@@ -9,6 +9,7 @@ import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 import {
   listMembers,
   removeMember,
@@ -26,7 +27,7 @@ export function transferErrorMessageFor(response) {
   return response?.data?.message ?? 'Could not transfer ownership. Please try again.';
 }
 
-export default function MemberManagementScreen() {
+export default function MemberManagementScreen({ navigation }) {
   const authContext = useContext(AuthContext);
   const { scope } = useActiveGroup();
   const { data, refresh } = useGroupsHub();
@@ -35,6 +36,10 @@ export default function MemberManagementScreen() {
   const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
   const group = groups.find((g) => g.id === groupId) ?? null;
   const isOwner = group?.role === 'owner';
+  const theme = getPrivateGroupTheme({
+    primaryColor: group?.primary_color,
+    secondaryColor: group?.secondary_color,
+  });
 
   const [members, setMembers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -64,6 +69,13 @@ export default function MemberManagementScreen() {
       refresh();
     }, [refresh])
   );
+
+  useEffect(() => {
+    navigation?.setOptions?.({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme.headerTintColor, theme.primaryColor]);
 
   if (!groupId) {
     return <LoadingOverlay message="Loading group..." />;
@@ -110,23 +122,27 @@ export default function MemberManagementScreen() {
   }
 
   return (
-    <View style={styles.container}>
+    <View testID="member-mgmt.screen" style={[styles.container, { backgroundColor: theme.screen }] }>
       <FlatList
         data={members}
         keyExtractor={(item) => String(item.id)}
-        ListEmptyComponent={<Text style={styles.empty}>No members.</Text>}
+        ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>No members.</Text>}
         renderItem={({ item }) => (
-          <View style={styles.row}>
+          <View
+            testID={`member-mgmt.row.${item.id}`}
+            style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.hairline }] }
+          >
             <View style={styles.info}>
-              <Text style={styles.username}>{item.username ?? item.user_id ?? 'Member'}</Text>
-              {item.role === 'owner' && <Text style={styles.role}>Owner</Text>}
+              <Text style={[styles.username, { color: theme.text }]}>{item.username ?? item.user_id ?? 'Member'}</Text>
+              {item.role === 'owner' && <Text style={[styles.role, { color: theme.warning }]}>Owner</Text>}
             </View>
             {isOwner && item.role !== 'owner' && (
               <View style={styles.actions}>
                 <Button
-                  cancel
                   disabled={isWorking}
                   onPress={() => setRemoveTarget(item)}
+                  style={{ backgroundColor: theme.danger }}
+                  textStyle={{ color: '#fff' }}
                   testID="member-mgmt.button.remove"
                 >
                   Remove
@@ -134,6 +150,8 @@ export default function MemberManagementScreen() {
                 <Button
                   disabled={isWorking}
                   onPress={() => setTransferTarget(item)}
+                  style={{ backgroundColor: theme.primaryColor }}
+                  textStyle={{ color: theme.accentText }}
                   testID="member-mgmt.button.transfer"
                 >
                   Transfer
@@ -174,11 +192,19 @@ export default function MemberManagementScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 12 },
-  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 12, backgroundColor: GlobalStyle.color.primaryColor800, borderRadius: 8, marginVertical: 6 },
+  container: { flex: 1, padding: 12 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 12,
+    borderRadius: 8,
+    marginVertical: 6,
+    borderWidth: 1,
+  },
   info: { flex: 1 },
-  username: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  role: { color: '#ffd700', fontSize: 12 },
+  username: { fontSize: 16, fontWeight: '600' },
+  role: { fontSize: 12 },
   actions: { flexDirection: 'row', gap: 8 },
-  empty: { color: '#fff', textAlign: 'center', marginTop: 20 },
+  empty: { textAlign: 'center', marginTop: 20 },
 });

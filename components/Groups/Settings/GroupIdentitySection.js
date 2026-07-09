@@ -27,17 +27,27 @@ export default function GroupIdentitySection({
   appearance = 'dark',
 }) {
   const authContext = useContext(AuthContext);
-  const t = getSettingsTokens(appearance);
   const [name, setName] = useState(initialName ?? '');
-  const [primaryColor, setPrimaryColor] = useState(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
-  const [secondaryColor, setSecondaryColor] = useState(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
+  const [selectedPrimaryColor, setSelectedPrimaryColor] = useState(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
+  const [selectedSecondaryColor, setSelectedSecondaryColor] = useState(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
   const [isSaving, setIsSaving] = useState(false);
+  const t = getSettingsTokens({
+    appearance,
+    primaryColor: selectedPrimaryColor,
+    secondaryColor: selectedSecondaryColor,
+  });
+  const pickerThemeColors = {
+    label: t.text,
+    expandedBorder: t.hairlineStrong,
+    shadeGrid: t.accentWash,
+    selectedBorder: t.text,
+  };
 
   // Re-sync from upstream when the group is refreshed after a save.
   useEffect(() => {
     setName(initialName ?? '');
-    setPrimaryColor(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
-    setSecondaryColor(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
+    setSelectedPrimaryColor(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
+    setSelectedSecondaryColor(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
   }, [initialName, initialPrimaryColor, initialSecondaryColor]);
 
   const saveSettings = async () => {
@@ -45,8 +55,8 @@ export default function GroupIdentitySection({
     try {
       const response = await updateGroupSettings(authContext, groupId, {
         name: name.trim(),
-        primaryColor,
-        secondaryColor,
+        primaryColor: selectedPrimaryColor,
+        secondaryColor: selectedSecondaryColor,
       });
       if (response?.status === 200 || response?.status === 204) {
         Alert.alert('Saved', 'Group settings updated.');
@@ -67,6 +77,8 @@ export default function GroupIdentitySection({
   return (
     <SettingsSection
       appearance={appearance}
+      primaryColor={selectedPrimaryColor}
+      secondaryColor={selectedSecondaryColor}
       testID={`${testIDPrefix}.section.identity`}
       title="Group identity"
       caption="Name and colors shown across the group."
@@ -91,15 +103,17 @@ export default function GroupIdentitySection({
       <ColorPalettePicker
         appearance={appearance}
         label="Primary color"
-        value={primaryColor}
-        onValueChange={setPrimaryColor}
+        value={selectedPrimaryColor}
+        onValueChange={setSelectedPrimaryColor}
+        themeColors={pickerThemeColors}
         testIDPrefix={`${testIDPrefix}.color-primary`}
       />
       <ColorPalettePicker
         appearance={appearance}
         label="Secondary color"
-        value={secondaryColor}
-        onValueChange={setSecondaryColor}
+        value={selectedSecondaryColor}
+        onValueChange={setSelectedSecondaryColor}
+        themeColors={pickerThemeColors}
         testIDPrefix={`${testIDPrefix}.color-secondary`}
       />
       <Pressable
