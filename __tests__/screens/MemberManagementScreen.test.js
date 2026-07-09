@@ -55,9 +55,11 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { Alert, StyleSheet } from 'react-native';
 
 import MemberManagementScreen from '../../screens/Groups/MemberManagementScreen';
-import { listMembers, removeMember } from '../../services/groups/groupMembershipApi';
+import { listMembers, removeMember, transferOwnership } from '../../services/groups/groupMembershipApi';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 describe('MemberManagementScreen', () => {
   beforeEach(() => {
@@ -113,6 +115,36 @@ describe('MemberManagementScreen', () => {
 
     expect(renderer.root.findAllByProps({ testID: 'member-leave' })).toHaveLength(0);
     expect(renderer.root.findAllByProps({ testID: 'member-mgmt.button.remove' })).toHaveLength(0);
+  });
+
+  it('uses the active group palette for the screen and member rows', async () => {
+    const group = {
+      id: 'g-3',
+      role: 'owner',
+      name: 'Mine',
+      primary_color: '#198868',
+      secondary_color: '#FFCC00',
+    };
+    const theme = getPrivateGroupTheme({
+      primaryColor: group.primary_color,
+      secondaryColor: group.secondary_color,
+    });
+
+    const renderer = await renderScreen({
+      groupsData: {
+        owned: [group],
+        joined: [],
+      },
+      members: [{ id: 'm-2', user_id: 'u-2', username: 'waldo', role: 'member' }],
+    });
+
+    const screen = renderer.root.findByProps({ testID: 'member-mgmt.screen' });
+    expect(StyleSheet.flatten(screen.props.style).backgroundColor).toBe(theme.screen);
+
+    const row = renderer.root.findByProps({ testID: 'member-mgmt.row.m-2' });
+    const rowStyle = StyleSheet.flatten(row.props.style);
+    expect(rowStyle.backgroundColor).toBe(theme.surface);
+    expect(rowStyle.borderColor).toBe(theme.hairline);
   });
 
   it('removes the targeted member when the confirm modal is accepted', async () => {
@@ -199,5 +231,48 @@ describe('MemberManagementScreen', () => {
     });
 
     expect(removeMember).toHaveBeenCalledTimes(1);
+  });
+
+  it('surfaces a Premium+ explanation when transfer fails with recipient_not_creator', async () => {
+    transferOwnership.mockResolvedValue({
+      status: 422,
+      data: { error: 'recipient_not_creator', message: 'Recipient is not premium+' },
+    });
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+
+    const renderer = await renderScreen({
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+      members: [{ id: 'm-2', user_id: 'u-2', username: 'waldo', role: 'member' }],
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'member-mgmt.button.transfer' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    const transferModalCall = mockCenteredModal.mock.calls
+      .map(([props]) => props)
+      .filter((props) => props.confirmTestID === 'members.transfer.confirm.ok' && props.isModalVisible)
+      .pop();
+
+    await act(async () => {
+      await transferModalCall.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(transferOwnership).toHaveBeenCalledWith(expect.objectContaining({
+      groupId: 'g-3',
+      targetUserId: 'u-2',
+    }));
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Cannot transfer ownership',
+      'This member needs to hold a "Group Creator" tier before transfer to own the group.',
+    );
+    alertSpy.mockRestore();
   });
 });

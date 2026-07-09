@@ -106,6 +106,10 @@ jest.mock('../utils/storageDatum', () => ({
   saveSessionLanguageFilter: jest.fn(),
 }));
 
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => ({ data: null, isLoading: false, error: null, refresh: jest.fn() }),
+}));
+
 import React from 'react';
 import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';

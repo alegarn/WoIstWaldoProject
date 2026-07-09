@@ -1,8 +1,8 @@
-import { useLayoutEffect, useMemo } from "react";
+import { useLayoutEffect } from "react";
 import { View, StyleSheet } from "react-native";
 
 import { handleOrientation } from "../../utils/orientation";
-import { useGroupsHub } from "../../hooks/useGroupsHub";
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from "../../store/privateGroupTheme-context";
 
 import ShowSuccess from "../../components/Results/ShowSuccess";
 import ShowFailure from "../../components/Results/ShowFailure";
@@ -15,21 +15,16 @@ export default function ResultScreen({ route, navigation }) {
 
   const scope = route?.params?.scope;
   const isPrivate = scope?.kind === 'private';
-  const { data } = useGroupsHub();
-
-  const group = useMemo(() => {
-    if (!isPrivate) {
-      return null;
-    }
-    const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
-    return groups.find((g) => g.id === scope.groupId) ?? null;
-  }, [data, isPrivate, scope]);
+  const { group, theme } = useScopedPrivateGroupTheme(scope);
 
   useLayoutEffect(() => {
-    if (isPrivate && group?.name) {
-      navigation.setOptions({ title: group.name });
-    }
-  }, [isPrivate, group, navigation]);
+    if (!theme) return;
+    navigation.setOptions({
+      title: group?.name,
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor]);
 
   const backgroundColor = isPrivate
     ? (group?.primary_color ?? '#1D133D')
@@ -49,11 +44,13 @@ export default function ResultScreen({ route, navigation }) {
     return null;
   })();
 
-  if (backgroundColor) {
-    return <View style={[styles.wrapper, { backgroundColor }]}>{content}</View>;
-  }
-
-  return content;
+  return (
+    <PrivateGroupThemeProvider group={group}>
+      {backgroundColor ? (
+        <View style={[styles.wrapper, { backgroundColor }]}>{content}</View>
+      ) : content}
+    </PrivateGroupThemeProvider>
+  );
 };
 
 const styles = StyleSheet.create({

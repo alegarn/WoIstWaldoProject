@@ -3,6 +3,7 @@ import { FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-nat
 
 import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
+import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 function buildRankingMetrics(width, height) {
   return {
@@ -80,6 +81,11 @@ const RowItem = React.memo(function RowItem({ row, onPressMore, metrics, styles 
 export default function TableComponent({ data, onPress, onEndReached }) {
   const { width, height } = useWindowDimensions();
   const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
+  const theme = usePrivateGroupTheme();
+  const containerBg = theme ? theme.screen : GlobalStyle.color.primaryColor800;
+  const headBg = theme ? theme.insetDeep : GlobalStyle.color.primaryColor600;
+  const scoreColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
+  const headTextColor = theme ? theme.muted : '#c8b4ff';
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -87,11 +93,11 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       padding: metrics.containerPaddingHorizontal,
       paddingTop: metrics.containerPaddingTop,
       paddingBottom: metrics.containerPaddingBottom,
-      backgroundColor: GlobalStyle.color.primaryColor800,
+      backgroundColor: containerBg,
     },
     head: {
       height: metrics.headerHeight,
-      backgroundColor: GlobalStyle.color.primaryColor600,
+      backgroundColor: headBg,
       flexDirection: 'row',
       alignSelf: "center",
       overflow: "hidden",
@@ -102,7 +108,7 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       borderBottomColor: 'rgba(160, 118, 249, 0.5)',
     },
     headText: {
-      color: '#c8b4ff',
+      color: headTextColor,
       fontSize: metrics.headerFontSize,
       textTransform: 'uppercase',
       letterSpacing: 1,
@@ -133,10 +139,10 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       fontSize: metrics.textFontSize,
     },
     score: {
-      color: GlobalStyle.color.secondaryColor,
+      color: scoreColor,
       fontWeight: '700',
     },
-  }), [metrics]);
+  }), [metrics, containerBg, headBg, scoreColor, headTextColor]);
 
   const headers = data?.tableHeaders || [];
   const rows = data?.tableScores || [];

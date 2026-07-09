@@ -15,6 +15,11 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 jest.mock('../../components/UI/BigButton', () => {
   return function MockBigButton(props) {
     mockBigButton(props);
@@ -61,6 +66,7 @@ jest.mock('../../services/groups/groupUploadApi', () => ({
 
 jest.mock('../../services/groups/groupCategoryThumbnails', () => ({
   deleteCategoryThumbnailFile: jest.fn(),
+  resolveCategoryThumbnail: jest.fn().mockResolvedValue(null),
 }));
 
 jest.mock('../../utils/imagesRequests', () => ({
@@ -76,7 +82,7 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import GroupSettingsScreen from '../../screens/Groups/GroupSettingsScreen';
@@ -88,6 +94,7 @@ import { updateGroupSettings } from '../../services/groups/groupApi';
 import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
 import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategoryThumbnails';
 import { performImageUpload } from '../../utils/imagesRequests';
+import { getPrivateGroupSettingsTokens } from '../../utils/privateGroupTheme';
 
 async function flushEffects() {
   await Promise.resolve();
@@ -107,7 +114,7 @@ describe('GroupSettingsScreen', () => {
 
   async function renderScreen({ scope = { kind: 'private', groupId: 'g-3' }, groupsData, navigation = { replace: jest.fn() } } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope });
-    mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
+    mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading: false, refresh: jest.fn() });
 
     let renderer;
     await act(async () => {
@@ -129,9 +136,86 @@ describe('GroupSettingsScreen', () => {
 
     expect(renderer.root.findByProps({ testID: 'group-settings.input.name' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.button.save-colors' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'group-settings.uploader.home-background' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'group-settings.uploader.button-image' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'group-settings.category.editor' })).toBeTruthy();
+  });
+
+  it('renders the Members entry that navigates to MemberManagementScreen when pressed', async () => {
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+
+    const { renderer } = await renderScreen({
+      navigation,
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    const membersButton = renderer.root.findByProps({ testID: 'group-settings.button.members' });
+    expect(membersButton).toBeTruthy();
+    expect(membersButton.props.accessibilityLabel).toBe('Manage members');
+
+    await act(async () => {
+      membersButton.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('MemberManagementScreen');
+  });
+
+  it('uses the active group palette across the settings sections', async () => {
+    const group = {
+      id: 'g-3',
+      role: 'owner',
+      name: 'Mine',
+      primary_color: '#198868',
+      secondary_color: '#FFCC00',
+    };
+    const tokens = getPrivateGroupSettingsTokens({
+      primaryColor: group.primary_color,
+      secondaryColor: group.secondary_color,
+    });
+
+    const { renderer } = await renderScreen({
+      groupsData: {
+        owned: [group],
+        joined: [],
+      },
+    });
+
+    const identitySection = renderer.root
+      .findAllByProps({ testID: 'group-settings.section.identity' })
+      .find((node) => node.props.style);
+    expect(identitySection).toBeTruthy();
+    expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe(tokens.panel);
+
+    const membersButton = renderer.root.findByProps({ testID: 'group-settings.button.members' });
+    const membersStyle = StyleSheet.flatten(membersButton.props.style({ pressed: false }));
+    expect(membersStyle.backgroundColor).toBe(tokens.inset);
+    expect(membersStyle.borderColor).toBe(tokens.hairline);
+
+    const saveButton = renderer.root.findByProps({ testID: 'group-settings.button.save-colors' });
+    const saveStyle = StyleSheet.flatten(saveButton.props.style({ pressed: false }));
+    expect(saveStyle.backgroundColor).toBe(group.primary_color);
+  });
+
+  it('does not redirect and shows LoadingOverlay while hub is still loading, even when user is the owner', async () => {
+    const navigation = { replace: jest.fn() };
+
+    mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-3' } });
+    mockUseGroupsHub.mockReturnValue({
+      data: null,
+      isLoading: true,
+      refresh: jest.fn(),
+    });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(<GroupSettingsScreen navigation={navigation} />);
+      await flushEffects();
+    });
+
+    expect(navigation.replace).not.toHaveBeenCalled();
+    expect(mockLoadingOverlay).toHaveBeenCalled();
+    expect(() => renderer.root.findByProps({ testID: 'group-settings.button.members' })).toThrow();
   });
 
   it('redirects to GroupsListScreen when the current user is not the owner', async () => {
@@ -175,7 +259,7 @@ describe('GroupSettingsScreen', () => {
     expect(Alert.alert).toHaveBeenCalled();
 
     const saveButtonProps = renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props;
-    expect(saveButtonProps.text).toBe('Save');
+    expect(saveButtonProps.accessibilityLabel).toBe('Save changes');
   });
 
   it('launches picker and prepares category thumbnail upload without categoryId payload', async () => {

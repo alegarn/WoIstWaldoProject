@@ -1,5 +1,4 @@
 const mockHomeCard = jest.fn(() => null);
-const mockBigButton = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockCenteredModal = jest.fn();
 const mockColorPalettePicker = jest.fn();
@@ -19,16 +18,14 @@ jest.mock('../../utils/orientation', () => ({
   handleOrientation: jest.fn(),
 }));
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 jest.mock('../../components/UI/HomeCard', () => {
   return function MockHomeCard(props) {
     mockHomeCard(props);
-    return null;
-  };
-});
-
-jest.mock('../../components/UI/BigButton', () => {
-  return function MockBigButton(props) {
-    mockBigButton(props);
     return null;
   };
 });
@@ -93,13 +90,14 @@ jest.mock('../../hooks/useGroupsHub', () => ({
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Share, Alert } from 'react-native';
+import { Share, Alert, StyleSheet } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
 import { handleOrientation } from '../../utils/orientation';
 import { updateGroupSettings, deletePrivateImage } from '../../services/groups/groupApi';
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 describe('PrivateHomeScreen', () => {
   beforeEach(() => {
@@ -148,19 +146,6 @@ describe('PrivateHomeScreen', () => {
     return headerRoot;
   }
 
-  it('renders the active group name in private-home.title and forces portrait orientation', async () => {
-    const { renderer } = await renderScreen({
-      scope: { kind: 'private', groupId: 'g-7' },
-      groupsData: {
-        owned: [{ id: 'g-7', name: 'Waldos Of The World', role: 'owner' }],
-        joined: [],
-      },
-    });
-
-    const titleNode = renderer.root.findByProps({ testID: 'private-home.title' });
-    expect(titleNode.props.children).toBe('Waldos Of The World');
-    expect(handleOrientation).toHaveBeenCalledWith('portrait');
-  });
 
   it('does not render the legacy back-to-public button', async () => {
     const { renderer } = await renderScreen({
@@ -240,15 +225,29 @@ describe('PrivateHomeScreen', () => {
 
     it('wires the header background to the group primary_color', async () => {
       const { navigation } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
 
       const options = lastSetOptions(navigation);
       expect(options.headerStyle.backgroundColor).toBe('#6528F7');
-      expect(options.headerTintColor).toBe('#fff');
+      expect(options.headerTintColor).toBe(expectedTheme.headerTintColor);
+    });
+
+    it('paints the outer container with the resolved group screen color', async () => {
+      const { renderer } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
+
+      let container = renderer.root;
+      while (container && container.type !== 'View') {
+        container = container.parent;
+      }
+      expect(container).toBeTruthy();
+      expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
     });
 
     it('lets the owner customize colors via the header button', async () => {
       updateGroupSettings.mockResolvedValue({ status: 200 });
-      const { navigation } = await renderScreen({ groupsData: ownerData });
+      const { renderer, navigation } = await renderScreen({ groupsData: ownerData });
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
 
       const headerRoot = await renderHeader(navigation);
 
@@ -260,10 +259,25 @@ describe('PrivateHomeScreen', () => {
         headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
       });
 
+      const identitySection = renderer.root
+        .findAllByProps({ testID: 'private-home.section.identity' })
+        .find((node) => node.props.style);
+
+      expect(identitySection).toBeTruthy();
+      expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe(expectedTheme.lightPanel);
+
+      const nameInput = renderer.root.findByProps({ testID: 'private-home.input.name' });
+      expect(StyleSheet.flatten(nameInput.props.style).backgroundColor).toBe('#FFFFFF');
+
       // Editor opened -> two color pickers rendered.
       expect(mockColorPalettePicker.mock.calls.length).toBeGreaterThanOrEqual(2);
 
       const colorCalls = mockColorPalettePicker.mock.calls;
+      expect(colorCalls[colorCalls.length - 2][0].appearance).toBe('light');
+      expect(colorCalls[colorCalls.length - 1][0].appearance).toBe('light');
+      expect(colorCalls[colorCalls.length - 2][0].themeColors.label).toBe(expectedTheme.lightText);
+      expect(colorCalls[colorCalls.length - 1][0].themeColors.shadeGrid).toBe(expectedTheme.lightAccentWash);
+
       await act(async () => {
         colorCalls[colorCalls.length - 2][0].onValueChange('#111111'); // primary
         colorCalls[colorCalls.length - 1][0].onValueChange('#EEEEEE'); // secondary
@@ -273,14 +287,15 @@ describe('PrivateHomeScreen', () => {
       expect(modalProps.confirmTestID).toBe('private-home.color-editor.confirm.ok');
 
       await act(async () => {
-        await modalProps.onPress();
+        renderer.root.findByProps({ testID: 'private-home.button.save-colors' }).props.onPress();
+        await Promise.resolve();
         await Promise.resolve();
       });
 
       expect(updateGroupSettings).toHaveBeenCalledWith(
         expect.anything(),
         'g-7',
-        { primaryColor: '#111111', secondaryColor: '#EEEEEE' },
+        { name: 'Waldos', primaryColor: '#111111', secondaryColor: '#EEEEEE' },
       );
 
       const lastModalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
@@ -325,7 +340,7 @@ describe('PrivateHomeScreen', () => {
     it('shows the owner modal (visible) and no member banner when owner views a locked group', async () => {
       const { navigation } = await renderScreen({
         groupsData: {
-          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true }],
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true, primary_color: '#198868', secondary_color: '#FFCC00' }],
           joined: [],
         },
       });
@@ -334,6 +349,8 @@ describe('PrivateHomeScreen', () => {
       const lastOwnerModal = ownerModalCalls[ownerModalCalls.length - 1];
       expect(lastOwnerModal.visible).toBe(true);
       expect(lastOwnerModal.groupName).toBe('Waldos');
+      expect(lastOwnerModal.primaryColor).toBe('#198868');
+      expect(lastOwnerModal.secondaryColor).toBe('#FFCC00');
 
       const bannerCalls = mockLockedGroupMemberBanner.mock.calls.map(([props]) => props);
       expect(bannerCalls).toHaveLength(0);
@@ -401,13 +418,15 @@ describe('PrivateHomeScreen', () => {
       await renderScreen({
         groupsData: {
           owned: [],
-          joined: [{ id: 'g-7', name: 'Waldos', role: 'member', locked: true }],
+          joined: [{ id: 'g-7', name: 'Waldos', role: 'member', locked: true, primary_color: '#198868', secondary_color: '#FFCC00' }],
         },
       });
 
       const bannerCalls = mockLockedGroupMemberBanner.mock.calls.map(([props]) => props);
       expect(bannerCalls.length).toBeGreaterThanOrEqual(1);
       expect(bannerCalls[bannerCalls.length - 1].groupName).toBe('Waldos');
+      expect(bannerCalls[bannerCalls.length - 1].primaryColor).toBe('#198868');
+      expect(bannerCalls[bannerCalls.length - 1].secondaryColor).toBe('#FFCC00');
 
       const ownerModalCalls = mockLockedGroupOwnerModal.mock.calls.map(([props]) => props);
       const visibleOwnerModals = ownerModalCalls.filter((props) => props.visible);

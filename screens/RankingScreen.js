@@ -7,8 +7,8 @@ import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 import { useActiveGroup } from '../hooks/useActiveGroup';
-import { useGroupsHub } from '../hooks/useGroupsHub';
 
 // Bounded resident window: 150 rows ≈ 7–8 cursor pages of 20 rows.
 // Keeps memory stable on low-end devices while allowing deep browsing.
@@ -26,15 +26,9 @@ export default function RankingScreen({ route, navigation }) {
 
   const context = useContext(AuthContext);
   const routeScope = route?.params?.scope;
+  const { group, theme, isPrivate } = useScopedPrivateGroupTheme(routeScope);
   const { scope: activeScope } = useActiveGroup();
-  const scope = routeScope ?? activeScope;
-  const isPrivate = scope?.kind === 'private';
-  const { data } = useGroupsHub();
-  const group = isPrivate
-    ? [...(data?.owned ?? []), ...(data?.joined ?? [])].find((entry) => entry.id === scope.groupId)
-    : null;
-
-  const rankingScope = isPrivate ? scope : 'initial';
+  const rankingScope = isPrivate ? (routeScope ?? activeScope) : 'initial';
 
   const tableHeaders = RANKING?.tableHeaders;
 
@@ -88,8 +82,16 @@ export default function RankingScreen({ route, navigation }) {
   };
 
   useEffect(() => {
-    navigation.setOptions({ title: group?.name ?? 'Ranking' });
-  }, [navigation, group?.name]);
+    if (theme) {
+      navigation.setOptions({
+        title: group?.name ?? 'Ranking',
+        headerStyle: { backgroundColor: theme.primaryColor },
+        headerTintColor: theme.headerTintColor,
+      });
+    } else {
+      navigation.setOptions({ title: group?.name ?? 'Ranking' });
+    }
+  }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor]);
 
 
 
@@ -181,7 +183,7 @@ export default function RankingScreen({ route, navigation }) {
   }, [handleRankingData])
 
   return (
-    <>
+    <PrivateGroupThemeProvider group={group}>
       {rankingDatum ? (
         <View style={styles.screen} testID="ranking.screen">
           <TableComponent data={rankingDatum} onPress={showSpecificDatum} onEndReached={handleEndReached} />
@@ -189,7 +191,7 @@ export default function RankingScreen({ route, navigation }) {
       ) : (
         <LoadingOverlay message={"Loading ranking table..."}/>
       )}
-    </>
+    </PrivateGroupThemeProvider>
   );
 };
 

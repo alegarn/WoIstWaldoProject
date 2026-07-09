@@ -11,6 +11,7 @@ import {
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 const DEFAULT_LANGUAGE = 'en';
 
@@ -22,6 +23,7 @@ export default function GuessFeedScreen({ navigation, route }) {
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
+  const { group, theme } = useScopedPrivateGroupTheme(routeScope);
   const [language, setLanguage] = useState(routeLanguage || null);
   const [showOverlay, setShowOverlay] = useState(!skipInstructions);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -53,6 +55,16 @@ export default function GuessFeedScreen({ navigation, route }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!theme) {
+      return;
+    }
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
 
   const handleOpenFilter = () => {
     setIsFilterModalVisible(true);
@@ -90,6 +102,7 @@ export default function GuessFeedScreen({ navigation, route }) {
   }
 
   return (
+    <PrivateGroupThemeProvider group={group}>
     <>
       <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
         {language || DEFAULT_LANGUAGE}
@@ -151,6 +164,7 @@ export default function GuessFeedScreen({ navigation, route }) {
         </View>
       </Modal>
     </>
+    </PrivateGroupThemeProvider>
   );
 }
 

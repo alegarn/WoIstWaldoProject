@@ -1,12 +1,12 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Share, Alert, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Share, Alert, ScrollView, Image, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import CenteredModal from '../../components/UI/CenteredModal';
-import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import HomeCard from '../../components/UI/HomeCard';
 import IconButton from '../../components/UI/IconButton';
-import BigButton from '../../components/UI/BigButton';
+import GroupIdentitySection from '../../components/Groups/Settings/GroupIdentitySection';
 import LockedGroupOwnerModal from '../../components/Groups/LockedGroupOwnerModal';
 import LockedGroupMemberBanner from '../../components/Groups/LockedGroupMemberBanner';
 import { GlobalStyle } from '../../constants/theme';
@@ -17,6 +17,8 @@ import { AuthContext } from '../../store/auth-context';
 import { updateGroupSettings, deletePrivateImage } from '../../services/groups/groupApi';
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
+import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
 
 const HideImage = require('../../assets/home/WoIstWaldo-character-hide.webp');
 const FindImage = require('../../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -47,11 +49,12 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const isLocked = group?.locked === true;
   const isOwner = group?.role === 'owner';
   const groupId = activeScope?.kind === 'private' ? activeScope.groupId : null;
+  const groupTheme = getPrivateGroupTheme({
+    primaryColor: group?.primary_color,
+    secondaryColor: group?.secondary_color,
+  });
 
   const [isColorEditorVisible, setIsColorEditorVisible] = useState(false);
-  const [editorPrimary, setEditorPrimary] = useState(group?.primary_color ?? GlobalStyle.color.primaryColor);
-  const [editorSecondary, setEditorSecondary] = useState(group?.secondary_color ?? GlobalStyle.color.secondaryColor);
-  const [isSavingColors, setIsSavingColors] = useState(false);
   const [isLockedOwnerModalVisible, setIsLockedOwnerModalVisible] = useState(isLocked && isOwner);
   const [bgUris, setBgUris] = useState({});
   const [savingSlot, setSavingSlot] = useState({});
@@ -65,11 +68,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
   useEffect(() => {
     setIsLockedOwnerModalVisible(isLocked && isOwner);
   }, [isLocked, isOwner, groupId]);
-
-  useEffect(() => {
-    setEditorPrimary(group?.primary_color ?? GlobalStyle.color.primaryColor);
-    setEditorSecondary(group?.secondary_color ?? GlobalStyle.color.secondaryColor);
-  }, [group?.primary_color, group?.secondary_color]);
 
   useEffect(() => {
     let mounted = true;
@@ -128,28 +126,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
     setIsColorEditorVisible(false);
   }, []);
 
-  const saveColors = useCallback(async () => {
-    if (!groupId) return;
-    setIsSavingColors(true);
-    try {
-      const response = await updateGroupSettings(authContext, groupId, {
-        primaryColor: editorPrimary,
-        secondaryColor: editorSecondary,
-      });
-      if (response?.status === 200 || response?.status === 204) {
-        Alert.alert('Saved', 'Group colors updated.');
-        setIsColorEditorVisible(false);
-        await refresh();
-      } else {
-        Alert.alert(`Error ${response?.status ?? ''}`, 'Could not save colors.');
-      }
-    } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not save colors.');
-    } finally {
-      setIsSavingColors(false);
-    }
-  }, [authContext, groupId, editorPrimary, editorSecondary, refresh]);
-
   const chooseSlotBackground = useCallback(async (slot) => {
     if (!groupId) return;
     if (savingSlotRef.current[slot]) return;
@@ -200,13 +176,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
   useEffect(() => {
     navigation.setOptions({
       title: group?.name ?? '',
-      headerStyle: { backgroundColor: group?.primary_color || GlobalStyle.color.primaryColor900 },
-      headerTintColor: '#fff',
+      headerStyle: { backgroundColor: groupTheme.primaryColor },
+      headerTintColor: groupTheme.headerTintColor,
       headerRight: () => (
         <View style={{ flexDirection: 'row' }}>
           <IconButton
             icon="home-outline"
-            color="#fff"
+            color={groupTheme.headerTintColor}
             size={26}
             onPress={() => {
               clear();
@@ -219,7 +195,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
           {isOwner && (
             <IconButton
               icon="color-palette-outline"
-              color="#fff"
+              color={groupTheme.headerTintColor}
               size={26}
               onPress={openColorEditor}
               testID="private-home.button.customize-colors"
@@ -230,7 +206,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
           {isOwner && (
             <IconButton
               icon="person-add-outline"
-              color="#fff"
+              color={groupTheme.headerTintColor}
               size={26}
               onPress={shareCode}
               testID="private-home.button.share-code"
@@ -241,7 +217,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
           {isOwner && (
             <IconButton
               icon="settings-outline"
-              color="#fff"
+              color={groupTheme.headerTintColor}
               size={26}
               onPress={() => navigation.navigate('GroupSettingsScreen')}
               testID="private-home.button.settings"
@@ -251,7 +227,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         </View>
       ),
     });
-  }, [navigation, group?.name, group?.primary_color, group?.joining_code, isOwner, clear, shareCode, openColorEditor]);
+  }, [navigation, group?.name, group?.joining_code, isOwner, clear, shareCode, openColorEditor, groupTheme.headerTintColor, groupTheme.primaryColor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -292,22 +268,21 @@ export default function PrivateHomeScreen({ navigation, route }) {
     <View
       style={[
         styles.container,
-        { backgroundColor: group?.primary_color || GlobalStyle.color.primaryColor900 },
+        { backgroundColor: groupTheme.screen },
       ]}
     >
-      <Text
-        style={styles.title}
-        testID="private-home.title"
-      >
-        {group?.name ?? ''}
-      </Text>
+      <PrivateGroupThemeProvider group={group}>
       {isLocked && (
         <Text testID="private-home.lock-badge" style={styles.lockBadge}>
           Locked by owner
         </Text>
       )}
       {isLocked && !isOwner && (
-        <LockedGroupMemberBanner groupName={group?.name} />
+        <LockedGroupMemberBanner
+          groupName={group?.name}
+          primaryColor={groupTheme.primaryColor}
+          secondaryColor={groupTheme.secondaryColor}
+        />
       )}
       <HomeCard
         text="Hide Waldo"
@@ -335,47 +310,94 @@ export default function PrivateHomeScreen({ navigation, route }) {
 
       <CenteredModal
         isModalVisible={isColorEditorVisible}
-        onPress={saveColors}
+        onPress={closeColorEditor}
         onCancel={closeColorEditor}
         testIDPrefix="private-home.color-editor"
         confirmTestID="private-home.color-editor.confirm.ok"
         cancelTestID="private-home.color-editor.confirm.cancel"
-        confirmLabel={isSavingColors ? 'Saving...' : 'Save'}
+        confirmLabel="Done"
         cancelLabel="Cancel"
       >
         <ScrollView keyboardShouldPersistTaps="handled">
-          <ColorPalettePicker
-            label="Primary color"
-            value={editorPrimary}
-            onValueChange={setEditorPrimary}
-            testIDPrefix="private-home.color-primary"
+          <GroupIdentitySection
+            groupId={groupId}
+            initialName={group?.name ?? ''}
+            initialPrimaryColor={group?.primary_color ?? GlobalStyle.color.primaryColor}
+            initialSecondaryColor={group?.secondary_color ?? GlobalStyle.color.secondaryColor}
+            appearance="light"
+            onRefresh={refresh}
+            onSaved={closeColorEditor}
+            testIDPrefix="private-home"
           />
-          <ColorPalettePicker
-            label="Secondary color"
-            value={editorSecondary}
-            onValueChange={setEditorSecondary}
-            testIDPrefix="private-home.color-secondary"
-          />
-          <Text style={styles.sectionTitle}>Button backgrounds</Text>
+          <Text style={[styles.bgSectionTitle, { color: groupTheme.lightText }]}>Button backgrounds</Text>
+          <Text style={[styles.bgSectionCaption, { color: groupTheme.lightMuted }]}>
+            Custom images behind each homescreen button.
+          </Text>
           {BACKGROUND_SLOTS.map(({ slot, label }) => {
             const slotData = group?.home_button_backgrounds?.[slot];
+            const uri = bgUris[slot];
+            const isSaving = !!savingSlot[slot];
             return (
-              <View key={slot} style={styles.slotRow}>
-                <Text style={styles.slotLabel}>{label}</Text>
-                <BigButton
-                  text={savingSlot[slot] ? 'Saving...' : 'Choose image'}
-                  onPress={() => chooseSlotBackground(slot)}
-                  testID={`private-home.button-bg.${slot}.choose`}
-                  accessibilityLabel={`Choose ${label} background`}
-                />
-                {slotData && (
-                  <BigButton
-                    text="Remove"
-                    onPress={() => removeSlotBackground(slot)}
-                    testID={`private-home.button-bg.${slot}.remove`}
-                    accessibilityLabel={`Remove ${label} background`}
-                  />
+              <View
+                key={slot}
+                style={[
+                  styles.bgSlotCard,
+                  {
+                    backgroundColor: groupTheme.lightPanel,
+                    borderColor: groupTheme.lightHairlineStrong,
+                  },
+                ]}
+                testID={`private-home.button-bg.${slot}.row`}
+              >
+                {uri ? (
+                  <Image source={{ uri }} style={styles.bgThumb} />
+                ) : (
+                  <View
+                    style={[
+                      styles.bgThumb,
+                      styles.bgThumbFallback,
+                      { backgroundColor: groupTheme.lightAccentWash },
+                    ]}
+                  >
+                    <Ionicons name="image-outline" size={18} color={groupTheme.secondaryColor} />
+                  </View>
                 )}
+                <View style={styles.bgSlotInfo}>
+                  <Text style={[styles.bgSlotLabel, { color: groupTheme.lightText }]}>{label}</Text>
+                  <Text style={[styles.bgSlotStatus, { color: groupTheme.lightMuted }]}>
+                    {slotData ? 'Custom image' : 'Default'}
+                  </Text>
+                </View>
+                <View style={styles.bgSlotActions}>
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Choose ${label} background`}
+                    onPress={() => chooseSlotBackground(slot)}
+                    disabled={isSaving}
+                    testID={`private-home.button-bg.${slot}.choose`}
+                    style={({ pressed }) => [
+                      styles.bgChooseChip,
+                      { backgroundColor: groupTheme.primaryColor },
+                      pressed && styles.pressed,
+                      isSaving && styles.bgChooseBusy,
+                    ]}
+                  >
+                    <Ionicons name="cloud-upload-outline" size={15} color={groupTheme.accentText} />
+                    <Text style={[styles.bgChooseChipText, { color: groupTheme.accentText }]}>{isSaving ? 'Saving…' : 'Choose'}</Text>
+                  </Pressable>
+                  {slotData && (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${label} background`}
+                      onPress={() => removeSlotBackground(slot)}
+                      testID={`private-home.button-bg.${slot}.remove`}
+                      style={({ pressed }) => [styles.bgRemoveChip, pressed && styles.pressed]}
+                    >
+                      <Ionicons name="trash-outline" size={14} color="#E03A3A" />
+                      <Text style={styles.bgRemoveChipText}>Remove</Text>
+                    </Pressable>
+                  )}
+                </View>
               </View>
             );
           })}
@@ -385,19 +407,49 @@ export default function PrivateHomeScreen({ navigation, route }) {
       <LockedGroupOwnerModal
         visible={isLockedOwnerModalVisible}
         groupName={group?.name}
+        primaryColor={groupTheme.primaryColor}
+        secondaryColor={groupTheme.secondaryColor}
         onRenew={renewSubscription}
         onTransfer={transferOwnership}
         onDismiss={dismissLockedOwnerModal}
       />
+      </PrivateGroupThemeProvider>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 10, gap: 10 },
-  title: { fontSize: 22, fontWeight: '700', textAlign: 'center', color: '#fff' },
+  title: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
   lockBadge: { fontSize: 14, color: '#ffd700', textAlign: 'center' },
-  sectionTitle: { fontSize: 16, fontWeight: '600', marginTop: 16, marginBottom: 8, color: '#333' },
-  slotRow: { alignItems: 'center', marginBottom: 8 },
-  slotLabel: { fontSize: 14, fontWeight: '500', color: '#333', marginBottom: 4 },
+  pressed: { opacity: 0.7 },
+
+  // Button backgrounds (inside the white customize modal)
+  bgSectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 4 },
+  bgSectionCaption: { fontSize: 12, marginBottom: 10 },
+  bgSlotCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8,
+    borderRadius: 10, padding: 10,
+    borderWidth: 1,
+  },
+  bgThumb: { width: 40, height: 40, borderRadius: 8, backgroundColor: 'rgba(101,40,247,0.08)' },
+  bgThumbFallback: { alignItems: 'center', justifyContent: 'center' },
+  bgSlotInfo: { flex: 1 },
+  bgSlotLabel: { fontSize: 15, fontWeight: '600' },
+  bgSlotStatus: { fontSize: 12, marginTop: 1 },
+  bgSlotActions: { alignItems: 'flex-end', gap: 6 },
+  bgChooseChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderRadius: 8,
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  bgChooseChipText: { fontSize: 13, fontWeight: '700' },
+  bgChooseBusy: { opacity: 0.6 },
+  bgRemoveChip: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: 'rgba(224,58,58,0.08)', borderRadius: 8,
+    borderWidth: 1, borderColor: 'rgba(224,58,58,0.35)',
+    paddingHorizontal: 10, paddingVertical: 7,
+  },
+  bgRemoveChipText: { color: '#E03A3A', fontSize: 13, fontWeight: '600' },
 });

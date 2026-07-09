@@ -21,6 +21,7 @@ import { listGroupCategories } from '../services/groups/groupCategoriesApi';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 
 const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
 const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
@@ -64,6 +65,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const context = useContext(AuthContext);
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
+  const { group, theme } = useScopedPrivateGroupTheme(scope);
   const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
 
   function normalizePrivateCategory(category) {
@@ -124,6 +126,17 @@ export default function SetInstructionsScreen({ navigation, route }) {
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!theme) {
+      return;
+    }
+
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
 
   const getPermissions = async () => {
     let currentPermission = permissionResponse;
@@ -333,53 +346,55 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
 
   return (
-    <View style={styles.container} testID="set-instructions.screen">
-      <ImageBackground
-        accessibilityLabel="Set instructions image"
-        source={{uri : uri}}
-        resizeMode='stretch'
-        style={imageDimensionStyle}
-        testID="set-instructions.image"
-      >
-        <HideDescription
-          onSubmit={handlePressDescription}
-          onCancel={onCancelGoBack}
-          language={language}
-          onLanguageChange={handleLanguageChange}
-          languageError={languageError}
-          categories={selectableCategories}
-          categoriesError={categoriesError}
-          onRetryCategories={loadCategories}
-          selectedCategory={selectedCategory}
-          onCategorySelect={handleCategorySelect}
-        />
-        <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
-      </ImageBackground>
-      {
-        showModal &&
-          <CenteredModal 
-            onPress={handleConfirmModal} 
-            onCancel={onCancelModal} 
-            isModalVisible={showModal}
-            testIDPrefix="set-instructions.confirm-modal"
-          >
-            <ModalContent
-              description={description}
-              screenHeight={screenHeight}
-              screenWidth={screenWidth}
-              guessPath={false} 
-            />
-          </CenteredModal> 
-      }
-      {
-        isTutorial && 
-          <TutorialOverlay 
-            screen={"SetInstructionScreen"}
-            isPortrait={isPortrait}
-            instructionsPosition={{top:0, left: 0}}
+    <PrivateGroupThemeProvider group={group}>
+      <View style={styles.container} testID="set-instructions.screen">
+        <ImageBackground
+          accessibilityLabel="Set instructions image"
+          source={{uri : uri}}
+          resizeMode='stretch'
+          style={imageDimensionStyle}
+          testID="set-instructions.image"
+        >
+          <HideDescription
+            onSubmit={handlePressDescription}
+            onCancel={onCancelGoBack}
+            language={language}
+            onLanguageChange={handleLanguageChange}
+            languageError={languageError}
+            categories={selectableCategories}
+            categoriesError={categoriesError}
+            onRetryCategories={loadCategories}
+            selectedCategory={selectedCategory}
+            onCategorySelect={handleCategorySelect}
           />
+          <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
+        </ImageBackground>
+        {
+          showModal &&
+            <CenteredModal
+              onPress={handleConfirmModal}
+              onCancel={onCancelModal}
+              isModalVisible={showModal}
+              testIDPrefix="set-instructions.confirm-modal"
+            >
+              <ModalContent
+                description={description}
+                screenHeight={screenHeight}
+                screenWidth={screenWidth}
+                guessPath={false}
+              />
+            </CenteredModal>
         }
-    </View>
+        {
+          isTutorial &&
+            <TutorialOverlay
+              screen={"SetInstructionScreen"}
+              isPortrait={isPortrait}
+              instructionsPosition={{top:0, left: 0}}
+            />
+          }
+      </View>
+    </PrivateGroupThemeProvider>
   )
 };
 

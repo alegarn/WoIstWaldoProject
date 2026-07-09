@@ -12,7 +12,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
 
   // States _________________________________________________________________
   const [showFullDescription, setShowFullDescription] = useState(false);
-  const [imageChoice, setImageChoice] = useState(require('../../assets/icons/tears.png'));
+  const [imageChoice, setImageChoice] = useState(require("../../assets/icons/bin.png"));
   const xPosition = useRef(new Animated.Value(0)).current;
   const yPosition = useRef(new Animated.Value(0)).current; // Add yPosition
   
