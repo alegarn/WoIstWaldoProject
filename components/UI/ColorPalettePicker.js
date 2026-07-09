@@ -26,6 +26,21 @@ export const DEFAULT_COLOR_PALETTE = [
 
 const SHADE_COUNT = 10;
 
+const appearanceThemes = {
+  dark: {
+    label: '#fff',
+    expandedBorder: 'rgba(255,255,255,0.5)',
+    shadeGrid: 'rgba(0,0,0,0.25)',
+    selectedBorder: '#fff',
+  },
+  light: {
+    label: '#1D133D',
+    expandedBorder: 'rgba(101,40,247,0.35)',
+    shadeGrid: 'rgba(101,40,247,0.08)',
+    selectedBorder: '#1D133D',
+  },
+};
+
 function noHash(hex) {
   return hex.replace('#', '');
 }
@@ -53,7 +68,9 @@ export default function ColorPalettePicker({
   palette = DEFAULT_COLOR_PALETTE,
   testIDPrefix = 'color-palette-picker',
   accessibilityLabel,
+  appearance = 'dark',
 }) {
+  const theme = appearanceThemes[appearance] ?? appearanceThemes.dark;
   const normalizedValue = typeof value === 'string' ? value.toUpperCase() : value;
 
   // base -> shades. Memoized so it stays stable across renders for a given palette.
@@ -82,7 +99,7 @@ export default function ColorPalettePicker({
 
   return (
     <View style={styles.container}>
-      {label ? <Text style={styles.label}>{label}</Text> : null}
+      {label ? <Text style={[styles.label, { color: theme.label }]}>{label}</Text> : null}
       <View style={styles.grid} accessibilityLabel={accessibilityLabel}>
         {basesWithShades.map((base) => {
           const selected = base.shades.includes(normalizedValue);
@@ -99,7 +116,7 @@ export default function ColorPalettePicker({
                 styles.swatch,
                 { backgroundColor: base.hex },
                 selected && styles.selected,
-                isExpanded && styles.expandedBase,
+                isExpanded && [styles.expandedBase, { borderColor: theme.expandedBorder }],
               ]}
             />
           );
@@ -108,7 +125,7 @@ export default function ColorPalettePicker({
 
       {expanded && (
         <View
-          style={styles.shadeGrid}
+          style={[styles.shadeGrid, { backgroundColor: theme.shadeGrid }]}
           testID={`${testIDPrefix}.shades.${noHash(expanded.hex)}`}
         >
           {expanded.shades.map((shadeHex) => {
@@ -124,7 +141,7 @@ export default function ColorPalettePicker({
                 style={[
                   styles.shade,
                   { backgroundColor: shadeHex },
-                  selected && styles.selected,
+                  selected && [styles.selected, { borderColor: theme.selectedBorder }],
                 ]}
               />
             );
@@ -137,10 +154,10 @@ export default function ColorPalettePicker({
 
 const styles = StyleSheet.create({
   container: { marginTop: 12 },
-  label: { color: '#fff', fontSize: 16, marginBottom: 4 },
+  label: { fontSize: 16, marginBottom: 4 },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   swatch: { width: 40, height: 40, borderRadius: 8 },
-  expandedBase: { borderWidth: 2, borderColor: 'rgba(255,255,255,0.5)' },
+  expandedBase: { borderWidth: 2 },
   shadeGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -148,8 +165,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     padding: 8,
     borderRadius: 8,
-    backgroundColor: 'rgba(0,0,0,0.25)',
   },
   shade: { width: 32, height: 32, borderRadius: 6 },
-  selected: { borderWidth: 3, borderColor: '#fff' },
+  selected: { borderWidth: 3 },
 });

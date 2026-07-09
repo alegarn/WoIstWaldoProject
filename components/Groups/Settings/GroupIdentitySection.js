@@ -4,7 +4,7 @@ import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import ColorPalettePicker from '../../UI/ColorPalettePicker';
 import SettingsSection from './SettingsSection';
-import { settingsTokens as t } from './settingsTokens';
+import { getSettingsTokens, settingsTokens } from './settingsTokens';
 import { GlobalStyle } from '../../../constants/theme';
 import { AuthContext } from '../../../store/auth-context';
 import { updateGroupSettings } from '../../../services/groups/groupApi';
@@ -24,8 +24,10 @@ export default function GroupIdentitySection({
   onRefresh,
   onSaved,
   testIDPrefix = 'group-settings',
+  appearance = 'dark',
 }) {
   const authContext = useContext(AuthContext);
+  const t = getSettingsTokens(appearance);
   const [name, setName] = useState(initialName ?? '');
   const [primaryColor, setPrimaryColor] = useState(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
   const [secondaryColor, setSecondaryColor] = useState(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
@@ -64,27 +66,37 @@ export default function GroupIdentitySection({
 
   return (
     <SettingsSection
+      appearance={appearance}
       testID={`${testIDPrefix}.section.identity`}
       title="Group identity"
       caption="Name and colors shown across the group."
     >
-      <Text style={styles.fieldLabel}>Name</Text>
+      <Text style={[styles.fieldLabel, { color: t.muted }]}>Name</Text>
       <TextInput
         accessibilityLabel="Group name"
         value={name}
         onChangeText={setName}
-        style={styles.input}
+        style={[
+          styles.input,
+          {
+            color: t.text,
+            backgroundColor: t.inputSurface,
+            borderColor: t.hairlineInput,
+          },
+        ]}
         testID={`${testIDPrefix}.input.name`}
         placeholder="Group name"
         placeholderTextColor={t.mutedSoft}
       />
       <ColorPalettePicker
+        appearance={appearance}
         label="Primary color"
         value={primaryColor}
         onValueChange={setPrimaryColor}
         testIDPrefix={`${testIDPrefix}.color-primary`}
       />
       <ColorPalettePicker
+        appearance={appearance}
         label="Secondary color"
         value={secondaryColor}
         onValueChange={setSecondaryColor}
@@ -96,10 +108,15 @@ export default function GroupIdentitySection({
         onPress={saveSettings}
         disabled={isSaving}
         testID={`${testIDPrefix}.button.save-colors`}
-        style={({ pressed }) => [styles.saveAction, pressed && styles.pressed, isSaving && styles.saveActionBusy]}
+        style={({ pressed }) => [
+          styles.saveAction,
+          { backgroundColor: t.accent },
+          pressed && styles.pressed,
+          isSaving && styles.saveActionBusy,
+        ]}
       >
-        <Ionicons name="save-outline" size={17} color={t.text} />
-        <Text style={styles.saveActionText}>{label}</Text>
+        <Ionicons name="save-outline" size={17} color={t.accentText} />
+        <Text style={[styles.saveActionText, { color: t.accentText }]}>{label}</Text>
       </Pressable>
     </SettingsSection>
   );
@@ -107,17 +124,34 @@ export default function GroupIdentitySection({
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
-  fieldLabel: { color: t.muted, fontSize: 13, fontWeight: '600', marginTop: 12, marginBottom: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   input: {
-    color: t.text, fontSize: 16, fontWeight: '600',
-    paddingVertical: 10, paddingHorizontal: 12, borderRadius: t.radiusInput,
-    backgroundColor: 'rgba(0,0,0,0.18)',
-    borderWidth: 1, borderColor: t.hairlineInput,
+    fontSize: 16,
+    fontWeight: '600',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: settingsTokens.radiusInput,
+    borderWidth: 1,
   },
   saveAction: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    backgroundColor: t.accent, borderRadius: 10, paddingVertical: 12, marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 14,
   },
   saveActionBusy: { opacity: 0.6 },
-  saveActionText: { color: t.text, fontSize: 15, fontWeight: '700' },
+  saveActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });

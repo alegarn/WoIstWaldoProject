@@ -1,5 +1,4 @@
 const mockHomeCard = jest.fn(() => null);
-const mockBigButton = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockCenteredModal = jest.fn();
 const mockColorPalettePicker = jest.fn();
@@ -27,13 +26,6 @@ jest.mock('@react-native-vector-icons/ionicons', () => ({
 jest.mock('../../components/UI/HomeCard', () => {
   return function MockHomeCard(props) {
     mockHomeCard(props);
-    return null;
-  };
-});
-
-jest.mock('../../components/UI/BigButton', () => {
-  return function MockBigButton(props) {
-    mockBigButton(props);
     return null;
   };
 });
@@ -98,7 +90,7 @@ jest.mock('../../hooks/useGroupsHub', () => ({
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Share, Alert } from 'react-native';
+import { Share, Alert, StyleSheet } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
 import { handleOrientation } from '../../utils/orientation';
@@ -265,10 +257,23 @@ describe('PrivateHomeScreen', () => {
         headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
       });
 
+      const identitySection = renderer.root
+        .findAllByProps({ testID: 'private-home.section.identity' })
+        .find((node) => node.props.style);
+
+      expect(identitySection).toBeTruthy();
+      expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe('#F5F2FC');
+
+      const nameInput = renderer.root.findByProps({ testID: 'private-home.input.name' });
+      expect(StyleSheet.flatten(nameInput.props.style).backgroundColor).toBe('#FFFFFF');
+
       // Editor opened -> two color pickers rendered.
       expect(mockColorPalettePicker.mock.calls.length).toBeGreaterThanOrEqual(2);
 
       const colorCalls = mockColorPalettePicker.mock.calls;
+      expect(colorCalls[colorCalls.length - 2][0].appearance).toBe('light');
+      expect(colorCalls[colorCalls.length - 1][0].appearance).toBe('light');
+
       await act(async () => {
         colorCalls[colorCalls.length - 2][0].onValueChange('#111111'); // primary
         colorCalls[colorCalls.length - 1][0].onValueChange('#EEEEEE'); // secondary

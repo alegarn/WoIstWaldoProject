@@ -1,6 +1,6 @@
 import { View, Text, StyleSheet } from 'react-native';
 
-import { settingsTokens as t } from './settingsTokens';
+import { getSettingsTokens, settingsTokens } from './settingsTokens';
 
 /**
  * Presentational shell shared by every GroupSettings section.
@@ -16,20 +16,22 @@ export default function SettingsSection({
   testID,
   headerRight,
   children,
+  appearance = 'dark',
 }) {
+  const t = getSettingsTokens(appearance);
   const showHeader = title || caption || typeof count === 'number' || headerRight;
   return (
-    <View style={styles.section} testID={testID}>
+    <View style={[styles.section, { backgroundColor: t.panel }]} testID={testID}>
       {showHeader && (
         <View style={styles.header}>
           <View style={styles.headingText}>
-            {title ? <Text style={styles.title}>{title}</Text> : null}
-            {caption ? <Text style={styles.caption}>{caption}</Text> : null}
+            {title ? <Text style={[styles.title, { color: t.text }]}>{title}</Text> : null}
+            {caption ? <Text style={[styles.caption, { color: t.muted }]}>{caption}</Text> : null}
           </View>
           {headerRight}
           {typeof count === 'number' && (
-            <View style={styles.countBadge}>
-              <Text style={styles.countBadgeText}>{count}</Text>
+            <View style={[styles.countBadge, { backgroundColor: t.accent }]}>
+              <Text style={[styles.countBadgeText, { color: t.accentText }]}>{count}</Text>
             </View>
           )}
         </View>
@@ -41,9 +43,8 @@ export default function SettingsSection({
 
 const styles = StyleSheet.create({
   section: {
-    backgroundColor: t.panel,
     padding: 12,
-    borderRadius: t.radiusPanel,
+    borderRadius: settingsTokens.radiusPanel,
   },
   header: {
     flexDirection: 'row',
@@ -52,17 +53,16 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   headingText: { flex: 1, marginRight: 12 },
-  title: { color: t.text, fontSize: 18, fontWeight: '700' },
-  caption: { color: t.muted, fontSize: 13, marginTop: 2 },
+  title: { fontSize: 18, fontWeight: '700' },
+  caption: { fontSize: 13, marginTop: 2 },
   countBadge: {
     minWidth: 26,
     height: 26,
     paddingHorizontal: 8,
-    borderRadius: t.radiusPill,
-    backgroundColor: t.accent,
+    borderRadius: settingsTokens.radiusPill,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
   },
-  countBadgeText: { color: t.text, fontSize: 13, fontWeight: '700' },
+  countBadgeText: { fontSize: 13, fontWeight: '700' },
 });

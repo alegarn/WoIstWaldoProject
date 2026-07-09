@@ -319,6 +319,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
             initialName={group?.name ?? ''}
             initialPrimaryColor={group?.primary_color ?? GlobalStyle.color.primaryColor}
             initialSecondaryColor={group?.secondary_color ?? GlobalStyle.color.secondaryColor}
+            appearance="light"
             onRefresh={refresh}
             onSaved={closeColorEditor}
             testIDPrefix="private-home"

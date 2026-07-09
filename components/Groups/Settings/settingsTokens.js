@@ -7,12 +7,14 @@ import { GlobalStyle } from '../../../constants/theme';
  * the look stays coherent and can evolve by editing one file (Open/Closed:
  * extend the palette here rather than scattering hexes across components).
  */
-export const settingsTokens = {
+const darkSettingsTokens = {
   panel: GlobalStyle.color.primaryColor800,
   inset: GlobalStyle.color.primaryColor700,
   insetDeep: GlobalStyle.color.primaryColor600,
   accent: GlobalStyle.color.primaryColor,
+  accentText: '#fff',
   accentSoft: GlobalStyle.color.secondaryColor,
+  inputSurface: 'rgba(1,0,0,0.18)',
 
   hairline: 'rgba(160,118,249,0.18)',
   hairlineStrong: 'rgba(160,118,249,0.35)',
@@ -31,3 +33,28 @@ export const settingsTokens = {
   radiusInput: 6,
   radiusPill: 13,
 };
+
+const lightSettingsTokens = {
+  ...darkSettingsTokens,
+  panel: '#F5F2FC',
+  inset: '#FFFFFF',
+  insetDeep: '#EFEAFC',
+  text: GlobalStyle.color.primaryColor800,
+  muted: '#6B6680',
+  mutedSoft: '#958FA8',
+  hairline: 'rgba(101,40,247,0.12)',
+  hairlineStrong: 'rgba(101,40,247,0.24)',
+  hairlineInput: 'rgba(101,40,247,0.18)',
+  inputSurface: '#FFFFFF',
+};
+
+export const settingsAppearances = {
+  dark: darkSettingsTokens,
+  light: lightSettingsTokens,
+};
+
+export const settingsTokens = darkSettingsTokens;
+
+export function getSettingsTokens(appearance = 'dark') {
+  return settingsAppearances[appearance] ?? settingsTokens;
+}
