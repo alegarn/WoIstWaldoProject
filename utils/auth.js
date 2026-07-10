@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const AUTH_STORAGE_KEYS = ['token', 'userId'];
-const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished'];
+const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished', 'isPremium', 'premiumTier', 'premiumExpiresAt', 'isGroupOwner', 'activeGroupId', 'isPrivateMode'];
 const BEARER_TOKEN_REGEX = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
 
 
@@ -49,6 +49,12 @@ export async function getStoredAuthState() {
   return {
     ...storedState,
     isTutorialFinished: parseStoredJsonValue(storedState.isTutorialFinished),
+    isPremium: parseStoredJsonValue(storedState.isPremium),
+    premiumTier: parseStoredJsonValue(storedState.premiumTier),
+    premiumExpiresAt: parseStoredJsonValue(storedState.premiumExpiresAt),
+    isGroupOwner: parseStoredJsonValue(storedState.isGroupOwner),
+    activeGroupId: parseStoredJsonValue(storedState.activeGroupId),
+    isPrivateMode: parseStoredJsonValue(storedState.isPrivateMode),
   };
 };
 
@@ -104,7 +110,7 @@ export function setHeaders({ token }) {
   return headers;
 };
 
-function mapRequestError(error) {
+export function mapRequestError(error) {
   return {
     status: error?.response?.status ?? error?.request?.status,
     data: error?.response?.data ?? error,
@@ -210,9 +216,13 @@ export async function checkSecureStoreItem({ secureStoreValue, context }) {
   return context?.[secureStoreValue] ?? null;
 };
 
-export async function getUserName({ context }) {
+// Lightweight authed probe used at app launch to confirm the restored JWT
+// is still server-valid. Hits an existing cheap authed route and inspects
+// only the HTTP status (401/403 ⇒ logout; anything else ⇒ keep session).
+// Response body is intentionally unused by the caller.
+export async function validateStoredSession({ context }) {
   const { token, userId } = await getBackendHeaders(context);
-  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_user_name`;
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_is_tutorial_finished`;
   const headers = setHeaders({ token });
   const config = {
     headers: headers,
@@ -222,7 +232,7 @@ export async function getUserName({ context }) {
     return { status: response.status, data: response.data };
   }).catch((error) => {
     const mappedError = mapRequestError(error);
-    return { status: mappedError.status, data: mappedError.data};
+    return { status: mappedError.status, data: mappedError.data };
   });
 
   return response;

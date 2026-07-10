@@ -10,6 +10,8 @@ This directory contains login-first Maestro flows for the deterministic app runt
 - `guess-login-saved-picture-failure.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, verifies the failure result actions, then uses `Next Card` to confirm direct continuation into the next guess.
 - `hide-to-guess-to-result.yml`: assumes an already-connected, logged-in session on HomeScreen; runs the deterministic hide -> guess -> ranking journey using the saved hide payload bridge.
 - `auth-boot-signup.yml`: signup smoke flow that generates unique credentials at runtime so it can be rerun without email or username collisions.
+- `private-manage-mode-smoke.yml`: NON-destructive smoke of the owner-only private category manage UI. Switches to a private group, opens the GuessPathScreen "manage" modal, asserts the Update-images / Delete-categories options, and that the per-card pencil / trash icons appear only in the chosen mode. Never taps a pencil/trash. See "Private group flows" below for preconditions.
+- `private-category-delete.yml`: DESTRUCTIVE smoke of the owner-only Delete-categories path. Manage → delete mode → tap the first card's trash → confirm the system Alert → assert the grid reloaded with the category removed. Issues a real backend DELETE (category CRUD is not stubbed). See "Private group flows" below for preconditions.
 - `e2e.env.example.yaml`: sample Maestro flow variables only.
 
 ## Runtime Requirement
@@ -82,6 +84,25 @@ maestro test .maestro/hide-to-guess-to-result.yml
 ```
 
 These flows take no env vars.
+
+### Private group flows
+
+The two `private-*.yml` flows exercise the owner-only category manage UI on a **private** group's GuessPathScreen. Unlike the public flows above, the private surface is NOT reachable from the default seeded state — these preconditions must hold on the device before running them (after the Phase 1 login):
+
+- The logged-in account **owns** at least one private group.
+- `private-category-delete.yml` requires that group to have **≥ 2 owner-created categories** (it deletes one and asserts a trash icon remains for the reload).
+- The app is on HomeScreen at flow start.
+
+Notes:
+- These flows inline their own private→public cleanup (switch-to-public) because `_shared/return_home.yaml` is tuned for the public stack (it asserts `home.button.ranking` directly).
+- `private-category-delete.yml` is **destructive**: category CRUD is not stubbed by e2e mode, so it issues a real backend `DELETE` and the test account loses one category per run. Reseed as needed.
+- Per-card pencil/trash testIDs embed the category UUID, so the flows target the first match via regex (`guess-path.category.edit.*` / `guess-path.category.delete.*`); they do not assert a named category. Precise handler assertions live in `__tests__/GuessPathScreen.test.js`.
+- The category-thumbnail picker has no e2e bypass, so the update-image path is covered only up to "pencil icon appears in update mode"; a full thumbnail-swap device test needs an e2e hook in `categoryThumbnailUpload.js`.
+
+```bash
+maestro test .maestro/private-manage-mode-smoke.yml
+maestro test .maestro/private-category-delete.yml
+```
 
 The Android app id is `com.alegarn.WoIstWaldoProject`.
 

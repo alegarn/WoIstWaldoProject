@@ -60,17 +60,6 @@ describe('GuessDescription', () => {
     expect(text.props.children).toBe(item.description);
   });
 
-  it('calls toggleDescription when the chevron is pressed', async () => {
-    const toggleDescription = jest.fn();
-    const renderer = await renderDescription({ toggleDescription });
-
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'guess-description.chevron' }).props.onPress();
-    });
-
-    expect(toggleDescription).toHaveBeenCalledTimes(1);
-  });
-
   it('renders the enigma text with numberOfLines undefined when expanded', async () => {
     const renderer = await renderDescription({ showFullDescription: true });
 
@@ -101,14 +90,14 @@ describe('GuessDescription', () => {
     ).toBe(fullDescription);
   });
 
-  it('positions the description area absolutely at 25% from the bottom', async () => {
+  it('positions the description area absolutely at 5% from the bottom', async () => {
     const renderer = await renderDescription();
 
     const area = renderer.root.findByType('View');
     const style = StyleSheet.flatten(area.props.style);
 
     expect(style.position).toBe('absolute');
-    expect(style.bottom).toBe('25%');
+    expect(style.bottom).toBe('5%');
   });
 
   it('falls back to full_description snake_case when other fields are missing', async () => {

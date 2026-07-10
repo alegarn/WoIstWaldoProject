@@ -2,7 +2,7 @@ import { Modal, View, Text,  StyleSheet, Platform } from 'react-native';
 import Button from './Button';
 
 
-export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal'}) {
+export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal', confirmTestID, cancelTestID, confirmLabel, cancelLabel }) {
   const shouldRenderTextChild = typeof children === 'string' || typeof children === 'number';
 
   return (
@@ -26,17 +26,17 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
               accessibilityLabel={`${testIDPrefix} confirm`}
               onPress={onPress}
               mode={Platform.OS === "ios" ? "flat" : null}
-              testID={`${testIDPrefix}.confirm`}
-              thin={true}>Confirm</Button>
+              testID={confirmTestID || `${testIDPrefix}.confirm`}
+              thin={true}>{confirmLabel || "Confirm"}</Button>
           </View>
           <View style={styles.space}>
             <Button
               accessibilityLabel={`${testIDPrefix} close`}
               onPress={onCancel}
               mode={Platform.OS === "ios" ? "flat" : null}
-              testID={`${testIDPrefix}.close`}
+              testID={cancelTestID || `${testIDPrefix}.close`}
               thin={true}
-              cancel={true}>Close</Button>
+              cancel={true}>{cancelLabel || "Close"}</Button>
           </View>
           </View>
         </View>
@@ -63,6 +63,8 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     alignItems: 'center',
     maxWidth: '80%',
+    maxHeight: '85%',
+    overflow: 'hidden',
   },
   modalText: {
     fontSize: 18,
@@ -71,6 +73,8 @@ const styles = StyleSheet.create({
   },
   modalBody: {
     marginBottom: 10,
+    flexShrink: 1,
+    width: '100%',
   },
   buttonContainer: {
     flexDirection: 'row',

@@ -7,17 +7,20 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getImages } from '../../utils/imagesRequests';
-import { getE2EHiddenGuessCard, getLocalImages, storeImageList, getLastImageId, emptyImageList, removeImageFromList, updateImageList, getLastImageUuid, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, emptyImageList, removeImageFromList, updateImageList, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
+import { readGroupFeedCache, writeGroupFeedCache } from '../../services/groups/groupFeedCache';
+import { fetchCardBatch, persistCardBatch } from '../../services/cardDeck';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
 
   const categoryKey = category?.key || 'all';
   const lang = language || 'any';
+  const privateGroupId = scope?.kind === 'private' ? scope.groupId : null;
+  const isPrivateScope = !!privateGroupId;
 
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
@@ -32,6 +35,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const asyncImagesAreLoadingRef = useRef(false);
   asyncImagesAreLoadingRef.current = asyncImagesAreLoading;
 
+  const allDeckWarmedRef = useRef(false);
+
   // Functions __________________________________________________________________
 
   /*
@@ -43,18 +48,25 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const handleData = useCallback(async (data) => {
     console.log("handleData");
 
-    const lastId = await getLastImageId(categoryKey, lang);
+    const currentImageList = imageListRef.current;
+    const lastId = currentImageList?.length
+      ? currentImageList.reduce((maxId, image) => Math.max(maxId, image?.listId ?? 0), 0)
+      : await getLastImageId(categoryKey, lang);
     // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
     const updatedImageList = data?.map((image, index) => ({
      ...image,
      listId: lastId + 1 + index,
     }));
-   
-    const currentImageList = imageListRef.current;
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
-      await storeImageList(updatedImageList, categoryKey, lang);
+      await persistCardBatch({
+        cards: updatedImageList,
+        categoryKey,
+        categoryId: category?.id,
+        language: lang,
+        scope,
+      });
       setImageList(updatedImageList);
 
       if (updatedImageList?.length > 0) {
@@ -70,23 +82,36 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
-        const newImageList = await updateImageList(updatedImageList, categoryKey, lang);
+        let newImageList;
+        if (isPrivateScope) {
+          newImageList = [...currentImageList, ...updatedImageList];
+          await persistCardBatch({
+            cards: newImageList,
+            categoryKey,
+            categoryId: category?.id,
+            language: lang,
+            scope,
+          });
+        } else {
+          newImageList = await updateImageList(updatedImageList, categoryKey, lang);
+        }
         setImageList(newImageList);
         return true
       };
 
       return false
     };
-  }, [categoryKey, lang]);
+  }, [category?.id, categoryKey, isPrivateScope, lang, scope]);
 
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
-    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
-    const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
-    const response = await getImages(pictureId, context, {
-      category_id: category?.id === 'all' ? undefined : category?.id,
-      category_key: category?.key || 'all',
+    const response = await fetchCardBatch({
+      categoryKey,
+      categoryId: category?.id,
       language,
+      scope,
+      authContext: context,
+      pictureIdOverride,
     });
 
     if (response.isError === true) {
@@ -98,7 +123,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData, category, language, categoryKey, lang]);
+  }, [context, handleData, category, language, categoryKey]);
 
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
@@ -137,7 +162,9 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     }
 
     //await emptyImageList(categoryKey, lang);
-    const localImageList = await getLocalImages(categoryKey, lang);
+    const localImageList = isPrivateScope
+      ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang }))?.images ?? null
+      : await getLocalImages(categoryKey, lang);
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
@@ -148,15 +175,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       setImageList(localImageList);
       await handleImagesLoading();
     };
-  }, [handleImagesLoading]);
+  }, [category?.id, categoryKey, handleImagesLoading, isPrivateScope, lang, privateGroupId]);
 
 
   const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
-    await removeImageFromList(id, categoryKey, lang);
+    if (!isPrivateScope) {
+      await removeImageFromList(id, categoryKey, lang);
+    }
     await deleteImageFromStorage(imageFilePath);
     return null;
-  }, [categoryKey, lang]);
+  }, [categoryKey, isPrivateScope, lang]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -174,13 +203,32 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         await deleteImage(id, image.imageFile);
       }
       setImageList(updatedImageList);
+      if (isPrivateScope) {
+        await writeGroupFeedCache(
+          privateGroupId,
+          { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang },
+          { images: updatedImageList, nextCursor: null },
+        );
+      }
 
       if (updatedImageList?.length < 4 && !asyncImagesAreLoadingRef.current) {
         await handleImagesLoading();
       }
+
+      if (updatedImageList?.length < 4
+        && !asyncImagesAreLoadingRef.current
+        && !isE2EMode()
+        && !allDeckWarmedRef.current) {
+        allDeckWarmedRef.current = true;
+        fetchCardBatch({ categoryKey: 'all', language, scope, authContext: context })
+          .then((r) => (r && !r.isError && r.images?.length
+            ? persistCardBatch({ cards: r.images, categoryKey: 'all', language, scope })
+            : null))
+          .catch(() => {});
+      }
       return null;
     },
-    [deleteImage, handleImagesLoading]
+    [category?.id, context, deleteImage, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]
   );
 
   // Effects __________________________________________________________________

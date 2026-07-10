@@ -7,13 +7,15 @@ import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import TableComponent from '../components/UI/TableComponent';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
+import { useActiveGroup } from '../hooks/useActiveGroup';
 
 // Bounded resident window: 150 rows ≈ 7–8 cursor pages of 20 rows.
 // Keeps memory stable on low-end devices while allowing deep browsing.
 // Old slices are evicted when the cap is exceeded (see fetchCursorPage).
 const RANKING_RESIDENT_ROW_CAP = 150;
 
-export default function RankingScreen() {
+export default function RankingScreen({ route, navigation }) {
 
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -23,6 +25,10 @@ export default function RankingScreen() {
   const fetchingRef = useRef(false);
 
   const context = useContext(AuthContext);
+  const routeScope = route?.params?.scope;
+  const { group, theme, isPrivate } = useScopedPrivateGroupTheme(routeScope);
+  const { scope: activeScope } = useActiveGroup();
+  const rankingScope = isPrivate ? (routeScope ?? activeScope) : 'initial';
 
   const tableHeaders = RANKING?.tableHeaders;
 
@@ -34,7 +40,7 @@ export default function RankingScreen() {
   } : null;
 
   const showSpecificDatum = useCallback(async (username) => {
-    const response = await getUserScores({username, context: context});
+    const response = await getUserScores({username, context: context, scope: rankingScope});
     if (response?.status !== 200) {
       if (response?.status === 404) {
         Alert.alert("User not found", `No scores found for ${username}.`);
@@ -62,7 +68,7 @@ export default function RankingScreen() {
     infoString += `Guessed Images Count: ${guessInfo.guess_count}\n`;
 
     Alert.alert("Complementary Scores of " + username, infoString);
-  }, [context]);
+  }, [context, rankingScope]);
 
   function handleError(message, status) {
     if (status === 401) {
@@ -75,10 +81,22 @@ export default function RankingScreen() {
     };
   };
 
+  useEffect(() => {
+    if (theme) {
+      navigation.setOptions({
+        title: group?.name ?? 'Ranking',
+        headerStyle: { backgroundColor: theme.primaryColor },
+        headerTintColor: theme.headerTintColor,
+      });
+    } else {
+      navigation.setOptions({ title: group?.name ?? 'Ranking' });
+    }
+  }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor]);
+
 
 
   const handleRankingData = useCallback(async () => {
-    const response = await getRankingData(context, { scope: 'initial', top: 10, window: 5 });
+    const response = await getRankingData(context, { scope: rankingScope, top: 10, window: 5 });
 
     if (response?.status !== 200) {
       handleError(response?.message, response?.status);
@@ -96,19 +114,20 @@ export default function RankingScreen() {
 
     setSlices([converted]);
     setNextCursor(cursor);
-    // Initial response always enables cursor browsing; the first cursor
-    // fetch (null cursor = start from top) provides the first browse page.
     setHasMore(true);
     setMode('initial');
     return response;
-  }, [context]);
+  }, [context, rankingScope]);
 
   const fetchCursorPage = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
     fetchingRef.current = true;
     setIsLoading(true);
 
-    const response = await getRankingData(context, { after: nextCursor });
+    const cursorParams = isPrivate
+      ? { scope: rankingScope, after: nextCursor }
+      : { after: nextCursor };
+    const response = await getRankingData(context, cursorParams);
 
     if (response?.status !== 200) {
       fetchingRef.current = false;
@@ -152,7 +171,7 @@ export default function RankingScreen() {
     setMode('browse');
     fetchingRef.current = false;
     setIsLoading(false);
-  }, [context, hasMore, nextCursor, displayRows.length, mode]);
+  }, [context, hasMore, nextCursor, displayRows.length, mode, rankingScope]);
 
   const handleEndReached = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
@@ -164,7 +183,7 @@ export default function RankingScreen() {
   }, [handleRankingData])
 
   return (
-    <>
+    <PrivateGroupThemeProvider group={group}>
       {rankingDatum ? (
         <View style={styles.screen} testID="ranking.screen">
           <TableComponent data={rankingDatum} onPress={showSpecificDatum} onEndReached={handleEndReached} />
@@ -172,7 +191,7 @@ export default function RankingScreen() {
       ) : (
         <LoadingOverlay message={"Loading ranking table..."}/>
       )}
-    </>
+    </PrivateGroupThemeProvider>
   );
 };
 

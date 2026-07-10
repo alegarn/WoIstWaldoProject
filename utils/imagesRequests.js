@@ -2,7 +2,14 @@ import axios from "axios";
 import { File, Paths } from 'expo-file-system';
 import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
+
+export { getBackendHeaders };
 import { saveLastImageUuid } from "./storageDatum";
+import { fetchPrivateFeedPageForGame } from "../services/groups/groupFeedApi";
+
+function isPrivateScope(scope) {
+  return scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
+}
 
 const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
 
@@ -22,14 +29,14 @@ function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
   return headers;
 };
 
-function setStorageDownloadHeaders(token) {
+export function setStorageDownloadHeaders(token) {
   return {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
   };
 };
 
-function usesBackendStorage(storageUrl) {
+export function usesBackendStorage(storageUrl) {
   const backendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
 
   return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
@@ -247,6 +254,15 @@ export async function getImages(pictureId, context, filters = {}) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
 
+  if (isPrivateScope(filters?.scope)) {
+    return fetchPrivateFeedPageForGame(pictureId, context, {
+      groupId: filters.scope.groupId,
+      categoryId: filters?.category_id,
+      language: filters?.language,
+      categoryKey: filters?.category_key,
+    });
+  }
+
   const { token, userId } = await getBackendHeaders(context);
   const headers = setHeaders({ token });
 
@@ -351,7 +367,7 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
     const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
       .then((response) => {
         if (response.status === 200) {
-          console.log("post img base64 ok", response);
+          console.log("post img base64 ok", Object.keys(response).filter((key) => key !== 'data'));
         };
         return response;
       })

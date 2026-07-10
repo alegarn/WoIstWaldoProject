@@ -85,4 +85,52 @@ describe('GuessScreen', () => {
       expect.objectContaining({ screen: 'GuessScreen', isPortrait: true })
     );
   });
+
+  it('skips AdScreen and goes straight to ResultScreen for private scope guesses', async () => {
+    const navigation = { replace: jest.fn() };
+    const scope = { kind: 'private', groupId: 'group-7' };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        scope,
+      },
+    };
+    isOnTarget.mockReturnValue(false);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = mockGuessPicture.mock.calls[mockGuessPicture.mock.calls.length - 1][0];
+    pictureProps.toAdScreen({ location: { x: 0.1, y: 0.2 } });
+
+    expect(navigation.replace).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', {
+      onTarget: false,
+      imageFile: 'file:///waldo.jpg',
+      pictureId: 'image-1',
+      description: 'Find Waldo',
+      imageHeight: 1200,
+      imageWidth: 800,
+      isPortrait: true,
+      hiddenLocation: { x: 0.5, y: 0.5 },
+      screenHeight: 640,
+      screenWidth: 320,
+      listId: 3,
+      isTutorial: false,
+      category: { id: 'cat-1', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+  });
 });

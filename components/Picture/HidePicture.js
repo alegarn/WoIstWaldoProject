@@ -18,7 +18,8 @@ export default function HidePicture({
   imageWidth, 
   imageHeight, 
   screenDimensions, 
-  isTutorial }) {
+  isTutorial,
+  scope }) {
 
   const [showFilter, setShowFilter] = useState(true);
   const [touchLocation, setTouchLocation] = useState(null);
@@ -104,7 +105,7 @@ const toggleDebugModal = () => {
 
   const handleConfirm = () => {
     setShowModal(false);
-    navigation.navigate( 'SetInstructions', {
+    const routeParams = {
       uri: uri,
       imageWidth: imageWidth,
       imageHeight: imageHeight,
@@ -114,7 +115,15 @@ const toggleDebugModal = () => {
       touchLocation: touchLocation,
       target: target,
       imageDimensionStyle: imageDimensionStyle,
-      isTutorial: isTutorial
+      isTutorial: isTutorial,
+    };
+
+    if (scope?.kind === 'private') {
+      routeParams.scope = scope;
+    }
+
+    navigation.navigate( 'SetInstructions', {
+      ...routeParams,
     });
   };
 

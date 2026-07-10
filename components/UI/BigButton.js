@@ -1,5 +1,6 @@
 import { Text, StyleSheet, Dimensions, Pressable, Platform, View } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
+import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 const screenHeight = Dimensions.get('window').height;
 const hideGuessButtonHeight = screenHeight * 0.35;
@@ -9,6 +10,9 @@ const hideGuessButtonWidth = screenWidth * 0.75;
 const rankingButtonWidth = screenWidth * 0.75;
 
 const BigButton = (({ text, onPress, buttonStyle, testID, accessibilityLabel }) => {
+  const theme = usePrivateGroupTheme();
+  const fill = theme ? theme.primaryColor : GlobalStyle.color.primaryColor;
+  const pressedFill = theme ? (theme.insetDeep ?? theme.primaryColor) : GlobalStyle.color.primaryColor700;
   return (
     <View>
         <Pressable
@@ -18,7 +22,8 @@ const BigButton = (({ text, onPress, buttonStyle, testID, accessibilityLabel }) 
         style={({ pressed }) =>
           [
             styles.homeButton,
-            pressed && styles.pressed,
+            { backgroundColor: fill },
+            pressed && { opacity: 0.75, backgroundColor: pressedFill },
             buttonStyle === 'big' ? styles.bigButton : styles.rankingButton,
             Platform.OS === 'ios' && styles.iOSButton
           ]
@@ -31,16 +36,12 @@ const BigButton = (({ text, onPress, buttonStyle, testID, accessibilityLabel }) 
 });
 
 const styles = StyleSheet.create({
-  pressed: {
-    opacity: 0.75,
-    backgroundColor: GlobalStyle.color.primaryColor700,
-  },
   homeButton: {
-    backgroundColor: GlobalStyle.color.primaryColor,
     padding: 10,
     borderRadius: 5,
     borderWidth: 1,
     marginVertical: 10,
+    alignSelf: 'center',
     alignItems: 'center',
     justifyContent: 'center',
   },

@@ -1,9 +1,10 @@
 import { StyleSheet, Text, Pressable, Animated, ImageBackground, View } from 'react-native';
 import { useRef } from 'react';
-import { GlobalStyle } from '../../constants/theme';
+import { useAccentColor } from '../../store/privateGroupTheme-context';
 
-const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => {
+const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID, accessibilityState, pointerEvents }) => {
   const scaleValue = useRef(new Animated.Value(1)).current;
+  const accentColor = useAccentColor();
 
   const handlePressIn = () => {
     Animated.spring(scaleValue, {
@@ -24,18 +25,19 @@ const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => 
   };
 
   const Content = (
-    <View style={[styles.innerContainer, !backgroundImage && styles.noBackground]}>
+    <View style={[styles.innerContainer, !backgroundImage && { backgroundColor: accentColor }]}>
       <Text style={styles.text}>{text}</Text>
     </View>
   );
 
   return (
-    <Animated.View 
+    <Animated.View
+      pointerEvents={pointerEvents}
       style={[
-        styles.container, 
-        { 
-          flex: heightPercent / 100, 
-          transform: [{ scale: scaleValue }] 
+        styles.container,
+        {
+          flex: heightPercent / 100,
+          transform: [{ scale: scaleValue }]
         }
       ]}
     >
@@ -43,6 +45,7 @@ const HomeCard = ({ text, onPress, backgroundImage, heightPercent, testID }) => 
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
+        accessibilityState={accessibilityState}
         style={({ pressed }) => [styles.pressable, pressed && styles.pressed]}
         testID={testID}
       >
@@ -81,9 +84,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.3)', // Slightly darker overlay for better text contrast
-  },
-  noBackground: {
-    backgroundColor: GlobalStyle.color.primaryColor500,
   },
   text: {
     color: 'white',

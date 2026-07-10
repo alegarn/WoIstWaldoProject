@@ -7,7 +7,7 @@ import * as ImagePicker from 'expo-image-picker';
 import ShowImagePicker from './ShowImagePicker';
 import { buildE2EHideRouteParams, isE2EMode } from '../../utils/e2eMode';
 
-export default function LogicalImagePicker({ navigation, isTutorial }) {
+export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
   // State for the image url
@@ -34,6 +34,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
       screenWidth: isPortrait ? screenHeight : screenWidth,
       isPortrait,
       isTutorial,
+      scope,
     });
   };
 
@@ -110,7 +111,7 @@ export default function LogicalImagePicker({ navigation, isTutorial }) {
 
   const pickImage = async () => {
     if (isE2EMode()) {
-      navigation.navigate('HideScreen', buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial }));
+    navigation.navigate('HideScreen', { ...buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial }), scope });
       return null;
     }
 

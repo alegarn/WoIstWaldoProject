@@ -271,7 +271,7 @@ export default function RatingSubmissionBlock({
 
   return (
     <View testID={`${testIDPrefix}.block`} style={styles.container}>
-      {/* <View style={styles.linksRow}>
+      <View style={styles.linksRow}>
         <Pressable
           testID={`${testIDPrefix}.tags.link`}
           onPress={() => setTagsModalOpen(true)}
@@ -387,7 +387,7 @@ export default function RatingSubmissionBlock({
             ))}
           </View>
         </View>
-      </CenteredModal> */}
+      </CenteredModal>
     </View>
   );
 }

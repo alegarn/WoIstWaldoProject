@@ -1,0 +1,143 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# PRIVATE CATEGORY MANAGE-MODE SMOKE (non-destructive).
+# Assesses the owner-only "manage" UI added to the private GuessPathScreen: the
+# manage button, its Update-images / Delete-categories options, and that the
+# per-card pencil / trash icons appear only in the chosen mode.
+#
+# NON-DESTRUCTIVE: only enters modes and asserts icons appear; never taps a
+# pencil/trash, so no category or thumbnail is changed. Pair with
+# private-category-delete.yml for the destructive delete path.
+#
+# PRECONDITIONS (NOT seeded by the public e2e suite — must hold on device):
+#  - Account is logged in and OWNS at least one private group.
+#  - That group has at least one owner-created category (so a per-card icon renders).
+#  - App is on HomeScreen at flow start (run auth-boot-login.yml once first).
+#  - EXPO_PUBLIC_E2E_MODE=true in the bundle.
+#
+# HONESTY NOTE — what this flow does NOT cover:
+#  - Actual thumbnail upload: the category-thumbnail picker (categoryThumbnailUpload.js)
+#    has NO e2e bypass (unlike the hide flow's LogicalImagePicker), so an Update-images
+#    tap cannot complete a real upload under EXPO_PUBLIC_E2E_MODE=true. This flow stops
+#    at "pencil icon is shown in update mode". Add an e2e hook to categoryThumbnailUpload
+#    to test the full swap on device.
+#  - Per-card testIDs embed the category UUID (guess-path.category.edit.{uuid} /
+#    delete.{uuid}); this flow targets the FIRST match via regex (.*) and does not
+#    assert a specific category.
+#  - Private-stack cleanup is inlined (the shared return_home.yaml is tuned for the
+#    public stack and asserts home.button.ranking directly).
+#
+# Example: maestro test .maestro/private-manage-mode-smoke.yml
+
+# --- fail fast: must be on public HomeScreen ---
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.guess
+
+# --- open the header menu and switch to private scope ---
+- tapOn:
+    id: home.header.other-options
+- extendedWaitUntil:
+    visible:
+      id: home.menu.scope-toggle
+    timeout: 5000
+- tapOn:
+    id: home.menu.scope-toggle
+
+# If no active group is set, scope-toggle lands on GroupsListScreen — open the first.
+- runFlow:
+    when:
+      visible:
+        id: groups-list.container
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: groups-list.button.open.*        # first owned/joined group (Open button)
+      - extendedWaitUntil:
+          visible:
+            id: private-home.title
+          timeout: 10000
+
+# Went straight to PrivateHomeScreen (active group already set) — wait for it.
+- extendedWaitUntil:
+    visible:
+      id: private-home.title
+    timeout: 10000
+
+# --- enter the private GuessPathScreen (Find) ---
+- tapOn:
+    id: private-home.button.find
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.grid
+    timeout: 10000
+
+# --- open the owner manage modal ---
+- tapOn:
+    id: guess-path.button.manage
+- extendedWaitUntil:
+    visible:
+      id: guess-path.manage.option.delete
+    timeout: 5000
+- assertVisible:
+    id: guess-path.manage.option.update
+- assertVisible:
+    id: guess-path.manage.option.delete
+
+# --- pick DELETE mode: a trash icon must appear on a deletable card ---
+- tapOn:
+    id: guess-path.manage.option.delete
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.delete.*
+    timeout: 5000
+- assertVisible:
+    id: guess-path.category.delete.*
+
+# --- reopen manage, pick UPDATE mode: a pencil must appear instead ---
+- tapOn:
+    id: guess-path.button.manage
+- extendedWaitUntil:
+    visible:
+      id: guess-path.manage.option.update
+    timeout: 5000
+- tapOn:
+    id: guess-path.manage.option.update
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.edit.*
+    timeout: 5000
+- assertVisible:
+    id: guess-path.category.edit.*
+
+# --- exit manage mode via Done ---
+- tapOn:
+    id: guess-path.button.manage-done
+
+# --- cleanup: unwind private stack back to public HomeScreen ---
+# E2E home button pops the private stack to its root (PrivateHomeScreen).
+- runFlow:
+    when:
+      visible:
+        id: guess-path.button.home
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: guess-path.button.home
+# PrivateHomeScreen → switch back to public.
+- runFlow:
+    when:
+      visible:
+        id: private-home.button.switch-to-public
+        timeout: 5000
+    commands:
+      - tapOn:
+          id: private-home.button.switch-to-public
+# Back on public HomeScreen.
+- extendedWaitUntil:
+    visible:
+      id: home.button.ranking
+    timeout: 10000

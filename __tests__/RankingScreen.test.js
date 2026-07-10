@@ -1,5 +1,7 @@
 const mockTableComponent = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
+const mockUseActiveGroup = jest.fn(() => ({ scope: { kind: 'public' } }));
+const mockUseGroupsHub = jest.fn(() => ({ data: null }));
 
 jest.mock('../components/UI/TableComponent', () => {
   return function MockTableComponent(props) {
@@ -20,6 +22,14 @@ jest.mock('../utils/scoreRequests', () => ({
   getUserScores: jest.fn(),
 }));
 
+jest.mock('../hooks/useActiveGroup', () => ({
+  useActiveGroup: () => mockUseActiveGroup(),
+}));
+
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => mockUseGroupsHub(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -36,6 +46,7 @@ import RankingScreen from '../screens/RankingScreen';
 import { AuthContext } from '../store/auth-context';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import { GlobalStyle } from '../constants/theme';
+import { getPrivateGroupTheme } from '../utils/privateGroupTheme';
 
 describe('RankingScreen', () => {
   const contextValue = {
@@ -67,7 +78,7 @@ describe('RankingScreen', () => {
     await act(async () => {
       renderer = create(
         <AuthContext.Provider value={contextValue}>
-          <RankingScreen />
+          <RankingScreen navigation={{ setOptions: jest.fn() }} />
         </AuthContext.Provider>
       );
 
@@ -97,7 +108,7 @@ describe('RankingScreen', () => {
     expect(StyleSheet.flatten(screen.props.style)).toEqual(
       expect.objectContaining({
         flex: 1,
-        backgroundColor: GlobalStyle.color.primaryColor500,
+        backgroundColor: GlobalStyle.color.primaryColor800,
       })
     );
   });
@@ -163,7 +174,7 @@ describe('RankingScreen', () => {
       await getTableProps().onPress('waldo');
     });
 
-    expect(getUserScores).toHaveBeenCalledWith({ username: 'waldo', context: contextValue });
+    expect(getUserScores).toHaveBeenCalledWith({ username: 'waldo', context: contextValue, scope: 'initial' });
     expect(Alert.alert).toHaveBeenCalledWith(
       'Complementary Scores of waldo',
       expect.stringContaining('Total Score: 25')
@@ -434,5 +445,73 @@ describe('RankingScreen', () => {
     });
     expect(typeof props.onEndReached).toBe('function');
     expect(typeof props.onPress).toBe('function');
+  });
+
+  it('wires the header background and tint to the private group theme when a private scope is active', async () => {
+    mockUseActiveGroup.mockReturnValueOnce({
+      scope: { kind: 'private', groupId: 'g-1' },
+    });
+    mockUseGroupsHub.mockReturnValueOnce({
+      data: {
+        owned: [{
+          id: 'g-1',
+          name: 'My Group',
+          primary_color: '#198868',
+          secondary_color: '#FFCC00',
+        }],
+        joined: [],
+      },
+    });
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: { rows: [], nextCursor: null, hasMore: false },
+    });
+
+    const expectedTheme = getPrivateGroupTheme({ primaryColor: '#198868' });
+    const navigation = { setOptions: jest.fn() };
+    const route = { params: { scope: { kind: 'private', groupId: 'g-1' } } };
+
+    await act(async () => {
+      create(
+        <AuthContext.Provider value={contextValue}>
+          <RankingScreen navigation={navigation} route={route} />
+        </AuthContext.Provider>
+      );
+      await flushEffects();
+    });
+
+    const setOptionsCalls = navigation.setOptions.mock.calls.map(([opts]) => opts);
+
+    expect(setOptionsCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          headerStyle: { backgroundColor: expectedTheme.primaryColor },
+          headerTintColor: expectedTheme.headerTintColor,
+        }),
+      ])
+    );
+  });
+
+  it('does not apply group header colors in public scope', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: { rows: [], nextCursor: null, hasMore: false },
+    });
+    const navigation = { setOptions: jest.fn() };
+
+    await act(async () => {
+      create(
+        <AuthContext.Provider value={contextValue}>
+          <RankingScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+      await flushEffects();
+    });
+
+    const setOptionsCalls = navigation.setOptions.mock.calls.map(([opts]) => opts);
+    setOptionsCalls.forEach((opts) => {
+      expect(opts).not.toHaveProperty('headerStyle');
+      expect(opts).not.toHaveProperty('headerTintColor');
+    });
   });
 });

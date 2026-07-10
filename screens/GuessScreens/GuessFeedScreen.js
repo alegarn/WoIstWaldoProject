@@ -10,6 +10,8 @@ import {
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
+import { useActiveGroup } from '../../hooks/useActiveGroup';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 const DEFAULT_LANGUAGE = 'en';
 
@@ -17,9 +19,13 @@ const DEFAULT_LANGUAGE = 'en';
 // GuessFeedScreen is currently the only caller in the authenticated stack, but we
 // still pass them explicitly so the cache namespace + filter plumbing stays explicit.
 export default function GuessFeedScreen({ navigation, route }) {
-  const { category, language: routeLanguage } = route.params || {};
+  const { category, language: routeLanguage, skipInstructions } = route.params || {};
+  const routeScope = route?.params?.scope;
+  const { scope: activeScope } = useActiveGroup();
+  const scope = routeScope ?? activeScope;
+  const { group, theme } = useScopedPrivateGroupTheme(routeScope);
   const [language, setLanguage] = useState(routeLanguage || null);
-  const [showOverlay, setShowOverlay] = useState(true);
+  const [showOverlay, setShowOverlay] = useState(!skipInstructions);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
@@ -49,6 +55,16 @@ export default function GuessFeedScreen({ navigation, route }) {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!theme) {
+      return;
+    }
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
 
   const handleOpenFilter = () => {
     setIsFilterModalVisible(true);
@@ -86,6 +102,7 @@ export default function GuessFeedScreen({ navigation, route }) {
   }
 
   return (
+    <PrivateGroupThemeProvider group={group}>
     <>
       <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
         {language || DEFAULT_LANGUAGE}
@@ -105,6 +122,7 @@ export default function GuessFeedScreen({ navigation, route }) {
           category={category}
           language={language || DEFAULT_LANGUAGE}
           onOpenFilter={handleOpenFilter}
+          scope={scope}
         />
       )}
 
@@ -146,6 +164,7 @@ export default function GuessFeedScreen({ navigation, route }) {
         </View>
       </Modal>
     </>
+    </PrivateGroupThemeProvider>
   );
 }
 

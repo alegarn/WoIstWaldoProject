@@ -19,6 +19,10 @@ jest.mock('../components/Results/ShowFailure', () => {
   };
 });
 
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => ({ data: null, isLoading: false, error: null, refresh: jest.fn() }),
+}));
+
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 

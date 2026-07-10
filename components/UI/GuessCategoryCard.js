@@ -10,7 +10,7 @@ function isRemoteThumbnail(value) {
 export default function GuessCategoryCard({ category, thumbnailUrl, count, onPress, testIDPrefix }) {
   const cardTestID = `${testIDPrefix}.card.${category.id}`;
   const useRemote = isRemoteThumbnail(thumbnailUrl);
-  const source = useRemote ? thumbnailUrl : getCategoryAsset(category?.key);
+  const source = useRemote ? { uri: thumbnailUrl } : getCategoryAsset(category?.key);
 
   return (
     <Pressable onPress={onPress} testID={cardTestID} style={styles.card}>

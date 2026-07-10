@@ -78,7 +78,76 @@ describe('ResultChoices', () => {
     expect(retryGuess).toHaveBeenCalledTimes(1);
     expect(navigation.reset).toHaveBeenCalledWith({
       index: 1,
-      routes: [{ name: 'GuessPathScreen', params: { isTutorial: false } }],
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'GuessPathScreen', params: { isTutorial: false } },
+      ],
+    });
+  });
+
+  it('returns to PrivateHomeScreen and preserves private scope on Home', async () => {
+    const navigation = { reset: jest.fn() };
+    const updateTutorialStatus = jest.fn().mockResolvedValue(undefined);
+    const scope = { kind: 'private', groupId: 'group-1' };
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ updateTutorialStatus, isTutorialFinished: {} }}>
+          <ResultChoices
+            navigation={navigation}
+            route={{ params: { scope } }}
+            success={true}
+            isTutorial={false}
+          />
+        </AuthContext.Provider>
+      );
+    });
+
+    await act(async () => {
+      await getButtonByTestID(renderer, 'result.button.home').props.onPress();
+    });
+
+    expect(updateTutorialStatus).not.toHaveBeenCalled();
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 1,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope, isTutorial: false } },
+      ],
+    });
+  });
+
+  it('keeps private scope when resetting back to GuessPathScreen', async () => {
+    const navigation = { reset: jest.fn() };
+    const scope = { kind: 'private', groupId: 'group-1' };
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ updateTutorialStatus: jest.fn(), isTutorialFinished: {} }}>
+          <ResultChoices
+            navigation={navigation}
+            route={{ params: { scope } }}
+            success={false}
+            retryGuess={jest.fn()}
+            isTutorial={false}
+          />
+        </AuthContext.Provider>
+      );
+    });
+
+    await act(async () => {
+      getButtonByTestID(renderer, 'result.button.next').props.onPress();
+    });
+
+    expect(navigation.reset).toHaveBeenCalledWith({
+      index: 2,
+      routes: [
+        { name: 'HomeScreen' },
+        { name: 'PrivateHomeScreen', params: { scope } },
+        { name: 'GuessPathScreen', params: { isTutorial: false, scope } },
+      ],
     });
   });
 

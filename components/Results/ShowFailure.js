@@ -22,8 +22,11 @@ export default function ShowFailure({ navigation, route }) {
     isTutorial,
     listId,
     category,
-    language
+    language,
+    scope
   } = route?.params;
+
+  const isPrivateScope = scope?.kind === 'private';
 
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -45,7 +48,7 @@ export default function ShowFailure({ navigation, route }) {
 
 /* functions________________________________________________ */
   function retryGuess() {
-    navigation.replace('GuessScreen', {
+    const params = {
       imageFile: imageFile,
       pictureId: pictureId,
       description: description,
@@ -55,8 +58,17 @@ export default function ShowFailure({ navigation, route }) {
       hiddenLocation: hiddenLocation,
       screenHeight: screenHeight,
       screenWidth: screenWidth,
-      isTutorial: isTutorial
-    });
+      isTutorial: isTutorial,
+      listId: listId,
+      category: category,
+      language: language,
+    };
+
+    if (isPrivateScope) {
+      params.scope = scope;
+    }
+
+    navigation.replace('GuessScreen', params);
   };
 
   const handleNextCard = () => navigateToNextGuess(navigation, {
@@ -64,6 +76,7 @@ export default function ShowFailure({ navigation, route }) {
     language,
     currentListId: listId,
     isTutorial,
+    scope: isPrivateScope ? scope : undefined,
   });
 
   return (

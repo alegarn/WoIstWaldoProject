@@ -37,9 +37,6 @@
     "web": {
       "favicon": "./assets/logo.png"
     },
-    "androidStatusBar": {
-      "hidden": true
-    },
     "plugins": [
       [
         "expo-dev-client",
@@ -107,7 +104,12 @@
         }
       ],
       "expo-secure-store",
-      "expo-status-bar",
+      [
+        "expo-status-bar",
+        {
+          "statusBarHidden": true
+        }
+      ],
       "@react-native-vector-icons/ionicons"
     ],
     "extra": {

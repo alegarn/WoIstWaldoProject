@@ -11,7 +11,7 @@ import { resolveDefaultLanguage } from '../utils/languageDefaults';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 
-const SettingsScreen = () => {
+const SettingsScreen = ({ navigation }) => {
 
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
@@ -297,6 +297,27 @@ const SettingsScreen = () => {
             />
           </View>
   
+          <View style={styles.boxContainer}>
+            <Text style={styles.title}>Subscription:</Text>
+            <Button
+              accessibilityLabel="Open subscription management"
+              children="Subscription"
+              onPress={() => navigation.navigate('SubscriptionManagementScreen')}
+              style={styles.button}
+              testID="settings.button.subscription"
+            />
+            {(context?.premiumTier ?? 0) < 1 && (
+              <Button
+                accessibilityLabel="Go premium"
+                children="Go Premium (no ads)"
+                mode="flat"
+                onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+                style={styles.button}
+                testID="settings.button.go-premium"
+              />
+            )}
+          </View>
+
           <View style={styles.dangerZoneContainer}>
             <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
             <Button 

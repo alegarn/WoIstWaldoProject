@@ -14,13 +14,20 @@ function SignupScreen({navigation}) {
 
 
   const handleAuthDataSaving = async (response) => {
+    const data = response?.data?.data;
+
     await authContext.authenticate({
       token: response?.headers?.authorization,
-      userId: response?.data?.data?.id,
-      email: response?.data?.data?.email,
-      username: response?.data?.data?.username,
-      scoreId: response?.data?.data?.score_id,
-      isTutorialFinished: response?.data?.data?.finished_tutorial,
+      userId: data?.id,
+      email: data?.email,
+      username: data?.username,
+      scoreId: data?.score_id,
+      isTutorialFinished: data?.finished_tutorial,
+      isPremium: data?.is_premium,
+      premiumTier: data?.premium_tier,
+      premiumExpiresAt: data?.premium_expires_at,
+      isGroupOwner: data?.is_group_owner,
+      activeGroupId: data?.active_group_id,
     });
   };
 

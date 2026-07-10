@@ -17,9 +17,11 @@ import { handleImageType, isTypeValid } from '../utils/imageInfos';
 import { getPreferredLanguage, saveE2EHiddenGuessCard } from '../utils/storageDatum';
 import { getCategories } from '../utils/categoryRequests';
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
+import { listGroupCategories } from '../services/groups/groupCategoriesApi';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
+import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 
 const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
 const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
@@ -57,26 +59,41 @@ export default function SetInstructionsScreen({ navigation, route }) {
     touchLocation,
     target,
     imageDimensionStyle,
-    isTutorial
+    isTutorial,
+    scope,
   } = route?.params;
 
   const context = useContext(AuthContext);
+  const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
+  const { group, theme } = useScopedPrivateGroupTheme(scope);
   const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
 
+  function normalizePrivateCategory(category) {
+    return {
+      ...category,
+      key: category?.key ?? category?.id,
+      thumbnailUrl: category?.thumbnailUrl ?? category?.thumbnail_url ?? null,
+    };
+  }
+
   const loadCategories = async () => {
-    const categoriesResponse = await getCategories({ context });
+    const categoriesResponse = isPrivateScope
+      ? await listGroupCategories(context, scope.groupId)
+      : await getCategories({ context });
 
     if (!isMountedRef.current) {
       return;
     }
 
-    if (categoriesResponse?.isError) {
+    if (categoriesResponse?.isError || (categoriesResponse?.status && categoriesResponse.status !== 200)) {
       setCategories([]);
-      setCategoriesError(categoriesResponse?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
+      setCategoriesError(categoriesResponse?.message || categoriesResponse?.data?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
       return;
     }
 
-    setCategories(categoriesResponse?.data ?? []);
+    setCategories((categoriesResponse?.data ?? []).map((category) => (
+      isPrivateScope ? normalizePrivateCategory(category) : category
+    )));
     setCategoriesError(null);
   };
 
@@ -110,6 +127,17 @@ export default function SetInstructionsScreen({ navigation, route }) {
     };
   }, []);
 
+  useEffect(() => {
+    if (!theme) {
+      return;
+    }
+
+    navigation.setOptions({
+      headerStyle: { backgroundColor: theme.primaryColor },
+      headerTintColor: theme.headerTintColor,
+    });
+  }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
+
   const getPermissions = async () => {
     let currentPermission = permissionResponse;
 
@@ -133,7 +161,11 @@ export default function SetInstructionsScreen({ navigation, route }) {
   };
 
   const onCancelGoBack = () => {
-    navigation.replace("HideScreen", { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial });
+    const params = { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial };
+    if (isPrivateScope) {
+      params.scope = scope;
+    }
+    navigation.replace("HideScreen", params);
   };
 
   const handleImage = async ({userId, fileExtension}) => {
@@ -157,7 +189,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
     setIsLoading(true);
 
     try {
-      const uploadState = await imageUploader({ imageInfos, context });
+      const uploaderArgs = { imageInfos, context };
+      if (isPrivateScope) {
+        uploaderArgs.scope = scope;
+      }
+
+      const uploadState = await imageUploader(uploaderArgs);
 
       if (uploadState.status !== 200) {
         setIsLoading(false);
@@ -213,15 +250,22 @@ export default function SetInstructionsScreen({ navigation, route }) {
     handleScreenUi();
     isTutorial && await handleTutorialUpdate();
 
+    const routeEntry = isPrivateScope
+      ? {
+          name: 'PrivateHomeScreen',
+          params: { scope, isTutorial, hidePathDone: true },
+        }
+      : {
+          name: 'HomeScreen',
+          params: {
+            isTutorial: isTutorial,
+            hidePathDone: true,
+          },
+        };
+
     navigation.reset({
       index: 0,
-      routes: [{ 
-        name: 'HomeScreen', 
-        params: { 
-          isTutorial: isTutorial,
-          hidePathDone: true
-        } 
-      }],
+      routes: [routeEntry],
     });
   };
 
@@ -302,53 +346,55 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
 
   return (
-    <View style={styles.container} testID="set-instructions.screen">
-      <ImageBackground
-        accessibilityLabel="Set instructions image"
-        source={{uri : uri}}
-        resizeMode='stretch'
-        style={imageDimensionStyle}
-        testID="set-instructions.image"
-      >
-        <HideDescription
-          onSubmit={handlePressDescription}
-          onCancel={onCancelGoBack}
-          language={language}
-          onLanguageChange={handleLanguageChange}
-          languageError={languageError}
-          categories={selectableCategories}
-          categoriesError={categoriesError}
-          onRetryCategories={loadCategories}
-          selectedCategory={selectedCategory}
-          onCategorySelect={handleCategorySelect}
-        />
-        <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
-      </ImageBackground>
-      {
-        showModal &&
-          <CenteredModal 
-            onPress={handleConfirmModal} 
-            onCancel={onCancelModal} 
-            isModalVisible={showModal}
-            testIDPrefix="set-instructions.confirm-modal"
-          >
-            <ModalContent
-              description={description}
-              screenHeight={screenHeight}
-              screenWidth={screenWidth}
-              guessPath={false} 
-            />
-          </CenteredModal> 
-      }
-      {
-        isTutorial && 
-          <TutorialOverlay 
-            screen={"SetInstructionScreen"}
-            isPortrait={isPortrait}
-            instructionsPosition={{top:0, left: 0}}
+    <PrivateGroupThemeProvider group={group}>
+      <View style={styles.container} testID="set-instructions.screen">
+        <ImageBackground
+          accessibilityLabel="Set instructions image"
+          source={{uri : uri}}
+          resizeMode='stretch'
+          style={imageDimensionStyle}
+          testID="set-instructions.image"
+        >
+          <HideDescription
+            onSubmit={handlePressDescription}
+            onCancel={onCancelGoBack}
+            language={language}
+            onLanguageChange={handleLanguageChange}
+            languageError={languageError}
+            categories={selectableCategories}
+            categoriesError={categoriesError}
+            onRetryCategories={loadCategories}
+            selectedCategory={selectedCategory}
+            onCategorySelect={handleCategorySelect}
           />
+          <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
+        </ImageBackground>
+        {
+          showModal &&
+            <CenteredModal
+              onPress={handleConfirmModal}
+              onCancel={onCancelModal}
+              isModalVisible={showModal}
+              testIDPrefix="set-instructions.confirm-modal"
+            >
+              <ModalContent
+                description={description}
+                screenHeight={screenHeight}
+                screenWidth={screenWidth}
+                guessPath={false}
+              />
+            </CenteredModal>
         }
-    </View>
+        {
+          isTutorial &&
+            <TutorialOverlay
+              screen={"SetInstructionScreen"}
+              isPortrait={isPortrait}
+              instructionsPosition={{top:0, left: 0}}
+            />
+          }
+      </View>
+    </PrivateGroupThemeProvider>
   )
 };
 

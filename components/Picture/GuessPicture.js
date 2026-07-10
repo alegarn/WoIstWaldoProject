@@ -14,9 +14,9 @@ import {
 } from '../../utils/e2eMode';
 
 
-export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen }) {
+export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions }) {
 
-  const [showFilter, setShowFilter] = useState(true); 
+  const [showFilter, setShowFilter] = useState(!skipInstructions); 
   const [touchLocation, setTouchLocation] = useState(null);
   const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);

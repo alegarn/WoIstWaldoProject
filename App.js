@@ -32,6 +32,19 @@ import SetInstructionsScreen from './screens/SetInstructionScreen';
 import RankingScreen from './screens/RankingScreen';
 import SettingsScreen from './screens/SettingsScreen';
 
+// Private group screens
+import GroupsListScreen from './screens/Groups/GroupsListScreen';
+import PrivateHomeScreen from './screens/Groups/PrivateHomeScreen';
+import CreateGroupScreen from './screens/Groups/CreateGroupScreen';
+import GroupSettingsScreen from './screens/Groups/GroupSettingsScreen';
+import JoinByCodeScreen from './screens/Groups/JoinByCodeScreen';
+import MemberManagementScreen from './screens/Groups/MemberManagementScreen';
+import { HomeHeaderRight } from './screens/Groups/HomeHeaderRight';
+
+// Billing screens
+import PaywallScreen from './screens/Billing/PaywallScreen';
+import SubscriptionManagementScreen from './screens/Billing/SubscriptionManagementScreen';
+
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
 
@@ -49,9 +62,9 @@ import { getUserConsent } from './utils/adHandling';
 import {
   bootstrapStoredAuthSession,
   getStoredAuthState,
-  getUserName,
   hasCompleteAuthState,
   isPersistedBearerToken,
+  validateStoredSession,
 } from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
 import { getOnboardingCompleted } from './utils/storageDatum';
@@ -152,6 +165,11 @@ function AuthenticatedStack({ authContext }) {
             headerShown: true,
             headerRight: ({ tintColor }) => (
               <>
+                <HomeHeaderRight
+                  navigation={navigation}
+                  tintColor={tintColor}
+                  onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
+                />
                 <IconButton
                   accessibilityLabel="Open settings"
                   icon="settings"
@@ -261,6 +279,69 @@ function AuthenticatedStack({ authContext }) {
             title: "Ranking",
             presentation: "modal",
             headerShown: true
+          }} />
+        <Stack.Screen
+          name="GroupsListScreen"
+          component={GroupsListScreen}
+          options={{
+            title: "Private Groups",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="PrivateHomeScreen"
+          component={PrivateHomeScreen}
+          options={{
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="CreateGroupScreen"
+          component={CreateGroupScreen}
+          options={{
+            title: "Create Group",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="JoinByCodeScreen"
+          component={JoinByCodeScreen}
+          options={{
+            title: "Join by Code",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="GroupSettingsScreen"
+          component={GroupSettingsScreen}
+          options={{
+            title: "Group Settings",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="MemberManagementScreen"
+          component={MemberManagementScreen}
+          options={{
+            title: "Members",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="PaywallScreen"
+          component={PaywallScreen}
+          options={{
+            title: "Premium",
+            presentation: "modal",
+            headerShown: true,
+          }} />
+        <Stack.Screen
+          name="SubscriptionManagementScreen"
+          component={SubscriptionManagementScreen}
+          options={{
+            title: "Subscription",
+            presentation: "modal",
+            headerShown: true,
           }} />
         {__DEV__ && process.env.EXPO_PUBLIC_E2E_MODE !== 'true' && (
           <Stack.Screen
@@ -470,7 +551,7 @@ export function Root() {
         return;
       }
 
-      if (typeof getUserName !== 'function') {
+      if (typeof validateStoredSession !== 'function') {
         return;
       }
 
@@ -478,7 +559,7 @@ export function Root() {
         // Cheap authed call: confirms the stored token is still server-valid.
         // Only auth rejection should clear the session here. Network/server
         // failures should not force-log the user out on app launch.
-        const result = await getUserName({ context: authContext });
+        const result = await validateStoredSession({ context: authContext });
 
         if (cancelled) {
           return;

@@ -61,6 +61,12 @@ jest.mock('../utils/storageDatum', () => ({
   deleteImageFromStorage: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupFeedCache', () => ({
+  __esModule: true,
+  readGroupFeedCache: jest.fn(),
+  writeGroupFeedCache: jest.fn(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -319,6 +325,121 @@ describe('SwipeImage', () => {
     expect(updateImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
     ], 'all', 'any');
+  });
+
+  it('silently prefetches the all deck when the stack drops below four', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, imageFile: 'file:///1.jpg' },
+      { listId: 2, imageFile: 'file:///2.jpg' },
+      { listId: 3, imageFile: 'file:///3.jpg' },
+      { listId: 4, imageFile: 'file:///4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      contextValue,
+      expect.objectContaining({ category_key: 'nature', category_id: 'cat-nature' }),
+    );
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      contextValue,
+      expect.objectContaining({ category_key: 'all', category_id: undefined }),
+    );
+  });
+
+  it('deduplicates the all-deck prefetch via allDeckWarmedRef on a second removal', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, imageFile: 'file:///1.jpg' },
+      { listId: 2, imageFile: 'file:///2.jpg' },
+      { listId: 3, imageFile: 'file:///3.jpg' },
+      { listId: 4, imageFile: 'file:///4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardOne = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    const cardTwo = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 2)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await cardOne.removeCard(1);
+      await flushEffects();
+    });
+    await act(async () => {
+      await cardTwo.removeCard(2);
+      await flushEffects();
+    });
+
+    const allPrefetchCalls = getImages.mock.calls.filter(
+      ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
+    );
+    expect(allPrefetchCalls).toHaveLength(1);
+  });
+
+  it('swallows all-deck prefetch errors without surfacing an Alert', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, imageFile: 'file:///1.jpg' },
+      { listId: 2, imageFile: 'file:///2.jpg' },
+      { listId: 3, imageFile: 'file:///3.jpg' },
+      { listId: 4, imageFile: 'file:///4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+    getImages.mockImplementation((pictureId, authContext, params) => {
+      if (params?.category_key === 'all') {
+        return Promise.reject(new Error('all-deck warmup failed'));
+      }
+      return Promise.resolve({ isError: false, images: [] });
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      contextValue,
+      expect.objectContaining({ category_key: 'all', category_id: undefined }),
+    );
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('skips the all-deck prefetch entirely in e2e mode', async () => {
+    isE2EMode.mockReturnValue(true);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    const allPrefetchCalls = getImages.mock.calls.filter(
+      ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
+    );
+    expect(allPrefetchCalls).toHaveLength(0);
   });
 
   it('uses the seeded guess cards in e2e mode instead of cache or network state', async () => {
