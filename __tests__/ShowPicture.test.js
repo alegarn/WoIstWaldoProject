@@ -89,6 +89,17 @@ describe('ShowPicture', () => {
     const target = {
       targetSize: 16,
       targetStyle: { position: 'absolute', width: 16, height: 16, left: 40, top: 20 },
+      dragSize: 32,
+      dragStyle: {
+        position: 'absolute',
+        width: 32,
+        height: 32,
+        left: 32,
+        top: 12,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
     };
     let renderer;
 
@@ -106,7 +117,10 @@ describe('ShowPicture', () => {
 
     const wrapper = renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' });
     expect(wrapper.props.onResponderGrant).toBe(onResponderGrant);
-    expect(wrapper.props.style).toEqual(target.targetStyle);
+    const flattenedStyle = StyleSheet.flatten(wrapper.props.style);
+    expect(flattenedStyle.width).toBe(32);
+    expect(flattenedStyle.borderRadius).toBe(16);
+    expect(flattenedStyle.borderColor).toBe('#6528F7');
 
     const icon = renderer.root.findByProps({ testID: 'game.picture.clear-guess' });
     expect(icon).toBeTruthy();

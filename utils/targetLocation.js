@@ -1,4 +1,5 @@
 const TARGET_SIZE_RATIO = 0.05;
+const DRAG_AREA_MULTIPLIER = 2;
 
 function determineLocation({locationX, locationY, newImageWidth, newImageHeight}) {
   const touchX = (locationX / newImageWidth).toFixed(2);
@@ -34,7 +35,19 @@ function setTarget({ locationX, locationY, targetSize }) {
     top: locationY - targetSize / 2, // Adjusted to center the icon vertically
   };
 
-  const target = { targetSize: targetSize , targetStyle: targetStyle };
+  const dragSize = targetSize * DRAG_AREA_MULTIPLIER;
+  const dragStyle = {
+    position: 'absolute',
+    width: dragSize,
+    height: dragSize,
+    left: locationX - dragSize / 2,
+    top: locationY - dragSize / 2,
+    borderRadius: dragSize / 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
+  const target = { targetSize: targetSize, targetStyle: targetStyle, dragSize: dragSize, dragStyle: dragStyle };
   return target;
 };
 

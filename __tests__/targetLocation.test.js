@@ -41,6 +41,17 @@ describe('targetLocation utilities', () => {
         left: 42.5,
         top: 17.5,
       },
+      dragSize: 30,
+      dragStyle: {
+        position: 'absolute',
+        width: 30,
+        height: 30,
+        left: 35,
+        top: 10,
+        borderRadius: 15,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
     });
   });
 
@@ -75,6 +86,17 @@ describe('targetLocation utilities', () => {
           left: 42.5,
           top: 17.5,
         },
+        dragSize: 30,
+        dragStyle: {
+          position: 'absolute',
+          width: 30,
+          height: 30,
+          left: 35,
+          top: 10,
+          borderRadius: 15,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
       },
     });
   });
@@ -96,6 +118,17 @@ describe('targetLocation utilities', () => {
           height: 15,
           left: 92.5,
           top: 42.5,
+        },
+        dragSize: 30,
+        dragStyle: {
+          position: 'absolute',
+          width: 30,
+          height: 30,
+          left: 85,
+          top: 35,
+          borderRadius: 15,
+          alignItems: 'center',
+          justifyContent: 'center',
         },
       },
     });

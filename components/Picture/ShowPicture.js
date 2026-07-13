@@ -3,6 +3,7 @@ import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import MovableTextBox from '../UI/MovableTextBox';
+import { GlobalStyle } from '../../constants/theme';
 
 export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen }) {
 
@@ -32,10 +33,10 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
         </Pressable>
 
 {/* no cross, when guess, if null  */}
-        {touchLocation && target?.targetStyle && (
+        {touchLocation && target?.dragStyle && (
           <View
             {...(targetPanHandlers || {})}
-            style={target.targetStyle}
+            style={[target.dragStyle, styles.dragRing]}
             testID={guess ? 'game.picture.guess-target-wrap' : 'game.picture.hide-target-wrap'}
           >
             <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
@@ -76,5 +77,10 @@ const styles = StyleSheet.create({
   image: {
     width: '100%',
     height: '100%',
+  },
+  dragRing: {
+    borderWidth: 2,
+    borderColor: GlobalStyle.color.primaryColor,
+    backgroundColor: 'transparent',
   },
 });
