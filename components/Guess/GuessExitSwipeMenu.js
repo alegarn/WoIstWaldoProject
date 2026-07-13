@@ -2,18 +2,20 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
+import SwipeHaloHint from './SwipeHaloHint';
 
 const EDGE_WIDTH = 36;
 const SWIPE_THRESHOLD_PX = 40;
 const TAP_THRESHOLD = 8;
 const PANEL_WIDTH = 160;
 
-export default function GuessExitSwipeMenu({ onHome }) {
+export default function GuessExitSwipeMenu({ onHome, showHints = false, onInteract }) {
   const [isOpen, setIsOpen] = useState(false);
   const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
   const panelOpacity = useRef(new Animated.Value(0)).current;
 
   const openPanel = useCallback(() => {
+    onInteract?.();
     setIsOpen(true);
     Animated.parallel([
       Animated.timing(translateX, {
@@ -27,7 +29,7 @@ export default function GuessExitSwipeMenu({ onHome }) {
         useNativeDriver: true,
       }),
     ]).start();
-  }, [translateX, panelOpacity]);
+  }, [translateX, panelOpacity, onInteract]);
 
   const closePanel = useCallback(() => {
     Animated.parallel([
@@ -129,6 +131,7 @@ export default function GuessExitSwipeMenu({ onHome }) {
           </Animated.View>
         </>
       ) : null}
+      <SwipeHaloHint visible={showHints && !isOpen} />
     </View>
   );
 }
