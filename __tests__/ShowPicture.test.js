@@ -10,8 +10,8 @@ jest.mock('../components/UI/CenteredModal', () => {
   };
 });
 
-jest.mock('../components/UI/MovableTextBox', () => {
-  return function MockMovableTextBox(props) {
+jest.mock('../components/Picture/Descriptions/EnigmaOverlay', () => {
+  return function MockEnigmaOverlay(props) {
     return null;
   };
 });

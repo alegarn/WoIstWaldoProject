@@ -2,7 +2,7 @@ import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
-import MovableTextBox from '../UI/MovableTextBox';
+import EnigmaOverlay from './Descriptions/EnigmaOverlay';
 import { GlobalStyle } from '../../constants/theme';
 
 export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen }) {
@@ -26,7 +26,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           >
 {/* target not showing for guessscreen */}
             { guess ? (
-              <MovableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width} defaultOpen={defaultOpen}/>
+              <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} defaultOpen={defaultOpen}/>
             ) : null }
           </ImageBackground>
 
