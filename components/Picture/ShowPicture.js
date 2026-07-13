@@ -4,7 +4,7 @@ import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import MovableTextBox from '../UI/MovableTextBox';
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen }) {
 
   return (
     <View style={styles.container} >
@@ -25,7 +25,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           >
 {/* target not showing for guessscreen */}
             { guess ? (
-              <MovableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
+              <MovableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width} defaultOpen={defaultOpen}/>
             ) : null }
           </ImageBackground>
 

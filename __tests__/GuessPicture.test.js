@@ -272,6 +272,19 @@ describe('GuessPicture', () => {
     });
   });
 
+  it('passes defaultOpen={false} to ShowPicture on a first-card route (skipInstructions falsy)', async () => {
+    await renderToPicture();
+    expect(getLatestShowPictureProps().defaultOpen).toBe(false);
+  });
+
+  it('passes defaultOpen={true} to ShowPicture on a second-card route (skipInstructions=true)', async () => {
+    await act(async () => {
+      create(<GuessPicture {...baseProps} skipInstructions={true} />);
+    });
+
+    expect(getLatestShowPictureProps().defaultOpen).toBe(true);
+  });
+
   it('uses a deterministic incorrect location on long press in e2e mode', async () => {
     const toAdScreen = jest.fn();
 

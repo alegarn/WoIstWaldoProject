@@ -94,6 +94,14 @@ describe('MovableTextBox', () => {
     expect(getTextStyle(renderer.root).maxWidth).toBe(30 * 0.75);
   });
 
+  it('starts wide (open) when defaultOpen is true and renders the description', async () => {
+    const renderer = await renderBox({ defaultOpen: true });
+
+    expect(getTextStyle(renderer.root).maxWidth).toBe(Math.min(SCREEN_WIDTH * 0.7, 280) * 0.75);
+    expect(getTextStyle(renderer.root).maxHeight).toBe(SCREEN_HEIGHT * 0.35 * 0.75);
+    expect(findTextNode(renderer.root).props.children).toBe(DESCRIPTION);
+  });
+
   it('updates left/top when dragged via the PanResponder', async () => {
     const renderer = await renderBox();
 
@@ -127,7 +135,7 @@ describe('MovableTextBox', () => {
     });
   });
 
-  it('toggles between narrow and wide sizing on tap (grant)', async () => {
+  it('toggles between narrow and wide sizing on tap (release below threshold)', async () => {
     const renderer = await renderBox();
 
     const narrowMaxWidth = getTextStyle(renderer.root).maxWidth;
@@ -135,10 +143,27 @@ describe('MovableTextBox', () => {
 
     await act(async () => {
       capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
+      capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
     });
 
     const wideMaxWidth = getTextStyle(renderer.root).maxWidth;
-    expect(wideMaxWidth).toBe(SCREEN_WIDTH * 0.75);
+    expect(wideMaxWidth).toBe(Math.min(SCREEN_WIDTH * 0.7, 280) * 0.75);
     expect(wideMaxWidth).not.toBe(narrowMaxWidth);
+  });
+
+  it('does not toggle wide/narrow state when dragged past the tap threshold', async () => {
+    const renderer = await renderBox({ defaultOpen: true });
+
+    const before = getTextStyle(renderer.root).maxWidth;
+    expect(before).toBe(Math.min(SCREEN_WIDTH * 0.7, 280) * 0.75);
+
+    await act(async () => {
+      capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
+      capturedPanResponder.onPanResponderMove(null, { dx: 50, dy: 0 });
+      capturedPanResponder.onPanResponderRelease(null, { dx: 50, dy: 0 });
+    });
+
+    expect(getTextStyle(renderer.root).maxWidth).toBe(before);
+    expect(getTextStyle(renderer.root)).toMatchObject({ left: 100, top: 50 });
   });
 });

@@ -174,6 +174,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
         targetPanHandlers={targetPanHandlers}
+        defaultOpen={skipInstructions === true}
         /* for debug */
        /*  showDebugModal={showDebugModal}
         setShowDebugModal={toggleDebugModal} */

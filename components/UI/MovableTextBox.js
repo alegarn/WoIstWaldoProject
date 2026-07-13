@@ -2,16 +2,19 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, PanResponder, StyleSheet } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function MovableTextBox({description, screenWidth, screenHeight}) {
+const TAP_THRESHOLD = 8;
+const COLLAPSED_SIZE = 30;
+
+export default function MovableTextBox({ description, screenWidth, screenHeight, defaultOpen }) {
   const [position, setPosition] = useState({ x: 50, y: 50 });
-  const [isWide, setIsWide] = useState(false);
+  const [isWide, setIsWide] = useState(!!defaultOpen);
 
   const positionRef = useRef(position);
   positionRef.current = position;
   const dragStartRef = useRef(position);
 
-  const textBoxWidth = isWide ? screenWidth : 30;
-  const textBoxHeight = isWide ? screenHeight : 30;
+  const textBoxWidth = isWide ? Math.min(screenWidth * 0.7, 280) : COLLAPSED_SIZE;
+  const textBoxHeight = isWide ? screenHeight * 0.35 : COLLAPSED_SIZE;
 
   const handleClick = useCallback(() => {
     setIsWide((prev) => !prev);
@@ -23,13 +26,11 @@ export default function MovableTextBox({description, screenWidth, screenHeight})
         onStartShouldSetPanResponder: () => true,
         onPanResponderGrant: () => {
           dragStartRef.current = positionRef.current;
-          handleClick();
         },
         onPanResponderMove: (event, gesture) => {
           let newX = dragStartRef.current.x + gesture.dx;
           let newY = dragStartRef.current.y + gesture.dy;
 
-          // Ensure the new position stays within the screen boundaries
           if (newX < 0) newX = 0;
           if (newX >= screenWidth) newX = screenWidth;
           if (newY < 0) newY = 0;
@@ -37,7 +38,12 @@ export default function MovableTextBox({description, screenWidth, screenHeight})
 
           setPosition({ x: newX, y: newY });
         },
-        onPanResponderRelease: () => {},
+        onPanResponderRelease: (_event, gesture) => {
+          const moved = Math.hypot(gesture.dx, gesture.dy);
+          if (moved < TAP_THRESHOLD) {
+            handleClick();
+          }
+        },
       }),
     [handleClick, screenHeight, screenWidth]
   );
