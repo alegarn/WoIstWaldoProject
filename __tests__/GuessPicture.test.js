@@ -111,6 +111,19 @@ describe('GuessPicture', () => {
     capturedPanResponder = undefined;
   });
 
+  const activeRenderers = [];
+
+  afterEach(() => {
+    while (activeRenderers.length) {
+      const renderer = activeRenderers.pop();
+      try {
+        act(() => { renderer.unmount(); });
+      } catch (_) {
+        // already unmounted
+      }
+    }
+  });
+
   function getLatestShowPictureProps() {
     return mockShowPicture.mock.calls[mockShowPicture.mock.calls.length - 1][0];
   }
@@ -121,6 +134,7 @@ describe('GuessPicture', () => {
     await act(async () => {
       renderer = create(<GuessPicture {...baseProps} {...overrides} />);
     });
+    activeRenderers.push(renderer);
 
     await act(async () => {
       const instructionsProps = mockGameInstructions.mock.calls[mockGameInstructions.mock.calls.length - 1][0];
@@ -199,6 +213,7 @@ describe('GuessPicture', () => {
       screenWidth: 320,
       screenHeight: 640,
       target: draggedSelection.target,
+      elapsedMs: expect.any(Number),
     });
   });
 
@@ -328,6 +343,77 @@ describe('GuessPicture', () => {
         targetSize: 16,
         targetStyle: { position: 'absolute', left: 24, top: 24 },
       },
+      elapsedMs: 0,
+    });
+  });
+
+  describe('speed timer', () => {
+    it('in e2e mode does not start a real interval and ships elapsedMs=0', async () => {
+      const toAdScreen = jest.fn();
+      await renderToPicture({ toAdScreen });
+
+      await act(async () => {
+        getLatestShowPictureProps().handleConfirm();
+      });
+
+      expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: 0 }));
+    });
+
+    it('in non-e2e mode starts the timer on instructions dismiss', () => {
+      isE2EMode.mockReturnValue(false);
+      const toAdScreen = jest.fn();
+      jest.useFakeTimers();
+      try {
+        act(() => {
+          activeRenderers.push(create(<GuessPicture {...baseProps} toAdScreen={toAdScreen} />));
+        });
+        act(() => {
+          const instructionsProps = mockGameInstructions.mock.calls[mockGameInstructions.mock.calls.length - 1][0];
+          instructionsProps.handleFilterClick();
+        });
+        act(() => {
+          jest.advanceTimersByTime(600);
+        });
+        act(() => {
+          capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
+          capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
+        });
+        act(() => {
+          getLatestShowPictureProps().handleConfirm();
+        });
+
+        expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: expect.any(Number) }));
+        const payload = toAdScreen.mock.calls[0][0];
+        expect(typeof payload.elapsedMs).toBe('number');
+        expect(payload.elapsedMs).toBeGreaterThanOrEqual(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('cleans up the interval on unmount without warnings', () => {
+      isE2EMode.mockReturnValue(false);
+      let renderer;
+      jest.useFakeTimers();
+      try {
+        act(() => {
+          renderer = create(<GuessPicture {...baseProps} />);
+        });
+        act(() => {
+          const instructionsProps = mockGameInstructions.mock.calls[mockGameInstructions.mock.calls.length - 1][0];
+          instructionsProps.handleFilterClick();
+        });
+        act(() => {
+          jest.advanceTimersByTime(300);
+        });
+        expect(() => {
+          act(() => {
+            renderer.unmount();
+          });
+        }).not.toThrow();
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 });

@@ -123,6 +123,8 @@ describe('GuessScreen', () => {
       pictureId: 'image-1',
       scope: undefined,
       userId: '',
+      points: 2,
+      multiplier: 2,
     });
     expect(navigation.replace).not.toHaveBeenCalledWith('AdScreen', expect.anything());
     expect(navigation.replace).not.toHaveBeenCalledWith('ResultScreen', expect.anything());
@@ -130,6 +132,85 @@ describe('GuessScreen', () => {
     const overlayProps = lastOverlayProps();
     expect(overlayProps.visible).toBe(true);
     expect(overlayProps.onDone).toEqual(expect.any(Function));
+    expect(overlayProps.multiplier).toBe(2);
+    expect(overlayProps.points).toBe(2);
+  });
+
+  it('on a slow success (elapsedMs past threshold) uses multiplier=1 and skips the bonus', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    await act(async () => {
+      pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 6000 });
+    });
+
+    expect(applySuccessSideEffects).toHaveBeenCalledWith({
+      listId: 3,
+      categoryKey: 'nature',
+      language: 'fr',
+      imageFile: 'file:///waldo.jpg',
+      pictureId: 'image-1',
+      scope: undefined,
+      userId: '',
+      points: 1,
+      multiplier: 1,
+    });
+    expect(lastOverlayProps().multiplier).toBe(1);
+    expect(lastOverlayProps().points).toBe(1);
+  });
+
+  it('never navigates to AdScreen regardless of speed bonus', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    await act(async () => {
+      pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+    });
+
+    expect(navigation.replace).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+    expect(navigation.replace).not.toHaveBeenCalledWith('ResultScreen', expect.anything());
   });
 
   it('overlay onDone with resolved params advances via setParams (no replace, no navigateToNextGuess)', async () => {

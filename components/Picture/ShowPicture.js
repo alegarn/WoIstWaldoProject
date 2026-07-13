@@ -4,7 +4,9 @@ import { Animated, View, Pressable, StyleSheet, ImageBackground } from 'react-na
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import EnigmaOverlay from './Descriptions/EnigmaOverlay';
+import SpeedRing from '../Guess/SpeedRing';
 import { GlobalStyle } from '../../constants/theme';
+import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
 
 const PULSE_DURATION_MS = 1200;
 const PULSE_HALF_DURATION_MS = PULSE_DURATION_MS / 2;
@@ -14,7 +16,7 @@ const PULSE_OPACITY_MIN = 0.55;
 const PULSE_OPACITY_MAX = 1;
 const PULSE_NATIVE_DRIVER = { useNativeDriver: true };
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, pulseTarget = false }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
 
@@ -94,6 +96,11 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
             testID={guess ? 'game.picture.guess-target-wrap' : 'game.picture.hide-target-wrap'}
           >
             <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
+            {guess && speedRingActive && target?.dragSize > 0 && (
+              <View style={[StyleSheet.absoluteFill, styles.speedRingWrap]} pointerEvents="none">
+                <SpeedRing size={target.dragSize} durationMs={speedDurationMs} active={speedRingActive} />
+              </View>
+            )}
           </Animated.View>
         )}
       </View>
@@ -136,5 +143,9 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: GlobalStyle.color.primaryColor,
     backgroundColor: 'transparent',
+  },
+  speedRingWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

@@ -1,15 +1,17 @@
 import { bufferScore, mintGuessId } from './sessionScoreStore';
 import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
 import { resolveNextCard } from './nextCardResolver';
+import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
 
-export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId }) {
+export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier }) {
   await bufferScore({
     guessId: mintGuessId(),
     imageName: pictureId,
     imageId: scope?.kind === 'private' ? pictureId : undefined,
     pictureId,
     scope,
-    points: 1,
+    points,
+    ...(multiplier !== undefined ? { multiplier } : {}),
     ts: Date.now(),
     userId,
   });
