@@ -66,26 +66,21 @@ appId: com.alegarn.WoIstWaldoProject
     timeout: 5000
 - tapOn:
     id: game.picture.guess-modal.confirm
+# Non-blocking success: SuccessOverlay flashes, next card loads in place
+# (no ResultScreen / ShowSuccess on success). Score is buffered, not rated.
 - extendedWaitUntil:
     visible:
-      id: result.screen.success
+      id: guess.success.overlay
     timeout: 10000
 - assertVisible:
-    id: result.screen.success
-- tapOn:
-        id: result.rating.global.star.5
-- extendedWaitUntil:
-        visible:
-            id: result.button.next
-        timeout: 10000
+    id: guess.success.overlay
+# Overlay is pointerEvents:none and animates ~0.6-0.9s, so the picture surface
+# underneath stays reachable. Assert it next with NO intervening fixed wait —
+# the surface is tappable/assertable while the overlay is still on screen.
 - assertVisible:
-    id: result.button.home
-- assertVisible:
-        id: result.button.next
-- tapOn:
-        id: result.button.next
-- extendedWaitUntil:
-        visible:
-            id: game.instructions.guess.overlay
-        timeout: 10000
+    id: game.picture.guess-surface
+# Card-advance signal: the just-guessed (saved) card's description must be gone,
+# proving setParams advanced to the next card in place.
+- assertNotVisible:
+    text: "A scenic spot used for deterministic e2e guess flows."
 - runFlow: "_shared/return_home.yaml"

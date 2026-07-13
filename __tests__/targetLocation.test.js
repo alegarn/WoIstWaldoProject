@@ -1,4 +1,6 @@
 import {
+  buildCenteredTarget,
+  buildSelectionFromPixels,
   determineImageCorners,
   handlePicturePress,
   isOnTarget,
@@ -27,7 +29,6 @@ describe('targetLocation utilities', () => {
       screenHeight: 600,
       screenWidth: 300,
       imageDimensionStyle: { width: 100, height: 50 },
-      topLeft: { x: 0, y: 0 },
     });
 
     expect(response.location).toEqual({ x: '0.50', y: '0.50' });
@@ -50,9 +51,54 @@ describe('targetLocation utilities', () => {
         screenHeight: 600,
         screenWidth: 300,
         imageDimensionStyle: { width: 100, height: 50 },
-        topLeft: { x: 0, y: 0 },
       })
     ).toEqual({ location: null, target: null });
+  });
+
+  it('builds a selection from pixel coordinates using the same shape as a press', () => {
+    expect(
+      buildSelectionFromPixels({
+        locationX: 50,
+        locationY: 25,
+        screenWidth: 300,
+        screenHeight: 600,
+        imageDimensionStyle: { width: 100, height: 50 },
+      })
+    ).toEqual({
+      location: { x: '0.50', y: '0.50' },
+      target: {
+        targetSize: 15,
+        targetStyle: {
+          position: 'absolute',
+          width: 15,
+          height: 15,
+          left: 42.5,
+          top: 17.5,
+        },
+      },
+    });
+  });
+
+  it('builds a centered target at the picture middle', () => {
+    expect(
+      buildCenteredTarget({
+        screenWidth: 300,
+        screenHeight: 600,
+        imageDimensionStyle: { width: 200, height: 100 },
+      })
+    ).toEqual({
+      location: { x: '0.50', y: '0.50' },
+      target: {
+        targetSize: 15,
+        targetStyle: {
+          position: 'absolute',
+          width: 15,
+          height: 15,
+          left: 92.5,
+          top: 42.5,
+        },
+      },
+    });
   });
 
   it('checks whether a guess falls within the target threshold', () => {
@@ -71,6 +117,46 @@ describe('targetLocation utilities', () => {
         hiddenLocation: { x: 0.8, y: 0.8 },
         screenWidth: 300,
         screenHeight: 600,
+      })
+    ).toBe(false);
+  });
+
+  it('characterizes buildSelectionFromPixels -> isOnTarget pipeline with string locations (toFixed(2))', () => {
+    const screenWidth = 300;
+    const screenHeight = 600;
+    const imageDimensionStyle = { width: 100, height: 50 };
+
+    const hiddenSelection = buildSelectionFromPixels({
+      locationX: 50,
+      locationY: 25,
+      screenWidth,
+      screenHeight,
+      imageDimensionStyle,
+    });
+
+    expect(
+      isOnTarget({
+        location: hiddenSelection.location,
+        hiddenLocation: hiddenSelection.location,
+        screenWidth,
+        screenHeight,
+      })
+    ).toBe(true);
+
+    const farGuess = buildSelectionFromPixels({
+      locationX: 10,
+      locationY: 5,
+      screenWidth,
+      screenHeight,
+      imageDimensionStyle,
+    });
+
+    expect(
+      isOnTarget({
+        location: farGuess.location,
+        hiddenLocation: hiddenSelection.location,
+        screenWidth,
+        screenHeight,
       })
     ).toBe(false);
   });

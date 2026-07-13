@@ -90,7 +90,7 @@ jest.mock('../../hooks/useGroupsHub', () => ({
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Share, Alert, StyleSheet } from 'react-native';
+import { Share, Alert, StyleSheet, View } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
 import { handleOrientation } from '../../utils/orientation';
@@ -236,10 +236,8 @@ describe('PrivateHomeScreen', () => {
       const { renderer } = await renderScreen({ groupsData: ownerData });
       const expectedTheme = getPrivateGroupTheme({ primaryColor: '#6528F7' });
 
-      let container = renderer.root;
-      while (container && container.type !== 'View') {
-        container = container.parent;
-      }
+      const container = renderer.root.findByType(View);
+
       expect(container).toBeTruthy();
       expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
     });

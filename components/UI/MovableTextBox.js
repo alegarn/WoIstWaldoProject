@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { View, Text, PanResponder, StyleSheet, Pressable } from 'react-native';
+import { View, Text, PanResponder, StyleSheet } from 'react-native';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function MoveableTextBox({description, screenWidth, screenHeight}) {
+export default function MovableTextBox({description, screenWidth, screenHeight}) {
   const [position, setPosition] = useState({ x: 50, y: 50 });
   const [isWide, setIsWide] = useState(false);
 
@@ -56,7 +56,6 @@ export default function MoveableTextBox({description, screenWidth, screenHeight}
     <View style={styles.textBox}>
       <View style={styles.textContainer}>
         <Text
-          editable={false}
           ellipsizeMode={"tail"}
           style={[styles.text, textStyle]}
           {...panResponder.panHandlers}

@@ -4,12 +4,16 @@ import { View, Text, StyleSheet, Animated } from 'react-native';
 import ResultChoices from './ResultChoices';
 import TutorialOverlay from '../UI/TutorialOverlay';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
+import { useAuthContext } from '../../store/auth-context';
+import { flush } from '../../utils/sessionScoreStore';
 
 
 
 export default function ShowFailure({ navigation, route }) {
 
-  const { 
+  const authContext = useAuthContext();
+
+  const {
     imageFile, 
     pictureId, 
     description, 
@@ -41,6 +45,10 @@ export default function ShowFailure({ navigation, route }) {
     );
     animation.start();
     return () => animation.stop();
+  }, []);
+
+  useEffect(() => {
+    void flush({ authContext });
   }, []);
 
   const messageScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });

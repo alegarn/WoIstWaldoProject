@@ -82,4 +82,33 @@ describe('ShowPicture', () => {
     expect(handlePress).toHaveBeenCalledTimes(1);
     expect(handleLongPress).toHaveBeenCalledTimes(1);
   });
+
+  it('attaches the target pan handlers to the wrapping view when a target is set', async () => {
+    const onResponderGrant = jest.fn();
+    const targetPanHandlers = { onResponderGrant };
+    const target = {
+      targetSize: 16,
+      targetStyle: { position: 'absolute', width: 16, height: 16, left: 40, top: 20 },
+    };
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <ShowPicture
+          {...baseProps}
+          guess={true}
+          touchLocation={{ x: '0.50', y: '0.50' }}
+          target={target}
+          targetPanHandlers={targetPanHandlers}
+        />
+      );
+    });
+
+    const wrapper = renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' });
+    expect(wrapper.props.onResponderGrant).toBe(onResponderGrant);
+    expect(wrapper.props.style).toEqual(target.targetStyle);
+
+    const icon = renderer.root.findByProps({ testID: 'game.picture.clear-guess' });
+    expect(icon).toBeTruthy();
+  });
 });

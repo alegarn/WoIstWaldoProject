@@ -1,16 +1,24 @@
-import { useEffect } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { Dimensions } from 'react-native';
 
+import GuessExitSwipeMenu from '../../components/Guess/GuessExitSwipeMenu';
 import GuessPicture from "../../components/Picture/GuessPicture";
-
-import { isOnTarget } from "../../utils/targetLocation";
+import SuccessOverlay from '../../components/Guess/SuccessOverlay';
 import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
+import { AuthContext } from '../../store/auth-context';
+import { isOnTarget } from "../../utils/targetLocation";
+import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
+import { navigateToNextGuess } from '../../utils/guessNavigation';
 
 export default function GuessScreen({ navigation, route }) {
 
   const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, skipInstructions } = route.params;
   const isPrivate = scope?.kind === 'private';
+
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  const { userId } = useContext(AuthContext);
 
   const { group, theme } = useScopedPrivateGroupTheme(scope);
 
@@ -32,7 +40,7 @@ export default function GuessScreen({ navigation, route }) {
     (screenDimensions = { width: screenHeight, height: screenWidth });
 
 
-  function toAdScreen(targetInfos) {
+  async function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
     const sharedParams = {
       onTarget: onTarget,
@@ -52,19 +60,36 @@ export default function GuessScreen({ navigation, route }) {
       scope,
     };
 
-    if (isPrivate) {
-      navigation.replace('ResultScreen', sharedParams);
+    if (onTarget) {
+      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId });
+      setShowSuccess(true);
       return;
     }
 
-    navigation.replace('AdScreen', sharedParams);
+    navigation.replace('ResultScreen', sharedParams);
   };
+
+  async function handleOverlayDone() {
+    const next = await resolveNextGuessParams({ category, language, currentListId: listId, isTutorial, scope });
+    setShowSuccess(false);
+    if (!next) {
+      navigateToNextGuess(navigation, { category, language, currentListId: listId, isTutorial, scope: isPrivate ? scope : undefined });
+      return;
+    }
+    navigation.setParams(next.params);
+  }
+
+  function handleExitToHome() {
+    navigation.popToTop();
+  }
 
 
   return(
     <PrivateGroupThemeProvider group={group}>
     <>
+    <GuessExitSwipeMenu onHome={handleExitToHome} />
     <GuessPicture
+      key={listId}
       navigation={navigation}
       // only in dev with local images, but imageFile in Prod
       imageFile={uri}
@@ -78,6 +103,7 @@ export default function GuessScreen({ navigation, route }) {
       toAdScreen={toAdScreen}
       skipInstructions={skipInstructions}
     />
+    <SuccessOverlay visible={showSuccess} onDone={handleOverlayDone} />
     {
       isTutorial && 
         <TutorialOverlay

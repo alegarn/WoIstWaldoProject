@@ -74,6 +74,43 @@ export async function updateUserScore({ score, pictureId, context, scope }) {
   return response;
 };
 
+export async function submitScoreBatch({ items, context }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return false;
+  }
+
+  const isPrivate = items[0]?.scope?.kind === 'private';
+  const { token, userId } = await getBackendHeaders(context);
+  const headers = setHeaders({ token });
+
+  if (isPrivate) {
+    const groupId = items[0].scope.groupId;
+    const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/${groupId}/game_complete/batch`;
+    const results = items.map((item) => ({
+      guess_id: item.guessId,
+      image_id: item.pictureId,
+      earned_points: item.points,
+    }));
+
+    return axios
+      .post(url, { batch: { results } }, { headers })
+      .then(() => true)
+      .catch(() => false);
+  }
+
+  const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/scores/batch`;
+  const results = items.map((item) => ({
+    guess_id: item.guessId,
+    image_name: item.pictureId,
+    points: item.points,
+  }));
+
+  return axios
+    .post(url, { batch: { results } }, { headers })
+    .then(() => true)
+    .catch(() => false);
+}
+
 export async function getRankingData(context, { scope, top, window, page, after, limit } = {}) {
   if (isE2EMode()) {
     const e2eData = buildE2ERankingResponse({ after, limit, scope, page });

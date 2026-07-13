@@ -11,6 +11,8 @@ import {
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
+import { useFlushOnLeave } from '../../hooks/useFlushOnLeave';
+import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 const DEFAULT_LANGUAGE = 'en';
@@ -19,6 +21,8 @@ const DEFAULT_LANGUAGE = 'en';
 // GuessFeedScreen is currently the only caller in the authenticated stack, but we
 // still pass them explicitly so the cache namespace + filter plumbing stays explicit.
 export default function GuessFeedScreen({ navigation, route }) {
+  const authContext = useAuthContext();
+  useFlushOnLeave({ navigation, authContext });
   const { category, language: routeLanguage, skipInstructions } = route.params || {};
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
@@ -81,12 +85,9 @@ export default function GuessFeedScreen({ navigation, route }) {
   };
 
   const startGuessing = ({ item }) => {
-    navigation.replace('GuessScreen', {
+    navigation.navigate('GuessScreen', {
       ...route.params,
       ...item,
-      // API exposes the hidden target coords as `touchLocation` on ImageModel,
-      // but GuessScreen reads `hiddenLocation`. Alias so the guess-confirm path
-      // has the coords it needs (see utils/targetLocation.js isOnTarget).
       hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
       language: language || DEFAULT_LANGUAGE,

@@ -68,6 +68,7 @@ import {
 } from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
 import { getOnboardingCompleted } from './utils/storageDatum';
+import { flush, getPending } from './utils/sessionScoreStore';
 
 
 const Stack = createNativeStackNavigator();
@@ -472,18 +473,37 @@ function Navigation({ authContext }) {
   }, [authContext.IsAuthenticated]);
 
   useEffect(() => {
-    if (!isE2EMode() || !authContext.IsAuthenticated) {
+    if (!authContext.IsAuthenticated) {
       return undefined;
     }
 
+    if (isE2EMode()) {
+      const subscription = AppState.addEventListener('change', (nextState) => {
+        if (nextState === 'active') {
+          scheduleHomeResetForE2E();
+        }
+      });
+
+      return () => subscription.remove();
+    }
+
     const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        void flush({ authContext });
+        return;
+      }
+
       if (nextState === 'active') {
-        scheduleHomeResetForE2E();
+        getPending().then((pending) => {
+          if (pending && pending.length > 0) {
+            void flush({ authContext });
+          }
+        });
       }
     });
 
     return () => subscription.remove();
-  }, [authContext.IsAuthenticated, showLanguageOnboarding]);
+  }, [authContext.IsAuthenticated, authContext, showLanguageOnboarding]);
 
   if (!isOnboardingResolved) {
     return <LoadingOverlay message="Loading preferences..." />;

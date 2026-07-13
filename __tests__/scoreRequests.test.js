@@ -1,5 +1,6 @@
 jest.mock('axios', () => ({
   get: jest.fn(),
+  post: jest.fn(),
   put: jest.fn(),
 }));
 
@@ -19,7 +20,7 @@ import axios from 'axios';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { buildE2ERankingRows, buildE2ERankingResponse, buildE2EUserScores, isE2EMode } from '../utils/e2eMode';
-import { getRankingData, getUserScores, updateUserScore } from '../utils/scoreRequests';
+import { getRankingData, getUserScores, submitScoreBatch, updateUserScore } from '../utils/scoreRequests';
 
 describe('scoreRequests utilities', () => {
   beforeEach(() => {
@@ -50,6 +51,101 @@ describe('scoreRequests utilities', () => {
       scoreId: 'score-1',
     });
     setHeaders.mockReturnValue({ Authorization: 'Bearer token' });
+  });
+
+  describe('submitScoreBatch', () => {
+    it('posts public items to the user scores batch endpoint with the expected payload', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      const result = await submitScoreBatch({
+        items: [
+          { guessId: 'g-1', pictureId: 'img-1', points: 10 },
+          { guessId: 'g-2', pictureId: 'img-2', points: 5 },
+        ],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/scores/batch',
+        {
+          batch: {
+            results: [
+              { guess_id: 'g-1', image_name: 'img-1', points: 10 },
+              { guess_id: 'g-2', image_name: 'img-2', points: 5 },
+            ],
+          },
+        },
+        { headers: { Authorization: 'Bearer token' } }
+      );
+      expect(result).toBe(true);
+      expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
+    });
+
+    it('posts private items to the group batch endpoint with the expected payload', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      const result = await submitScoreBatch({
+        items: [
+          { guessId: 'g-1', pictureId: 'img-1', points: 7, scope: { kind: 'private', groupId: 'g-9' } },
+        ],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-9/game_complete/batch',
+        {
+          batch: {
+            results: [
+              { guess_id: 'g-1', image_id: 'img-1', earned_points: 7 },
+            ],
+          },
+        },
+        { headers: { Authorization: 'Bearer token' } }
+      );
+      expect(result).toBe(true);
+      expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
+    });
+
+    it('calls setHeaders with only the token and no uid/expiry/access_token/client', async () => {
+      axios.post.mockResolvedValue({ status: 200 });
+
+      await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 3 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(setHeaders).toHaveBeenCalledTimes(1);
+      expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
+      expect(setHeaders.mock.calls[0][0]).toEqual({ token: 'Bearer token' });
+    });
+
+    it('returns false and does not throw when the backend rejects with a non-2xx status', async () => {
+      axios.post.mockRejectedValue({ request: { status: 500 }, message: 'Server Error' });
+
+      const result = await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 3 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false and does not throw on a network error', async () => {
+      axios.post.mockRejectedValue(new Error('Network Error'));
+
+      const result = await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 3 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(result).toBe(false);
+    });
+
+    it('returns false when called with an empty items array', async () => {
+      const result = await submitScoreBatch({ items: [], context: { token: 'Bearer token' } });
+      expect(result).toBe(false);
+      expect(axios.post).not.toHaveBeenCalled();
+    });
   });
 
   it('updates the current user score with the expected payload', async () => {

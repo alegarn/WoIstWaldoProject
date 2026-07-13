@@ -1,7 +1,11 @@
-import { useState, useEffect, useLayoutEffect } from 'react';
+import { useState, useLayoutEffect, useMemo, useRef } from 'react';
+import { PanResponder } from 'react-native';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress, determineImageCorners } from "../../utils/targetLocation";
+import {
+  buildCenteredTarget,
+  buildSelectionFromPixels,
+} from "../../utils/targetLocation";
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
@@ -13,12 +17,31 @@ import {
   isE2EMode,
 } from '../../utils/e2eMode';
 
+const TAP_THRESHOLD = 8;
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions }) {
 
   const [showFilter, setShowFilter] = useState(!skipInstructions); 
-  const [touchLocation, setTouchLocation] = useState(null);
-  const [target, setTarget] = useState(null);
+
+  const uri = imageFile;
+  const screenWidth = screenDimensions.width;
+  const screenHeight = screenDimensions.height;
+
+  const isPortrait = imageIsPortrait;
+  const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
+  const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
+
+  const initialSelection = useMemo(
+    () => isE2EMode() ? null : buildCenteredTarget({ screenWidth, screenHeight, imageDimensionStyle }),
+    []
+  );
+
+  const [touchLocation, setTouchLocation] = useState(initialSelection?.location ?? null);
+  const [target, setTarget] = useState(initialSelection?.target ?? null);
   const [showModal, setShowModal] = useState(false);
 
 /* debug */
@@ -29,50 +52,80 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   }; */
 /*  */
 
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const stateRef = useRef({ target, screenWidth, screenHeight, imageDimensionStyle });
+  stateRef.current = { target, screenWidth, screenHeight, imageDimensionStyle };
 
-  const uri = imageFile;
-  const screenWidth = screenDimensions.width;
-  const screenHeight = screenDimensions.height;
-
-  const isPortrait = imageIsPortrait;
-  const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
-  const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
+  const targetPanHandlers = useMemo(
+    () => {
+      if (isE2EMode()) {
+        return undefined;
+      }
+      return PanResponder.create({
+        onStartShouldSetPanResponder: () => true,
+        onStartShouldSetPanResponderCapture: () => true,
+        onMoveShouldSetPanResponder: () => false,
+        onMoveShouldSetPanResponderCapture: () => false,
+        onPanResponderGrant: () => {
+          const { target: currentTarget } = stateRef.current;
+          const half = (currentTarget?.targetSize ?? 0) / 2;
+          dragStartRef.current = {
+            x: (currentTarget?.targetStyle?.left ?? 0) + half,
+            y: (currentTarget?.targetStyle?.top ?? 0) + half,
+          };
+        },
+        onPanResponderMove: (_event, gestureState) => {
+          const { screenWidth: sw, screenHeight: sh, imageDimensionStyle: dims } = stateRef.current;
+          const nextX = clamp(dragStartRef.current.x + gestureState.dx, 0, dims.width);
+          const nextY = clamp(dragStartRef.current.y + gestureState.dy, 0, dims.height);
+          const selection = buildSelectionFromPixels({
+            locationX: nextX,
+            locationY: nextY,
+            screenWidth: sw,
+            screenHeight: sh,
+            imageDimensionStyle: dims,
+          });
+          setTouchLocation(selection.location);
+          setTarget(selection.target);
+        },
+        onPanResponderRelease: (_event, gestureState) => {
+          const moved = Math.hypot(gestureState.dx, gestureState.dy);
+          if (moved < TAP_THRESHOLD) {
+            setShowModal(true);
+          }
+        },
+        onPanResponderTerminationRequest: () => false,
+      }).panHandlers;
+    },
+    []
+  );
 
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({imageIsPortrait});
   }, [imageIsPortrait]);
 
-  useEffect(() => {
-    showUpdatedLocation();
-  }, [target]);
-
   const handleFilterClick = () => {
     setShowFilter(false);
   };
 
-  const selectPictureLocation = ({ event, relativeLocation }) => {
-    const selection = isE2EMode()
-      ? buildE2EPictureSelection({
-          screenWidth,
-          screenHeight,
-          imageDimensionStyle,
-          relativeLocation,
-        })
-      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
+  const selectPictureLocation = ({ relativeLocation }) => {
+    const selection = buildE2EPictureSelection({
+      screenWidth,
+      screenHeight,
+      imageDimensionStyle,
+      relativeLocation,
+    });
 
-    // still needed?
-    //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
-
-    /* from '../../utils/targetLocation' */
-    let { location, target } = selection;
+    const { location, target } = selection;
     if (location && target) {
-    setTouchLocation(location)
-    setTarget(target);
-    };
+      setTouchLocation(location);
+      setTarget(target);
+    }
   };
 
   const handlePress = (event) => {
+    if (!isE2EMode()) return; // real usage: target is drag-only; image tap does not move it
     selectPictureLocation({
       event,
       relativeLocation: hiddenLocation ?? getE2EHideLocation(),
@@ -94,6 +147,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   const handleConfirm = () => {
+    setShowModal(false);
     toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target });
   };
 
@@ -102,7 +156,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
 
-  const showUpdatedLocation = () => {
+  const renderPicture = () => {
     return (
       <ShowPicture
         uri={uri}
@@ -119,6 +173,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
+        targetPanHandlers={targetPanHandlers}
         /* for debug */
        /*  showDebugModal={showDebugModal}
         setShowDebugModal={toggleDebugModal} */
@@ -140,9 +195,5 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     );
   };
 
-  if (!showFilter) {
-    return(
-      showUpdatedLocation()
-    );
-  };
+  return renderPicture();
 }

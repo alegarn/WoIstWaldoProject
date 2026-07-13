@@ -3,6 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import { setUnauthorizedHandler } from "../utils/apiClient";
 import { emptyImageList } from "../utils/storageDatum";
+import { flush } from "../utils/sessionScoreStore";
 
 export const AuthContext = createContext({
   token: '',
@@ -265,6 +266,11 @@ export default function AuthContextProvider({ children }) {
     }
 
     isLoggingOutRef.current = true;
+
+    try {
+      await flush({ authContext: authContextRef.current });
+    } catch {
+    }
 
     setAuthToken(null);
     setUserId('');

@@ -32,6 +32,17 @@ jest.mock('../../components/UI/TableComponent', () => {
 
 jest.mock('../../components/UI/LoadingOverlay', () => () => null);
 
+jest.mock('../../components/Guess/SuccessOverlay', () => () => null);
+
+jest.mock('../../utils/handleGuessOutcome', () => ({
+  applySuccessSideEffects: jest.fn(),
+  resolveNextGuessParams: jest.fn(),
+}));
+
+jest.mock('../../utils/guessNavigation', () => ({
+  navigateToNextGuess: jest.fn(),
+}));
+
 jest.mock('../../hooks/useActiveGroup', () => ({
   useActiveGroup: () => ({
     scope: { kind: 'public' },
@@ -61,6 +72,7 @@ import HideScreen from '../../screens/HideScreens/HideScreen';
 import RankingScreen from '../../screens/RankingScreen';
 import { isOnTarget } from '../../utils/targetLocation';
 import { getRankingData } from '../../utils/scoreRequests';
+import { applySuccessSideEffects } from '../../utils/handleGuessOutcome';
 
 const PRIVATE_SCOPE = { kind: 'private', groupId: 'g-123' };
 
@@ -79,8 +91,8 @@ describe('reused screens — private scope wiring', () => {
     Dimensions.get.mockRestore();
   });
 
-  it('GuessScreen skips AdScreen and forwards scope=private+groupId to ResultScreen', async () => {
-    const navigation = { replace: jest.fn() };
+  it('GuessScreen on private success buffers side effects with scope and never routes to AdScreen/ResultScreen', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn() };
     const route = {
       params: {
         imageFile: 'file:///waldo.jpg',
@@ -92,10 +104,13 @@ describe('reused screens — private scope wiring', () => {
         hiddenLocation: { x: 0.5, y: 0.5 },
         listId: 1,
         isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
         scope: PRIVATE_SCOPE,
       },
     };
     isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
 
     let renderer;
     await act(async () => {
@@ -108,12 +123,13 @@ describe('reused screens — private scope wiring', () => {
       guessPictureInstance.props.toAdScreen({ location: { x: 0.5, y: 0.5 } });
     });
 
-    const targets = navigation.replace.mock.calls.map(([target]) => target);
-    expect(targets).not.toContain('AdScreen');
-    expect(navigation.replace).toHaveBeenCalledWith(
-      'ResultScreen',
+    expect(applySuccessSideEffects).toHaveBeenCalledWith(
       expect.objectContaining({ scope: PRIVATE_SCOPE })
     );
+
+    const targets = navigation.replace.mock.calls.map(([target]) => target);
+    expect(targets).not.toContain('AdScreen');
+    expect(targets).not.toContain('ResultScreen');
   });
 
   it('HideScreen forwards the private scope into HidePicture so the hide flow stays scoped', async () => {
