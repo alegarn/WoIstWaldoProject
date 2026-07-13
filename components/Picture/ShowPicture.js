@@ -1,11 +1,65 @@
-import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
-import MovableTextBox from '../UI/MovableTextBox';
+import EnigmaOverlay from './Descriptions/EnigmaOverlay';
 import { GlobalStyle } from '../../constants/theme';
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen }) {
+const PULSE_DURATION_MS = 1200;
+const PULSE_HALF_DURATION_MS = PULSE_DURATION_MS / 2;
+const PULSE_SCALE_MIN = 1;
+const PULSE_SCALE_MAX = 1.18;
+const PULSE_OPACITY_MIN = 0.55;
+const PULSE_OPACITY_MAX = 1;
+const PULSE_NATIVE_DRIVER = { useNativeDriver: true };
+
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, pulseTarget = false }) {
+  const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
+  const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
+
+  useEffect(() => {
+    if (!pulseTarget) {
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseScale, {
+            toValue: PULSE_SCALE_MAX,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseScale, {
+            toValue: PULSE_SCALE_MIN,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pulseOpacity, {
+            toValue: PULSE_OPACITY_MIN,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseOpacity, {
+            toValue: PULSE_OPACITY_MAX,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      loop.reset();
+    };
+  }, [pulseTarget, pulseScale, pulseOpacity]);
+
+  const pulseStyle = pulseTarget
+    ? { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }
+    : null;
 
   return (
     <View style={styles.container} >
@@ -26,7 +80,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           >
 {/* target not showing for guessscreen */}
             { guess ? (
-              <MovableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width} defaultOpen={defaultOpen}/>
+              <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} defaultOpen={defaultOpen}/>
             ) : null }
           </ImageBackground>
 
@@ -34,13 +88,13 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
 
 {/* no cross, when guess, if null  */}
         {touchLocation && target?.dragStyle && (
-          <View
+          <Animated.View
             {...(targetPanHandlers || {})}
-            style={[target.dragStyle, styles.dragRing]}
+            style={[target.dragStyle, styles.dragRing, pulseStyle]}
             testID={guess ? 'game.picture.guess-target-wrap' : 'game.picture.hide-target-wrap'}
           >
             <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
-          </View>
+          </Animated.View>
         )}
       </View>
 

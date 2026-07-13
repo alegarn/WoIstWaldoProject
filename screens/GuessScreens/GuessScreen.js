@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useState } from 'react';
 import { Dimensions } from 'react-native';
 
 import GuessExitSwipeMenu from '../../components/Guess/GuessExitSwipeMenu';
@@ -10,6 +10,7 @@ import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
 import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
+import { isE2EMode } from '../../utils/e2eMode';
 
 export default function GuessScreen({ navigation, route }) {
 
@@ -17,6 +18,11 @@ export default function GuessScreen({ navigation, route }) {
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
+  // Hints show on the first card of each game series (every fresh mount of
+  // GuessScreen). Advancing to later cards uses setParams (no remount), so the
+  // dismissed state persists for the rest of the series. Suppressed in e2e mode.
+  const [hintsActive, setHintsActive] = useState(!isE2EMode());
+  const dismissHints = useCallback(() => setHintsActive(false), []);
 
   const { userId } = useContext(AuthContext);
 
@@ -87,7 +93,7 @@ export default function GuessScreen({ navigation, route }) {
   return(
     <PrivateGroupThemeProvider group={group}>
     <>
-    <GuessExitSwipeMenu onHome={handleExitToHome} />
+    <GuessExitSwipeMenu onHome={handleExitToHome} showHints={hintsActive} onInteract={dismissHints} />
     <GuessPicture
       key={listId}
       navigation={navigation}
@@ -102,6 +108,8 @@ export default function GuessScreen({ navigation, route }) {
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
       skipInstructions={skipInstructions}
+      pulseTarget={hintsActive}
+      onInteract={dismissHints}
     />
     <SuccessOverlay visible={showSuccess} onDone={handleOverlayDone} />
     {
