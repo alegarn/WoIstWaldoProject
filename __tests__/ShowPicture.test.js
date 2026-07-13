@@ -16,6 +16,17 @@ jest.mock('../components/Picture/Descriptions/EnigmaOverlay', () => {
   };
 });
 
+jest.mock('react-native', () => {
+  const actualRN = jest.requireActual('react-native');
+  const noopAnimation = { start: () => {}, stop: () => {}, reset: () => {} };
+  actualRN.Animated.loop = () => noopAnimation;
+  actualRN.Animated.parallel = () => noopAnimation;
+  actualRN.Animated.sequence = () => noopAnimation;
+  actualRN.Animated.timing = () => noopAnimation;
+  actualRN.Animated.delay = () => noopAnimation;
+  return actualRN;
+});
+
 import React from 'react';
 import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -39,7 +50,13 @@ describe('ShowPicture', () => {
   };
 
   beforeEach(() => {
+    jest.useFakeTimers();
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    jest.clearAllTimers();
+    jest.useRealTimers();
   });
 
   it('keeps the clear icon hidden until a point has been selected', async () => {
@@ -124,5 +141,60 @@ describe('ShowPicture', () => {
 
     const icon = renderer.root.findByProps({ testID: 'game.picture.clear-guess' });
     expect(icon).toBeTruthy();
+  });
+
+  it('animates the drag ring as a pulsar when pulseTarget is true and stops when false', async () => {
+    const target = {
+      targetSize: 16,
+      targetStyle: { position: 'absolute', width: 16, height: 16, left: 40, top: 20 },
+      dragSize: 32,
+      dragStyle: {
+        position: 'absolute',
+        width: 32,
+        height: 32,
+        left: 32,
+        top: 12,
+        borderRadius: 16,
+        alignItems: 'center',
+        justifyContent: 'center',
+      },
+    };
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <ShowPicture
+          {...baseProps}
+          guess={true}
+          touchLocation={{ x: '0.50', y: '0.50' }}
+          target={target}
+          targetPanHandlers={{}}
+          pulseTarget={true}
+        />
+      );
+    });
+
+    const wrapper = renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' });
+    const activeFlattenedStyle = StyleSheet.flatten(wrapper.props.style);
+    expect(activeFlattenedStyle.borderColor).toBe('#6528F7');
+    expect(activeFlattenedStyle.transform).toBeDefined();
+
+    await act(async () => {
+      renderer.update(
+        <ShowPicture
+          {...baseProps}
+          guess={true}
+          touchLocation={{ x: '0.50', y: '0.50' }}
+          target={target}
+          targetPanHandlers={{}}
+          pulseTarget={false}
+        />
+      );
+    });
+
+    const inactiveFlattenedStyle = StyleSheet.flatten(
+      renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' }).props.style
+    );
+    expect(inactiveFlattenedStyle.transform).toBeUndefined();
   });
 });

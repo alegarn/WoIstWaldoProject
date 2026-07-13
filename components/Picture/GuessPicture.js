@@ -23,7 +23,7 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
-export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions }) {
+export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions, pulseTarget = false, onInteract }) {
 
   const [showFilter, setShowFilter] = useState(!skipInstructions); 
 
@@ -56,6 +56,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const stateRef = useRef({ target, screenWidth, screenHeight, imageDimensionStyle });
   stateRef.current = { target, screenWidth, screenHeight, imageDimensionStyle };
 
+  const onInteractRef = useRef(onInteract);
+  onInteractRef.current = onInteract;
+
   const targetPanHandlers = useMemo(
     () => {
       if (isE2EMode()) {
@@ -67,6 +70,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         onMoveShouldSetPanResponder: () => false,
         onMoveShouldSetPanResponderCapture: () => false,
         onPanResponderGrant: () => {
+          onInteractRef.current?.();
           const { target: currentTarget } = stateRef.current;
           const half = (currentTarget?.targetSize ?? 0) / 2;
           dragStartRef.current = {
@@ -143,10 +147,12 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   const handleIconPress = () => {
+    onInteract?.();
     setShowModal(true);
   };
 
   const handleConfirm = () => {
+    onInteract?.();
     setShowModal(false);
     toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target });
   };
@@ -175,6 +181,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         imageDimensionStyle={imageDimensionStyle}
         targetPanHandlers={targetPanHandlers}
         defaultOpen={skipInstructions === true}
+        pulseTarget={pulseTarget}
         /* for debug */
        /*  showDebugModal={showDebugModal}
         setShowDebugModal={toggleDebugModal} */

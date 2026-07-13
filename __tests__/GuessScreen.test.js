@@ -44,6 +44,10 @@ jest.mock('../utils/guessNavigation', () => ({
   navigateToNextGuess: jest.fn(),
 }));
 
+jest.mock('../utils/e2eMode', () => ({
+  isE2EMode: jest.fn(() => false),
+}));
+
 import React from 'react';
 import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -61,9 +65,15 @@ function lastOverlayProps() {
   return mockSuccessOverlay.mock.calls[mockSuccessOverlay.mock.calls.length - 1][0];
 }
 
+function lastMenuProps() {
+  return mockGuessExitSwipeMenu.mock.calls[mockGuessExitSwipeMenu.mock.calls.length - 1][0];
+}
+
 describe('GuessScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    const { isE2EMode } = require('../utils/e2eMode');
+    isE2EMode.mockReturnValue(false);
     jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
@@ -281,5 +291,98 @@ describe('GuessScreen', () => {
 
     const overlayProps = lastOverlayProps();
     expect(overlayProps.visible).toBe(false);
+  });
+
+  it('activates hints on the first card of each game series (non-e2e mount)', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    expect(pictureProps.pulseTarget).toBe(true);
+    expect(pictureProps.onInteract).toEqual(expect.any(Function));
+
+    const menuProps = lastMenuProps();
+    expect(menuProps.showHints).toBe(true);
+    expect(menuProps.onInteract).toEqual(expect.any(Function));
+  });
+
+  it('suppresses hints in e2e mode', async () => {
+    const { isE2EMode } = require('../utils/e2eMode');
+    isE2EMode.mockReturnValue(true);
+
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    expect(lastPictureProps().pulseTarget).toBe(false);
+    expect(lastMenuProps().showHints).toBe(false);
+  });
+
+  it('dismisses hints on first onInteract', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    expect(lastPictureProps().pulseTarget).toBe(true);
+    expect(lastMenuProps().showHints).toBe(true);
+
+    await act(async () => {
+      lastPictureProps().onInteract();
+    });
+
+    expect(lastPictureProps().pulseTarget).toBe(false);
+    expect(lastMenuProps().showHints).toBe(false);
   });
 });
