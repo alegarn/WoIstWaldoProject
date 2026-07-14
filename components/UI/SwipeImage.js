@@ -7,7 +7,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, getE2EHiddenGuessCard, getLocalImages, getLastImageId, getLastImageUuid, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -187,7 +187,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           return;
         }
       }
-      await handleImagesLoading(null);
+      const lastCursor = await getLastImageUuid(categoryKey, lang);
+      await handleImagesLoading(lastCursor === PUBLIC_FEED_END_CURSOR ? undefined : null);
     } else {
       setImageList(localImageList);
       await handleImagesLoading();

@@ -8,6 +8,7 @@ const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
+export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
 
 function imageListKey(categoryKey, language) {
   return `imageList:${categoryKey || 'all'}:${language || 'any'}`;

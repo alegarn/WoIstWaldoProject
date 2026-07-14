@@ -1,5 +1,5 @@
 import { getImages } from '../utils/imagesRequests';
-import { getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 
 function normalizeLanguage(language) {
@@ -18,6 +18,10 @@ export async function fetchCardBatch({ categoryKey, categoryId, language, scope,
   const lang = normalizeLanguage(language);
   const lastImageUuid = await getLastImageUuid(categoryKey, lang);
   const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
+
+  if (!isPrivateScope(scope) && pictureId === PUBLIC_FEED_END_CURSOR) {
+    return { isError: false, images: [] };
+  }
 
   return getImages(pictureId, authContext, {
     category_id: resolveCategoryId(categoryId),

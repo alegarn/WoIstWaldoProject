@@ -49,6 +49,7 @@ jest.mock('../utils/ratingRequests', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
   getE2EHiddenGuessCard: jest.fn(),
   getLocalImages: jest.fn(),
   storeImageList: jest.fn(),
@@ -102,6 +103,7 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  PUBLIC_FEED_END_CURSOR,
   removeImageFromList,
   storeImageList,
   updateImageList,
@@ -232,6 +234,23 @@ describe('SwipeImage', () => {
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
     ], 'all', 'any');
+  });
+
+  it('does not restart the synthetic all feed from head when the public exhausted sentinel is stored', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue(PUBLIC_FEED_END_CURSOR);
+
+    const { renderer } = await renderSwipeImage();
+
+    expect(getImages).not.toHaveBeenCalled();
+
+    const renderedText = renderer.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => node.props.children)
+      .flat()
+      .join(' ');
+
+    expect(renderedText).toContain('No more images to guess right now!');
   });
 
   it('normalizes the synthetic all card so category_id stays undefined while category_key is threaded', async () => {
