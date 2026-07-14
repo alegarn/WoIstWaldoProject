@@ -16,7 +16,7 @@ function buildPanelHeight(screenHeight) {
   return Math.max(computed, PANEL_MIN_HEIGHT);
 }
 
-export default function EnigmaOverlay({ description, screenHeight, defaultOpen }) {
+export default function EnigmaOverlay({ description, screenHeight, defaultOpen, onClose }) {
   const panelHeight = buildPanelHeight(screenHeight);
   const [isOpen, setIsOpen] = useState(!!defaultOpen);
   const translateY = useRef(new Animated.Value(defaultOpen ? 0 : panelHeight)).current;
@@ -31,6 +31,7 @@ export default function EnigmaOverlay({ description, screenHeight, defaultOpen }
   }, [translateY]);
 
   const closePanel = useCallback(() => {
+    onClose?.();
     Animated.timing(translateY, {
       toValue: panelHeight,
       duration: 140,
@@ -38,7 +39,7 @@ export default function EnigmaOverlay({ description, screenHeight, defaultOpen }
     }).start(() => {
       setIsOpen(false);
     });
-  }, [translateY, panelHeight]);
+  }, [translateY, panelHeight, onClose]);
 
   const handlePanResponder = useMemo(
     () =>

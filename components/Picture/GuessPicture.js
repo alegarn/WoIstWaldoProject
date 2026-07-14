@@ -1,4 +1,4 @@
-import { useState, useLayoutEffect, useMemo, useRef } from 'react';
+import { useState, useLayoutEffect, useMemo, useRef, useEffect } from 'react';
 import { PanResponder } from 'react-native';
 
 import { handleImageOrientation } from "../../utils/orientation";
@@ -16,8 +16,11 @@ import {
   getE2EIncorrectHideLocation,
   isE2EMode,
 } from '../../utils/e2eMode';
+import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
+import { useReadingGrace } from '../../hooks/useReadingGrace';
 
 const TAP_THRESHOLD = 8;
+const TIMER_TICK_MS = 100;
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -25,7 +28,11 @@ function clamp(value, min, max) {
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions, pulseTarget = false, onInteract }) {
 
-  const [showFilter, setShowFilter] = useState(!skipInstructions); 
+  const [showFilter, setShowFilter] = useState(!skipInstructions);
+
+  // Reading grace delays the chrono on 2nd+ cards (skipInstructions) while the
+  // enigma opens by default. Ends at the earliest of graceMs or description close.
+  const { graceDone, markClosed } = useReadingGrace({ enabled: skipInstructions === true && !isE2EMode() });
 
   const uri = imageFile;
   const screenWidth = screenDimensions.width;
@@ -43,6 +50,11 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const [touchLocation, setTouchLocation] = useState(initialSelection?.location ?? null);
   const [target, setTarget] = useState(initialSelection?.target ?? null);
   const [showModal, setShowModal] = useState(false);
+
+  const [elapsedMs, setElapsedMs] = useState(0);
+  const elapsedAccumRef = useRef(0);
+  const runStartRef = useRef(0);
+  const intervalRef = useRef(null);
 
 /* debug */
   /* const [showDebugModal, setShowDebugModal] = useState(false);
@@ -109,6 +121,24 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     handleImageOrientation({imageIsPortrait});
   }, [imageIsPortrait]);
 
+  useEffect(() => {
+    if (isE2EMode()) {
+      setElapsedMs(0);
+      return undefined;
+    }
+    if (showFilter || showModal || !graceDone) {
+      return undefined;
+    }
+    runStartRef.current = Date.now();
+    intervalRef.current = setInterval(() => {
+      setElapsedMs(elapsedAccumRef.current + (Date.now() - runStartRef.current));
+    }, TIMER_TICK_MS);
+    return () => {
+      elapsedAccumRef.current += Date.now() - runStartRef.current;
+      clearInterval(intervalRef.current);
+    };
+  }, [showFilter, showModal, graceDone]);
+
   const handleFilterClick = () => {
     setShowFilter(false);
   };
@@ -154,7 +184,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const handleConfirm = () => {
     onInteract?.();
     setShowModal(false);
-    toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target });
+    toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target, elapsedMs });
   };
 
   const onCancel = () => {
@@ -182,6 +212,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         targetPanHandlers={targetPanHandlers}
         defaultOpen={skipInstructions === true}
         pulseTarget={pulseTarget}
+        speedRingActive={!showFilter && !showModal && graceDone && !isE2EMode()}
+        speedDurationMs={SPEED_WINDOW_MS}
+        onDescriptionClosed={markClosed}
         /* for debug */
        /*  showDebugModal={showDebugModal}
         setShowDebugModal={toggleDebugModal} */

@@ -11,6 +11,7 @@ import { isOnTarget } from "../../utils/targetLocation";
 import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { isE2EMode } from '../../utils/e2eMode';
+import { computeMultiplier, isSpeedBonus, computeSpeedPoints, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
 
 export default function GuessScreen({ navigation, route }) {
 
@@ -18,6 +19,7 @@ export default function GuessScreen({ navigation, route }) {
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
+  const [successMultiplier, setSuccessMultiplier] = useState(SPEED_MULTIPLIER_BASE);
   // Hints show on the first card of each game series (every fresh mount of
   // GuessScreen). Advancing to later cards uses setParams (no remount), so the
   // dismissed state persists for the rest of the series. Suppressed in e2e mode.
@@ -48,6 +50,12 @@ export default function GuessScreen({ navigation, route }) {
 
   async function toAdScreen(targetInfos) {
     let onTarget = isOnTarget(targetInfos);
+    // Missing elapsedMs is treated as 0 by design: yields the fastest tier (fastest-find reward), preserving backward compatibility for callers that don't pass it.
+    const elapsedMs = targetInfos?.elapsedMs ?? 0;
+    const multiplier = computeMultiplier(elapsedMs);
+    // Forward-looking speed-bonus reward gate: no ad hop exists on success today,
+    // but when AdScreen is restored this flag (multiplier > 1) will skip the ad for fast finds.
+    isSpeedBonus(multiplier);
     const sharedParams = {
       onTarget: onTarget,
       imageFile: uri,
@@ -67,7 +75,8 @@ export default function GuessScreen({ navigation, route }) {
     };
 
     if (onTarget) {
-      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId });
+      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: computeSpeedPoints(1, multiplier), multiplier });
+      setSuccessMultiplier(multiplier);
       setShowSuccess(true);
       return;
     }
@@ -111,7 +120,7 @@ export default function GuessScreen({ navigation, route }) {
       pulseTarget={hintsActive}
       onInteract={dismissHints}
     />
-    <SuccessOverlay visible={showSuccess} onDone={handleOverlayDone} />
+    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={computeSpeedPoints(1, successMultiplier)} onDone={handleOverlayDone} />
     {
       isTutorial && 
         <TutorialOverlay

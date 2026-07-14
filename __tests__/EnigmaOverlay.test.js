@@ -166,4 +166,49 @@ describe('EnigmaOverlay', () => {
 
     expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
   });
+
+  it('renders open by default when defaultOpen=true and exposes the scrim', async () => {
+    const renderer = await renderOverlay({ defaultOpen: true });
+
+    expect(renderer.root.findByProps({ testID: 'guess.enigma.scrim' })).toBeTruthy();
+  });
+
+  it('calls onClose when the panel is dismissed via the scrim', async () => {
+    const onClose = jest.fn();
+    const renderer = await renderOverlay({ defaultOpen: true, onClose });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess.enigma.scrim' }).props.onPress();
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls onClose when the close chevron is pressed', async () => {
+    const onClose = jest.fn();
+    const renderer = await renderOverlay({ defaultOpen: true, onClose });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess.enigma.close' }).props.onPress();
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call onClose when onClose is not provided (no throw)', async () => {
+    const renderer = await renderOverlay({ defaultOpen: true });
+
+    await expect(
+      act(async () => {
+        renderer.root.findByProps({ testID: 'guess.enigma.scrim' }).props.onPress();
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it('renders closed (handle only) when defaultOpen=false', async () => {
+    const renderer = await renderOverlay({ defaultOpen: false });
+
+    expect(renderer.root.findByProps({ testID: 'guess.enigma.handle' })).toBeTruthy();
+    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.scrim' })).toThrow();
+  });
 });
