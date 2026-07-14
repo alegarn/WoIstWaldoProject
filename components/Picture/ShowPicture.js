@@ -16,7 +16,7 @@ const PULSE_OPACITY_MIN = 0.55;
 const PULSE_OPACITY_MAX = 1;
 const PULSE_NATIVE_DRIVER = { useNativeDriver: true };
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, onDescriptionClosed, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
 
@@ -82,7 +82,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           >
 {/* target not showing for guessscreen */}
             { guess ? (
-              <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} defaultOpen={defaultOpen}/>
+              <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} defaultOpen={defaultOpen} onClose={onDescriptionClosed}/>
             ) : null }
           </ImageBackground>
 

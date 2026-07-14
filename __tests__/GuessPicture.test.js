@@ -416,4 +416,100 @@ describe('GuessPicture', () => {
       }
     });
   });
+
+  describe('reading grace', () => {
+    beforeEach(() => {
+      isE2EMode.mockReturnValue(false);
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it('on a first card (skipInstructions falsy) skips the grace: ring is active right after instructions dismiss', () => {
+      act(() => {
+        activeRenderers.push(create(<GuessPicture {...baseProps} />));
+      });
+      act(() => {
+        const instructionsProps = mockGameInstructions.mock.calls[mockGameInstructions.mock.calls.length - 1][0];
+        instructionsProps.handleFilterClick();
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(true);
+    });
+
+    it('on a second card (skipInstructions=true) the ring is inactive during the grace window', () => {
+      act(() => {
+        activeRenderers.push(create(<GuessPicture {...baseProps} skipInstructions={true} />));
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(false);
+
+      act(() => {
+        jest.advanceTimersByTime(2999);
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(false);
+    });
+
+    it('on a second card, the ring activates once the grace window elapses', () => {
+      act(() => {
+        activeRenderers.push(create(<GuessPicture {...baseProps} skipInstructions={true} />));
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(false);
+
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(true);
+    });
+
+    it('on a second card, closing the description ends the grace immediately', () => {
+      act(() => {
+        activeRenderers.push(create(<GuessPicture {...baseProps} skipInstructions={true} />));
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(false);
+
+      act(() => {
+        getLatestShowPictureProps().onDescriptionClosed();
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(true);
+    });
+
+    it('on a second card, elapsedMs stays 0 during the grace and only advances after', () => {
+      const toAdScreen = jest.fn();
+      act(() => {
+        activeRenderers.push(create(<GuessPicture {...baseProps} skipInstructions={true} toAdScreen={toAdScreen} />));
+      });
+
+      act(() => {
+        jest.advanceTimersByTime(1000);
+      });
+
+      expect(toAdScreen).not.toHaveBeenCalled();
+
+      act(() => {
+        jest.advanceTimersByTime(3000);
+      });
+
+      expect(getLatestShowPictureProps().speedRingActive).toBe(true);
+
+      act(() => {
+        capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
+        capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
+      });
+      act(() => {
+        getLatestShowPictureProps().handleConfirm();
+      });
+
+      expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: expect.any(Number) }));
+      const payload = toAdScreen.mock.calls[0][0];
+      expect(typeof payload.elapsedMs).toBe('number');
+    });
+  });
 });

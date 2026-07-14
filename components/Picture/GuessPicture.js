@@ -17,6 +17,7 @@ import {
   isE2EMode,
 } from '../../utils/e2eMode';
 import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
+import { useReadingGrace } from '../../hooks/useReadingGrace';
 
 const TAP_THRESHOLD = 8;
 const TIMER_TICK_MS = 100;
@@ -27,7 +28,11 @@ function clamp(value, min, max) {
 
 export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions, pulseTarget = false, onInteract }) {
 
-  const [showFilter, setShowFilter] = useState(!skipInstructions); 
+  const [showFilter, setShowFilter] = useState(!skipInstructions);
+
+  // Reading grace delays the chrono on 2nd+ cards (skipInstructions) while the
+  // enigma opens by default. Ends at the earliest of graceMs or description close.
+  const { graceDone, markClosed } = useReadingGrace({ enabled: skipInstructions === true && !isE2EMode() });
 
   const uri = imageFile;
   const screenWidth = screenDimensions.width;
@@ -121,7 +126,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
       setElapsedMs(0);
       return undefined;
     }
-    if (showFilter || showModal) {
+    if (showFilter || showModal || !graceDone) {
       return undefined;
     }
     runStartRef.current = Date.now();
@@ -132,7 +137,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
       elapsedAccumRef.current += Date.now() - runStartRef.current;
       clearInterval(intervalRef.current);
     };
-  }, [showFilter, showModal]);
+  }, [showFilter, showModal, graceDone]);
 
   const handleFilterClick = () => {
     setShowFilter(false);
@@ -207,8 +212,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         targetPanHandlers={targetPanHandlers}
         defaultOpen={skipInstructions === true}
         pulseTarget={pulseTarget}
-        speedRingActive={!showFilter && !showModal && !isE2EMode()}
+        speedRingActive={!showFilter && !showModal && graceDone && !isE2EMode()}
         speedDurationMs={SPEED_WINDOW_MS}
+        onDescriptionClosed={markClosed}
         /* for debug */
        /*  showDebugModal={showDebugModal}
         setShowDebugModal={toggleDebugModal} */
