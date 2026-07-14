@@ -48,6 +48,22 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(() => false),
 }));
 
+jest.mock('../hooks/useStreak', () => {
+  const actual = jest.requireActual('../hooks/useStreak');
+  const spies = { onWin: jest.fn(), onLose: jest.fn(), reset: jest.fn() };
+  const useStreakMock = jest.fn((initial) => {
+    const result = actual.useStreak(initial);
+    return {
+      ...result,
+      onWin: (...args) => { spies.onWin(...args); return result.onWin(...args); },
+      onLose: (...args) => { spies.onLose(...args); return result.onLose(...args); },
+      reset: (...args) => { spies.reset(...args); return result.reset(...args); },
+    };
+  });
+  useStreakMock.__spies = spies;
+  return { useStreak: useStreakMock };
+});
+
 import React from 'react';
 import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -67,6 +83,11 @@ function lastOverlayProps() {
 
 function lastMenuProps() {
   return mockGuessExitSwipeMenu.mock.calls[mockGuessExitSwipeMenu.mock.calls.length - 1][0];
+}
+
+function streakSpies() {
+  const { useStreak } = require('../hooks/useStreak');
+  return useStreak.__spies;
 }
 
 describe('GuessScreen', () => {
@@ -125,6 +146,8 @@ describe('GuessScreen', () => {
       userId: '',
       points: 2,
       multiplier: 2,
+      streak: 1,
+      streakMultiplier: 1.0,
     });
     expect(navigation.replace).not.toHaveBeenCalledWith('AdScreen', expect.anything());
     expect(navigation.replace).not.toHaveBeenCalledWith('ResultScreen', expect.anything());
@@ -175,6 +198,8 @@ describe('GuessScreen', () => {
       userId: '',
       points: 1,
       multiplier: 1,
+      streak: 1,
+      streakMultiplier: 1.0,
     });
     expect(lastOverlayProps().multiplier).toBe(1);
     expect(lastOverlayProps().points).toBe(1);
@@ -465,5 +490,301 @@ describe('GuessScreen', () => {
 
     expect(lastPictureProps().pulseTarget).toBe(false);
     expect(lastMenuProps().showHints).toBe(false);
+  });
+
+  it('on success: calls streak.onWin and passes streakTier (tier >= 0) to SuccessOverlay', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    await act(async () => {
+      pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+    });
+
+    expect(streakSpies().onWin).toHaveBeenCalledTimes(1);
+    expect(streakSpies().onLose).not.toHaveBeenCalled();
+
+    const overlayProps = lastOverlayProps();
+    expect(overlayProps.streakTier).toBeDefined();
+    expect(overlayProps.streakTier.tier).toBeGreaterThanOrEqual(0);
+  });
+
+  it('after 3 consecutive successes, SuccessOverlay streakTier.tier === 1 (Focused)', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+      });
+    }
+
+    expect(streakSpies().onWin).toHaveBeenCalledTimes(3);
+
+    const overlayProps = lastOverlayProps();
+    expect(overlayProps.streakTier.tier).toBe(1);
+    expect(overlayProps.streakTier.label).toBe('Focused');
+  });
+
+  it('on failure: calls streak.onLose before navigating to ResultScreen', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(false);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    await act(async () => {
+      pictureProps.toAdScreen({ location: { x: 0.1, y: 0.2 } });
+    });
+
+    expect(streakSpies().onLose).toHaveBeenCalledTimes(1);
+    expect(streakSpies().onWin).not.toHaveBeenCalled();
+    expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', expect.anything());
+  });
+
+  it('after success then failure: streak resets and a fresh mount starts a tier-0 streak', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+      });
+    }
+    expect(lastOverlayProps().streakTier.tier).toBe(1);
+
+    isOnTarget.mockReturnValue(false);
+    await act(async () => {
+      pictureProps.toAdScreen({ location: { x: 0.1, y: 0.2 } });
+    });
+    expect(streakSpies().onLose).toHaveBeenCalledTimes(1);
+
+    isOnTarget.mockReturnValue(true);
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+    await act(async () => {
+      lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+    });
+
+    expect(lastOverlayProps().streakTier.tier).toBe(0);
+  });
+
+  it('final points reflects both multipliers: Math.round(base * speedMul * streakMul)', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    const pictureProps = lastPictureProps();
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+      });
+    }
+
+    const overlayProps = lastOverlayProps();
+    expect(overlayProps.multiplier).toBe(2);
+    expect(overlayProps.streakTier.multiplier).toBe(1.5);
+    expect(overlayProps.points).toBe(3);
+  });
+
+  it('regression: 3rd consecutive win buffers post-increment streak=3, streakMultiplier=1.5, points=3 (not stale tier-0 values)', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await act(async () => {
+        lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+      });
+    }
+
+    expect(applySuccessSideEffects).toHaveBeenCalledTimes(3);
+    expect(applySuccessSideEffects).toHaveBeenLastCalledWith({
+      listId: 3,
+      categoryKey: 'nature',
+      language: 'fr',
+      imageFile: 'file:///waldo.jpg',
+      pictureId: 'image-1',
+      scope: undefined,
+      userId: '',
+      points: 3,
+      multiplier: 2,
+      streak: 3,
+      streakMultiplier: 1.5,
+    });
+
+    const overlayProps = lastOverlayProps();
+    expect(overlayProps.streakTier.tier).toBe(1);
+    expect(overlayProps.streakTier.multiplier).toBe(1.5);
+    expect(overlayProps.points).toBe(3);
+  });
+
+  it('regression: 7th consecutive win buffers post-increment streak=7, streakMultiplier=2.0, points=4', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    for (let i = 0; i < 7; i++) {
+      await act(async () => {
+        lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+      });
+    }
+
+    expect(applySuccessSideEffects).toHaveBeenCalledTimes(7);
+    expect(applySuccessSideEffects).toHaveBeenLastCalledWith({
+      listId: 3,
+      categoryKey: 'nature',
+      language: 'fr',
+      imageFile: 'file:///waldo.jpg',
+      pictureId: 'image-1',
+      scope: undefined,
+      userId: '',
+      points: 4,
+      multiplier: 2,
+      streak: 7,
+      streakMultiplier: 2.0,
+    });
+
+    const overlayProps = lastOverlayProps();
+    expect(overlayProps.streakTier.tier).toBe(2);
+    expect(overlayProps.streakTier.multiplier).toBe(2.0);
+    expect(overlayProps.points).toBe(4);
   });
 });

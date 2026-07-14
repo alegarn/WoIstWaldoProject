@@ -5,6 +5,18 @@ import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
 import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
+const COLUMNS = [
+  { header: 'Rank',       field: 'rank',      flex: 0.7, kind: 'rank' },
+  { header: 'Name',       field: 'name',      flex: 1.6, kind: 'name' },
+  { header: 'Score',      field: 'score',     flex: 1,   kind: 'score' },
+  { header: 'Max Streak', field: 'maxStreak', flex: 1,   kind: 'text' },
+  { header: 'Others',     field: 'others',    flex: 0.9, kind: 'button' },
+];
+
+function getColumnDescriptor(header) {
+  return COLUMNS.find((column) => column.header === header);
+}
+
 function buildRankingMetrics(width, height) {
   return {
     containerPaddingHorizontal: width * 0.04,
@@ -17,8 +29,6 @@ function buildRankingMetrics(width, height) {
     headerFontSize: height * 0.022,
 
     rowHeight: height * 0.07,
-
-    cellWidth: width * 0.23,
     cellHeight: height * 0.07,
 
     textMargin: width * 0.02,
@@ -44,36 +54,47 @@ function getRowBackground(rank) {
   return rank % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'transparent';
 }
 
-const RowItem = React.memo(function RowItem({ row, onPressMore, metrics, styles }) {
+function cellTextStyle(kind, styles, rankColor) {
+  if (kind === 'rank') return [styles.text, styles.big, { color: rankColor, fontWeight: 'bold' }];
+  if (kind === 'name') return [styles.text, styles.name];
+  if (kind === 'score') return [styles.text, styles.big, styles.score];
+  return [styles.text];
+}
+
+const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics, styles }) {
   const rankColor = getRankColor(row.rank);
   const rowBackground = getRowBackground(row.rank);
   return (
     <View style={[styles.row, { backgroundColor: rowBackground }]} testID={`ranking.row.${row.rank}`}>
-      <View style={styles.cell}>
-        <Text style={[styles.text, styles.big, { color: rankColor, fontWeight: 'bold' }]} numberOfLines={1} testID={`ranking.row.${row.rank}.rank`}>
-          {row.rank}
-        </Text>
-      </View>
-      <View style={styles.cell}>
-        <Text style={[styles.text, styles.name]} numberOfLines={1} testID={`ranking.row.${row.rank}.name`}>
-          {row.name}
-        </Text>
-      </View>
-      <View style={styles.cell}>
-        <Text style={[styles.text, styles.big, styles.score]} numberOfLines={1} testID={`ranking.row.${row.rank}.score`}>
-          {row.score}
-        </Text>
-      </View>
-      <View style={styles.cell}>
-        <TableButton
-          accessibilityLabel={`Show more scores for ${row.name}`}
-          onPress={() => onPressMore(row.name)}
-          testID={`ranking.row.${row.rank}.more`}
-          buttonWidth={metrics.buttonWidth}
-          buttonHeight={metrics.buttonHeight}
-          buttonBorderRadius={metrics.buttonBorderRadius}
-        />
-      </View>
+      {headers.map((header, index) => {
+        const column = getColumnDescriptor(header);
+        const key = `${header}-${index}`;
+        if (column?.kind === 'button') {
+          return (
+            <View key={key} style={[styles.cell, { flex: column.flex }]}>
+              <TableButton
+                accessibilityLabel={`Show more scores for ${row.name}`}
+                onPress={() => onPressMore(row.name)}
+                testID={`ranking.row.${row.rank}.more`}
+                buttonWidth={metrics.buttonWidth}
+                buttonHeight={metrics.buttonHeight}
+                buttonBorderRadius={metrics.buttonBorderRadius}
+              />
+            </View>
+          );
+        }
+        return (
+          <View key={key} style={[styles.cell, { flex: column?.flex ?? 1 }]}>
+            <Text
+              style={cellTextStyle(column?.kind, styles, rankColor)}
+              numberOfLines={1}
+              testID={`ranking.row.${row.rank}.${column?.field ?? header}`}
+            >
+              {row[column?.field]}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 });
@@ -127,7 +148,6 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       flexDirection: 'row',
     },
     cell: {
-      width: metrics.cellWidth,
       height: metrics.cellHeight,
       borderBottomWidth: 0.5,
       borderBottomColor: 'rgba(255, 255, 255, 0.08)',
@@ -157,22 +177,25 @@ export default function TableComponent({ data, onPress, onEndReached }) {
   const renderHeader = useCallback(() => {
     return (
       <View style={styles.head} testID="ranking.header">
-        {headers.map((header, index) => (
-          <View key={`${header}-${index}`} style={styles.cell}>
-            <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
-              {header}
-            </Text>
-          </View>
-        ))}
+        {headers.map((header, index) => {
+          const column = getColumnDescriptor(header);
+          return (
+            <View key={`${header}-${index}`} style={[styles.cell, { flex: column?.flex ?? 1 }]}>
+              <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
+                {header}
+              </Text>
+            </View>
+          );
+        })}
       </View>
     );
   }, [headers, styles]);
 
   const renderItem = useCallback(
     ({ item }) => {
-      return <RowItem row={item} onPressMore={onPressMore} metrics={metrics} styles={styles} />;
+      return <RowItem row={item} headers={headers} onPressMore={onPressMore} metrics={metrics} styles={styles} />;
     },
-    [onPressMore, metrics, styles]
+    [headers, onPressMore, metrics, styles]
   );
 
   return (

@@ -70,8 +70,8 @@ describe('scoreRequests utilities', () => {
         {
           batch: {
             results: [
-              { guess_id: 'g-1', image_name: 'img-1', points: 10 },
-              { guess_id: 'g-2', image_name: 'img-2', points: 5 },
+              { guess_id: 'g-1', image_name: 'img-1', points: 10, streak: 0 },
+              { guess_id: 'g-2', image_name: 'img-2', points: 5, streak: 0 },
             ],
           },
         },
@@ -79,6 +79,69 @@ describe('scoreRequests utilities', () => {
       );
       expect(result).toBe(true);
       expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
+    });
+
+    it('includes the streak value on the public batch payload when provided', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 10, streak: 5 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/scores/batch',
+        {
+          batch: {
+            results: [
+              { guess_id: 'g-1', image_name: 'img-1', points: 10, streak: 5 },
+            ],
+          },
+        },
+        { headers: { Authorization: 'Bearer token' } }
+      );
+    });
+
+    it('defaults streak to 0 on the public batch payload when the item omits it', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 10 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/scores/batch',
+        {
+          batch: {
+            results: [
+              { guess_id: 'g-1', image_name: 'img-1', points: 10, streak: 0 },
+            ],
+          },
+        },
+        { headers: { Authorization: 'Bearer token' } }
+      );
+    });
+
+    it('passes an explicit streak of 0 through to the public batch payload', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      await submitScoreBatch({
+        items: [{ guessId: 'g-1', pictureId: 'img-1', points: 10, streak: 0 }],
+        context: { token: 'Bearer token' },
+      });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/scores/batch',
+        {
+          batch: {
+            results: [
+              { guess_id: 'g-1', image_name: 'img-1', points: 10, streak: 0 },
+            ],
+          },
+        },
+        { headers: { Authorization: 'Bearer token' } }
+      );
     });
 
     it('posts private items to the group batch endpoint with the expected payload', async () => {
@@ -104,6 +167,27 @@ describe('scoreRequests utilities', () => {
       );
       expect(result).toBe(true);
       expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
+    });
+
+    it('does not include streak on the private batch payload', async () => {
+      axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
+
+      await submitScoreBatch({
+        items: [
+          { guessId: 'g-1', pictureId: 'img-1', points: 7, streak: 5, scope: { kind: 'private', groupId: 'g-9' } },
+        ],
+        context: { token: 'Bearer token' },
+      });
+
+      const call = axios.post.mock.calls[0];
+      const [url, body] = call;
+      expect(url).toBe('https://backend.example/api/v1/private_groups/g-9/game_complete/batch');
+      expect(body.batch.results[0]).toEqual({
+        guess_id: 'g-1',
+        image_id: 'img-1',
+        earned_points: 7,
+      });
+      expect(body.batch.results[0]).not.toHaveProperty('streak');
     });
 
     it('calls setHeaders with only the token and no uid/expiry/access_token/client', async () => {

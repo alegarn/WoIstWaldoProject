@@ -103,6 +103,7 @@ export async function submitScoreBatch({ items, context }) {
     guess_id: item.guessId,
     image_name: item.pictureId,
     points: item.points,
+    streak: item.streak ?? 0,
   }));
 
   return axios

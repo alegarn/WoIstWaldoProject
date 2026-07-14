@@ -35,7 +35,7 @@ export default function RankingScreen({ route, navigation }) {
   const displayRows = slices.flat();
 
   const rankingDatum = displayRows.length > 0 ? {
-    tableHeaders: tableHeaders.slice(0, 3).concat(["Others"]),
+    tableHeaders: tableHeaders.slice(0, 4).concat(["Others"]),
     tableScores: displayRows,
   } : null;
 
@@ -108,6 +108,7 @@ export default function RankingScreen({ route, navigation }) {
       rank: Number(row.rank),
       name: row.username,
       score: row.total_score,
+      maxStreak: Number(row.max_streak || 0),
       others: "",
       userId: row.user_id,
     }));
@@ -142,6 +143,7 @@ export default function RankingScreen({ route, navigation }) {
       rank: baseRank + index + 1,
       name: row.username,
       score: row.total_score || row.totalScore,
+      maxStreak: Number(row.max_streak || 0),
       others: "",
       userId: row.user_id,
     }));

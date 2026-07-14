@@ -11,7 +11,9 @@ import { isOnTarget } from "../../utils/targetLocation";
 import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { isE2EMode } from '../../utils/e2eMode';
-import { computeMultiplier, isSpeedBonus, computeSpeedPoints, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { computeMultiplier, isSpeedBonus, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { useStreak } from '../../hooks/useStreak';
+import { resolveStreakTier } from '../../constants/streakTiers';
 
 export default function GuessScreen({ navigation, route }) {
 
@@ -20,6 +22,7 @@ export default function GuessScreen({ navigation, route }) {
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMultiplier, setSuccessMultiplier] = useState(SPEED_MULTIPLIER_BASE);
+  const { streak, tier, multiplier: streakMultiplier, onWin, onLose, reset } = useStreak();
   // Hints show on the first card of each game series (every fresh mount of
   // GuessScreen). Advancing to later cards uses setParams (no remount), so the
   // dismissed state persists for the rest of the series. Suppressed in e2e mode.
@@ -75,12 +78,17 @@ export default function GuessScreen({ navigation, route }) {
     };
 
     if (onTarget) {
-      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: computeSpeedPoints(1, multiplier), multiplier });
+      const nextStreak = streak + 1;
+      const nextTier = resolveStreakTier(nextStreak);
+      onWin();
+      const finalPoints = Math.round(1 * multiplier * nextTier.multiplier);
+      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: finalPoints, multiplier, streak: nextStreak, streakMultiplier: nextTier.multiplier });
       setSuccessMultiplier(multiplier);
       setShowSuccess(true);
       return;
     }
 
+    onLose();
     navigation.replace('ResultScreen', sharedParams);
   };
 
@@ -120,7 +128,7 @@ export default function GuessScreen({ navigation, route }) {
       pulseTarget={hintsActive}
       onInteract={dismissHints}
     />
-    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={computeSpeedPoints(1, successMultiplier)} onDone={handleOverlayDone} />
+    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={Math.round(1 * successMultiplier * streakMultiplier)} streakTier={tier} onDone={handleOverlayDone} />
     {
       isTutorial && 
         <TutorialOverlay

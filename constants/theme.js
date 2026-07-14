@@ -46,6 +46,17 @@ export const GlobalStyle = {
     warning: '#FFCC00',
     info: '#17a2b8',
     win: '#FFD700',
+    danger: '#FF3B30',
+    onSurface: '#FFFFFF',
+    // streak hex values mirror sibling tokens above (DIP fallback: GlobalStyle is in TDZ while its initializer evaluates).
+    streak: {
+      neutral: '#7895CB',
+      blue:    '#17a2b8',
+      orange:  '#f37c13',
+      red:     '#FF3B30',
+      purple:  '#6528F7',
+      white:   '#FFFFFF',
+    },
   },
 };
 

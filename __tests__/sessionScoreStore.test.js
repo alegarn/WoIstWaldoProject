@@ -387,4 +387,62 @@ describe('sessionScoreStore', () => {
       expect(aItem.userId).toBe('user-A');
     });
   });
+
+  describe('streak passthrough', () => {
+    it('passes streak through unchanged to submitScoreBatch on flush', async () => {
+      bufferScore(item({ guessId: 'g-streak', streak: 5 }));
+      await drain();
+
+      const result = await flush({ authContext: { token: 'Bearer token' } });
+
+      expect(result).toEqual({ ok: true, sent: 1, retained: 0 });
+      expect(submitScoreBatch).toHaveBeenCalledTimes(1);
+      const callItems = submitScoreBatch.mock.calls[0][0].items;
+      expect(callItems).toHaveLength(1);
+      expect(callItems[0].guessId).toBe('g-streak');
+      expect(callItems[0].streak).toBe(5);
+    });
+
+    it('survives a serialize/deserialize round-trip via AsyncStorage', async () => {
+      bufferScore(item({ guessId: 'g-rt', streak: 7 }));
+      await drain();
+
+      expect(mockStorage[PENDING_KEY]).toContain('"streak":7');
+
+      const storedAfterBuffer = await getPending();
+      expect(storedAfterBuffer).toHaveLength(1);
+      expect(storedAfterBuffer[0].streak).toBe(7);
+
+      const reloaded = JSON.parse(mockStorage[PENDING_KEY]);
+      expect(reloaded[0].streak).toBe(7);
+
+      const result = await flush({ authContext: { token: 'Bearer token' } });
+      expect(result).toEqual({ ok: true, sent: 1, retained: 0 });
+      const callItems = submitScoreBatch.mock.calls[0][0].items;
+      expect(callItems[0].streak).toBe(7);
+    });
+
+    it('leaves streak undefined when bufferScore receives no streak', async () => {
+      bufferScore(item({ guessId: 'g-no-streak' }));
+      await drain();
+
+      const result = await flush({ authContext: { token: 'Bearer token' } });
+
+      expect(result).toEqual({ ok: true, sent: 1, retained: 0 });
+      const callItems = submitScoreBatch.mock.calls[0][0].items;
+      expect(callItems[0].guessId).toBe('g-no-streak');
+      expect(callItems[0].streak).toBeUndefined();
+    });
+
+    it('passes streakMultiplier through unchanged for display-only consumers', async () => {
+      bufferScore(item({ guessId: 'g-sm', streak: 3, streakMultiplier: 1.5 }));
+      await drain();
+
+      await flush({ authContext: { token: 'Bearer token' } });
+
+      const callItems = submitScoreBatch.mock.calls[0][0].items;
+      expect(callItems[0].streak).toBe(3);
+      expect(callItems[0].streakMultiplier).toBe(1.5);
+    });
+  });
 });
