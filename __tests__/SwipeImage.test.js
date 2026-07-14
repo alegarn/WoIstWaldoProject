@@ -81,6 +81,11 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
 }));
 
+jest.mock('../services/cardPrefetcher', () => ({
+  prefetchIfLow: jest.fn(() => Promise.resolve()),
+  warmAllDeckIfNeeded: jest.fn(() => Promise.resolve()),
+}));
+
 import React from 'react';
 import { Alert, StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
@@ -101,6 +106,8 @@ import {
   storeImageList,
   updateImageList,
 } from '../utils/storageDatum';
+import { prefetchIfLow, warmAllDeckIfNeeded } from '../services/cardPrefetcher';
+import { readGroupFeedCache } from '../services/groups/groupFeedCache';
 
 describe('SwipeImage', () => {
   const contextValue = {
@@ -289,7 +296,7 @@ describe('SwipeImage', () => {
     expect(Alert.alert).toHaveBeenCalledWith('Server error', 'Please retry later');
   });
 
-  it('deletes a dismissed card and fetches more images when the stack drops below four', async () => {
+  it('deletes a dismissed card at deck 4→3 without firing a foreground load (background prefetch owns refill)', async () => {
     getLocalImages.mockResolvedValue([
       { listId: 1, imageFile: 'file:///1.jpg' },
       { listId: 2, imageFile: 'file:///2.jpg' },
@@ -321,13 +328,12 @@ describe('SwipeImage', () => {
 
     expect(removeImageFromList).toHaveBeenCalledWith(1, 'all', 'any');
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///1.jpg');
-    expect(getImages).toHaveBeenCalledWith('image-4', contextValue, { category_id: undefined, category_key: 'all', language: undefined });
-    expect(updateImageList).toHaveBeenCalledWith([
-      expect.objectContaining({ pictureId: 'img-5', listId: 5 }),
-    ], 'all', 'any');
+    // No foreground load at deck 3 (only background prefetch is in flight).
+    expect(getImages).not.toHaveBeenCalled();
+    expect(updateImageList).not.toHaveBeenCalled();
   });
 
-  it('silently prefetches the all deck when the stack drops below four', async () => {
+  it('delegates the warm-all prefetch to prefetchIfLow at deck 4→3 without a foreground load', async () => {
     getLocalImages.mockResolvedValue([
       { listId: 1, imageFile: 'file:///1.jpg' },
       { listId: 2, imageFile: 'file:///2.jpg' },
@@ -347,19 +353,22 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
-    expect(getImages).toHaveBeenCalledWith(
-      null,
-      contextValue,
-      expect.objectContaining({ category_key: 'nature', category_id: 'cat-nature' }),
+    // No foreground load at deck 3 (refillOrFallback only fires at deck 0).
+    expect(getImages).not.toHaveBeenCalled();
+    expect(prefetchIfLow).toHaveBeenCalledWith({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: undefined,
+      scope: undefined,
+      authContext: contextValue,
+    });
+    const allPrefetchCalls = getImages.mock.calls.filter(
+      ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
     );
-    expect(getImages).toHaveBeenCalledWith(
-      null,
-      contextValue,
-      expect.objectContaining({ category_key: 'all', category_id: undefined }),
-    );
+    expect(allPrefetchCalls).toHaveLength(0);
   });
 
-  it('deduplicates the all-deck prefetch via allDeckWarmedRef on a second removal', async () => {
+  it('calls prefetchIfLow on every removal (dedup is the prefetcher job, not the component)', async () => {
     getLocalImages.mockResolvedValue([
       { listId: 1, imageFile: 'file:///1.jpg' },
       { listId: 2, imageFile: 'file:///2.jpg' },
@@ -384,13 +393,14 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
+    expect(prefetchIfLow).toHaveBeenCalledTimes(2);
     const allPrefetchCalls = getImages.mock.calls.filter(
       ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
     );
-    expect(allPrefetchCalls).toHaveLength(1);
+    expect(allPrefetchCalls).toHaveLength(0);
   });
 
-  it('swallows all-deck prefetch errors without surfacing an Alert', async () => {
+  it('swallows prefetchIfLow rejections without surfacing an Alert (prefetcher owns error handling)', async () => {
     getLocalImages.mockResolvedValue([
       { listId: 1, imageFile: 'file:///1.jpg' },
       { listId: 2, imageFile: 'file:///2.jpg' },
@@ -398,12 +408,8 @@ describe('SwipeImage', () => {
       { listId: 4, imageFile: 'file:///4.jpg' },
     ]);
     getLastImageId.mockResolvedValue(4);
-    getImages.mockImplementation((pictureId, authContext, params) => {
-      if (params?.category_key === 'all') {
-        return Promise.reject(new Error('all-deck warmup failed'));
-      }
-      return Promise.resolve({ isError: false, images: [] });
-    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    prefetchIfLow.mockRejectedValueOnce(new Error('prefetcher failed'));
 
     await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
 
@@ -415,15 +421,11 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
-    expect(getImages).toHaveBeenCalledWith(
-      null,
-      contextValue,
-      expect.objectContaining({ category_key: 'all', category_id: undefined }),
-    );
+    expect(prefetchIfLow).toHaveBeenCalled();
     expect(Alert.alert).not.toHaveBeenCalled();
   });
 
-  it('skips the all-deck prefetch entirely in e2e mode', async () => {
+  it('still delegates to prefetchIfLow in e2e mode (prefetcher owns the e2e short-circuit)', async () => {
     isE2EMode.mockReturnValue(true);
 
     await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
@@ -436,6 +438,7 @@ describe('SwipeImage', () => {
       await flushEffects();
     });
 
+    expect(prefetchIfLow).toHaveBeenCalled();
     const allPrefetchCalls = getImages.mock.calls.filter(
       ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
     );
@@ -596,5 +599,516 @@ describe('SwipeImage', () => {
 
     expect(consoleErrorSpy).not.toHaveBeenCalled();
     consoleErrorSpy.mockRestore();
+  });
+});
+
+describe('SwipeImage — cardPrefetcher integration', () => {
+  const contextValue = {
+    token: 'token',
+    uid: 'waldo@example.com',
+    expiry: '123',
+    access_token: 'access-token',
+    client: 'client-id',
+    userId: '42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    getLastImageId.mockResolvedValue(0);
+    getLastImageUuid.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language, scope } = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={contextValue}>
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+            scope={scope}
+          />
+        </AuthContext.Provider>,
+      );
+
+      await flushEffects();
+    });
+
+    return { renderer, startGuessing };
+  }
+
+  it('calls prefetchIfLow with the active category, language, scope, and authContext after a card is removed', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    readGroupFeedCache.mockResolvedValue({
+      images: [
+        { listId: 1, imageFile: 'file:///1.jpg' },
+        { listId: 2, imageFile: 'file:///2.jpg' },
+        { listId: 3, imageFile: 'file:///3.jpg' },
+        { listId: 4, imageFile: 'file:///4.jpg' },
+      ],
+    });
+    getLastImageId.mockResolvedValue(4);
+
+    await renderSwipeImage(jest.fn(), {
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(prefetchIfLow).toHaveBeenCalledWith({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope,
+      authContext: contextValue,
+    });
+  });
+
+  it('calls prefetchIfLow at most once per removeCard (component does not pre-dedupe)', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, imageFile: 'file:///1.jpg' },
+      { listId: 2, imageFile: 'file:///2.jpg' },
+      { listId: 3, imageFile: 'file:///3.jpg' },
+      { listId: 4, imageFile: 'file:///4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not call fetchCardBatch with categoryKey "all" from removeCard anymore (warm-all is the prefetcher job)', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, imageFile: 'file:///1.jpg' },
+      { listId: 2, imageFile: 'file:///2.jpg' },
+      { listId: 3, imageFile: 'file:///3.jpg' },
+      { listId: 4, imageFile: 'file:///4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    const allPrefetchCalls = getImages.mock.calls.filter(
+      ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
+    );
+    expect(allPrefetchCalls).toHaveLength(0);
+    expect(prefetchIfLow).toHaveBeenCalled();
+  });
+});
+
+describe('SwipeImage — deck-empty fallback to "all"', () => {
+  const contextValue = {
+    token: 'token',
+    uid: 'waldo@example.com',
+    expiry: '123',
+    access_token: 'access-token',
+    client: 'client-id',
+    userId: '42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    getLastImageId.mockResolvedValue(0);
+    getLastImageUuid.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language, scope } = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={contextValue}>
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+            scope={scope}
+          />
+        </AuthContext.Provider>,
+      );
+
+      await flushEffects();
+    });
+
+    return { renderer, startGuessing };
+  }
+
+  it('falls back to the warmed "all" deck from AsyncStorage when removeCard empties a real category deck (no foreground load)', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    const allCard = { listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' };
+
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      if (key === 'all') {
+        return Promise.resolve([allCard]);
+      }
+      return Promise.resolve(null);
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).not.toHaveBeenCalled();
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).not.toHaveBeenCalled();
+    expect(warmAllDeckIfNeeded).toHaveBeenCalledWith(expect.objectContaining({ language: undefined, scope: undefined }));
+    const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+    expect(renderedPictureIds).toContain('all-1');
+  });
+
+  it('uses the category prefetch result before warming or foreground-loading when the last card is removed', async () => {
+    const prefetchedNatureCard = { listId: 5, pictureId: 'nat-5', imageFile: 'file:///n5.jpg' };
+    let natureDeck = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let allDeck = [];
+
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        return Promise.resolve([...natureDeck]);
+      }
+      if (key === 'all') {
+        return Promise.resolve([...allDeck]);
+      }
+      return Promise.resolve(null);
+    });
+    removeImageFromList.mockImplementation(async (listId, key) => {
+      if (key === 'nature') {
+        natureDeck = natureDeck.filter((item) => item.listId !== listId);
+      }
+      if (key === 'all') {
+        allDeck = allDeck.filter((item) => item.listId !== listId);
+      }
+      return null;
+    });
+    prefetchIfLow.mockImplementation(({ categoryKey }) => {
+      if (categoryKey === 'nature' && natureDeck.length === 0) {
+        natureDeck = [prefetchedNatureCard];
+      }
+      return Promise.resolve();
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    getImages.mockClear();
+    warmAllDeckIfNeeded.mockClear();
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).not.toHaveBeenCalled();
+    expect(warmAllDeckIfNeeded).not.toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('nat-5');
+  });
+
+  it('fires a last-resort foreground load when both the active category deck and "all" are empty on removeCard', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    getLastImageId.mockResolvedValue(4);
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).toHaveBeenCalled();
+    const natureForegroundCalls = getImages.mock.calls.filter(
+      ([, , params]) => params?.category_key === 'nature',
+    );
+    expect(natureForegroundCalls.length).toBeGreaterThan(0);
+  });
+
+  it('does not fire a foreground load when removeCard drops the deck from 4→3 (low but not empty)', async () => {
+    getLocalImages.mockResolvedValue([
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ]);
+    getLastImageId.mockResolvedValue(4);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const first = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    getImages.mockClear();
+
+    await act(async () => {
+      await first.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(getImages).not.toHaveBeenCalled();
+    expect(prefetchIfLow).toHaveBeenCalled();
+  });
+
+  it('on mount, switches to the "all" deck without a foreground load when the category deck is empty but "all" has cards', async () => {
+    const allCard = { listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' };
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') return Promise.resolve([]);
+      if (key === 'all') return Promise.resolve([allCard]);
+      return Promise.resolve(null);
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).not.toHaveBeenCalled();
+    expect(warmAllDeckIfNeeded).toHaveBeenCalled();
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('all-1');
+  });
+
+  it('on mount, fires the foreground cold-start load when the category deck AND "all" are both empty', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }],
+    });
+    getLastImageId.mockResolvedValue(0);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).toHaveBeenCalled();
+  });
+
+  it('after falling back to "all", a subsequent removeCard removes from the "all" AsyncStorage key', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    const allCard = { listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' };
+
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      if (key === 'all') return Promise.resolve([allCard]);
+      return Promise.resolve(null);
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    removeImageFromList.mockClear();
+
+    const allRemovable = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'all-1')[0];
+    await act(async () => {
+      await allRemovable.removeCard(allCard.listId);
+      await flushEffects();
+    });
+
+    expect(removeImageFromList).toHaveBeenCalledWith(allCard.listId, 'all', 'any');
+  });
+
+  it('private scope: fallback reads the groupFeedCache for "all" (categoryId undefined) when the group nature deck empties', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    const allCard = { listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' };
+
+    let natureCallCount = 0;
+    readGroupFeedCache.mockImplementation((groupId, { categoryId } = {}) => {
+      if (groupId !== 'group-7') return Promise.resolve(null);
+      if (categoryId === 'cat-nature') {
+        natureCallCount += 1;
+        return Promise.resolve({ images: natureCallCount === 1 ? natureCards : [], nextCursor: null });
+      }
+      if (categoryId === undefined) {
+        return Promise.resolve({ images: [allCard], nextCursor: null });
+      }
+      return Promise.resolve(null);
+    });
+
+    await renderSwipeImage(jest.fn(), {
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+
+    expect(getImages).not.toHaveBeenCalled();
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).not.toHaveBeenCalled();
+    const allCacheReads = readGroupFeedCache.mock.calls.filter(
+      ([, params]) => params?.categoryId === undefined,
+    );
+    expect(allCacheReads.length).toBeGreaterThan(0);
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('all-1');
+  });
+
+  it('e2e mode: deck-empty fallback runs without crashing (warm/prefetch are no-ops; storage reads return null)', async () => {
+    isE2EMode.mockReturnValue(true);
+    getLocalImages.mockResolvedValue(null);
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const removable = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+
+    await act(async () => {
+      await removable.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(prefetchIfLow).toHaveBeenCalled();
   });
 });

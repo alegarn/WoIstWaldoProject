@@ -1,6 +1,6 @@
 import { getImages } from '../utils/imagesRequests';
-import { getLastImageUuid, storeImageList } from '../utils/storageDatum';
-import { writeGroupFeedCache } from './groups/groupFeedCache';
+import { getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
+import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 
 function normalizeLanguage(language) {
   return language || 'any';
@@ -40,5 +40,33 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
   }
 
   await storeImageList(cards, categoryKey, lang);
+  return null;
+}
+
+/**
+ * Append a card batch to the persisted deck (scope-aware). Mirrors persistCardBatch
+ * scope branching but appends instead of overwriting. Used by background prefetch
+ * (cardPrefetcher) to grow the deck without losing existing cards.
+ * - Public scope: reuses updateImageList (already appends to AsyncStorage).
+ * - Private scope: reads the group feed cache, concatenates, writes back.
+ * Returns null (matches persistCardBatch return contract).
+ */
+export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
+  const lang = normalizeLanguage(language);
+
+  if (isPrivateScope(scope)) {
+    const cid = resolveCategoryId(categoryId);
+    const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
+    const prior = existing?.images ?? [];
+    const merged = [...prior, ...cards];
+    await writeGroupFeedCache(
+      scope.groupId,
+      { categoryId: cid, language: lang },
+      { images: merged, nextCursor: existing?.nextCursor ?? null },
+    );
+    return null;
+  }
+
+  await updateImageList(cards, categoryKey, lang);
   return null;
 }

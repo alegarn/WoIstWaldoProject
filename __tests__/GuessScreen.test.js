@@ -48,6 +48,11 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(() => false),
 }));
 
+jest.mock('../services/cardPrefetcher', () => ({
+  prefetchIfLow: jest.fn(() => Promise.resolve()),
+  warmAllDeckIfNeeded: jest.fn(() => Promise.resolve()),
+}));
+
 jest.mock('../hooks/useStreak', () => {
   const actual = jest.requireActual('../hooks/useStreak');
   const spies = { onWin: jest.fn(), onLose: jest.fn(), reset: jest.fn() };
@@ -72,6 +77,8 @@ import GuessScreen from '../screens/GuessScreens/GuessScreen';
 import { isOnTarget } from '../utils/targetLocation';
 import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../utils/guessNavigation';
+import { prefetchIfLow } from '../services/cardPrefetcher';
+import { warmAllDeckIfNeeded } from '../services/cardPrefetcher';
 
 function lastPictureProps() {
   return mockGuessPicture.mock.calls[mockGuessPicture.mock.calls.length - 1][0];
@@ -294,6 +301,15 @@ describe('GuessScreen', () => {
     expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
     expect(navigation.replace).not.toHaveBeenCalledWith('GuessScreen', expect.anything());
     expect(navigateToNextGuess).not.toHaveBeenCalled();
+    // Regression (T4): prefetch fired during success path but did not block overlay/setParams.
+    expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+    expect(prefetchIfLow).toHaveBeenCalledWith({
+      categoryKey: 'nature',
+      categoryId: 'cat-1',
+      language: 'fr',
+      scope: undefined,
+      authContext: expect.objectContaining({ userId: '' }),
+    });
   });
 
   it('overlay onDone with null (deck exhausted) falls back to navigateToNextGuess (no setParams)', async () => {
@@ -343,6 +359,9 @@ describe('GuessScreen', () => {
       }
     );
     expect(navigation.setParams).not.toHaveBeenCalled();
+    // Regression (T5): prefetch fired on win but did not interfere with exhaustion fallback.
+    expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+    expect(navigateToNextGuess).toHaveBeenCalledTimes(1);
   });
 
   it('on failure (private scope): navigates to ResultScreen with sharedParams, no side effects, overlay hidden', async () => {
@@ -786,5 +805,308 @@ describe('GuessScreen', () => {
     expect(overlayProps.streakTier.tier).toBe(2);
     expect(overlayProps.streakTier.multiplier).toBe(2.0);
     expect(overlayProps.points).toBe(4);
+  });
+
+  describe('background prefetch on streak win', () => {
+    function baseRoute(overrides = {}) {
+      return {
+        params: {
+          imageFile: 'file:///waldo.jpg',
+          pictureId: 'image-1',
+          description: 'Find Waldo',
+          imageHeight: 1200,
+          imageWidth: 800,
+          isPortrait: true,
+          hiddenLocation: { x: 0.5, y: 0.5 },
+          listId: 3,
+          isTutorial: false,
+          category: { id: 'cat-1', key: 'nature' },
+          language: 'fr',
+          ...overrides,
+        },
+      };
+    }
+
+    it('T1: on success fires prefetchIfLow after applySuccessSideEffects with identity deps', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(applySuccessSideEffects).toHaveBeenCalled();
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(prefetchIfLow).toHaveBeenCalledWith({
+        categoryKey: 'nature',
+        categoryId: 'cat-1',
+        language: 'fr',
+        scope: undefined,
+        authContext: expect.objectContaining({ userId: '' }),
+      });
+    });
+
+    it('T2: prefetch is fire-and-forget (overlay visible even before prefetch resolves)', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      // Never-resolving deferred: if awaited, SuccessOverlay would never show.
+      prefetchIfLow.mockReturnValue(new Promise(() => {}));
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(lastOverlayProps().visible).toBe(true);
+    });
+
+    it('T3: prefetch is a no-op in e2e mode (screen-side guard is internal to prefetcher)', async () => {
+      // Prefetcher guards on isE2EMode internally. Mock the module to mimic that behavior.
+      const { isE2EMode } = require('../utils/e2eMode');
+      isE2EMode.mockReturnValue(true);
+      prefetchIfLow.mockImplementation(() => {
+        // Mirror real prefetcher: e2e mode short-circuits before any work.
+        return Promise.resolve();
+      });
+
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      // Screen still calls prefetchIfLow (it does not duplicate the e2e check);
+      // the prefetcher module owns the no-op behavior.
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(lastOverlayProps().visible).toBe(true);
+    });
+
+    it('T6: on a miss, prefetchIfLow is never called (no deck mutation)', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(false);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.1, y: 0.2 } });
+      });
+
+      expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', expect.anything());
+      expect(prefetchIfLow).not.toHaveBeenCalled();
+    });
+
+    it('T6b: categoryKey falls back to "all" when category is null', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute({ category: null })} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
+        categoryKey: 'all',
+        categoryId: undefined,
+      }));
+    });
+
+    it('T7: prefetch rejection does not break the success flow (overlay still shows, setParams still fires onDone)', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      // Lazy: build the rejected promise only when the screen calls the mock,
+      // so the call-site .catch(() => {}) attaches synchronously.
+      prefetchIfLow.mockImplementation(() => Promise.reject(new Error('network down')));
+      const nextParams = {
+        listId: 4,
+        imageFile: 'file:///next.jpg',
+        pictureId: 'image-2',
+        description: 'Next card',
+        hiddenLocation: { x: 0.3, y: 0.7 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        skipInstructions: true,
+      };
+      resolveNextGuessParams.mockResolvedValue({ params: nextParams });
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      // Overlay still shown despite prefetch rejection (call-site .catch swallows).
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(lastOverlayProps().visible).toBe(true);
+
+      const overlayProps = lastOverlayProps();
+      await act(async () => {
+        overlayProps.onDone();
+      });
+
+      // Flush the rejected promise's unhandled-rejection microtask.
+      await act(async () => { await Promise.resolve(); });
+
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+      expect(navigateToNextGuess).not.toHaveBeenCalled();
+    });
+
+    it('T8: mount fires eager warm-all for real category', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      expect(warmAllDeckIfNeeded).toHaveBeenCalledTimes(1);
+      expect(warmAllDeckIfNeeded).toHaveBeenCalledWith(expect.objectContaining({
+        language: 'fr',
+        scope: undefined,
+        authContext: expect.objectContaining({ userId: '' }),
+      }));
+    });
+
+    it('T9: mount does NOT fire warm-all for "all" category', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute({ category: { id: 'cat-all', key: 'all' } })} />);
+      });
+
+      expect(warmAllDeckIfNeeded).not.toHaveBeenCalled();
+    });
+
+    it('T10: handleOverlayDone waits for warm-all and retries when deck exhausted in real category', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      warmAllDeckIfNeeded.mockResolvedValue(undefined);
+
+      const nextParams = {
+        listId: 4,
+        imageFile: 'file:///next.jpg',
+        pictureId: 'image-2',
+        description: 'Next card',
+        hiddenLocation: { x: 0.3, y: 0.7 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        skipInstructions: true,
+      };
+      resolveNextGuessParams
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ params: nextParams });
+
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      const overlayProps = lastOverlayProps();
+      await act(async () => {
+        overlayProps.onDone();
+      });
+
+      // mount (1) + handleOverlayDone wait (1) = 2
+      expect(warmAllDeckIfNeeded).toHaveBeenCalledTimes(2);
+      expect(resolveNextGuessParams).toHaveBeenCalledTimes(2);
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+      expect(navigateToNextGuess).not.toHaveBeenCalled();
+    });
+
+    it('T11: handleOverlayDone bounces when deck is truly empty after warm retry', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      warmAllDeckIfNeeded.mockResolvedValue(undefined);
+
+      resolveNextGuessParams.mockResolvedValue(null);
+      navigateToNextGuess.mockResolvedValue(undefined);
+
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute()} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      const overlayProps = lastOverlayProps();
+      await act(async () => {
+        overlayProps.onDone();
+      });
+
+      expect(warmAllDeckIfNeeded).toHaveBeenCalledTimes(2);
+      expect(resolveNextGuessParams).toHaveBeenCalledTimes(2);
+      expect(navigateToNextGuess).toHaveBeenCalledTimes(1);
+      expect(navigation.setParams).not.toHaveBeenCalled();
+    });
+
+    it('T12: handleOverlayDone does NOT warm when category is "all" (immediate bounce)', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+
+      resolveNextGuessParams.mockResolvedValue(null);
+      navigateToNextGuess.mockResolvedValue(undefined);
+
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute({ category: { id: 'cat-all', key: 'all' } })} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      const overlayProps = lastOverlayProps();
+      await act(async () => {
+        overlayProps.onDone();
+      });
+
+      expect(warmAllDeckIfNeeded).not.toHaveBeenCalled();
+      expect(resolveNextGuessParams).toHaveBeenCalledTimes(1);
+      expect(navigateToNextGuess).toHaveBeenCalledTimes(1);
+    });
   });
 });
