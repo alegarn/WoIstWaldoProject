@@ -236,21 +236,23 @@ describe('SwipeImage', () => {
     ], 'all', 'any');
   });
 
-  it('does not restart the synthetic all feed from head when the public exhausted sentinel is stored', async () => {
+  it('re-queries the server on cold mount when the exhausted sentinel is stored so new uploads surface', async () => {
+    // Regression: a stored PUBLIC_FEED_END_CURSOR used to short-circuit the
+    // cold-mount load, so once a category ever returned empty it never queried
+    // the server again — newly uploaded cards stayed invisible until reinstall.
     getLocalImages.mockResolvedValue(null);
     getLastImageUuid.mockResolvedValue(PUBLIC_FEED_END_CURSOR);
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'fresh-after-exhaust', imageFile: 'file:///fresh.jpg' },
+      ],
+    });
 
-    const { renderer } = await renderSwipeImage();
+    await renderSwipeImage();
 
-    expect(getImages).not.toHaveBeenCalled();
-
-    const renderedText = renderer.root
-      .findAll((node) => node.type === 'Text')
-      .map((node) => node.props.children)
-      .flat()
-      .join(' ');
-
-    expect(renderedText).toContain('No more images to guess right now!');
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, expect.objectContaining({}));
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('fresh-after-exhaust');
   });
 
   it('normalizes the synthetic all card so category_id stays undefined while category_key is threaded', async () => {

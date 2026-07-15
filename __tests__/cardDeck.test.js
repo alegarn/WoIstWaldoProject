@@ -1,4 +1,5 @@
 jest.mock('../utils/storageDatum', () => ({
+  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
   getLastImageUuid: jest.fn(),
   storeImageList: jest.fn(),
   updateImageList: jest.fn(),
@@ -13,9 +14,10 @@ jest.mock('../services/groups/groupFeedCache', () => ({
   writeGroupFeedCache: jest.fn(),
 }));
 
-import { updateImageList } from '../utils/storageDatum';
+import { getLastImageUuid, updateImageList } from '../utils/storageDatum';
+import { getImages } from '../utils/imagesRequests';
 import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
-import { appendCardBatch } from '../services/cardDeck';
+import { appendCardBatch, fetchCardBatch } from '../services/cardDeck';
 
 describe('appendCardBatch', () => {
   beforeEach(() => {
@@ -148,6 +150,95 @@ describe('appendCardBatch', () => {
       'g-3',
       { categoryId: undefined, language: 'fr' },
       expect.objectContaining({ images: [{ listId: 1 }] }),
+    );
+  });
+});
+
+describe('fetchCardBatch', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+  });
+
+  it('normalizes a synthetic "any" language to undefined so the backend does not filter by a non-existent language code', async () => {
+    // Regression: GuessPathScreen passes navigationLanguage='any' when the user
+    // never opened the language filter. That literal flowed all the way to the
+    // backend as ?language=any, and Image.batch_with_existing_storage applied
+    // WHERE language='any' — matching zero rows (no image has language='any').
+    // Categories with otherwise-matching cards appeared permanently empty.
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'any',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ language: undefined, category_key: 'nature', category_id: 'cat-nature' }),
+    );
+    expect(getImages.mock.calls[0][2].language).not.toBe('any');
+  });
+
+  it('forwards a real language code untouched', async () => {
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ language: 'fr' }),
+    );
+  });
+
+  it('normalizes an undefined language to undefined on the server (parity with the any/undefined branch)', async () => {
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: undefined,
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ language: undefined }),
+    );
+    expect(getImages.mock.calls[0][2].language).not.toBe('any');
+  });
+
+  it('treats a legacy stored exhausted sentinel as a fresh cursor so pictureIdOverride===undefined paths self-heal', async () => {
+    // Regression: prior app versions persisted PUBLIC_FEED_END_CURSOR to mark a
+    // category exhausted. After the brick fix, the cold-mount path bypasses the
+    // cursor (always passes null), but refillOrFallback's foreground load and
+    // the background prefetcher still call fetchCardBatch with no override —
+    // which used to read the stale sentinel and POST {name:'__public_feed_end__'}
+    // to the backend every session. Treat the sentinel as null so those paths
+    // also re-query from head and overwrite the stale key with a real cursor.
+    getLastImageUuid.mockResolvedValue('__public_feed_end__');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      // pictureIdOverride intentionally omitted (refillOrFallback / prefetcher shape)
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
     );
   });
 });
