@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { fetchGroups } from '../services/groups/groupApi';
 import { AuthContext } from '../store/auth-context';
 
-export function useGroupsHub() {
+export function useGroupsHub({ enabled = true } = {}) {
   const { token, userId } = useContext(AuthContext);
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -16,9 +16,10 @@ export function useGroupsHub() {
   }, []);
 
   const refresh = useCallback(async () => {
-    if (!token || !userId) {
+    if (!enabled || !token || !userId) {
       if (mounted.current) {
         setData(null);
+        setError(null);
         setIsLoading(false);
       }
       return;
@@ -40,7 +41,7 @@ export function useGroupsHub() {
     }
 
     if (mounted.current) setIsLoading(false);
-  }, [token, userId]);
+  }, [enabled, token, userId]);
 
   useEffect(() => {
     refresh();

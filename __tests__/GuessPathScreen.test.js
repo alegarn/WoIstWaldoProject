@@ -44,7 +44,7 @@ jest.mock('../components/UI/IconButton', () => {
 });
 
 jest.mock('../hooks/useGroupsHub', () => ({
-  useGroupsHub: () => mockUseGroupsHub(),
+  useGroupsHub: (...args) => mockUseGroupsHub(...args),
 }));
 
 jest.mock('../utils/categoryRequests', () => ({
@@ -203,6 +203,13 @@ describe('GuessPathScreen', () => {
 
     return renderer;
   }
+
+  it('does not opt into private group loading while rendering the public guess path flow', async () => {
+    await renderScreen();
+
+    expect(mockUseGroupsHub).toHaveBeenCalled();
+    expect(mockUseGroupsHub.mock.calls.every(([options]) => options?.enabled === false)).toBe(true);
+  });
 
   function getCardPropsByKey(key) {
     const call = mockGuessCategoryCard.mock.calls.find(
