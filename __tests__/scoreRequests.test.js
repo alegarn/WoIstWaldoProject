@@ -149,7 +149,7 @@ describe('scoreRequests utilities', () => {
 
       const result = await submitScoreBatch({
         items: [
-          { guessId: 'g-1', pictureId: 'img-1', points: 7, scope: { kind: 'private', groupId: 'g-9' } },
+          { guessId: 'g-1', pictureId: 'img-1', points: 7, streak: 5, scope: { kind: 'private', groupId: 'g-9' } },
         ],
         context: { token: 'Bearer token' },
       });
@@ -159,7 +159,7 @@ describe('scoreRequests utilities', () => {
         {
           batch: {
             results: [
-              { guess_id: 'g-1', image_id: 'img-1', earned_points: 7 },
+              { guess_id: 'g-1', image_id: 'img-1', earned_points: 7, streak: 5 },
             ],
           },
         },
@@ -169,12 +169,12 @@ describe('scoreRequests utilities', () => {
       expect(setHeaders).toHaveBeenCalledWith({ token: 'Bearer token' });
     });
 
-    it('does not include streak on the private batch payload', async () => {
+    it('defaults streak to 0 on the private batch payload when the item omits it', async () => {
       axios.post.mockResolvedValue({ status: 200, data: { ok: true } });
 
       await submitScoreBatch({
         items: [
-          { guessId: 'g-1', pictureId: 'img-1', points: 7, streak: 5, scope: { kind: 'private', groupId: 'g-9' } },
+          { guessId: 'g-1', pictureId: 'img-1', points: 7, scope: { kind: 'private', groupId: 'g-9' } },
         ],
         context: { token: 'Bearer token' },
       });
@@ -186,8 +186,8 @@ describe('scoreRequests utilities', () => {
         guess_id: 'g-1',
         image_id: 'img-1',
         earned_points: 7,
+        streak: 0,
       });
-      expect(body.batch.results[0]).not.toHaveProperty('streak');
     });
 
     it('calls setHeaders with only the token and no uid/expiry/access_token/client', async () => {
