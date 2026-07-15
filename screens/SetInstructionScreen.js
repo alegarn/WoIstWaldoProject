@@ -43,7 +43,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [categories, setCategories] = useState([]);
   const [categoriesError, setCategoriesError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
+  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions({
+    granularPermissions: ['photo'],
+  });
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const languageTouchedRef = useRef(false);
@@ -146,7 +148,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       currentPermission = await requestPermission();
     };
     if (!currentPermission?.canAskAgain || currentPermission?.status === "denied") {
-      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
+      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos is denied');
       Linking.openSettings();
     } else {
       if (currentPermission?.status === "granted") {

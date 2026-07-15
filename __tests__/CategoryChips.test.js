@@ -13,6 +13,7 @@ import { act, create } from 'react-test-renderer';
 
 import CategoryChips from '../components/UI/CategoryChips';
 import { GlobalStyle } from '../constants/theme';
+import { CATEGORY_ASSETS } from '../utils/categoryAssets';
 
 describe('CategoryChips', () => {
   const categories = [
@@ -83,5 +84,25 @@ describe('CategoryChips', () => {
 
     expect(renderer.root.findByProps({ testID: 'categories.chip.other.fallback' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'categories.chip.nature.fallback' })).toBeTruthy();
+  });
+
+  it('uses the local asset when a private default category has no remote thumbnail', async () => {
+    const renderer = await renderChips({
+      categories: [
+        {
+          id: '966b8efe-887d-44da-b6a6-5eac0791b4ff',
+          key: '966b8efe-887d-44da-b6a6-5eac0791b4ff',
+          name: 'Nature',
+          thumbnailUrl: null,
+        },
+      ],
+      selected: null,
+    });
+
+    const images = renderer.root.findAllByType('Image');
+
+    expect(images).toHaveLength(1);
+    expect(images[0].props.source).toBe(CATEGORY_ASSETS.nature);
+    expect(() => renderer.root.findByProps({ testID: 'categories.chip.966b8efe-887d-44da-b6a6-5eac0791b4ff.fallback' })).toThrow();
   });
 });

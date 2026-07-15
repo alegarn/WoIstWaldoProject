@@ -84,6 +84,21 @@ describe('GuessCategoryCard', () => {
     expect(image.props.source).toBe(CATEGORY_ASSETS.nature);
   });
 
+  it('uses the local asset when thumbnailUrl is missing and a private default category name is known', async () => {
+    const renderer = await renderCard({
+      category: {
+        id: '966b8efe-887d-44da-b6a6-5eac0791b4ff',
+        key: '966b8efe-887d-44da-b6a6-5eac0791b4ff',
+        name: 'Nature',
+      },
+      thumbnailUrl: undefined,
+    });
+
+    const image = renderer.root.findByType('ImageBackground');
+
+    expect(image.props.source).toBe(CATEGORY_ASSETS.nature);
+  });
+
   it('prefers an explicit remote thumbnailUrl string over the local asset', async () => {
     const renderer = await renderCard({ thumbnailUrl: 'https://example/x.png' });
 
