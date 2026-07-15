@@ -29,6 +29,7 @@
 - Prefer Jest for unit and mocked integration coverage. Use Maestro for full-device journeys, gesture-heavy flows, or deterministic E2E behavior.
 - Keep source-of-truth runtime rules here; keep one-off proposals in `planning/` instead.
 - Ignore `.expo/`, `node_modules/`, and packaged APK artifacts unless task explicitly targets them.
+- If something is implemented for public or private groups, check that it works in both contexts, unless explicitly stated otherwise. Private groups have their own backend isolation rules and may require extra setup to test.
 
 ## Verification
 
