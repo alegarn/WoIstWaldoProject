@@ -17,6 +17,24 @@ import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetche
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
+/**
+ * Guarantee every card has a finite, unique listId. Background-prefetched cards
+ * are persisted with listId === null (buildImageObject hardcodes it and the
+ * prefetcher bypasses handleData, the only path that assigns listIds). Loading
+ * those back would render multiple <SwipeableCard key={null}> (React "two
+ * children with the same key" warning) and would also break removeCard, which
+ * matches/removes by listId. Assign sequential ids continuing from the deck's
+ * current max so this is a stable no-op for already-healthy decks and a
+ * one-time self-heal for legacy null-listId cards.
+ */
+function normalizeListIds(cards) {
+  if (!Array.isArray(cards) || cards.length === 0) return cards;
+  const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
+  if (!hasMissing) return cards;
+  let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
+  return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
+}
+
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
 
   const categoryKey = category?.key || 'all';
@@ -172,21 +190,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
-      setImageList(localImageList);
+      setImageList(normalizeListIds(localImageList));
     } else if (localImageList === null || localImageList?.length === 0) {
-      // Category deck empty on mount — try 'all' fallback before blocking foreground load.
-      if (categoryKey !== 'all') {
-        await warmAllDeckIfNeeded({ language, scope, authContext: context }).catch(() => {});
-        const allDeck = isPrivateScope
-          ? (await readGroupFeedCache(privateGroupId, { categoryId: undefined, language: lang }))?.images ?? null
-          : await getLocalImages('all', lang);
-        if (allDeck && allDeck.length > 0) {
-          setActiveCategoryKey('all');
-          setActiveCategory(RECENT_ALL_CATEGORY);
-          setImageList(allDeck);
-          return;
-        }
-      }
+      // Empty category deck on mount — cold-start the ACTIVE category. Do NOT
+      // cross-fall back to 'recent/all' here; that refill belongs to mid-play
+      // (refillOrFallback), once the user is actually swiping and the deck
+      // empties. Loading recent/all on a cold mount is the reported bug.
       const lastCursor = await getLastImageUuid(categoryKey, lang);
       await handleImagesLoading(lastCursor === PUBLIC_FEED_END_CURSOR ? undefined : null);
     } else {
@@ -216,10 +225,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     const aKey = activeCategoryKeyRef.current;
     const aCat = activeCategoryRef.current;
 
-    const readDeck = async (deckKey, deckCategory) => (
+    const readDeck = async (deckKey, deckCategory) => normalizeListIds(
       isPrivateScope
         ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang }))?.images ?? []
-        : (await getLocalImages(deckKey, lang)) ?? []
+        : await getLocalImages(deckKey, lang) ?? [],
     );
 
     // 1. Re-read the active deck — the background prefetcher may have appended
@@ -398,7 +407,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
                 <>
                   {reversedImageList.map((item) => (
                     <SwipeableCard
-                      key={item.listId}
+                      key={item.listId ?? item.name}
                       item={item}
                       onBadgePress={openDetail}
                       removeCard={removeCard}

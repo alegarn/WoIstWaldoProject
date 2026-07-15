@@ -990,19 +990,28 @@ describe('SwipeImage — deck-empty fallback to "all"', () => {
     expect(prefetchIfLow).toHaveBeenCalled();
   });
 
-  it('on mount, switches to the "all" deck without a foreground load when the category deck is empty but "all" has cards', async () => {
+  it('on mount, cold-starts the active category foreground load when the category deck is empty (no switch to "all")', async () => {
     const allCard = { listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' };
     getLocalImages.mockImplementation((key) => {
       if (key === 'nature') return Promise.resolve([]);
       if (key === 'all') return Promise.resolve([allCard]);
       return Promise.resolve(null);
     });
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [{ pictureId: 'nat-fresh', imageFile: 'file:///nf.jpg' }],
+    });
 
     await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
 
-    expect(getImages).not.toHaveBeenCalled();
-    expect(warmAllDeckIfNeeded).toHaveBeenCalled();
-    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('all-1');
+    // No cross-category 'recent/all' fallback on mount — that refill only fires mid-play.
+    expect(warmAllDeckIfNeeded).not.toHaveBeenCalled();
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      expect.anything(),
+      expect.objectContaining({ category_key: 'nature', category_id: 'cat-nature' }),
+    );
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).not.toContain('all-1');
   });
 
   it('on mount, fires the foreground cold-start load when the category deck AND "all" are both empty', async () => {

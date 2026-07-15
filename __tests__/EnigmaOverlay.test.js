@@ -117,6 +117,25 @@ describe('EnigmaOverlay', () => {
     expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe(DESCRIPTION);
   });
 
+  it('opens when defaultOpen flips from false to true on an existing instance', async () => {
+    const renderer = await renderOverlay({ defaultOpen: false });
+
+    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
+
+    await act(async () => {
+      renderer.update(
+        <EnigmaOverlay
+          description={DESCRIPTION}
+          screenHeight={SCREEN_HEIGHT}
+          defaultOpen={true}
+        />
+      );
+    });
+
+    expect(renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe(DESCRIPTION);
+  });
+
   it('opens when the handle sees an up-swipe', async () => {
     const renderer = await renderOverlay();
 
