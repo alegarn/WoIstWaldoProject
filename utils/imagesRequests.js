@@ -4,7 +4,7 @@ import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
 
 export { getBackendHeaders };
-import { PUBLIC_FEED_END_CURSOR, saveLastImageUuid } from "./storageDatum";
+import { saveLastImageUuid } from "./storageDatum";
 import { fetchPrivateFeedPageForGame } from "../services/groups/groupFeedApi";
 
 function isPrivateScope(scope) {
@@ -263,10 +263,6 @@ export async function getImages(pictureId, context, filters = {}) {
     });
   }
 
-  if (pictureId === PUBLIC_FEED_END_CURSOR) {
-    return { isError: false, images: [] };
-  }
-
   const { token, userId } = await getBackendHeaders(context);
   const headers = setHeaders({ token });
 
@@ -294,7 +290,7 @@ export async function getImages(pictureId, context, filters = {}) {
     const imagesInfosData = imagesInfos?.data?.data ?? [];
 
     if (imagesInfosData.length === 0) {
-      await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, filters?.category_key, filters?.language);
+      await saveLastImageUuid(filters?.category_key, filters?.language);
 
       return { isError: false, images: [] };
     };

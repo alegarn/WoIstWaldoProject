@@ -15,7 +15,6 @@ jest.mock('../utils/auth', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
-  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
   saveLastImageUuid: jest.fn(),
 }));
 
@@ -43,7 +42,7 @@ import { File, Paths } from 'expo-file-system';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { getImages, performImageUpload, prepareImageUpload, saveImageInfos, buildImageObject } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, saveLastImageUuid } from '../utils/storageDatum';
+import { saveLastImageUuid } from '../utils/storageDatum';
 
 describe('imagesRequests utilities', () => {
   beforeEach(() => {
@@ -152,15 +151,11 @@ describe('imagesRequests utilities', () => {
 
     expect(response).toEqual({ isError: false, images: [] });
     expect(axios.get).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith(PUBLIC_FEED_END_CURSOR, undefined, undefined);
-  });
-
-  it('short-circuits the public exhausted sentinel without hitting the network', async () => {
-    const response = await getImages(PUBLIC_FEED_END_CURSOR, { token: 'Bearer token' }, { language: 'fr' });
-
-    expect(response).toEqual({ isError: false, images: [] });
-    expect(axios.get).not.toHaveBeenCalled();
-    expect(axios.post).not.toHaveBeenCalled();
+    // Regression: an empty batch must NOT persist the exhausted sentinel.
+    // Saving it bricked the category forever (no new uploads ever surfaced).
+    // The caller decides exhaustion via the empty images array; the cursor
+    // stays on the last successfully fetched image so a later retry can page.
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
   });
 
   it('downloads backend-hosted images with auth headers', async () => {

@@ -7,7 +7,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { PUBLIC_FEED_END_CURSOR, getE2EHiddenGuessCard, getLocalImages, getLastImageId, getLastImageUuid, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -192,12 +192,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     if (localImageList !== null && (localImageList?.length >= 4)) {
       setImageList(normalizeListIds(localImageList));
     } else if (localImageList === null || localImageList?.length === 0) {
-      // Empty category deck on mount — cold-start the ACTIVE category. Do NOT
-      // cross-fall back to 'recent/all' here; that refill belongs to mid-play
-      // (refillOrFallback), once the user is actually swiping and the deck
-      // empties. Loading recent/all on a cold mount is the reported bug.
-      const lastCursor = await getLastImageUuid(categoryKey, lang);
-      await handleImagesLoading(lastCursor === PUBLIC_FEED_END_CURSOR ? undefined : null);
+      // Empty category deck on mount — cold-start the ACTIVE category with a
+      // fresh server query (pictureId=null). Do NOT consult the stored cursor:
+      // it may be a stale exhausted marker, and we want new uploads to surface.
+      // Cross-fallback to 'recent/all' belongs to mid-play (refillOrFallback),
+      // once the user is actually swiping and the deck empties.
+      await handleImagesLoading(null);
     } else {
       setImageList(localImageList);
       await handleImagesLoading();

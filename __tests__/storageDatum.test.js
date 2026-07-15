@@ -112,7 +112,7 @@ describe('storageDatum utilities', () => {
     expect(await getLastImageUuid()).toBe('uuid-1');
   });
 
-  it('round-trips the session language filter and defaults to en when unset', async () => {
+  it('round-trips the session language filter and returns null when unset', async () => {
     await saveSessionLanguageFilter('fr');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('sessionLanguageFilter', 'fr');
 
@@ -120,7 +120,7 @@ describe('storageDatum utilities', () => {
     expect(await getSessionLanguageFilter()).toBe('fr');
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
-    expect(await getSessionLanguageFilter()).toBe('en');
+    expect(await getSessionLanguageFilter()).toBeNull();
   });
 
   it('round-trips the preferred language and returns null when unset', async () => {

@@ -52,6 +52,7 @@ jest.mock('../utils/categoryRequests', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  getPreferredLanguage: jest.fn(),
   getSessionLanguageFilter: jest.fn(),
   saveSessionLanguageFilter: jest.fn(),
 }));
@@ -92,6 +93,7 @@ import GuessPathScreen from '../screens/GuessScreens/GuessPathScreen';
 import { AuthContext } from '../store/auth-context';
 import { getCategories } from '../utils/categoryRequests';
 import {
+  getPreferredLanguage,
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
 } from '../utils/storageDatum';
@@ -158,6 +160,7 @@ describe('GuessPathScreen', () => {
     resolveCategoryThumbnail.mockResolvedValue(null);
     deleteCategoryThumbnailFile.mockReturnValue(undefined);
     uploadCategoryThumbnail.mockResolvedValue(null);
+    getPreferredLanguage.mockResolvedValue(null);
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
@@ -320,6 +323,28 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
       language: 'any',
+    });
+  });
+
+  it('falls back to the preferred language when the session filter is unset', async () => {
+    getPreferredLanguage.mockResolvedValue('fr');
+
+    const renderer = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
+        .children
+    ).toBe('fr');
+
+    const natureCard = getCardPropsByKey('nature');
+
+    await act(async () => {
+      natureCard.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
+      language: 'fr',
     });
   });
 

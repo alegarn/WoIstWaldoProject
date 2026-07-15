@@ -6,6 +6,18 @@ function normalizeLanguage(language) {
   return language || 'any';
 }
 
+/**
+ * Server-side language filter. AsyncStorage uses 'any' as the canonical
+ * "no language filter" namespace (see normalizeLanguage), but the backend's
+ * Image.batch_with_existing_storage applies WHERE language = params[:language]
+ * verbatim — and no image row has language='any'. So 'any' must be stripped at
+ * the server boundary, or every card query under a no-filter session returns
+ * empty. Real codes ('en', 'fr', …) pass through untouched.
+ */
+function resolveServerLanguage(language) {
+  return language && language !== 'any' ? language : undefined;
+}
+
 function resolveCategoryId(categoryId) {
   return categoryId === 'all' ? undefined : categoryId;
 }
@@ -19,14 +31,18 @@ export async function fetchCardBatch({ categoryKey, categoryId, language, scope,
   const lastImageUuid = await getLastImageUuid(categoryKey, lang);
   const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
 
-  if (!isPrivateScope(scope) && pictureId === PUBLIC_FEED_END_CURSOR) {
-    return { isError: false, images: [] };
-  }
+  // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
+  // mark a category exhausted. The cold-mount path now bypasses the cursor
+  // (always passes null), but refillOrFallback's foreground load and the
+  // background prefetcher still call fetchCardBatch with no override. Treat
+  // the stale sentinel as a fresh cursor so those paths also re-query from
+  // head; the next non-empty batch overwrites the stale key with a real uuid.
+  const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
 
-  return getImages(pictureId, authContext, {
+  return getImages(effectivePictureId, authContext, {
     category_id: resolveCategoryId(categoryId),
     category_key: categoryKey || 'all',
-    language,
+    language: resolveServerLanguage(language),
     scope,
   });
 }
