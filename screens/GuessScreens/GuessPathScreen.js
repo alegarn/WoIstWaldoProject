@@ -21,6 +21,7 @@ import CenteredModal from '../../components/UI/CenteredModal';
 import { LANGUAGES } from '../../constants/languages';
 import { getCategories } from '../../utils/categoryRequests';
 import {
+  getPreferredLanguage,
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
@@ -123,11 +124,14 @@ export default function GuessPathScreen({ navigation, route }) {
     let cancelled = false;
 
     async function loadLanguage() {
-      const stored = await getSessionLanguageFilter();
+      const [stored, preferred] = await Promise.all([
+        getSessionLanguageFilter(),
+        getPreferredLanguage(),
+      ]);
       if (cancelled) {
         return;
       }
-      setSessionLanguage(stored);
+      setSessionLanguage(stored ?? preferred ?? null);
     }
 
     loadLanguage();

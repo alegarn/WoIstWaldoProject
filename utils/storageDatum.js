@@ -150,7 +150,11 @@ export async function getLastImageUuid(categoryKey, language) {
 
 export async function getSessionLanguageFilter() {
   const stored = await AsyncStorage.getItem(SESSION_LANGUAGE_FILTER_KEY);
-  return stored || DEFAULT_LANGUAGE;
+
+  // Keep "unset" distinct from an explicit language choice.
+  // GuessPath/GuessFeed use this to send "any" (no server filter) while still
+  // rendering the UI sentinel as English until the user picks a filter.
+  return stored || null;
 };
 
 export async function saveSessionLanguageFilter(code) {
