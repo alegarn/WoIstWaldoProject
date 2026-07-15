@@ -5,10 +5,10 @@
 
 export const STREAK_TIERS = [
   { tier: 5, threshold: 50, multiplier: 10.0, label: "Waldo's Nemesis", colorKey: 'white'  },
-  { tier: 4, threshold: 20, multiplier: 5.0,  label: 'Legendary',       colorKey: 'purple' },
-  { tier: 3, threshold: 12, multiplier: 3.0,  label: 'On Fire',         colorKey: 'red'    },
-  { tier: 2, threshold: 7,  multiplier: 2.0,  label: 'In the Zone',     colorKey: 'orange' },
-  { tier: 1, threshold: 3,  multiplier: 1.5,  label: 'Focused',         colorKey: 'blue'   },
+  { tier: 4, threshold: 20, multiplier: 7.0,  label: 'Legendary',       colorKey: 'purple' },
+  { tier: 3, threshold: 12, multiplier: 5.0,  label: 'On Fire',         colorKey: 'red'    },
+  { tier: 2, threshold: 7,  multiplier: 3.0,  label: 'In the Zone',     colorKey: 'orange' },
+  { tier: 1, threshold: 3,  multiplier: 2.0,  label: 'Focused',         colorKey: 'blue'   },
 ];
 
 export const NEUTRAL_TIER = { tier: 0, threshold: 0, multiplier: 1.0, label: '', colorKey: 'neutral' };
