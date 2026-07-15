@@ -23,7 +23,7 @@ import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 
-const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
+const NON_UPLOAD_CATEGORY_KEYS = new Set(['all']);
 const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
 
 function isUploadableCategoryKey(categoryKey) {
