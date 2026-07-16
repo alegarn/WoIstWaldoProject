@@ -151,6 +151,11 @@ describe('imagesRequests utilities', () => {
 
     expect(response).toEqual({ isError: false, images: [] });
     expect(axios.get).toHaveBeenCalledTimes(1);
+    // Regression: an empty batch must NOT persist the exhausted sentinel.
+    // Saving it bricked the category forever (no new uploads ever surfaced).
+    // The caller decides exhaustion via the empty images array; the cursor
+    // stays on the last successfully fetched image so a later retry can page.
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
   });
 
   it('downloads backend-hosted images with auth headers', async () => {

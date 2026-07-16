@@ -8,6 +8,7 @@ const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
+export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
 
 function imageListKey(categoryKey, language) {
   return `imageList:${categoryKey || 'all'}:${language || 'any'}`;
@@ -93,6 +94,27 @@ export async function getNextImageForScope({ category, language, currentListId, 
   return images[0];
 };
 
+/**
+ * Return the TOTAL number of cards persisted for a given scope (category+language).
+ * Used by the prefetcher as a low-water trigger (count < threshold → fetch more).
+ * Returns the TOTAL deck size (NOT cursor-filtered) — prefetch triggering only
+ * needs a proxy, and cursor-filtering is the resolver's responsibility (SRP).
+ * - Public scope: count getLocalImages(category?.key || 'all', language).
+ * - Private scope: count readGroupFeedCache(scope.groupId, {categoryId, language}).images.
+ * Returns 0 for missing/empty decks. Never throws.
+ */
+export async function getDeckCountForScope({ category, language, scope }) {
+  const isPrivate = scope?.kind === 'private' && scope?.groupId;
+  if (!isPrivate) {
+    const images = await getLocalImages(category?.key || 'all', language);
+    return Array.isArray(images) ? images.length : 0;
+  }
+
+  const categoryId = category?.key === 'all' ? undefined : category?.id;
+  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+  return Array.isArray(cache?.images) ? cache.images.length : 0;
+};
+
 function getLastListId(list) {
   const lastListId = list.reduce((maxId, image) => {
     const imageId = image.listId;
@@ -128,7 +150,11 @@ export async function getLastImageUuid(categoryKey, language) {
 
 export async function getSessionLanguageFilter() {
   const stored = await AsyncStorage.getItem(SESSION_LANGUAGE_FILTER_KEY);
-  return stored || DEFAULT_LANGUAGE;
+
+  // Keep "unset" distinct from an explicit language choice.
+  // GuessPath/GuessFeed use this to send "any" (no server filter) while still
+  // rendering the UI sentinel as English until the user picks a filter.
+  return stored || null;
 };
 
 export async function saveSessionLanguageFilter(code) {

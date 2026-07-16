@@ -3,7 +3,7 @@ import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
 import { resolveNextCard } from './nextCardResolver';
 import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
 
-export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier }) {
+export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }) {
   await bufferScore({
     guessId: mintGuessId(),
     imageName: pictureId,
@@ -12,6 +12,8 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
     scope,
     points,
     ...(multiplier !== undefined ? { multiplier } : {}),
+    streak,
+    ...(streakMultiplier !== undefined ? { streakMultiplier } : {}),
     ts: Date.now(),
     userId,
   });

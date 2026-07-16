@@ -28,6 +28,18 @@ describe('useGroupsHub', () => {
     jest.clearAllMocks();
   });
 
+  it('does not fetch private groups when disabled explicitly', async () => {
+    const { result } = renderHook(() => useGroupsHub({ enabled: false }), {
+      wrapper: makeWrapper(),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(fetchGroups).not.toHaveBeenCalled();
+    expect(result.current.data).toBeNull();
+    expect(result.current.error).toBeNull();
+  });
+
   it('populates data.owned and data.joined and flips isLoading to false once fetchGroups resolves', async () => {
     fetchGroups.mockResolvedValue({
       status: 200,

@@ -7,13 +7,33 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, emptyImageList, removeImageFromList, updateImageList, saveLastImageUuid, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
 import { readGroupFeedCache, writeGroupFeedCache } from '../../services/groups/groupFeedCache';
-import { fetchCardBatch, persistCardBatch } from '../../services/cardDeck';
+import { fetchCardBatch, persistCardBatch, appendCardBatch } from '../../services/cardDeck';
+import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
+import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
+
+/**
+ * Guarantee every card has a finite, unique listId. Background-prefetched cards
+ * are persisted with listId === null (buildImageObject hardcodes it and the
+ * prefetcher bypasses handleData, the only path that assigns listIds). Loading
+ * those back would render multiple <SwipeableCard key={null}> (React "two
+ * children with the same key" warning) and would also break removeCard, which
+ * matches/removes by listId. Assign sequential ids continuing from the deck's
+ * current max so this is a stable no-op for already-healthy decks and a
+ * one-time self-heal for legacy null-listId cards.
+ */
+function normalizeListIds(cards) {
+  if (!Array.isArray(cards) || cards.length === 0) return cards;
+  const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
+  if (!hasMissing) return cards;
+  let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
+  return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
+}
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
 
@@ -25,6 +45,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const [imageList, setImageList] = useState(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
   const [noMoreCard, setNoMoreCard] = useState(null);
+  const [activeCategoryKey, setActiveCategoryKey] = useState(categoryKey);
+  const [activeCategory, setActiveCategory] = useState(category);
 
   const context = useContext(AuthContext);
   const { detailImage, detailTags, detailRating, detailVisible, openDetail, closeDetail } = useBadgeDetail(context);
@@ -35,7 +57,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const asyncImagesAreLoadingRef = useRef(false);
   asyncImagesAreLoadingRef.current = asyncImagesAreLoading;
 
-  const allDeckWarmedRef = useRef(false);
+  const activeCategoryKeyRef = useRef(categoryKey);
+  activeCategoryKeyRef.current = activeCategoryKey;
+  const activeCategoryRef = useRef(category);
+  activeCategoryRef.current = activeCategory;
 
   // Functions __________________________________________________________________
 
@@ -48,10 +73,12 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const handleData = useCallback(async (data) => {
     console.log("handleData");
 
+    const aKey = activeCategoryKeyRef.current;
+    const aCat = activeCategoryRef.current;
     const currentImageList = imageListRef.current;
     const lastId = currentImageList?.length
       ? currentImageList.reduce((maxId, image) => Math.max(maxId, image?.listId ?? 0), 0)
-      : await getLastImageId(categoryKey, lang);
+      : await getLastImageId(aKey, lang);
     // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
     const updatedImageList = data?.map((image, index) => ({
      ...image,
@@ -62,8 +89,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       console.log("updatedImageList handleData imageList null");
       await persistCardBatch({
         cards: updatedImageList,
-        categoryKey,
-        categoryId: category?.id,
+        categoryKey: aKey,
+        categoryId: aCat?.id,
         language: lang,
         scope,
       });
@@ -82,32 +109,27 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       console.log("updatedImageList handleData imageList !== null");
 
       if (updatedImageList?.length > 0) {
-        let newImageList;
-        if (isPrivateScope) {
-          newImageList = [...currentImageList, ...updatedImageList];
-          await persistCardBatch({
-            cards: newImageList,
-            categoryKey,
-            categoryId: category?.id,
-            language: lang,
-            scope,
-          });
-        } else {
-          newImageList = await updateImageList(updatedImageList, categoryKey, lang);
-        }
+        await appendCardBatch({
+          cards: updatedImageList,
+          categoryKey: aKey,
+          categoryId: aCat?.id,
+          language: lang,
+          scope,
+        });
+        const newImageList = [...currentImageList, ...updatedImageList];
         setImageList(newImageList);
-        return true
-      };
+        return true;
+      }
 
-      return false
+      return false;
     };
-  }, [category?.id, categoryKey, isPrivateScope, lang, scope]);
+  }, [lang, scope]);
 
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
     const response = await fetchCardBatch({
-      categoryKey,
-      categoryId: category?.id,
+      categoryKey: activeCategoryKeyRef.current,
+      categoryId: activeCategoryRef.current?.id,
       language,
       scope,
       authContext: context,
@@ -123,7 +145,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData, category, language, categoryKey]);
+  }, [context, handleData, language, scope]);
 
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
@@ -168,24 +190,89 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
-      setImageList(localImageList);
+      setImageList(normalizeListIds(localImageList));
     } else if (localImageList === null || localImageList?.length === 0) {
+      // Empty category deck on mount — cold-start the ACTIVE category with a
+      // fresh server query (pictureId=null). Do NOT consult the stored cursor:
+      // it may be a stale exhausted marker, and we want new uploads to surface.
+      // Cross-fallback to 'recent/all' belongs to mid-play (refillOrFallback),
+      // once the user is actually swiping and the deck empties.
       await handleImagesLoading(null);
     } else {
       setImageList(localImageList);
       await handleImagesLoading();
     };
-  }, [category?.id, categoryKey, handleImagesLoading, isPrivateScope, lang, privateGroupId]);
+  }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 
 
   const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
     if (!isPrivateScope) {
-      await removeImageFromList(id, categoryKey, lang);
+      await removeImageFromList(id, activeCategoryKeyRef.current, lang);
     }
     await deleteImageFromStorage(imageFilePath);
     return null;
-  }, [categoryKey, isPrivateScope, lang]);
+  }, [isPrivateScope, lang]);
+
+  /*
+   * Deck-empty fallback. Prefers background-prefetched cards (re-read the active
+   * deck — the prefetcher may have appended to AsyncStorage since mount), then
+   * the warmed 'all' deck (awaiting any in-flight warm), then a foreground load
+   * as a last resort. Avoids the "Load new images..." overlay whenever the
+   * background prefetcher has done its job.
+   */
+  const refillOrFallback = useCallback(async (categoryPrefetchPromise) => {
+    const aKey = activeCategoryKeyRef.current;
+    const aCat = activeCategoryRef.current;
+
+    const readDeck = async (deckKey, deckCategory) => normalizeListIds(
+      isPrivateScope
+        ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang }))?.images ?? []
+        : await getLocalImages(deckKey, lang) ?? [],
+    );
+
+    // 1. Re-read the active deck — the background prefetcher may have appended
+    //    cards to AsyncStorage that local state hasn't picked up yet.
+    let catDeck = await readDeck(aKey, aCat);
+    if (catDeck.length > 0) {
+      setImageList(catDeck);
+      return;
+    }
+
+    // 2. Join any in-flight category prefetch (or start one at deck 0) before
+    //    declaring the category exhausted. This covers the last-card race where
+    //    the background top-up lands just after the first storage read.
+    await (categoryPrefetchPromise ?? prefetchIfLow({
+      categoryKey: aKey,
+      categoryId: aCat?.id,
+      language,
+      scope,
+      authContext: context,
+    }).catch(() => {}));
+
+    catDeck = await readDeck(aKey, aCat);
+    if (catDeck.length > 0) {
+      setImageList(catDeck);
+      return;
+    }
+
+    // 3. Active deck empty and not already on 'all' → fall back to the 'all' deck.
+    //    Await the warm so we don't bounce when the warm is mid-flight.
+    if (aKey !== 'all') {
+      await warmAllDeckIfNeeded({ language, scope, authContext: context }).catch(() => {});
+      const allDeck = await readDeck('all', RECENT_ALL_CATEGORY);
+      if (allDeck.length > 0) {
+        setActiveCategoryKey('all');
+        setActiveCategory(RECENT_ALL_CATEGORY);
+        setImageList(allDeck);
+        return;
+      }
+    }
+
+    // 4. Both empty — last-resort foreground load (will show the overlay, but
+    //    only when truly out of cards). Keep on the active category/scope.
+    await handleImagesLoading();
+  }, [context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -198,6 +285,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const currentList = imageListRef.current ?? [];
       const updatedImageList = currentList.filter((item) => item.listId !== id);
       const image = currentList.find((item) => item.listId === id);
+      const aCat = activeCategoryRef.current;
 
       if (image?.imageFile) {
         await deleteImage(id, image.imageFile);
@@ -206,29 +294,29 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       if (isPrivateScope) {
         await writeGroupFeedCache(
           privateGroupId,
-          { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang },
+          { categoryId: aCat?.id === 'all' ? undefined : aCat?.id, language: lang },
           { images: updatedImageList, nextCursor: null },
         );
       }
 
-      if (updatedImageList?.length < 4 && !asyncImagesAreLoadingRef.current) {
-        await handleImagesLoading();
+      const prefetchPromise = prefetchIfLow({
+        categoryKey: activeCategoryKeyRef.current,
+        categoryId: aCat?.id,
+        language,
+        scope,
+        authContext: context,
+      }).catch(() => {});
+
+      // Deck-empty fallback: prefer background-prefetched cards, then 'all' deck,
+      // then a foreground load as last resort. Avoids the "Load new images..."
+      // blocking overlay whenever the background prefetcher has done its job.
+      if (updatedImageList?.length === 0 && !asyncImagesAreLoadingRef.current) {
+        await refillOrFallback(prefetchPromise);
       }
 
-      if (updatedImageList?.length < 4
-        && !asyncImagesAreLoadingRef.current
-        && !isE2EMode()
-        && !allDeckWarmedRef.current) {
-        allDeckWarmedRef.current = true;
-        fetchCardBatch({ categoryKey: 'all', language, scope, authContext: context })
-          .then((r) => (r && !r.isError && r.images?.length
-            ? persistCardBatch({ cards: r.images, categoryKey: 'all', language, scope })
-            : null))
-          .catch(() => {});
-      }
       return null;
     },
-    [category?.id, context, deleteImage, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]
+    [context, deleteImage, isPrivateScope, lang, language, privateGroupId, refillOrFallback, scope]
   );
 
   // Effects __________________________________________________________________
@@ -319,7 +407,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
                 <>
                   {reversedImageList.map((item) => (
                     <SwipeableCard
-                      key={item.listId}
+                      key={item.listId ?? item.name}
                       item={item}
                       onBadgePress={openDetail}
                       removeCard={removeCard}

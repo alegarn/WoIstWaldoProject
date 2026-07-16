@@ -1,6 +1,6 @@
 import { Pressable, View, Text, ImageBackground, StyleSheet } from 'react-native';
 
-import { getCategoryAsset } from '../../utils/categoryAssets';
+import { getCategoryAssetSource } from '../../utils/categoryAssets';
 import { GlobalStyle } from '../../constants/theme';
 
 function isRemoteThumbnail(value) {
@@ -10,7 +10,7 @@ function isRemoteThumbnail(value) {
 export default function GuessCategoryCard({ category, thumbnailUrl, count, onPress, testIDPrefix }) {
   const cardTestID = `${testIDPrefix}.card.${category.id}`;
   const useRemote = isRemoteThumbnail(thumbnailUrl);
-  const source = useRemote ? { uri: thumbnailUrl } : getCategoryAsset(category?.key);
+  const source = useRemote ? { uri: thumbnailUrl } : getCategoryAssetSource(category);
 
   return (
     <Pressable onPress={onPress} testID={cardTestID} style={styles.card}>

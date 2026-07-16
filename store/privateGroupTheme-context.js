@@ -39,9 +39,9 @@ export function useGroupSurfaceColor() {
 
 export function useScopedPrivateGroupTheme(routeScopeOverride) {
   const { scope: activeScope } = useActiveGroup();
-  const { data } = useGroupsHub();
   const scope = routeScopeOverride ?? activeScope;
   const isPrivate = !!(scope?.kind === 'private' && scope?.groupId);
+  const { data } = useGroupsHub({ enabled: isPrivate });
   const group = useMemo(() => {
     if (!isPrivate) return null;
     const all = [...(data?.owned ?? []), ...(data?.joined ?? [])];

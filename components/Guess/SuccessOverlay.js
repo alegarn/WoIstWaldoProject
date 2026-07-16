@@ -3,6 +3,7 @@ import { Animated, Easing, StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import { GlobalStyle } from '../../constants/theme';
+import { NEUTRAL_TIER } from '../../constants/streakTiers';
 
 // Single source of truth for the speed-bonus color (spokes, chrono, pill).
 const SPEED_COLOR = GlobalStyle.color.win;
@@ -22,8 +23,29 @@ const BADGE_DELAY_MS = 120;
 const BURST_SPIN_DEG = 45;
 const CHRONO_ICON = 'timer-outline';
 const CHRONO_SIZE = 22;
+const STREAK_PULSE_MS = 600;
+const STREAK_PULSE_OPACITY_MAX = 1.0;
+const STREAK_PULSE_OPACITY_MIN = 0.6;
+const STREAK_PULSE_SCALE_MAX = 1.0;
+const STREAK_PULSE_SCALE_MIN = 0.97;
+const STREAK_RING_MS = 1400;
+const STREAK_RING_STAGGER_MS = 700;
+const STREAK_RING_SCALE_MAX = 1.4;
+const STREAK_RING_OPACITY_START = 0.5;
+const STREAK_RING_OPACITY_END = 0;
+const STREAK_RING_SCALE_START = 1.0;
+const STREAK_RING_BORDER_WIDTH = 2;
+const STREAK_RING_RADIUS = 36;
+const STREAK_RING_SIZE = (STREAK_RING_RADIUS + STREAK_RING_BORDER_WIDTH) * 2;
 
-export default function SuccessOverlay({ visible, onDone, multiplier = 1, points = 1 }) {
+function breathe(value, high, low, durationMs) {
+  return Animated.sequence([
+    Animated.timing(value, { toValue: low, duration: durationMs, useNativeDriver: true }),
+    Animated.timing(value, { toValue: high, duration: durationMs, useNativeDriver: true }),
+  ]);
+}
+
+export default function SuccessOverlay({ visible, onDone, multiplier = 1, points = 1, streakTier = NEUTRAL_TIER }) {
   const isSpeedBonus = multiplier > 1;
   const scale = useRef(new Animated.Value(0)).current;
   const opacity = useRef(new Animated.Value(0)).current;
@@ -42,6 +64,38 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
   const onDoneRef = useRef(onDone);
   onDoneRef.current = onDone;
   const animRef = useRef(null);
+
+  const isStreak = streakTier.tier > 0;
+  const flameColor = GlobalStyle.color.streak[streakTier.colorKey];
+  const pulseOpacity = useRef(new Animated.Value(STREAK_PULSE_OPACITY_MAX)).current;
+  const pulseScale = useRef(new Animated.Value(STREAK_PULSE_SCALE_MAX)).current;
+  const ringA = useRef({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
+  const ringB = useRef({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
+
+  useEffect(() => {
+    if (!visible || streakTier.tier !== 1) return undefined;
+    const loop = Animated.loop(Animated.parallel([
+      breathe(pulseOpacity, STREAK_PULSE_OPACITY_MAX, STREAK_PULSE_OPACITY_MIN, STREAK_PULSE_MS),
+      breathe(pulseScale, STREAK_PULSE_SCALE_MAX, STREAK_PULSE_SCALE_MIN, STREAK_PULSE_MS),
+    ]));
+    loop.start();
+    return () => loop.stop();
+  }, [visible, streakTier.tier, pulseOpacity, pulseScale]);
+
+  useEffect(() => {
+    if (!visible || streakTier.tier < 2) return undefined;
+    const ripple = (ring) => Animated.loop(Animated.parallel([
+      Animated.timing(ring.scale, { toValue: STREAK_RING_SCALE_MAX, duration: STREAK_RING_MS, useNativeDriver: true }),
+      Animated.timing(ring.opacity, { toValue: STREAK_RING_OPACITY_END, duration: STREAK_RING_MS, useNativeDriver: true }),
+    ]));
+    const loopA = ripple(ringA);
+    loopA.start();
+    const loopBHandle = setTimeout(() => ripple(ringB).start(), STREAK_RING_STAGGER_MS);
+    return () => {
+      loopA.stop();
+      clearTimeout(loopBHandle);
+    };
+  }, [visible, streakTier.tier, flameColor, ringA, ringB]);
 
   useEffect(() => {
     if (!visible) return undefined;
@@ -152,6 +206,53 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
             </View>
           </Animated.View>
         )}
+        {isStreak && (
+          <View style={styles.streakBadge}>
+            {streakTier.tier >= 2 && (
+              <>
+                <Animated.View
+                  testID="guess.success.streak.ring"
+                  pointerEvents="none"
+                  style={[
+                    styles.glowRing,
+                    {
+                      borderColor: flameColor,
+                      opacity: ringA.opacity,
+                      transform: [{ scale: ringA.scale }],
+                    },
+                  ]}
+                />
+                <Animated.View
+                  testID="guess.success.streak.ring"
+                  pointerEvents="none"
+                  style={[
+                    styles.glowRing,
+                    {
+                      borderColor: flameColor,
+                      opacity: ringB.opacity,
+                      transform: [{ scale: ringB.scale }],
+                    },
+                  ]}
+                />
+              </>
+            )}
+            <Animated.View
+              testID="guess.success.streak.pill"
+              style={[
+                styles.streakPill,
+                {
+                  borderColor: flameColor,
+                  opacity: streakTier.tier === 1 ? pulseOpacity : STREAK_PULSE_OPACITY_MAX,
+                  transform: [{ scale: streakTier.tier === 1 ? pulseScale : STREAK_PULSE_SCALE_MAX }],
+                },
+              ]}
+            >
+              <Text style={[styles.streakPillText, { color: flameColor }]}>
+                {`🔥 ${streakTier.label} ×${streakTier.multiplier}`}
+              </Text>
+            </Animated.View>
+          </View>
+        )}
       </Animated.View>
     </View>
   );
@@ -192,4 +293,20 @@ const styles = StyleSheet.create({
   chrono: { marginRight: 6 },
   multiplierPill: { borderWidth: 2, borderColor: SPEED_COLOR, borderRadius: 10, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'transparent' },
   multiplierText: { fontSize: 20, fontWeight: 'bold', color: SPEED_COLOR },
+  streakBadge: { marginTop: 8, alignItems: 'center', justifyContent: 'center' },
+  streakPill: {
+    borderWidth: 2,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    backgroundColor: 'transparent',
+  },
+  streakPillText: { fontSize: 16, fontWeight: 'bold' },
+  glowRing: {
+    position: 'absolute',
+    width: STREAK_RING_SIZE,
+    height: STREAK_RING_SIZE,
+    borderRadius: STREAK_RING_SIZE / 2,
+    borderWidth: STREAK_RING_BORDER_WIDTH,
+  },
 });

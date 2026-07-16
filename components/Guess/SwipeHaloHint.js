@@ -22,6 +22,7 @@ const RING_SIZE_STEP_PX = 40;
 const RING_BORDER_WIDTH_PX = 3;
 const RING_RADIUS_DIVISOR = 2;
 const RING_CENTER_OFFSET_PERCENT = 50;
+const BOTTOM_EDGE_INSET_PX = 28;
 const RING_COLOR_PRIMARY = GlobalStyle.color.primaryColor;
 const RING_COLOR_SECONDARY = GlobalStyle.color.secondaryColor;
 const RING_KEY_PREFIX = 'swipe-halo-ring-';
@@ -50,7 +51,7 @@ function ringLayout(edge, size) {
   }
 
   return {
-    bottom: centerOffset,
+    bottom: BOTTOM_EDGE_INSET_PX + centerOffset,
     left: `${RING_CENTER_OFFSET_PERCENT}%`,
     marginLeft: centerOffset,
   };

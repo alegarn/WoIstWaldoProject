@@ -60,4 +60,27 @@ describe('applySuccessSideEffects', () => {
     expect(bufferScore).toHaveBeenCalledTimes(1);
     expect(deleteImageFromStorage).not.toHaveBeenCalled();
   });
+
+  it('defaults streak to 0 and omits streakMultiplier when not passed', async () => {
+    await applySuccessSideEffects(baseArgs);
+
+    const arg = bufferScore.mock.calls[0][0];
+    expect(arg).toEqual(expect.objectContaining({ streak: 0 }));
+    expect('streakMultiplier' in arg).toBe(false);
+  });
+
+  it('threads streak and streakMultiplier into the buffered item', async () => {
+    await applySuccessSideEffects({ ...baseArgs, streak: 5, streakMultiplier: 1.5 });
+
+    const arg = bufferScore.mock.calls[0][0];
+    expect(arg).toEqual(expect.objectContaining({ streak: 5, streakMultiplier: 1.5 }));
+  });
+
+  it('threads streak without streakMultiplier when only streak is passed', async () => {
+    await applySuccessSideEffects({ ...baseArgs, streak: 5 });
+
+    const arg = bufferScore.mock.calls[0][0];
+    expect(arg).toEqual(expect.objectContaining({ streak: 5 }));
+    expect('streakMultiplier' in arg).toBe(false);
+  });
 });

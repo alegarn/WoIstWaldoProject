@@ -290,9 +290,7 @@ export async function getImages(pictureId, context, filters = {}) {
     const imagesInfosData = imagesInfos?.data?.data ?? [];
 
     if (imagesInfosData.length === 0) {
-      if (lastSkippedPictureId !== null) {
-        await saveLastImageUuid(lastSkippedPictureId, filters?.category_key, filters?.language);
-      }
+      await saveLastImageUuid(filters?.category_key, filters?.language);
 
       return { isError: false, images: [] };
     };

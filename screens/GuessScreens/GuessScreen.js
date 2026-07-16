@@ -11,7 +11,10 @@ import { isOnTarget } from "../../utils/targetLocation";
 import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { isE2EMode } from '../../utils/e2eMode';
-import { computeMultiplier, isSpeedBonus, computeSpeedPoints, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
+import { computeMultiplier, isSpeedBonus, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { useStreak } from '../../hooks/useStreak';
+import { resolveStreakTier } from '../../constants/streakTiers';
 
 export default function GuessScreen({ navigation, route }) {
 
@@ -20,13 +23,15 @@ export default function GuessScreen({ navigation, route }) {
 
   const [showSuccess, setShowSuccess] = useState(false);
   const [successMultiplier, setSuccessMultiplier] = useState(SPEED_MULTIPLIER_BASE);
+  const { streak, tier, multiplier: streakMultiplier, onWin, onLose, reset } = useStreak();
   // Hints show on the first card of each game series (every fresh mount of
   // GuessScreen). Advancing to later cards uses setParams (no remount), so the
   // dismissed state persists for the rest of the series. Suppressed in e2e mode.
   const [hintsActive, setHintsActive] = useState(!isE2EMode());
   const dismissHints = useCallback(() => setHintsActive(false), []);
 
-  const { userId } = useContext(AuthContext);
+  const authContext = useContext(AuthContext);
+  const { userId } = authContext;
 
   const { group, theme } = useScopedPrivateGroupTheme(scope);
 
@@ -37,6 +42,20 @@ export default function GuessScreen({ navigation, route }) {
       headerTintColor: theme.headerTintColor,
     });
   }, [navigation, theme?.primaryColor, theme?.headerTintColor]);
+
+  // Eagerly warm the 'all' deck on entering a real-category streak so the
+  // category→all fallback is instant when the category exhausts. Fire-and-forget;
+  // the prefetcher dedupes + shares the in-flight promise across this and the
+  // per-win prefetch. No-op for 'all' itself (no fallback needed) and in e2e.
+  useEffect(() => {
+    if (category?.key === 'all') return;
+    warmAllDeckIfNeeded({
+      language,
+      scope,
+      authContext,
+    }).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only warm
+  }, []);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -75,17 +94,43 @@ export default function GuessScreen({ navigation, route }) {
     };
 
     if (onTarget) {
-      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: computeSpeedPoints(1, multiplier), multiplier });
+      const nextStreak = streak + 1;
+      const nextTier = resolveStreakTier(nextStreak);
+      onWin();
+      const finalPoints = Math.round(1 * multiplier * nextTier.multiplier);
+      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: finalPoints, multiplier, streak: nextStreak, streakMultiplier: nextTier.multiplier });
+      // Background prefetch (fire-and-forget). Keeps the deck warm for long streaks
+      // without blocking the success animation or the setParams advance. Dedup +
+      // warm-all handled by the prefetcher module (SRP).
+      prefetchIfLow({
+        categoryKey: category?.key || 'all',
+        categoryId: category?.id,
+        language,
+        scope,
+        authContext,
+      }).catch(() => {});
       setSuccessMultiplier(multiplier);
       setShowSuccess(true);
       return;
     }
 
+    onLose();
     navigation.replace('ResultScreen', sharedParams);
   };
 
   async function handleOverlayDone() {
-    const next = await resolveNextGuessParams({ category, language, currentListId: listId, isTutorial, scope });
+    let next = await resolveNextGuessParams({ category, language, currentListId: listId, isTutorial, scope });
+
+    // Streak-preservation: if the deck exhausted while in a real category, the
+    // 'all' fallback inside resolveNextCard may have found an empty 'all' deck
+    // because the background warm hasn't completed yet. Wait for the warm, then
+    // retry once. Only bounce to the feed if 'all' is truly empty. No-op for
+    // 'all' itself (no warmer deck to fall back to).
+    if (!next && category?.key !== 'all') {
+      await warmAllDeckIfNeeded({ language, scope, authContext }).catch(() => {});
+      next = await resolveNextGuessParams({ category, language, currentListId: listId, isTutorial, scope });
+    }
+
     setShowSuccess(false);
     if (!next) {
       navigateToNextGuess(navigation, { category, language, currentListId: listId, isTutorial, scope: isPrivate ? scope : undefined });
@@ -120,7 +165,7 @@ export default function GuessScreen({ navigation, route }) {
       pulseTarget={hintsActive}
       onInteract={dismissHints}
     />
-    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={computeSpeedPoints(1, successMultiplier)} onDone={handleOverlayDone} />
+    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={Math.round(1 * successMultiplier * streakMultiplier)} streakTier={tier} onDone={handleOverlayDone} />
     {
       isTutorial && 
         <TutorialOverlay

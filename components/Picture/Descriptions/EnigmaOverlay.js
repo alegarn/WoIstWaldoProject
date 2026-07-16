@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import IconButton from '../../UI/IconButton';
@@ -20,6 +20,24 @@ export default function EnigmaOverlay({ description, screenHeight, defaultOpen, 
   const panelHeight = buildPanelHeight(screenHeight);
   const [isOpen, setIsOpen] = useState(!!defaultOpen);
   const translateY = useRef(new Animated.Value(defaultOpen ? 0 : panelHeight)).current;
+  const previousDefaultOpenRef = useRef(!!defaultOpen);
+
+  useEffect(() => {
+    const previousDefaultOpen = previousDefaultOpenRef.current;
+    if (previousDefaultOpen === !!defaultOpen) {
+      return;
+    }
+
+    previousDefaultOpenRef.current = !!defaultOpen;
+    if (defaultOpen) {
+      setIsOpen(true);
+      translateY.setValue(0);
+      return;
+    }
+
+    translateY.setValue(panelHeight);
+    setIsOpen(false);
+  }, [defaultOpen, panelHeight, translateY]);
 
   const openPanel = useCallback(() => {
     setIsOpen(true);

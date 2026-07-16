@@ -38,6 +38,7 @@ import {
   clearE2EHiddenGuessCard,
   deleteImageFromStorage,
   emptyImageList,
+  getDeckCountForScope,
   getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
@@ -111,7 +112,7 @@ describe('storageDatum utilities', () => {
     expect(await getLastImageUuid()).toBe('uuid-1');
   });
 
-  it('round-trips the session language filter and defaults to en when unset', async () => {
+  it('round-trips the session language filter and returns null when unset', async () => {
     await saveSessionLanguageFilter('fr');
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('sessionLanguageFilter', 'fr');
 
@@ -119,7 +120,7 @@ describe('storageDatum utilities', () => {
     expect(await getSessionLanguageFilter()).toBe('fr');
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
-    expect(await getSessionLanguageFilter()).toBe('en');
+    expect(await getSessionLanguageFilter()).toBeNull();
   });
 
   it('round-trips the preferred language and returns null when unset', async () => {
@@ -376,6 +377,152 @@ describe('storageDatum utilities', () => {
       });
 
       expect(card).toEqual({ listId: 7, imageFile: 'file:///cache/p7.jpg' });
+    });
+  });
+
+  describe('getDeckCountForScope', () => {
+    it('returns the getLocalImages array length for the public scope', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+      ]));
+
+      const count = await getDeckCountForScope({
+        category: { key: 'all' },
+        language: 'any',
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(3);
+      expect(readGroupFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('returns 0 for the public scope when the deck is missing', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+      const count = await getDeckCountForScope({
+        category: { key: 'all' },
+        language: 'any',
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(0);
+    });
+
+    it('returns 0 for the public scope when the deck is an empty array', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+
+      const count = await getDeckCountForScope({
+        category: { key: 'all' },
+        language: 'any',
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(0);
+    });
+
+    it('uses category.key for the public scope lookup', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      ]));
+
+      await getDeckCountForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        scope: { kind: 'public' },
+      });
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:city:fr');
+    });
+
+    it('falls back to the "all" category key when category is missing', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      ]));
+
+      await getDeckCountForScope({
+        category: null,
+        language: 'fr',
+        scope: { kind: 'public' },
+      });
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr');
+    });
+
+    it('returns the readGroupFeedCache images length for a private scope', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [{ listId: 1, imageFile: 'file:///cache/p1.jpg' }],
+        nextCursor: 'x',
+      });
+
+      const count = await getDeckCountForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(count).toBe(1);
+    });
+
+    it('returns 0 for a private scope when the cache is missing', async () => {
+      readGroupFeedCache.mockResolvedValueOnce(null);
+
+      const count = await getDeckCountForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(count).toBe(0);
+    });
+
+    it('resolves category.key === "all" to categoryId undefined for a private scope', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+
+      await getDeckCountForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: undefined, language: 'fr' });
+    });
+
+    it('passes category.id as categoryId for a private scope with a real category', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+
+      await getDeckCountForScope({
+        category: { key: 'city', id: 42 },
+        language: 'de',
+        scope: { kind: 'private', groupId: 'g-9' },
+      });
+
+      expect(readGroupFeedCache).toHaveBeenCalledWith('g-9', { categoryId: 42, language: 'de' });
+    });
+
+    it('passes language through unchanged to both readers', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+      ]));
+
+      await getDeckCountForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        scope: { kind: 'public' },
+      });
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr');
+
+      readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+
+      await getDeckCountForScope({
+        category: { key: 'all' },
+        language: undefined,
+        scope: { kind: 'private', groupId: 'g-1' },
+      });
+
+      expect(readGroupFeedCache).toHaveBeenCalledWith('g-1', { categoryId: undefined, language: undefined });
     });
   });
 });

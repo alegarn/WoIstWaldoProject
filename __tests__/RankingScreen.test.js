@@ -132,14 +132,65 @@ describe('RankingScreen', () => {
     expect(getTableProps()).toEqual(
       expect.objectContaining({
         data: {
-          tableHeaders: ['Rank', 'Name', 'Score', 'Others'],
+          tableHeaders: ['Rank', 'Name', 'Score', 'Max Streak', 'Others'],
           tableScores: [
-            { rank: 1, name: 'waldo', score: 25, others: '' },
-            { rank: 2, name: 'odile', score: 14, others: '' },
+            { rank: 1, name: 'waldo', score: 25, maxStreak: 0, others: '' },
+            { rank: 2, name: 'odile', score: 14, maxStreak: 0, others: '' },
           ],
         },
       })
     );
+  });
+
+  it('maps max_streak from the API payload into the row as maxStreak', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 25, max_streak: 7 }],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+
+    await renderScreen();
+
+    const tableScores = getTableProps().data.tableScores;
+    expect(tableScores[0].maxStreak).toBe(7);
+  });
+
+  it('defaults maxStreak to 0 when the API payload omits max_streak', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 25 }],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+
+    await renderScreen();
+
+    const tableScores = getTableProps().data.tableScores;
+    expect(tableScores[0].maxStreak).toBe(0);
+  });
+
+  it('exposes a 5-column header slice with Max Streak between Score and Others', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 25, max_streak: 3 }],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+
+    await renderScreen();
+
+    const headers = getTableProps().data.tableHeaders;
+    expect(headers).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
+    expect(headers).toHaveLength(5);
+    expect(headers.indexOf('Max Streak')).toBe(3);
+    expect(headers.indexOf('Others')).toBe(4);
   });
 
   it('shows the detailed score breakdown when a username is selected from the table', async () => {
@@ -337,9 +388,9 @@ describe('RankingScreen', () => {
 
     const tableScores = getTableProps().data.tableScores;
     expect(tableScores).toEqual([
-      { rank: 1, name: 'waldo', score: 100, others: '', userId: 'u1' },
-      { rank: 2, name: 'odile', score: 80, others: '', userId: 'u2' },
-      { rank: 4, name: 'bob', score: 60, others: '', userId: 'u3' },
+      { rank: 1, name: 'waldo', score: 100, maxStreak: 0, others: '', userId: 'u1' },
+      { rank: 2, name: 'odile', score: 80, maxStreak: 0, others: '', userId: 'u2' },
+      { rank: 4, name: 'bob', score: 60, maxStreak: 0, others: '', userId: 'u3' },
     ]);
   });
 
@@ -379,10 +430,10 @@ describe('RankingScreen', () => {
 
     const tableScores = getTableProps().data.tableScores;
     expect(tableScores).toEqual([
-      { rank: 1, name: 'waldo', score: 100, others: '', userId: 'u1' },
-      { rank: 2, name: 'odile', score: 80, others: '', userId: 'u2' },
-      { rank: 3, name: 'bob', score: 60, others: '', userId: 'u3' },
-      { rank: 4, name: 'eve', score: 40, others: '', userId: 'u4' },
+      { rank: 1, name: 'waldo', score: 100, maxStreak: 0, others: '', userId: 'u1' },
+      { rank: 2, name: 'odile', score: 80, maxStreak: 0, others: '', userId: 'u2' },
+      { rank: 3, name: 'bob', score: 60, maxStreak: 0, others: '', userId: 'u3' },
+      { rank: 4, name: 'eve', score: 40, maxStreak: 0, others: '', userId: 'u4' },
     ]);
   });
 
@@ -419,8 +470,8 @@ describe('RankingScreen', () => {
 
     const tableScores = getTableProps().data.tableScores;
     expect(tableScores).toEqual([
-      { rank: 1, name: 'waldo', score: 100, others: '', userId: 'u1' },
-      { rank: 2, name: 'odile', score: 80, others: '', userId: 'u2' },
+      { rank: 1, name: 'waldo', score: 100, maxStreak: 0, others: '', userId: 'u1' },
+      { rank: 2, name: 'odile', score: 80, maxStreak: 0, others: '', userId: 'u2' },
     ]);
   });
 

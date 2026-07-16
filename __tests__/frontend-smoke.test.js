@@ -29,6 +29,7 @@ describe('frontend smoke invariants', () => {
       'Rank',
       'Name',
       'Score',
+      'Max Streak',
       'Guess Score',
       'Guess Count',
       'Hide Score',
