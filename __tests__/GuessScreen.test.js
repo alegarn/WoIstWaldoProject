@@ -852,6 +852,35 @@ describe('GuessScreen', () => {
       });
     });
 
+    it('T7 (plan-spec): on success (private scope): prefetchIfLow called with private scope passed through', async () => {
+      // Mirrors T1 with scope = { kind: 'private', groupId: 'group-7' }.
+      // Screen must NOT strip or rewrite scope; prefetcher handles private
+      // write path internally (out of scope for screen test).
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+      const privateScope = { kind: 'private', groupId: 'group-7' };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={baseRoute({ scope: privateScope })} />);
+      });
+
+      const pictureProps = lastPictureProps();
+      await act(async () => {
+        pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(applySuccessSideEffects).toHaveBeenCalled();
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(prefetchIfLow).toHaveBeenCalledWith({
+        categoryKey: 'nature',
+        categoryId: 'cat-1',
+        language: 'fr',
+        scope: privateScope,
+        authContext: expect.objectContaining({ userId: '' }),
+      });
+    });
+
     it('T2: prefetch is fire-and-forget (overlay visible even before prefetch resolves)', async () => {
       const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
       isOnTarget.mockReturnValue(true);
