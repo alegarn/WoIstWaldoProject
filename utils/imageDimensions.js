@@ -49,10 +49,8 @@ function handlePortraitDimensions({ imageHeight, imageWidth, screenHeight, scree
     return { maxHeight, maxWidth };
   };
 
-  if (imageWidth < screenWidth) {
-    const { maxHeight, maxWidth } = handleSmallPortraitDimensions({ imageHeight, screenHeight, ratios });
-    return { maxHeight, maxWidth };
-  };
+  const { maxHeight, maxWidth } = handleSmallPortraitDimensions({ imageHeight, screenHeight, ratios });
+  return { maxHeight, maxWidth };
 };
 
 
@@ -110,15 +108,13 @@ function handleSmallLandscapeDimensions({  imageWidth, screenHeight, ratios }) {
 
 function handleLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios }) {
 
-  if (imageHeight < screenWidth) {
-    const { maxHeight, maxWidth } = handleSmallLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios });
-    return { maxHeight, maxWidth };
-  };
-
   if ((imageHeight > screenWidth) && (imageWidth > screenHeight)) {
     const { maxHeight, maxWidth } = handleLargeLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios });
     return { maxHeight, maxWidth };
   };
+
+  const { maxHeight, maxWidth } = handleSmallLandscapeDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, ratios });
+  return { maxHeight, maxWidth };
 };
 
 

@@ -1,31 +1,52 @@
-const mockGuessPicture = jest.fn(() => null);
-const mockTutorialOverlay = jest.fn(() => null);
-const mockGuessExitSwipeMenu = jest.fn(() => null);
-const mockSuccessOverlay = jest.fn(() => null);
+type MockPictureProps = {
+  toAdScreen: (target: { location: { x: number; y: number }; elapsedMs?: number }) => void | Promise<void>;
+  pulseTarget: boolean;
+  onInteract: () => void;
+  [key: string]: unknown;
+};
+type MockOverlayProps = {
+  visible: boolean;
+  onDone: () => void | Promise<void>;
+  multiplier: number;
+  points: number;
+  streakTier: { tier: number; multiplier: number; label?: string };
+  [key: string]: unknown;
+};
+type MockMenuProps = {
+  showHints: boolean;
+  onInteract: () => void;
+  onHome: () => void;
+  [key: string]: unknown;
+};
+
+const mockGuessPicture = jest.fn((_props: MockPictureProps) => null);
+const mockTutorialOverlay = jest.fn((_props: Record<string, unknown>) => null);
+const mockGuessExitSwipeMenu = jest.fn((_props: MockMenuProps) => null);
+const mockSuccessOverlay = jest.fn((_props: MockOverlayProps) => null);
 
 jest.mock('../components/Picture/GuessPicture', () => {
-  return function MockGuessPicture(props) {
+  return function MockGuessPicture(props: MockPictureProps) {
     mockGuessPicture(props);
     return null;
   };
 });
 
 jest.mock('../components/UI/TutorialOverlay', () => {
-  return function MockTutorialOverlay(props) {
+  return function MockTutorialOverlay(props: Record<string, unknown>) {
     mockTutorialOverlay(props);
     return null;
   };
 });
 
 jest.mock('../components/Guess/GuessExitSwipeMenu', () => {
-  return function MockGuessExitSwipeMenu(props) {
+  return function MockGuessExitSwipeMenu(props: MockMenuProps) {
     mockGuessExitSwipeMenu(props);
     return null;
   };
 });
 
 jest.mock('../components/Guess/SuccessOverlay', () => {
-  return function MockSuccessOverlay(props) {
+  return function MockSuccessOverlay(props: MockOverlayProps) {
     mockSuccessOverlay(props);
     return null;
   };
@@ -53,48 +74,93 @@ jest.mock('../services/cardPrefetcher', () => ({
   warmAllDeckIfNeeded: jest.fn(() => Promise.resolve()),
 }));
 
+jest.mock('../services/billing/entitlements', () => ({
+  shouldSuppressAds: jest.fn(() => false),
+}));
+
+jest.mock('../utils/adCadence', () => ({
+  consumeAdSlot: jest.fn(),
+}));
+
+jest.mock('../services/ads/FallbackAdSource', () => ({
+  createFallbackAdSource: jest.fn(),
+}));
+jest.mock('../services/ads/AdMobInterstitialSource', () => ({
+  createAdMobInterstitialSource: jest.fn(),
+}));
+jest.mock('../services/ads/InternalProAdSource', () => ({
+  createInternalProAdSource: jest.fn(),
+}));
+
 jest.mock('../hooks/useStreak', () => {
-  const actual = jest.requireActual('../hooks/useStreak');
+  const actual = jest.requireActual<{
+    useStreak: (initial?: number) => {
+      streak: number;
+      tier: unknown;
+      multiplier: number;
+      onWin(...a: unknown[]): unknown;
+      onLose(...a: unknown[]): unknown;
+      reset(...a: unknown[]): unknown;
+    };
+  }>('../hooks/useStreak');
   const spies = { onWin: jest.fn(), onLose: jest.fn(), reset: jest.fn() };
-  const useStreakMock = jest.fn((initial) => {
+  const useStreakMock = jest.fn((initial: number) => {
     const result = actual.useStreak(initial);
     return {
       ...result,
-      onWin: (...args) => { spies.onWin(...args); return result.onWin(...args); },
-      onLose: (...args) => { spies.onLose(...args); return result.onLose(...args); },
-      reset: (...args) => { spies.reset(...args); return result.reset(...args); },
+      onWin: (...args: unknown[]) => { spies.onWin(...args); return result.onWin(...args); },
+      onLose: (...args: unknown[]) => { spies.onLose(...args); return result.onLose(...args); },
+      reset: (...args: unknown[]) => { spies.reset(...args); return result.reset(...args); },
     };
   });
-  useStreakMock.__spies = spies;
+  // reason: attach an introspection-only field not present on the jest.Mock type; bridge through unknown since the mock object genuinely carries __spies at runtime.
+  (useStreakMock as unknown as { __spies: typeof spies }).__spies = spies;
   return { useStreak: useStreakMock };
 });
 
-import React from 'react';
 import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
+import type { FC } from 'react';
 
-import GuessScreen from '../screens/GuessScreens/GuessScreen';
-import { isOnTarget } from '../utils/targetLocation';
-import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
-import { navigateToNextGuess } from '../utils/guessNavigation';
-import { prefetchIfLow } from '../services/cardPrefetcher';
-import { warmAllDeckIfNeeded } from '../services/cardPrefetcher';
+import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
+import { isOnTarget as isOnTargetImpl } from '../utils/targetLocation';
+import { applySuccessSideEffects as applySuccessSideEffectsImpl, resolveNextGuessParams as resolveNextGuessParamsImpl } from '../utils/handleGuessOutcome';
+import { navigateToNextGuess as navigateToNextGuessImpl } from '../utils/guessNavigation';
+import { prefetchIfLow as prefetchIfLowImpl } from '../services/cardPrefetcher';
+import { warmAllDeckIfNeeded as warmAllDeckIfNeededImpl } from '../services/cardPrefetcher';
+import { consumeAdSlot as consumeAdSlotImpl } from '../utils/adCadence';
+import { shouldSuppressAds as shouldSuppressAdsImpl } from '../services/billing/entitlements';
 
-function lastPictureProps() {
+// reason: these modules are fully replaced by jest.mock at runtime; cast the typed
+// import bindings to jest.MockedFunction so .mockReturnValue/.mockResolvedValue/.mockImplementation read cleanly without per-call casts.
+const isOnTarget = isOnTargetImpl as jest.MockedFunction<typeof isOnTargetImpl>;
+const applySuccessSideEffects = applySuccessSideEffectsImpl as jest.MockedFunction<typeof applySuccessSideEffectsImpl>;
+const resolveNextGuessParams = resolveNextGuessParamsImpl as jest.MockedFunction<typeof resolveNextGuessParamsImpl>;
+const navigateToNextGuess = navigateToNextGuessImpl as jest.MockedFunction<typeof navigateToNextGuessImpl>;
+const prefetchIfLow = prefetchIfLowImpl as jest.MockedFunction<typeof prefetchIfLowImpl>;
+const warmAllDeckIfNeeded = warmAllDeckIfNeededImpl as jest.MockedFunction<typeof warmAllDeckIfNeededImpl>;
+const consumeAdSlot = consumeAdSlotImpl as jest.MockedFunction<typeof consumeAdSlotImpl>;
+const shouldSuppressAds = shouldSuppressAdsImpl as jest.MockedFunction<typeof shouldSuppressAdsImpl>;
+
+// reason: source's GuessNavigation requires navigate/setOptions, but several test fixtures only supply replace/setParams/popToTop; loosen prop types to keep fixtures byte-identical to the .js baseline.
+type LooseGuessScreenProps = { navigation: unknown; route: { params: Record<string, unknown> } };
+const GuessScreen = GuessScreenBase as unknown as FC<LooseGuessScreenProps>;
+
+function lastPictureProps(): MockPictureProps {
   return mockGuessPicture.mock.calls[mockGuessPicture.mock.calls.length - 1][0];
 }
 
-function lastOverlayProps() {
+function lastOverlayProps(): MockOverlayProps {
   return mockSuccessOverlay.mock.calls[mockSuccessOverlay.mock.calls.length - 1][0];
 }
 
-function lastMenuProps() {
+function lastMenuProps(): MockMenuProps {
   return mockGuessExitSwipeMenu.mock.calls[mockGuessExitSwipeMenu.mock.calls.length - 1][0];
 }
 
 function streakSpies() {
   const { useStreak } = require('../hooks/useStreak');
-  return useStreak.__spies;
+  return useStreak.__spies as { onWin: jest.Mock; onLose: jest.Mock; reset: jest.Mock };
 }
 
 describe('GuessScreen', () => {
@@ -108,10 +174,12 @@ describe('GuessScreen', () => {
       scale: 1,
       fontScale: 1,
     });
+    consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
+    shouldSuppressAds.mockReturnValue(false);
   });
 
   afterEach(() => {
-    Dimensions.get.mockRestore();
+    (Dimensions.get as jest.MockedFunction<typeof Dimensions.get>).mockRestore();
   });
 
   it('on success (public): buffers side effects, shows overlay, never navigates to AdScreen/ResultScreen', async () => {
@@ -808,7 +876,7 @@ describe('GuessScreen', () => {
   });
 
   describe('background prefetch on streak win', () => {
-    function baseRoute(overrides = {}) {
+    function baseRoute(overrides: Record<string, unknown> = {}) {
       return {
         params: {
           imageFile: 'file:///waldo.jpg',
@@ -1137,5 +1205,190 @@ describe('GuessScreen', () => {
       expect(resolveNextGuessParams).toHaveBeenCalledTimes(1);
       expect(navigateToNextGuess).toHaveBeenCalledTimes(1);
     });
+  });
+
+  const PUBLIC_ROUTE_PARAMS = {
+    imageFile: 'file:///waldo.jpg',
+    pictureId: 'image-1',
+    description: 'Find Waldo',
+    imageHeight: 1200, imageWidth: 800, isPortrait: true,
+    hiddenLocation: { x: 0.5, y: 0.5 },
+    listId: 3, isTutorial: false,
+    category: { id: 'cat-1', key: 'nature' }, language: 'fr',
+  };
+
+  function makeNav() {
+    return { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), navigate: jest.fn(), goBack: jest.fn() };
+  }
+
+  it('on success + ad due (public, tier 0): navigates to AdScreen with onAdDone=advance', async () => {
+    consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    const pictureProps = lastPictureProps();
+    await act(async () => { pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    const overlayProps = lastOverlayProps();
+    await act(async () => { overlayProps.onDone(); });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('AdScreen', expect.objectContaining({ onAdDone: 'advance' }));
+    expect(navigation.setParams).not.toHaveBeenCalledWith(expect.objectContaining({ listId: 4 }));
+  });
+
+  it('on success + ad not due: advances directly (no AdScreen navigation)', async () => {
+    consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+    expect(navigation.setParams).toHaveBeenCalledWith({ listId: 4 });
+  });
+
+  it('on success + private scope: navigates to AdScreen when cadence is due (private no longer suppresses ads)', async () => {
+    consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 }); // cadence due
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const route = { params: { ...PUBLIC_ROUTE_PARAMS, scope: { kind: 'private', groupId: 'g-1' } } };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('AdScreen', expect.anything());
+  });
+
+  it('on success + tier >= 1 (no_ads gate): never navigates to AdScreen', async () => {
+    consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 }); // frozen
+    shouldSuppressAds.mockReturnValue(true);
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+  });
+
+  it('on success + isE2EMode: never navigates to AdScreen', async () => {
+    const { isE2EMode } = require('../utils/e2eMode');
+    isE2EMode.mockReturnValue(true);
+    consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+  });
+
+  it('on failure: resets counter to 0 and navigates to ResultScreen', async () => {
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(false);
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.1, y: 0.1 } }); });
+
+    expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', expect.objectContaining({ onTarget: false }));
+  });
+
+  it('resets successesSinceLastAd to 0 on failure (verified via next success)', async () => {
+    // First success: tick counter from 0 → 1.
+    consumeAdSlot.mockReturnValueOnce({ showAd: false, nextCount: 1 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+    expect(consumeAdSlot).toHaveBeenLastCalledWith(expect.objectContaining({ successesSinceLastAd: 0 }));
+
+    // Now a FAILURE: counter should reset to 0.
+    isOnTarget.mockReturnValue(false);
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.1, y: 0.1 } }); });
+    expect(navigation.replace).toHaveBeenCalledWith('ResultScreen', expect.objectContaining({ onTarget: false }));
+
+    // Next success: counter MUST be 0 again (proves the reset happened).
+    isOnTarget.mockReturnValue(true);
+    consumeAdSlot.mockReturnValueOnce({ showAd: false, nextCount: 1 });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+    expect(consumeAdSlot).toHaveBeenLastCalledWith(expect.objectContaining({ successesSinceLastAd: 0 }));
+  });
+
+  it('passes current counter to consumeAdSlot and persists nextCount across renders', async () => {
+    // First success: counter starts at 0, consumeAdSlot returns nextCount=1 (no ad).
+    consumeAdSlot.mockReturnValueOnce({ showAd: false, nextCount: 1 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const route = { params: PUBLIC_ROUTE_PARAMS };
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(consumeAdSlot).toHaveBeenLastCalledWith(expect.objectContaining({
+      successesSinceLastAd: 0,
+      isSourceReady: expect.any(Boolean),
+    }));
+
+    // Second success: counter should now be 1 (persisted from the first cycle).
+    consumeAdSlot.mockReturnValueOnce({ showAd: false, nextCount: 2 });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    expect(consumeAdSlot).toHaveBeenLastCalledWith(expect.objectContaining({
+      successesSinceLastAd: 1,
+    }));
+  });
+
+  it('advanceAfterAd effect applies stashed advanceParams when set', async () => {
+    const navigation = makeNav();
+    const route = {
+      params: {
+        ...PUBLIC_ROUTE_PARAMS,
+        advanceAfterAd: true,
+        advanceParams: { listId: 9, imageFile: 'file:///next.jpg' },
+      },
+    };
+    isOnTarget.mockReturnValue(true);
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+
+    expect(navigation.setParams).toHaveBeenCalledWith({ advanceAfterAd: undefined });
+    expect(navigation.setParams).toHaveBeenCalledWith({ advanceParams: undefined });
+    expect(navigation.setParams).toHaveBeenCalledWith({ listId: 9, imageFile: 'file:///next.jpg' });
   });
 });

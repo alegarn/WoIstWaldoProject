@@ -51,4 +51,46 @@ describe('imageDimensions utilities', () => {
       })
     ).toEqual({ maxImageHeight: 240, maxImageWidth: 400 });
   });
+
+  // Regression: portrait image whose width EQUALS screen width previously fell
+  // through handlePortraitDimensions (both branches used strict < and >) and
+  // returned undefined, crashing setImageDimensions at the destructure.
+  it('handles portrait image width equal to screen width without crashing', () => {
+    expect(
+      setImageDimensions({
+        imageHeight: 800,
+        imageWidth: 400,
+        screenHeight: 900,
+        screenWidth: 400,
+        isPortrait: true,
+      })
+    ).toEqual({ maxImageHeight: 800, maxImageWidth: 400 });
+  });
+
+  // Regression: landscape image whose height EQUALS screenWidth (and the
+  // tall-but-narrow combo) previously fell through handleLandscapeDimensions
+  // and returned undefined, crashing setImageDimensions.
+  it('handles landscape image height equal to screenWidth without crashing', () => {
+    expect(
+      setImageDimensions({
+        imageHeight: 500,
+        imageWidth: 1000,
+        screenHeight: 400,
+        screenWidth: 500,
+        isPortrait: false,
+      })
+    ).toEqual({ maxImageHeight: 200, maxImageWidth: 400 });
+  });
+
+  it('handles tall-but-narrow landscape (height>screenWidth, width<=screenHeight) without crashing', () => {
+    expect(
+      setImageDimensions({
+        imageHeight: 600,
+        imageWidth: 300,
+        screenHeight: 400,
+        screenWidth: 500,
+        isPortrait: false,
+      })
+    ).toEqual({ maxImageHeight: 600, maxImageWidth: 300 });
+  });
 });

@@ -199,7 +199,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       // once the user is actually swiping and the deck empties.
       await handleImagesLoading(null);
     } else {
-      setImageList(localImageList);
+      setImageList(normalizeListIds(localImageList));
       await handleImagesLoading();
     };
   }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
