@@ -103,6 +103,16 @@ describe('services/ads/InternalProAdSource', () => {
       expect(surface).not.toBeNull();
     });
 
+    it('contains the advertisement image (ad-gazette.webp) as background', () => {
+      const source = createInternalProAdSource();
+      const surface: any = source.renderSurface();
+      
+      // The surface itself is now the ImageBackground
+      expect(surface.props.source).toEqual(require('../../assets/ads/ad-gazette.webp'));
+      expect(surface.props.testID).toBe('ad.internal.pro.panel');
+      expect(surface.props.resizeMode).toBe('contain');
+    });
+
     it('the returned surface is stable across calls when state has not changed', () => {
       // Calling renderSurface must NOT mutate state or start a show() cycle.
       const source = createInternalProAdSource();

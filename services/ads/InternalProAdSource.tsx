@@ -9,7 +9,7 @@
 //
 // show() resolving IS the sole completion signal — exactly one completion path (SRP).
 
-import { Button, Text, View } from 'react-native';
+import { Button, ImageBackground, Text, View } from 'react-native';
 
 import { adPanel } from '../../constants/theme';
 import type { ReactNode } from 'react';
@@ -50,22 +50,26 @@ export function createInternalProAdSource(): InternalProAdSource {
 
     renderSurface(): ReactNode {
       return (
-        <View
+        <ImageBackground
           testID={INTERNAL_AD_PANEL_TESTID}
-          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: adPanel.padding }}
+          source={require('../../assets/ads/ad-gazette.webp')}
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: adPanel.padding, backgroundColor: '#000' }}
+          resizeMode="contain"
         >
-          <Text style={{ fontSize: adPanel.titleFontSize, fontWeight: adPanel.titleFontWeight, marginBottom: adPanel.titleMarginBottom }}>
-            Tired of ads?
-          </Text>
-          <Text style={{ fontSize: adPanel.bodyFontSize, color: adPanel.bodyColor, marginBottom: adPanel.bodyMarginBottom, textAlign: 'center' }}>
-            Go Pro to hide every ad.
-          </Text>
-          <Button
-            testID={INTERNAL_AD_CONTINUE_TESTID}
-            title="Continue"
-            onPress={resolveAndCleanup}
-          />
-        </View>
+          <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.85)', padding: 20, borderRadius: 12, alignItems: 'center' }}>
+            <Text style={{ fontSize: adPanel.titleFontSize, fontWeight: adPanel.titleFontWeight, marginBottom: adPanel.titleMarginBottom, color: '#000' }}>
+              Tired of ads?
+            </Text>
+            <Text style={{ fontSize: adPanel.bodyFontSize, color: '#444', marginBottom: adPanel.bodyMarginBottom, textAlign: 'center' }}>
+              Go Pro to hide every ad.
+            </Text>
+            <Button
+              testID={INTERNAL_AD_CONTINUE_TESTID}
+              title="Continue"
+              onPress={resolveAndCleanup}
+            />
+          </View>
+        </ImageBackground>
       );
     },
 
