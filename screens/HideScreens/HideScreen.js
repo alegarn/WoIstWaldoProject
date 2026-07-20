@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Dimensions, View, StyleSheet } from 'react-native';
+import { useWindowDimensions, View, StyleSheet } from 'react-native';
 import HidePicture from '../../components/Picture/HidePicture';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { GlobalStyle } from '../../constants/theme';
@@ -7,13 +7,10 @@ import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../sto
 
 export default function HideScreen({ navigation, route }) {
   const uri = route.params?.uri;
-  let screenDimensions = {};
-
-  const screenHeight = Dimensions.get('window').height;
-  const screenWidth = Dimensions.get('window').width;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const screenDimensions = { width: screenWidth, height: screenHeight };
 
   const isPortrait = route.params?.isPortrait;
-  isPortrait ? (screenDimensions = { width: screenWidth, height: screenHeight }) : (screenDimensions = { width: screenHeight, height: screenWidth }) ;
 
   const isTutorial = route.params?.isTutorial;
   const routeScope = route.params?.scope;

@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { FC } from 'react';
-import { Dimensions, Platform } from 'react-native';
+import { Platform, useWindowDimensions } from 'react-native';
 
 import GuessExitSwipeMenu from '../../components/Guess/GuessExitSwipeMenu';
 import GuessPictureDefault from "../../components/Picture/GuessPicture";
@@ -284,15 +284,10 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only warm
   }, []);
 
-  const screenWidth = Dimensions.get('window').width;
-  const screenHeight = Dimensions.get('window').height;
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const uri = imageFile;
 
-  let screenDimensions: { width?: number; height?: number } = {};
-  isPortrait ?
-    (screenDimensions = { width: screenWidth, height: screenHeight }) :
-    (screenDimensions = { width: screenHeight, height: screenWidth });
-
+  const screenDimensions = { width: screenWidth, height: screenHeight };
 
   async function toAdScreen(targetInfos: TargetInfos) {
     let onTarget = isOnTarget(targetInfos);

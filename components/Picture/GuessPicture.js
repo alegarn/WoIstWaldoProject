@@ -44,11 +44,19 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
 
   const initialSelection = useMemo(
     () => isE2EMode() ? null : buildCenteredTarget({ screenWidth, screenHeight, imageDimensionStyle }),
-    []
+    [screenWidth, screenHeight, maxImageWidth, maxImageHeight]
   );
 
   const [touchLocation, setTouchLocation] = useState(initialSelection?.location ?? null);
   const [target, setTarget] = useState(initialSelection?.target ?? null);
+  const userInteractedRef = useRef(false);
+
+  useEffect(() => {
+    if (userInteractedRef.current) return;
+    setTouchLocation(initialSelection?.location ?? null);
+    setTarget(initialSelection?.target ?? null);
+  }, [initialSelection]);
+
   const [showModal, setShowModal] = useState(false);
 
   const [elapsedMs, setElapsedMs] = useState(0);
@@ -83,6 +91,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         onMoveShouldSetPanResponderCapture: () => false,
         onPanResponderGrant: () => {
           onInteractRef.current?.();
+          userInteractedRef.current = true;
           const { target: currentTarget } = stateRef.current;
           const half = (currentTarget?.targetSize ?? 0) / 2;
           dragStartRef.current = {
