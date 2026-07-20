@@ -295,11 +295,31 @@ function removeObjectById(imageListObject, listId) {
   return imageListObject;
 };
 
+/**
+ * Guarantee every card has a finite, unique listId. Background-prefetched and
+ * foreground-fetched cards are persisted without one (the server has no synthetic
+ * listId), and getNextImage filters by `listId > currentListId` — so cards lacking
+ * a finite listId would be invisible to the guess resolver. Assign sequential ids
+ * continuing from the deck's current max: a stable no-op for already-healthy decks
+ * and a one-time self-heal for null/missing/non-finite listId cards.
+ *
+ * Centralized here (the storage-write boundary) so EVERY writer (feed handleData,
+ * prefetcher, advance-path foregroundTopUp) produces resolvable cards. SwipeImage
+ * re-imports this and still calls it read-time as a defensive backstop.
+ */
+export function normalizeListIds(cards) {
+  if (!Array.isArray(cards) || cards.length === 0) return cards;
+  const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
+  if (!hasMissing) return cards;
+  let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
+  return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
+}
+
 export async function updateImageList(updatedImageList, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
   const jsonImageList = imageList ? JSON.parse(imageList) : [];
-  const newImageList = [...jsonImageList, ...updatedImageList];
+  const newImageList = normalizeListIds([...jsonImageList, ...updatedImageList]);
   await AsyncStorage.setItem(listKey, JSON.stringify(newImageList));
   return newImageList;
 };

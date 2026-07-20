@@ -10,8 +10,9 @@ import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../sto
 import { AuthContext } from '../../store/auth-context';
 import { AD_OUTCOME_ADVANCE } from '../../constants/adOutcome';
 import { isOnTarget } from "../../utils/targetLocation";
-import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
+import { applySuccessSideEffects } from '../../utils/handleGuessOutcome';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
+import { resolveNextCardWithServerFallback } from '../../utils/nextCardAdvancer';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { computeMultiplier, isSpeedBonus, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
@@ -85,35 +86,6 @@ let defaultAdSourceFactory = (): AdSource => {
   const internal = createInternalProAdSource();
   return createFallbackAdSource(adMob, internal);
 };
-
-type ResolveNextArgs = {
-  category?: GuessCategory;
-  language?: string;
-  listId?: number;
-  isTutorial?: boolean;
-  scope?: AdScope;
-  authContext: AuthContextLike;
-};
-
-async function resolveNextWithWarmRetry({ category, language, listId, isTutorial, scope, authContext }: ResolveNextArgs): Promise<NextGuessResult> {
-  const next = await resolveNextGuessParams({
-    category, language, currentListId: listId, isTutorial, scope,
-  });
-
-  // Streak-preservation: if the deck exhausted while in a real category, the
-  // 'all' fallback inside resolveNextCard may have found an empty 'all' deck
-  // because the background warm hasn't completed yet. Wait for the warm, then
-  // retry once. Only bounce to the feed if 'all' is truly empty. No-op for
-  // 'all' itself (no warmer deck to fall back to).
-  if (!next && category?.key !== 'all') {
-    await warmAllDeckIfNeeded({ language, scope, authContext }).catch(() => {});
-    return resolveNextGuessParams({
-      category, language, currentListId: listId, isTutorial, scope,
-    });
-  }
-
-  return next;
-}
 
 type DecideAdSlotArgs = {
   successesSinceLastAd: number;
@@ -375,8 +347,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   };
 
   async function handleOverlayDone() {
-    const next = await resolveNextWithWarmRetry({
-      category, language, listId, isTutorial, scope, authContext,
+    const next = await resolveNextCardWithServerFallback({
+      category, language, currentListId: listId, isTutorial, scope, authContext,
     });
 
     setShowSuccess(false);
