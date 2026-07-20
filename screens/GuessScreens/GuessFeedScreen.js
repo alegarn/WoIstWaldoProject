@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
-import { GlobalStyle } from '../../constants/theme';
 import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
 import { LANGUAGES } from '../../constants/languages';
@@ -14,6 +14,7 @@ import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useFlushOnLeave } from '../../hooks/useFlushOnLeave';
 import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
+import { handleOrientation } from '../../utils/orientation';
 
 const DEFAULT_LANGUAGE = 'en';
 
@@ -34,6 +35,12 @@ export default function GuessFeedScreen({ navigation, route }) {
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
+
+  useFocusEffect(
+    useCallback(() => {
+      handleOrientation('portrait');
+    }, [])
+  );
 
   useEffect(() => {
     let cancelled = false;
