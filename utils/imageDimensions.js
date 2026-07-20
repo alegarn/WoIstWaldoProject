@@ -70,35 +70,44 @@ function handleLargeLandscapeDimensions({ imageHeight, imageWidth, screenHeight,
   maxWidth = imageWidth * scaleFactor;
   maxHeight = imageHeight * scaleFactor;
 
-  if (maxWidth < screenHeight) {
+  if (maxWidth < screenWidth) {
     // Resize the image until it reaches the border of the screen
     maxWidth = screenWidth;
     maxHeight = imageHeight * (screenWidth / imageWidth);
-    if (maxHeight <= screenWidth) {
+    if (maxHeight <= screenHeight) {
       return { maxHeight, maxWidth };
     };
   };
 
   // Check if the image height is smaller than the screen height
-  if (maxHeight < screenWidth) {
+  if (maxHeight < screenHeight) {
     // Resize the image until it reaches the border of the screen
     maxHeight = screenHeight;
     maxWidth = imageWidth * (screenHeight / imageHeight);
+    if (maxWidth <= screenWidth) {
+      return { maxHeight, maxWidth };
+    };
+  };
+
+  maxWidth = screenWidth;
+  maxHeight = imageHeight * (screenWidth / imageWidth);
+  if (maxHeight <= screenHeight) {
+    return { maxHeight, maxWidth };
   };
 
   return { maxHeight, maxWidth };
 };
 
-function handleSmallLandscapeDimensions({  imageWidth, screenHeight, ratios }) {
+function handleSmallLandscapeDimensions({  imageWidth, screenWidth, ratios }) {
   let maxHeight = 0;
   let maxWidth = 0;
 
-  if (imageWidth < screenHeight) {
+  if (imageWidth < screenWidth) {
     maxWidth = imageWidth;
   };
 
-  if (imageWidth > screenHeight) {
-    maxWidth = screenHeight;
+  if (imageWidth > screenWidth) {
+    maxWidth = screenWidth;
   };
 
   maxHeight = maxWidth/ratios.imageRatio;
@@ -125,6 +134,15 @@ export function setImageDimensions({
   screenWidth,
   isPortrait
 }) {
+
+  const isFinitePositive = (n) => Number.isFinite(n) && n > 0;
+  if (!isFinitePositive(imageHeight) || !isFinitePositive(imageWidth) ||
+      !isFinitePositive(screenHeight) || !isFinitePositive(screenWidth)) {
+    if (isFinitePositive(screenHeight) && isFinitePositive(screenWidth)) {
+      return { maxImageWidth: screenWidth, maxImageHeight: screenHeight };
+    };
+    return { maxImageWidth: 0, maxImageHeight: 0 };
+  };
 
   const ratios = setRatios({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
 

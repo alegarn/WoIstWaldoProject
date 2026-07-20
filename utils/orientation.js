@@ -27,11 +27,11 @@ export const handleImageOrientation = async ({ imageIsPortrait }) => {
 
   const orientation = await checkOrientation();
 
-  if ( imageIsPortrait && (orientation === 3 || orientation === 4)) {
+  if ( imageIsPortrait && (orientation === 3 || orientation === 4 || orientation === 0)) {
     changeOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
   };
 
-  if ((orientation === 1 || orientation === 2) && !imageIsPortrait) {
+  if ((orientation === 1 || orientation === 2 || orientation === 0) && !imageIsPortrait) {
     changeOrientation(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
   };
 
