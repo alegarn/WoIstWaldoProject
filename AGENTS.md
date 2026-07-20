@@ -42,4 +42,4 @@
 
 - `.maestro/AGENTS.md`: deterministic E2E flow contracts and runtime setup.
 
-This parent continues to govern `screens/`, `components/`, `store/`, `utils/`, `constants/`, `models/`, `__tests__/`, `assets/`, `android/`, `ios/`, and `patches/`.
+This parent continues to govern `screens/`, `components/`, `store/`, `services/`, `utils/`, `constants/`, `models/`, `__tests__/`, `assets/`, `android/`, `ios/`, and `patches/`.

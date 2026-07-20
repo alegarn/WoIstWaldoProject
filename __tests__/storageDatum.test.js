@@ -221,6 +221,28 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr', JSON.stringify([{ listId: 5 }]));
   });
 
+  it('assigns sequential listIds (continuing from the deck max) to appended cards that lack one', async () => {
+    // Background-prefetched + foreground-fetched cards arrive without a synthetic
+    // listId. getNextImage filters by listId > currentListId, so without assignment
+    // here they'd be invisible to the guess resolver. Normalize at write time.
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 7 }, { listId: 12 }]));
+
+    const updatedList = await updateImageList([
+      { pictureId: 'a' },
+      { pictureId: 'b', listId: null },
+      { pictureId: 'c' },
+    ], 'all', 'fr');
+
+    expect(updatedList).toEqual([
+      { listId: 7 },
+      { listId: 12 },
+      { pictureId: 'a', listId: 13 },
+      { pictureId: 'b', listId: 14 },
+      { pictureId: 'c', listId: 15 },
+    ]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:fr', JSON.stringify(updatedList));
+  });
+
   it('does not throw or write when no image list is stored for the namespace', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     await expect(removeImageFromList(2, 'city', 'fr')).resolves.toBe(null);

@@ -1,3 +1,13 @@
+export const adPanel = {
+  padding: 24,
+  titleFontSize: 20,
+  titleFontWeight: '600',
+  titleMarginBottom: 12,
+  bodyFontSize: 16,
+  bodyColor: '#555',
+  bodyMarginBottom: 24,
+} as const;
+
 export const GlobalStyle = {
   color: {
     primaryColor: "#6528F7",

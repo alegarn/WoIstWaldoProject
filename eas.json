@@ -9,18 +9,21 @@
       "distribution": "internal",
       "env": {
         "EXPO_PUBLIC_APP_BACKEND_URL": "https://winning-bear-up.ngrok-free.app/"
-      }
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "env": {
         "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {

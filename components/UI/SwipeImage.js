@@ -7,7 +7,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -16,24 +16,6 @@ import { fetchCardBatch, persistCardBatch, appendCardBatch } from '../../service
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
-
-/**
- * Guarantee every card has a finite, unique listId. Background-prefetched cards
- * are persisted with listId === null (buildImageObject hardcodes it and the
- * prefetcher bypasses handleData, the only path that assigns listIds). Loading
- * those back would render multiple <SwipeableCard key={null}> (React "two
- * children with the same key" warning) and would also break removeCard, which
- * matches/removes by listId. Assign sequential ids continuing from the deck's
- * current max so this is a stable no-op for already-healthy decks and a
- * one-time self-heal for legacy null-listId cards.
- */
-function normalizeListIds(cards) {
-  if (!Array.isArray(cards) || cards.length === 0) return cards;
-  const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
-  if (!hasMissing) return cards;
-  let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
-  return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
-}
 
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
 
@@ -199,7 +181,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       // once the user is actually swiping and the deck empties.
       await handleImagesLoading(null);
     } else {
-      setImageList(localImageList);
+      setImageList(normalizeListIds(localImageList));
       await handleImagesLoading();
     };
   }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);

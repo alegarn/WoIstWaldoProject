@@ -1,11 +1,12 @@
 import { useState, useLayoutEffect, useMemo, useRef, useEffect } from 'react';
+import type { FC } from 'react';
 import { PanResponder } from 'react-native';
 
-import { handleImageOrientation } from "../../utils/orientation";
+import { handleImageOrientation } from '../../utils/orientation';
 import {
   buildCenteredTarget,
   buildSelectionFromPixels,
-} from "../../utils/targetLocation";
+} from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
@@ -22,12 +23,79 @@ import { useReadingGrace } from '../../hooks/useReadingGrace';
 const TAP_THRESHOLD = 8;
 const TIMER_TICK_MS = 100;
 
-function clamp(value, min, max) {
+type Point = { x: number; y: number };
+type SelectionLocation = { x: string; y: string };
+type TargetStyle = {
+  position: 'absolute';
+  width: number;
+  height: number;
+  left: number;
+  top: number;
+  borderRadius?: number;
+  alignItems?: 'center';
+  justifyContent?: 'center';
+};
+type SelectionTarget = {
+  targetSize: number;
+  targetStyle: TargetStyle;
+  dragSize: number;
+  dragStyle: TargetStyle;
+};
+type ImageDimensionStyle = { width: number; height: number };
+type HiddenLocation = Point;
+type Selection = { location: SelectionLocation; target: SelectionTarget };
+
+type ToAdScreenArgs = {
+  location: SelectionLocation | null;
+  hiddenLocation?: HiddenLocation;
+  screenWidth: number;
+  screenHeight: number;
+  target: SelectionTarget | null;
+  elapsedMs: number;
+};
+
+type GuessPictureProps = {
+  navigation?: unknown;
+  imageFile?: string;
+  pictureId?: string;
+  description?: string;
+  imageIsPortrait?: boolean;
+  imageHeight?: number;
+  imageWidth?: number;
+  hiddenLocation?: HiddenLocation;
+  screenDimensions: { width: number; height: number };
+  toAdScreen?: (args: ToAdScreenArgs) => void | Promise<void>;
+  skipInstructions?: boolean;
+  pulseTarget?: boolean;
+  onInteract?: () => void;
+};
+
+type TimerHandle = ReturnType<typeof setInterval> | null;
+
+type DragState = {
+  target: SelectionTarget | null;
+  screenWidth: number;
+  screenHeight: number;
+  imageDimensionStyle: ImageDimensionStyle;
+};
+
+function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
 }
 
-export default function GuessPicture({ imageFile, description, imageIsPortrait, imageHeight, imageWidth, hiddenLocation, screenDimensions, toAdScreen, skipInstructions, pulseTarget = false, onInteract }) {
-
+const GuessPicture: FC<GuessPictureProps> = ({
+  imageFile,
+  description,
+  imageIsPortrait,
+  imageHeight,
+  imageWidth,
+  hiddenLocation,
+  screenDimensions,
+  toAdScreen,
+  skipInstructions,
+  pulseTarget = false,
+  onInteract,
+}) => {
   const [showFilter, setShowFilter] = useState(!skipInstructions);
 
   // Reading grace delays the chrono on 2nd+ cards (skipInstructions) while the
@@ -40,32 +108,32 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
 
   const isPortrait = imageIsPortrait;
   const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
-  const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
+  const imageDimensionStyle: ImageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
 
-  const initialSelection = useMemo(
-    () => isE2EMode() ? null : buildCenteredTarget({ screenWidth, screenHeight, imageDimensionStyle }),
-    []
+  const initialSelection = useMemo<Selection | null>(
+    () => (isE2EMode() ? null : buildCenteredTarget({ screenWidth, screenHeight, imageDimensionStyle }) as Selection),
+    [screenWidth, screenHeight, maxImageWidth, maxImageHeight]
   );
 
-  const [touchLocation, setTouchLocation] = useState(initialSelection?.location ?? null);
-  const [target, setTarget] = useState(initialSelection?.target ?? null);
+  const [touchLocation, setTouchLocation] = useState<SelectionLocation | null>(initialSelection?.location ?? null);
+  const [target, setTarget] = useState<SelectionTarget | null>(initialSelection?.target ?? null);
+  const userInteractedRef = useRef(false);
+
+  useEffect(() => {
+    if (userInteractedRef.current) return;
+    setTouchLocation(initialSelection?.location ?? null);
+    setTarget(initialSelection?.target ?? null);
+  }, [initialSelection]);
+
   const [showModal, setShowModal] = useState(false);
 
   const [elapsedMs, setElapsedMs] = useState(0);
   const elapsedAccumRef = useRef(0);
   const runStartRef = useRef(0);
-  const intervalRef = useRef(null);
+  const intervalRef = useRef<TimerHandle>(null);
 
-/* debug */
-  /* const [showDebugModal, setShowDebugModal] = useState(false);
-
-  const toggleDebugModal = () => {
-    setShowDebugModal(!showDebugModal);
-  }; */
-/*  */
-
-  const dragStartRef = useRef({ x: 0, y: 0 });
-  const stateRef = useRef({ target, screenWidth, screenHeight, imageDimensionStyle });
+  const dragStartRef = useRef<Point>({ x: 0, y: 0 });
+  const stateRef = useRef<DragState>({ target, screenWidth, screenHeight, imageDimensionStyle });
   stateRef.current = { target, screenWidth, screenHeight, imageDimensionStyle };
 
   const onInteractRef = useRef(onInteract);
@@ -83,6 +151,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         onMoveShouldSetPanResponderCapture: () => false,
         onPanResponderGrant: () => {
           onInteractRef.current?.();
+          userInteractedRef.current = true;
           const { target: currentTarget } = stateRef.current;
           const half = (currentTarget?.targetSize ?? 0) / 2;
           dragStartRef.current = {
@@ -100,7 +169,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
             screenWidth: sw,
             screenHeight: sh,
             imageDimensionStyle: dims,
-          });
+          }) as Selection;
           setTouchLocation(selection.location);
           setTarget(selection.target);
         },
@@ -117,8 +186,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   );
 
   useLayoutEffect(() => {
-    /* from "../../utils/orientation" */
-    handleImageOrientation({imageIsPortrait});
+    handleImageOrientation({ imageIsPortrait });
   }, [imageIsPortrait]);
 
   useEffect(() => {
@@ -135,7 +203,9 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     }, TIMER_TICK_MS);
     return () => {
       elapsedAccumRef.current += Date.now() - runStartRef.current;
-      clearInterval(intervalRef.current);
+      if (intervalRef.current !== null) {
+        clearInterval(intervalRef.current);
+      }
     };
   }, [showFilter, showModal, graceDone]);
 
@@ -143,25 +213,24 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
     setShowFilter(false);
   };
 
-  const selectPictureLocation = ({ relativeLocation }) => {
+  const selectPictureLocation = ({ relativeLocation }: { relativeLocation: HiddenLocation }) => {
     const selection = buildE2EPictureSelection({
       screenWidth,
       screenHeight,
       imageDimensionStyle,
       relativeLocation,
-    });
+    }) as Selection;
 
-    const { location, target } = selection;
-    if (location && target) {
+    const { location, target: selectionTarget } = selection;
+    if (location && selectionTarget) {
       setTouchLocation(location);
-      setTarget(target);
+      setTarget(selectionTarget);
     }
   };
 
-  const handlePress = (event) => {
+  const handlePress = () => {
     if (!isE2EMode()) return; // real usage: target is drag-only; image tap does not move it
     selectPictureLocation({
-      event,
       relativeLocation: hiddenLocation ?? getE2EHideLocation(),
     });
   };
@@ -184,7 +253,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   const handleConfirm = () => {
     onInteract?.();
     setShowModal(false);
-    toAdScreen({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target, elapsedMs });
+    toAdScreen?.({ location: touchLocation, hiddenLocation, screenWidth, screenHeight, target, elapsedMs });
   };
 
   const onCancel = () => {
@@ -198,8 +267,6 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         uri={uri}
         guess={true}
         description={description}
-        screenWidth={screenWidth}
-        screenHeight={screenHeight}
         touchLocation={touchLocation}
         handlePress={handlePress}
         handleLongPress={handleLongPress}
@@ -215,10 +282,7 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
         speedRingActive={!showFilter && !showModal && graceDone && !isE2EMode()}
         speedDurationMs={SPEED_WINDOW_MS}
         onDescriptionClosed={markClosed}
-        /* for debug */
-       /*  showDebugModal={showDebugModal}
-        setShowDebugModal={toggleDebugModal} */
-        />
+      />
     );
   };
 
@@ -237,4 +301,6 @@ export default function GuessPicture({ imageFile, description, imageIsPortrait, 
   };
 
   return renderPicture();
-}
+};
+
+export default GuessPicture;

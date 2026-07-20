@@ -57,6 +57,15 @@ jest.mock('../utils/storageDatum', () => ({
   emptyImageList: jest.fn(),
   removeImageFromList: jest.fn(),
   updateImageList: jest.fn(),
+  // Real impl (pure) — SwipeImage now imports this from storageDatum instead of
+  // defining it locally, so the mock must supply the same behaviour.
+  normalizeListIds: (cards) => {
+    if (!Array.isArray(cards) || cards.length === 0) return cards;
+    const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
+    if (!hasMissing) return cards;
+    let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
+    return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
+  },
   getLastImageUuid: jest.fn(),
   saveLastImageUuid: jest.fn(),
   deleteImageFromStorage: jest.fn(),
