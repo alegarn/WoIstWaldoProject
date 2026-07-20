@@ -118,7 +118,6 @@ jest.mock('../hooks/useStreak', () => {
   return { useStreak: useStreakMock };
 });
 
-import { Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { FC } from 'react';
 
@@ -168,18 +167,8 @@ describe('GuessScreen', () => {
     jest.clearAllMocks();
     const { isE2EMode } = require('../utils/e2eMode');
     isE2EMode.mockReturnValue(false);
-    jest.spyOn(Dimensions, 'get').mockReturnValue({
-      width: 320,
-      height: 640,
-      scale: 1,
-      fontScale: 1,
-    });
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
     shouldSuppressAds.mockReturnValue(false);
-  });
-
-  afterEach(() => {
-    (Dimensions.get as jest.MockedFunction<typeof Dimensions.get>).mockRestore();
   });
 
   it('on success (public): buffers side effects, shows overlay, never navigates to AdScreen/ResultScreen', async () => {
@@ -471,10 +460,10 @@ describe('GuessScreen', () => {
       imageHeight: 1200,
       imageWidth: 800,
       isPortrait: true,
-      hiddenLocation: { x: 0.5, y: 0.5 },
-      screenHeight: 640,
-      screenWidth: 320,
-      listId: 3,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        screenHeight: 1334,
+        screenWidth: 750,
+        listId: 3,
       isTutorial: false,
       category: { id: 'cat-1', key: 'nature' },
       language: 'fr',

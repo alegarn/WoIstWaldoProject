@@ -15,7 +15,7 @@ import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { resolveNextCardWithServerFallback } from '../../utils/nextCardAdvancer';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
-import { computeMultiplier, isSpeedBonus, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { computeMultiplier, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
 import { useStreak } from '../../hooks/useStreak';
 import { resolveStreakTier } from '../../constants/streakTiers';
 import { consumeAdSlot } from '../../utils/adCadence';
@@ -69,6 +69,10 @@ type GuessNavigation = {
 type AdSource = { isReady(): boolean };
 
 type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
+
+function computePoints(speedMultiplier: number, streakMultiplier: number): number {
+  return Math.round(speedMultiplier * streakMultiplier);
+}
 
 let defaultAdSourceFactory = (): AdSource => {
   // On iOS the whole ad feature is a no-op (Q1): the AdMob source is never ready, and
@@ -290,13 +294,10 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   const screenDimensions = { width: screenWidth, height: screenHeight };
 
   async function toAdScreen(targetInfos: TargetInfos) {
-    let onTarget = isOnTarget(targetInfos);
+    const onTarget = isOnTarget(targetInfos);
     // Missing elapsedMs is treated as 0 by design: yields the fastest tier (fastest-find reward), preserving backward compatibility for callers that don't pass it.
     const elapsedMs = targetInfos?.elapsedMs ?? 0;
     const multiplier = computeMultiplier(elapsedMs);
-    // Forward-looking speed-bonus reward gate: no ad hop exists on success today,
-    // but when AdScreen is restored this flag (multiplier > 1) will skip the ad for fast finds.
-    isSpeedBonus(multiplier);
     const sharedParams = {
       onTarget: onTarget,
       imageFile: uri,
@@ -319,7 +320,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       const nextStreak = streak + 1;
       const nextTier = resolveStreakTier(nextStreak);
       onWin();
-      const finalPoints = Math.round(1 * multiplier * nextTier.multiplier);
+      const finalPoints = computePoints(multiplier, nextTier.multiplier);
       await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: finalPoints, multiplier, streak: nextStreak, streakMultiplier: nextTier.multiplier });
       // Background prefetch (fire-and-forget). Keeps the deck warm for long streaks
       // without blocking the success animation or the setParams advance. Dedup +
@@ -389,7 +390,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       pulseTarget={hintsActive}
       onInteract={dismissHints}
     />
-    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={Math.round(1 * successMultiplier * streakMultiplier)} streakTier={tier} onDone={handleOverlayDone} />
+    <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={computePoints(successMultiplier, streakMultiplier)} streakTier={tier} onDone={handleOverlayDone} />
     {
       isTutorial && 
         <TutorialOverlay
