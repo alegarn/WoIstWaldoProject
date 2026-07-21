@@ -188,6 +188,46 @@ function routeAfterOverlay({
   });
 }
 
+type SharedParams = {
+  onTarget: boolean;
+  imageFile?: string;
+  pictureId?: string;
+  description?: string;
+  imageHeight?: number;
+  imageWidth?: number;
+  isPortrait?: boolean;
+  hiddenLocation?: HiddenLocation;
+  screenHeight: number;
+  screenWidth: number;
+  listId?: number;
+  isTutorial?: boolean;
+  category?: GuessCategory;
+  language?: string;
+  scope?: AdScope;
+};
+
+function buildSharedParams(args: SharedParams): SharedParams {
+  return { ...args };
+}
+
+type ResolveCorrectGuessOutcomeArgs = {
+  multiplier: number;
+  currentStreak: number;
+};
+
+type CorrectGuessOutcome = {
+  nextStreak: number;
+  nextTier: ReturnType<typeof resolveStreakTier>;
+  finalPoints: number;
+};
+
+function resolveCorrectGuessOutcome({ multiplier, currentStreak }: ResolveCorrectGuessOutcomeArgs): CorrectGuessOutcome {
+  const nextStreak = currentStreak + 1;
+  const nextTier = resolveStreakTier(nextStreak);
+  const finalPoints = computePoints(multiplier, nextTier.multiplier);
+  return { nextStreak, nextTier, finalPoints };
+}
+
 type GuessScreenProps = {
   navigation: GuessNavigation;
   route: { params: GuessRouteParams };
@@ -293,53 +333,41 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
   const screenDimensions = { width: screenWidth, height: screenHeight };
 
-  async function toAdScreen(targetInfos: TargetInfos) {
-    const onTarget = isOnTarget(targetInfos);
-    // Missing elapsedMs is treated as 0 by design: yields the fastest tier (fastest-find reward), preserving backward compatibility for callers that don't pass it.
-    const elapsedMs = targetInfos?.elapsedMs ?? 0;
-    const multiplier = computeMultiplier(elapsedMs);
-    const sharedParams = {
-      onTarget: onTarget,
-      imageFile: uri,
-      pictureId: pictureId,
-      description: description,
-      imageHeight: imageHeight,
-      imageWidth:imageWidth,
-      isPortrait: isPortrait,
-      hiddenLocation: hiddenLocation,
-      screenHeight: screenHeight,
-      screenWidth: screenWidth,
-      listId: listId,
-      isTutorial: isTutorial,
-      category,
+  async function applySuccessPath(multiplier: number) {
+    const { nextStreak, nextTier, finalPoints } = resolveCorrectGuessOutcome({ multiplier, currentStreak: streak });
+    onWin();
+    await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: finalPoints, multiplier, streak: nextStreak, streakMultiplier: nextTier.multiplier });
+    prefetchIfLow({
+      categoryKey: category?.key || 'all',
+      categoryId: category?.id,
       language,
       scope,
-    };
+      authContext,
+    }).catch(() => {});
+    setSuccessMultiplier(multiplier);
+    setShowSuccess(true);
+  }
 
-    if (onTarget) {
-      const nextStreak = streak + 1;
-      const nextTier = resolveStreakTier(nextStreak);
-      onWin();
-      const finalPoints = computePoints(multiplier, nextTier.multiplier);
-      await applySuccessSideEffects({ listId, categoryKey: category?.key, language, imageFile: uri, pictureId, scope, userId, points: finalPoints, multiplier, streak: nextStreak, streakMultiplier: nextTier.multiplier });
-      // Background prefetch (fire-and-forget). Keeps the deck warm for long streaks
-      // without blocking the success animation or the setParams advance. Dedup +
-      // warm-all handled by the prefetcher module (SRP).
-      prefetchIfLow({
-        categoryKey: category?.key || 'all',
-        categoryId: category?.id,
-        language,
-        scope,
-        authContext,
-      }).catch(() => {});
-      setSuccessMultiplier(multiplier);
-      setShowSuccess(true);
-      return;
-    }
-
+  function applyFailurePath(sharedParams: SharedParams) {
     onLose();
     setSuccessesSinceLastAd(0);
     navigation.replace('ResultScreen', sharedParams);
+  }
+
+  async function toAdScreen(targetInfos: TargetInfos) {
+    const onTarget = isOnTarget(targetInfos);
+    const multiplier = computeMultiplier(targetInfos?.elapsedMs ?? 0);
+    const sharedParams = buildSharedParams({
+      onTarget, imageFile: uri, pictureId, description,
+      imageHeight, imageWidth, isPortrait, hiddenLocation,
+      screenHeight, screenWidth, listId, isTutorial,
+      category, language, scope,
+    });
+    if (!onTarget) {
+      applyFailurePath(sharedParams);
+      return;
+    }
+    await applySuccessPath(multiplier);
   };
 
   async function handleOverlayDone() {

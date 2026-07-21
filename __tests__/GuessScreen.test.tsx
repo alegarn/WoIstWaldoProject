@@ -1380,4 +1380,113 @@ describe('GuessScreen', () => {
     expect(navigation.setParams).toHaveBeenCalledWith({ advanceParams: undefined });
     expect(navigation.setParams).toHaveBeenCalledWith({ listId: 9, imageFile: 'file:///next.jpg' });
   });
+
+  describe('toAdScreen characterization', () => {
+    it('passes post-increment streak and resolveStreakTier(N+1).multiplier to applySuccessSideEffects (off-by-one guard)', async () => {
+      const { resolveStreakTier } = require('../constants/streakTiers');
+      const navigation = makeNav();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />);
+      });
+
+      for (let n = 1; n <= 5; n++) {
+        await act(async () => {
+          lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
+        });
+        const nextStreak = n;
+        const expectedStreakMultiplier = resolveStreakTier(nextStreak).multiplier;
+        expect(applySuccessSideEffects).toHaveBeenLastCalledWith(expect.objectContaining({
+          streak: nextStreak,
+          streakMultiplier: expectedStreakMultiplier,
+        }));
+        expect(streakSpies().onWin).toHaveBeenCalledTimes(n);
+      }
+    });
+
+    it.each([
+      ['undefined (treated as 0)', undefined, 2],
+      ['4000 (under threshold)', 4000, 2],
+      ['4999 (just under threshold)', 4999, 2],
+      ['5000 (at threshold)', 5000, 1],
+      ['6000 (over threshold)', 6000, 1],
+    ])('maps elapsedMs = %s to speed multiplier %d on success', async (_label, elapsedMs, expectedMultiplier) => {
+      const navigation = makeNav();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />);
+      });
+
+      const target = elapsedMs === undefined
+        ? { location: { x: 0.5, y: 0.5 } }
+        : { location: { x: 0.5, y: 0.5 }, elapsedMs: elapsedMs as number };
+      await act(async () => {
+        lastPictureProps().toAdScreen(target);
+      });
+
+      expect(applySuccessSideEffects).toHaveBeenLastCalledWith(expect.objectContaining({
+        multiplier: expectedMultiplier,
+      }));
+      expect(lastOverlayProps().multiplier).toBe(expectedMultiplier);
+    });
+
+    it('fires prefetchIfLow AFTER applySuccessSideEffects resolves (call-order preserved)', async () => {
+      const navigation = makeNav();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />);
+      });
+      await act(async () => {
+        lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      const applyOrder = applySuccessSideEffects.mock.invocationCallOrder[0];
+      const prefetchOrder = prefetchIfLow.mock.invocationCallOrder[0];
+      expect(applyOrder).toEqual(expect.any(Number));
+      expect(prefetchOrder).toEqual(expect.any(Number));
+      expect(prefetchOrder).toBeGreaterThan(applyOrder);
+    });
+
+    it('on success: never calls navigation.navigate or navigation.replace (overlay-only)', async () => {
+      const navigation = makeNav();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />);
+      });
+      await act(async () => {
+        lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(navigation.navigate).not.toHaveBeenCalled();
+      expect(navigation.replace).not.toHaveBeenCalled();
+      expect(lastOverlayProps().visible).toBe(true);
+    });
+
+    it('on success with category.key === "all": prefetch still fires with categoryKey "all" (|| "all" fallback path)', async () => {
+      const navigation = makeNav();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={{ params: { ...PUBLIC_ROUTE_PARAMS, category: { id: 'cat-all', key: 'all' } } }} />);
+      });
+      await act(async () => {
+        lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } });
+      });
+
+      expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
+        categoryKey: 'all',
+        categoryId: 'cat-all',
+      }));
+    });
+  });
 });

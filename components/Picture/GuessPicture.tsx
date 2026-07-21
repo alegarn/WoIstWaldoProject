@@ -1,12 +1,8 @@
-import { useState, useLayoutEffect, useMemo, useRef, useEffect } from 'react';
+import { useState, useLayoutEffect, useMemo } from 'react';
 import type { FC } from 'react';
-import { PanResponder } from 'react-native';
 
 import { handleImageOrientation } from '../../utils/orientation';
-import {
-  buildCenteredTarget,
-  buildSelectionFromPixels,
-} from '../../utils/targetLocation';
+import { buildCenteredTarget } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
@@ -19,11 +15,9 @@ import {
 } from '../../utils/e2eMode';
 import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
 import { useReadingGrace } from '../../hooks/useReadingGrace';
+import { useSpeedTimer } from '../../hooks/useSpeedTimer';
+import { useTargetDrag } from '../../hooks/useTargetDrag';
 
-const TAP_THRESHOLD = 8;
-const TIMER_TICK_MS = 100;
-
-type Point = { x: number; y: number };
 type SelectionLocation = { x: string; y: string };
 type TargetStyle = {
   position: 'absolute';
@@ -42,7 +36,7 @@ type SelectionTarget = {
   dragStyle: TargetStyle;
 };
 type ImageDimensionStyle = { width: number; height: number };
-type HiddenLocation = Point;
+type HiddenLocation = { x: number; y: number };
 type Selection = { location: SelectionLocation; target: SelectionTarget };
 
 type ToAdScreenArgs = {
@@ -69,19 +63,6 @@ type GuessPictureProps = {
   pulseTarget?: boolean;
   onInteract?: () => void;
 };
-
-type TimerHandle = ReturnType<typeof setInterval> | null;
-
-type DragState = {
-  target: SelectionTarget | null;
-  screenWidth: number;
-  screenHeight: number;
-  imageDimensionStyle: ImageDimensionStyle;
-};
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(Math.max(value, min), max);
-}
 
 const GuessPicture: FC<GuessPictureProps> = ({
   imageFile,
@@ -115,99 +96,30 @@ const GuessPicture: FC<GuessPictureProps> = ({
     [screenWidth, screenHeight, maxImageWidth, maxImageHeight]
   );
 
-  const [touchLocation, setTouchLocation] = useState<SelectionLocation | null>(initialSelection?.location ?? null);
-  const [target, setTarget] = useState<SelectionTarget | null>(initialSelection?.target ?? null);
-  const userInteractedRef = useRef(false);
-
-  useEffect(() => {
-    if (userInteractedRef.current) return;
-    setTouchLocation(initialSelection?.location ?? null);
-    setTarget(initialSelection?.target ?? null);
-  }, [initialSelection]);
-
   const [showModal, setShowModal] = useState(false);
 
-  const [elapsedMs, setElapsedMs] = useState(0);
-  const elapsedAccumRef = useRef(0);
-  const runStartRef = useRef(0);
-  const intervalRef = useRef<TimerHandle>(null);
+  const { elapsedMs } = useSpeedTimer({
+    active: !showFilter && !showModal && graceDone && !isE2EMode(),
+  });
 
-  const dragStartRef = useRef<Point>({ x: 0, y: 0 });
-  const stateRef = useRef<DragState>({ target, screenWidth, screenHeight, imageDimensionStyle });
-  stateRef.current = { target, screenWidth, screenHeight, imageDimensionStyle };
-
-  const onInteractRef = useRef(onInteract);
-  onInteractRef.current = onInteract;
-
-  const targetPanHandlers = useMemo(
-    () => {
-      if (isE2EMode()) {
-        return undefined;
-      }
-      return PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => true,
-        onMoveShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponderCapture: () => false,
-        onPanResponderGrant: () => {
-          onInteractRef.current?.();
-          userInteractedRef.current = true;
-          const { target: currentTarget } = stateRef.current;
-          const half = (currentTarget?.targetSize ?? 0) / 2;
-          dragStartRef.current = {
-            x: (currentTarget?.targetStyle?.left ?? 0) + half,
-            y: (currentTarget?.targetStyle?.top ?? 0) + half,
-          };
-        },
-        onPanResponderMove: (_event, gestureState) => {
-          const { screenWidth: sw, screenHeight: sh, imageDimensionStyle: dims } = stateRef.current;
-          const nextX = clamp(dragStartRef.current.x + gestureState.dx, 0, dims.width);
-          const nextY = clamp(dragStartRef.current.y + gestureState.dy, 0, dims.height);
-          const selection = buildSelectionFromPixels({
-            locationX: nextX,
-            locationY: nextY,
-            screenWidth: sw,
-            screenHeight: sh,
-            imageDimensionStyle: dims,
-          }) as Selection;
-          setTouchLocation(selection.location);
-          setTarget(selection.target);
-        },
-        onPanResponderRelease: (_event, gestureState) => {
-          const moved = Math.hypot(gestureState.dx, gestureState.dy);
-          if (moved < TAP_THRESHOLD) {
-            setShowModal(true);
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }).panHandlers;
-    },
-    []
-  );
+  const {
+    touchLocation,
+    target,
+    panHandlers: targetPanHandlers,
+    setSelection,
+  } = useTargetDrag({
+    enabled: !isE2EMode(),
+    screenWidth,
+    screenHeight,
+    imageDimensionStyle,
+    initialSelection,
+    onInteract,
+    onTap: () => setShowModal(true),
+  });
 
   useLayoutEffect(() => {
     handleImageOrientation({ imageIsPortrait });
   }, [imageIsPortrait]);
-
-  useEffect(() => {
-    if (isE2EMode()) {
-      setElapsedMs(0);
-      return undefined;
-    }
-    if (showFilter || showModal || !graceDone) {
-      return undefined;
-    }
-    runStartRef.current = Date.now();
-    intervalRef.current = setInterval(() => {
-      setElapsedMs(elapsedAccumRef.current + (Date.now() - runStartRef.current));
-    }, TIMER_TICK_MS);
-    return () => {
-      elapsedAccumRef.current += Date.now() - runStartRef.current;
-      if (intervalRef.current !== null) {
-        clearInterval(intervalRef.current);
-      }
-    };
-  }, [showFilter, showModal, graceDone]);
 
   const handleFilterClick = () => {
     setShowFilter(false);
@@ -223,8 +135,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
 
     const { location, target: selectionTarget } = selection;
     if (location && selectionTarget) {
-      setTouchLocation(location);
-      setTarget(selectionTarget);
+      setSelection(selection);
     }
   };
 

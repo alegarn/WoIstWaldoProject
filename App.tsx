@@ -253,7 +253,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           })} />
         <Stack.Screen
           name="GuessFeedScreen"
-          component={GuessFeedScreen}
+          component={GuessFeedScreen as React.ComponentType<any>}
           options={({ navigation }) => ({
             presentation: "modal",
             headerShown: true,
