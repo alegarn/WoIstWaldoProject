@@ -32,8 +32,8 @@ type TargetStyle = {
 type SelectionTarget = {
   targetSize: number;
   targetStyle: TargetStyle;
-  dragSize: number;
-  dragStyle: TargetStyle;
+  dragSize?: number;
+  dragStyle?: TargetStyle;
 };
 type ImageDimensionStyle = { width: number; height: number };
 type HiddenLocation = { x: number; y: number };
