@@ -12,8 +12,8 @@ import { MobileAds } from 'react-native-google-mobile-ads';
 import { GlobalStyle } from './constants/theme';
 import _IconButton from './components/UI/IconButton';
 // IconButton.js is unmigrated; its destructured-props-with-defaults are inferred
-// as required by TS. Permissive cast mirrors the AdScreen/GuessScreen convention
-// below. Runtime behavior unchanged; no JSX edits, no edit to IconButton.js.
+// as required by TS. Permissive cast mirrors the GuessScreen convention below.
+// Runtime behavior unchanged; no JSX edits, no edit to IconButton.js.
 const IconButton = _IconButton as React.ComponentType<any>;
 //import LoadingOverlay from './components/UI/LoadingOverlay';
 
@@ -29,7 +29,6 @@ import HideScreen from './screens/HideScreens/HideScreen';
 import GuessPathScreen from './screens/GuessScreens/GuessPathScreen';
 import GuessFeedScreen from './screens/GuessScreens/GuessFeedScreen';
 import GuessScreen from './screens/GuessScreens/GuessScreen';
-import AdScreen from './screens/GuessScreens/AdScreen';
 import { AdMobInterstitialBridge } from './services/ads/AdMobInterstitialBridge';
 import ResultScreen from './screens/GuessScreens/ResultScreen';
 
@@ -274,16 +273,6 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           // structurally narrower than this untyped Stack's generic
           // ScreenComponent. Behavior unchanged.
           component={GuessScreen as React.ComponentType<any>}
-          options={{
-            presentation: "modal",
-            headerShown: false,
-          }} />
-        <Stack.Screen
-          name="AdScreen"
-          // Narrow cast: AdScreen.tsx declares its own nav/route param types,
-          // which are structurally narrower than this untyped Stack's generic
-          // ScreenComponent. Behavior unchanged.
-          component={AdScreen as React.ComponentType<any>}
           options={{
             presentation: "modal",
             headerShown: false,

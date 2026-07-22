@@ -42,8 +42,8 @@ describe('cardPrefetcher', () => {
     appendMock.mockResolvedValue(null as never);
   });
 
-  it('exports LOW_CARD_THRESHOLD equal to 10 (RC9 fix)', () => {
-    expect(LOW_CARD_THRESHOLD).toBe(10);
+  it('exports LOW_CARD_THRESHOLD equal to 3 (lowered for warmer decode pipeline)', () => {
+    expect(LOW_CARD_THRESHOLD).toBe(3);
   });
 
   it('exports ALL_WARM_THRESHOLD equal to 5 (intentionally unchanged)', () => {
@@ -64,7 +64,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('fetches and appends when count < LOW_CARD_THRESHOLD', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: { token: 'x' } });
 
@@ -87,7 +87,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('skips append when fetchCardBatch returns isError', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockResolvedValue({ isError: true } as never);
 
     await expect(
@@ -98,7 +98,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('swallows errors from fetchCardBatch', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockRejectedValue(new Error('network down') as never);
 
     await expect(
@@ -109,7 +109,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('dedups concurrent calls for the same deck key (one fetchCardBatch total)', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockImplementation(() => okResponse());
 
     const a = prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -122,7 +122,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('allows a new prefetch after the in-flight promise resolves (dedup cleared)', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockImplementation(() => okResponse());
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -134,7 +134,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('warms the "all" deck in addition to the category fetch when categoryKey !== "all" and count is low', async () => {
-    remainingMock.mockResolvedValueOnce(3);
+    remainingMock.mockResolvedValueOnce(2);
     remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation((params) =>
       okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : IMAGES),
@@ -182,7 +182,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('does not warm when categoryKey === "all"', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockImplementation(() => okResponse());
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -303,7 +303,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('prefetcher normalizeListIds is called on fetched cards before append (T2.6 defense-in-depth)', async () => {
-    remainingMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     normalizeMock.mockImplementation((cards) => cards);
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });

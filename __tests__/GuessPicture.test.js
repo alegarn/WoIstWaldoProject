@@ -300,6 +300,54 @@ describe('GuessPicture', () => {
     expect(getLatestShowPictureProps().defaultOpen).toBe(true);
   });
 
+  it('skipInstructions flips true after mount → overlay hides reactively (ShowPicture renders)', async () => {
+    isE2EMode.mockReturnValue(false);
+    let renderer;
+    await act(async () => {
+      renderer = create(<GuessPicture {...baseProps} skipInstructions={false} />);
+    });
+    activeRenderers.push(renderer);
+
+    expect(mockShowPicture).not.toHaveBeenCalled();
+    expect(mockGameInstructions).toHaveBeenCalled();
+
+    await act(async () => {
+      renderer.update(<GuessPicture {...baseProps} skipInstructions={true} />);
+    });
+
+    expect(mockShowPicture).toHaveBeenCalled();
+  });
+
+  describe('PB2 disabled prop (input gating)', () => {
+    // PB2: when disabled=true is passed (advance state machine mid-cycle),
+    // useTargetDrag is constructed with enabled=false → panHandlers undefined
+    // → ShowPicture receives no targetPanHandlers → tap/drag cannot move the
+    // target or open the confirm modal during a resolve. Pre-fix, the prop
+    // was silently dropped (omitted from GuessPictureProps), so the screen's
+    // `disabled={advance.state !== 'idle'}` had no effect.
+
+    it('disabled=true → useTargetDrag enabled=false → ShowPicture receives no targetPanHandlers', async () => {
+      isE2EMode.mockReturnValue(false);
+      await renderToPicture({ disabled: true });
+
+      expect(getLatestShowPictureProps().targetPanHandlers).toBeUndefined();
+    });
+
+    it('disabled=false (default) → useTargetDrag enabled=true → ShowPicture receives targetPanHandlers', async () => {
+      isE2EMode.mockReturnValue(false);
+      await renderToPicture();
+
+      expect(getLatestShowPictureProps().targetPanHandlers).toEqual({ testID: 'mock-target-pan-handlers' });
+    });
+
+    it('disabled=true + e2e mode → still no panHandlers (e2e path keeps its own surface-tap wiring)', async () => {
+      isE2EMode.mockReturnValue(true);
+      await renderToPicture({ disabled: true });
+
+      expect(getLatestShowPictureProps().targetPanHandlers).toBeUndefined();
+    });
+  });
+
   it('uses a deterministic incorrect location on long press in e2e mode', async () => {
     const toAdScreen = jest.fn();
 

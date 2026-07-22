@@ -95,13 +95,55 @@ export async function getNextImageForScope({ category, language, currentListId, 
 };
 
 /**
- * Return the TOTAL number of cards persisted for a given scope (category+language).
- * Used by the prefetcher as a low-water trigger (count < threshold → fetch more).
- * Returns the TOTAL deck size (NOT cursor-filtered) — prefetch triggering only
- * needs a proxy, and cursor-filtering is the resolver's responsibility (SRP).
- * - Public scope: count getLocalImages(category?.key || 'all', language).
- * - Private scope: count readGroupFeedCache(scope.groupId, {categoryId, language}).images.
- * Returns 0 for missing/empty decks. Never throws.
+ * Scope-aware BATCH reader — mirrors getNextImageForScope but returns up to
+ * `limit` cards whose listId is strictly greater than currentListId (or the
+ * deck head when currentListId is not finite). Used by the GuessScreen
+ * NextCardImageWarmer to enumerate upcoming card imageFile URIs so RN can
+ * pre-decode bitmaps into the in-memory image cache before the advance.
+ *
+ * Returns [] (never null) for missing/empty decks so the warmer can feed an
+ * empty array directly and render nothing without a null-check at the call site.
+ *
+ * @param {{ category?: { key?: string, id?: unknown }|null, language?: string|null, currentListId?: number, scope?: unknown, limit?: number }} args
+ * @returns {Promise<Array<{ listId: number, imageFile: string }>>}
+ */
+export async function getNextImagesForScope({ category, language, currentListId, scope, limit = 7 }) {
+  const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 7;
+
+  const isPrivate = scope?.kind === 'private' && scope?.groupId;
+  let images;
+  if (!isPrivate) {
+    images = await getLocalImages(category?.key || 'all', language);
+  } else {
+    const categoryId = category?.key === 'all' ? undefined : category?.id;
+    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+    images = cache?.images;
+  }
+
+  if (!Array.isArray(images) || images.length === 0) {
+    return [];
+  }
+
+  const ahead = Number.isFinite(currentListId)
+    ? images.filter((image) => Number.isFinite(image?.listId) && image.listId > currentListId)
+    : images.filter((image) => Number.isFinite(image?.listId));
+
+  return ahead.slice(0, cap);
+};
+
+/**
+ * @deprecated As of T2.4/T2.8 (streak-continuity Phase 2), the prefetcher uses
+ *             `getRemainingDeckCount` (cursor-filtered) instead. This function
+ *             returns the TOTAL deck size and does NOT account for cursor
+ *             position — using it for prefetch triggers causes RC8 (late-streak
+ *             prefetch-never-fires). Retained for back-compat; do NOT add new
+ *             callers. Migrate existing callers to `getRemainingDeckCount`.
+ *
+ *             Returns the total deck size for the (category, language, scope)
+ *             tuple by reading AsyncStorage JSON only (no per-file probe).
+ *             - Public scope: count getLocalImages(category?.key || 'all', language).
+ *             - Private scope: count readGroupFeedCache(scope.groupId, {categoryId, language}).images.
+ *             Returns 0 for missing/empty decks. Never throws.
  */
 export async function getDeckCountForScope({ category, language, scope }) {
   const isPrivate = scope?.kind === 'private' && scope?.groupId;
@@ -360,11 +402,33 @@ export function normalizeListIds(cards) {
   return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
 }
 
+/**
+ * Drop incoming cards whose `pictureId` already exists in the prior deck.
+ *
+ * RC10/T4.3 (mirror of services/cardDeck.js#dedupByPictureId): the server can
+ * re-serve a card already in the local deck when the cursor (`getLastImageUuid`)
+ * is stale. Without dedup, the duplicate gets a NEW listId (via normalizeListIds)
+ * greater than currentListId, and getNextImage returns it → the just-played card
+ * repeats. Drop duplicates by `pictureId` so the existing card's listId is
+ * preserved and the duplicate never enters the deck.
+ *
+ * Cards with no `pictureId` (legacy server payloads) pass through — there is no
+ * key to dedup against, so dropping them would lose data.
+ */
+function dedupByPictureId(prior, incoming) {
+  if (!Array.isArray(incoming) || incoming.length === 0) return [];
+  const priorIds = new Set(
+    Array.isArray(prior) ? prior.map((c) => c?.pictureId).filter(Boolean) : [],
+  );
+  return incoming.filter((c) => !c?.pictureId || !priorIds.has(c.pictureId));
+}
+
 export async function updateImageList(updatedImageList, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
   const jsonImageList = imageList ? JSON.parse(imageList) : [];
-  const newImageList = normalizeListIds([...jsonImageList, ...updatedImageList]);
+  const deduped = dedupByPictureId(jsonImageList, updatedImageList);
+  const newImageList = normalizeListIds([...jsonImageList, ...deduped]);
   await AsyncStorage.setItem(listKey, JSON.stringify(newImageList));
   return newImageList;
 };

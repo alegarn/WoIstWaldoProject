@@ -5,11 +5,33 @@ jest.mock('../services/cardDeck', () => ({
   fetchCardBatch: jest.fn(),
   appendCardBatch: jest.fn(),
 }));
-jest.mock('../utils/storageDatum', () => ({
-  getDeckCountForScope: jest.fn(),
-  getRemainingDeckCount: jest.fn(),
-  normalizeListIds: jest.fn((cards) => cards),
-}));
+
+let mockFileExists = true;
+jest.mock('expo-file-system', () => {
+  const File = jest.fn().mockImplementation(function MockFile(firstArg: string | { uri?: string }, secondArg?: string) {
+    const baseUri = typeof firstArg === 'string' ? firstArg : firstArg?.uri;
+    this.uri = secondArg ? `${baseUri}${secondArg}` : baseUri;
+    this.exists = mockFileExists;
+    this.delete = jest.fn();
+  });
+  return {
+    File,
+    Paths: class MockPaths {
+      static get cache() {
+        return { uri: 'file:///cache/' };
+      }
+    },
+  };
+});
+jest.mock('../utils/storageDatum', () => {
+  const actual = jest.requireActual('../utils/storageDatum');
+  return {
+    ...actual,
+    getDeckCountForScope: jest.fn(),
+    getRemainingDeckCount: jest.fn(),
+    normalizeListIds: jest.fn((cards) => cards),
+  };
+});
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
 // PB4 (T2.7): use the REAL prefetchIfLow (with its inFlight Map) so the
 // prefetch/foreground dedup is exercisable. warmAllDeckIfNeeded stays mocked
@@ -24,10 +46,11 @@ jest.mock('../services/cardPrefetcher', () => {
 
 import { resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getDeckCountForScope, getRemainingDeckCount } from '../utils/storageDatum';
+import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { warmAllDeckIfNeeded, prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const resolveMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
 const fetchMock = fetchCardBatch as jest.MockedFunction<typeof fetchCardBatch>;
@@ -36,6 +59,7 @@ const warmMock = warmAllDeckIfNeeded as jest.MockedFunction<typeof warmAllDeckIf
 const countMock = getDeckCountForScope as jest.MockedFunction<typeof getDeckCountForScope>;
 const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
 const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
+const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
 
 const CARD_PARAMS = { listId: 9, pictureId: 'img-9', imageFile: 'file:///nine.jpg' };
 const A_CARD_RESULT = { params: CARD_PARAMS };
@@ -348,5 +372,105 @@ describe('resolveNextCardWithServerFallback', () => {
     const allCards = appendMock.mock.calls.flatMap((c) => (c[0] as { cards?: Array<{ pictureId?: string }> }).cards ?? []);
     const pictureIds = allCards.map((card) => card.pictureId).filter((id): id is string => Boolean(id));
     expect(new Set(pictureIds).size).toBe(pictureIds.length);
+  });
+
+  it('Tier 4 (looping replay) fetches "all" from HEAD with no category_id, regardless of original category (Tier 4 category bug)', async () => {
+    // Phase 2 review: Tier 4 must override the original category with
+    // { key: 'all' } so fetchCardBatch sends NO category_id (server returns
+    // 'all' cards) and appendCardBatch writes to the 'all' namespace. Passing
+    // the original category (e.g. sports) leaks sports cards into both the
+    // server query and the 'all' write.
+    //
+    // Setup: original category is sports (id=5). Make Tier 1, 2, 3 all fail
+    // (local resolver returns null at every tier, foreground fetch returns
+    // empty), then Tier 4 succeeds — assert its fetchCardBatch call has NO
+    // categoryId (undefined), NOT categoryId=5.
+    resolveMock
+      .mockResolvedValueOnce(null as never)   // Tier 1 local
+      .mockResolvedValueOnce(null as never)   // Tier 2 recheck (post-prefetch)
+      .mockResolvedValueOnce(null as never)   // Tier 3 cross-fallback (warmed 'all')
+      .mockResolvedValueOnce(A_CARD_RESULT as never); // after Tier 4 fetch+append
+    // Tier 2 foreground fetch: empty.
+    fetchMock.mockResolvedValueOnce({ isError: false, images: [] } as never);
+    // Tier 4 foreground fetch: replay set.
+    fetchMock.mockResolvedValueOnce({ isError: false, images: [{ listId: 1 }] } as never);
+
+    const sportsArgs = { ...BASE_ARGS, category: { key: 'sports', id: 5 } };
+
+    const result = await resolveNextCardWithServerFallback(sportsArgs);
+
+    // Tier 4 fetch is the 2nd fetchCardBatch call.
+    const tier4FetchCall = fetchMock.mock.calls[1][0] as { categoryKey?: string; categoryId?: number; pictureIdOverride?: string | null };
+    expect(tier4FetchCall.categoryKey).toBe('all');
+    expect(tier4FetchCall.pictureIdOverride).toBeNull();
+    expect(tier4FetchCall.categoryId).toBeUndefined();
+    // Tier 4 append writes to the 'all' namespace (no categoryId).
+    const tier4AppendCall = appendMock.mock.calls[appendMock.mock.calls.length - 1][0] as { categoryKey?: string; categoryId?: number };
+    expect(tier4AppendCall.categoryKey).toBe('all');
+    expect(tier4AppendCall.categoryId).toBeUndefined();
+    expect(result.next).toEqual(A_CARD_RESULT);
+    expect(result.reason).toBe('ok');
+  });
+
+  // ─── RC10/T4.3 — same-card repeat (user bug) ─────────────────────────────
+  //
+  // Real-writer end-to-end: with the mocks that bypass appendCardBatch and
+  // resolveNextGuessParams lifted, the advancer must NOT return the just-played
+  // card when the server re-serves it in the Tier 2 batch. The fix lives in
+  // appendCardBatch / updateImageList (drop duplicates by pictureId); this test
+  // exercises that fix through the public advancer flow with a real AsyncStorage
+  // deck so the regression is observable at the advancer boundary.
+
+  describe('resolveNextCardWithServerFallback — same-card repeat (RC10 user bug)', () => {
+    const realStorage = jest.requireActual('../utils/storageDatum');
+    const realCardDeck = jest.requireActual('../services/cardDeck');
+    const realHandleGuess = jest.requireActual('../utils/handleGuessOutcome');
+
+    beforeEach(() => {
+      // Lift the writer/resolver mocks for this suite only. Real appendCardBatch
+      // + real resolveNextGuessParams + real normalizeListIds exercise the
+      // pictureId dedup end-to-end against AsyncStorage.
+      appendMock.mockImplementation(realCardDeck.appendCardBatch as never);
+      resolveMock.mockImplementation(realHandleGuess.resolveNextGuessParams as never);
+      normalizeMock.mockImplementation(realStorage.normalizeListIds as never);
+      AsyncStorage.setItem.mockResolvedValue(undefined);
+    });
+
+    it('does NOT return the just-played card when the server re-serves it in Tier 2', async () => {
+      // AsyncStorage as an in-memory store so writes (appendCardBatch →
+      // updateImageList) are visible to subsequent reads (resolver). The deck
+      // starts with the just-played card; currentListId=1 → Tier 1 finds no
+      // listId > 1 → null → Tier 2 fires.
+      const store = new Map<string, string>();
+      store.set(
+        'imageList:city:fr',
+        JSON.stringify([{ listId: 1, pictureId: 'played-card', imageFile: 'file:///cache/played.jpg' }]),
+      );
+      AsyncStorage.getItem.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
+      AsyncStorage.setItem.mockImplementation((key: string, value: string) => {
+        store.set(key, value);
+        return Promise.resolve();
+      });
+
+      // Server re-serves the just-played card + a new card. Without pictureId
+      // dedup, appendCardBatch would give 'played-card' a fresh listId > 1 and
+      // the resolver would return it → same card repeats.
+      fetchMock.mockResolvedValue({
+        isError: false,
+        images: [
+          { pictureId: 'played-card' },
+          { pictureId: 'new-card' },
+        ],
+      } as never);
+
+      const result = await resolveNextCardWithServerFallback({
+        ...BASE_ARGS,
+        currentListId: 1,
+      });
+
+      expect(result.reason).toBe('ok');
+      expect(result.next).not.toBeNull();
+      expect((result.next as { params: { pictureId?: string } }).params.pictureId).toBe('new-card');
+    });
   });
 });

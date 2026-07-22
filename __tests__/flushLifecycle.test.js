@@ -108,6 +108,7 @@ jest.mock('../utils/storageDatum', () => ({
   getSessionLanguageFilter: jest.fn(),
   saveSessionLanguageFilter: jest.fn(),
   emptyImageList: jest.fn().mockResolvedValue(undefined),
+  getNextImagesForScope: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('../utils/guessNavigation', () => ({
@@ -210,7 +211,6 @@ jest.mock('../components/Guess/GuessExhaustedPanel', () => {
   };
 });
 jest.mock('../components/Guess/GuessAdvanceLoader', () => () => null);
-jest.mock('../constants/adOutcome', () => ({ AD_OUTCOME_ADVANCE: 'advance', AD_SCREEN_TESTID: 'ad-screen' }));
 jest.mock('../utils/targetLocation', () => ({ isOnTarget: jest.fn(() => true) }));
 jest.mock('../utils/handleGuessOutcome', () => ({
   applySuccessSideEffects: jest.fn(() => Promise.resolve()),
@@ -268,7 +268,6 @@ jest.mock('../screens/HideScreens/HidingPathScreen', () => () => null);
 jest.mock('../screens/HideScreens/HideScreen', () => () => null);
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => () => null);
 jest.mock('../screens/GuessScreens/GuessScreen', () => () => null);
-jest.mock('../screens/GuessScreens/AdScreen', () => () => null);
 jest.mock('../screens/GuessScreens/ResultScreen', () => () => null);
 jest.mock('../screens/LanguageOnboardingScreen', () => () => null);
 jest.mock('../screens/SetInstructionScreen', () => () => null);
@@ -673,12 +672,13 @@ describe('flush lifecycle - rapid multi-trigger wiring', () => {
   });
 });
 
-describe('flush lifecycle - T1.11 exhausted Leave (real GuessScreen, mitigation b-i)', () => {
-  // CB1 + PT3: GuessScreen now mounts useFlushOnLeave too (Phase 1 introduces
-  // the GuessExhaustedPanel Leave path). Mitigation (b-i) gates the mount on
-  // route.params?.advanceAfterAd !== undefined so a normal exhausted Leave
-  // doesn't double-flush with GuessFeedScreen's own hook. The sessionScoreStore
-  // `flushing` guard coalesces any residual overlap into a single POST.
+describe('flush lifecycle - exhausted Leave (real GuessScreen, no double-flush on popToTop)', () => {
+  // CB1 + PT3 + C3: GuessScreen no longer mounts useFlushOnLeave (the AdScreen
+  // round-trip premise is gone — ads render as in-component overlay, no param
+  // merge). On popToTop from GuessExhaustedPanel, only GuessFeedScreen's hook
+  // fires flush; the sessionScoreStore `flushing` guard coalesces any residual
+  // overlap into a single POST. The test asserts the structural invariant:
+  // "no double-flush on popToTop from GuessExhaustedPanel."
   let RealGuessScreen;
   let submitScoreBatch;
   let AsyncStorage;
@@ -748,17 +748,26 @@ describe('flush lifecycle - T1.11 exhausted Leave (real GuessScreen, mitigation 
 
     // Home → GuessFeedScreen (mounts GuessFeedScreen's useFlushOnLeave).
     await press(renderer, 'real.home.go-feed');
-    // GuessFeedScreen → GuessScreen via the SwipeImage stand-in (no advanceAfterAd
-    // → GuessScreen's hook is gated OFF on mount: mitigation b-i).
+    // GuessFeedScreen → GuessScreen via the SwipeImage stand-in. C3: GuessScreen
+    // no longer mounts useFlushOnLeave (AdScreen round-trip is gone).
     await press(renderer, 'guess-feed.stub.start-swipe');
     await press(renderer, 'guess-feed.stub.swipe');
 
-    // Drive GuessScreen to exhausted: tap picture (success) → tap overlay Done
-    // → resolveNextCardWithServerFallback returns { next: null, reason: 'empty' }
-    // (cardDeck mock returns empty) → FAILED_PERMANENT → GuessExhaustedPanel.
+    // Drive GuessScreen to exhausted (safety-net path): tap picture (success)
+    // → tap overlay Done → resolveNextCardWithServerFallback returns
+    // { next: null, reason: 'empty' } (cardDeck mock returns empty) →
+    // C1 (P1 post-fix): single empty cascade dispatches FAILED_TRANSIENT →
+    // warming, NOT exhausted. The safety-net panel only mounts after 3 failed
+    // retries (RETRY_TICKs at 1s/2s/4s). Fake-timer-drive the retry budget so
+    // GuessExhaustedPanel mounts (safety net intact).
+    jest.useFakeTimers();
     await press(renderer, 'guess.picture.tap');
     await press(renderer, 'guess.overlay.done');
     await act(async () => { await flushPromises(); });
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    await act(async () => { jest.advanceTimersByTime(2000); });
+    await act(async () => { jest.advanceTimersByTime(4000); });
+    jest.useRealTimers();
 
     expect(renderer.root.findByProps({ testID: 'guess.exhausted.leave' })).toBeDefined();
 
@@ -766,8 +775,7 @@ describe('flush lifecycle - T1.11 exhausted Leave (real GuessScreen, mitigation 
     submitScoreBatch.mockClear();
 
     // Tap Leave → handleExitToHome → navigation.popToTop → beforeRemove fires on
-    // every popped screen. T1.11 mitigation (b-i): GuessScreen's useFlushOnLeave
-    // gate is closed (no advanceAfterAd in this normal session), so only
+    // every popped screen. C3: GuessScreen has no useFlushOnLeave hook, so only
     // GuessFeedScreen's hook fires flush. ≤2 calls + flushing guard bounds the
     // underlying POST to exactly one.
     await press(renderer, 'guess.exhausted.leave');
