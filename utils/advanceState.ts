@@ -77,7 +77,12 @@ export function advanceReducer(
       return { state: 'idle', retries: 0, next: null };
     }
 
-    default:
+    default: {
+      // Exhaustiveness check: adding a new AdvanceEvent variant without a
+      // matching case here produces a compile error (event is `never` only
+      // when every variant in the union is handled above).
+      const _exhaustive: never = event;
       return prev;
+    }
   }
 }

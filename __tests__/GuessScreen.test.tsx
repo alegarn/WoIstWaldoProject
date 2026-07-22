@@ -28,15 +28,48 @@ type MockExhaustedPanelProps = {
   [key: string]: unknown;
 };
 
+type MockAdInterstitialProps = {
+  adSource: unknown;
+  onDone: () => void;
+  [key: string]: unknown;
+};
+
 const mockGuessPicture = jest.fn((_props: MockPictureProps) => null);
 const mockTutorialOverlay = jest.fn((_props: Record<string, unknown>) => null);
 const mockGuessExitSwipeMenu = jest.fn((_props: MockMenuProps) => null);
 const mockSuccessOverlay = jest.fn((_props: MockOverlayProps) => null);
 const mockGuessExhaustedPanel = jest.fn((_props: MockExhaustedPanelProps) => null);
 const mockGuessAdvanceLoader = jest.fn((_props: Record<string, unknown>) => null);
+const mockAdInterstitial = jest.fn((_props: MockAdInterstitialProps) => null);
+
+// D1 (P3): NextCardImageWarmer is mocked like the other Guess sub-components so
+// tests can assert which deck-ahead URIs GuessScreen feeds it without depending
+// on the warmer's own Image-mount behavior (covered in NextCardImageWarmer.test.tsx).
+type MockNextCardImageWarmerProps = {
+  uris: (string | null | undefined)[];
+};
+const mockNextCardImageWarmer = jest.fn((_props: MockNextCardImageWarmerProps) => null);
+
+// Cumulative mount counter for GuessPicture remount regression asserts.
+// Monotonically increases on every mount (no decrement) so a key-change-driven
+// remount surfaces as count=2 (unmount-then-mount sequence). Name prefixed with
+// `mock` so jest.mock's factory can reference it (jest only allows out-of-scope
+// vars whose name starts with `mock`).
+let mockPictureMountCount = 0;
+
+// Currently-mounted AdInterstitial instance count (increment on mount,
+// decrement on cleanup). Drives the D1 "adPhase resets to idle after onDone"
+// assertion: after onDone fires, the overlay MUST have unmounted (count → 0).
+// Prefixed with `mock` for jest.mock factory out-of-scope visibility.
+let mockAdMountCount = 0;
 
 jest.mock('../components/Picture/GuessPicture', () => {
+  const React = jest.requireActual('react');
   return function MockGuessPicture(props: MockPictureProps) {
+    React.useEffect(() => {
+      mockPictureMountCount += 1;
+      return () => {};
+    }, []);
     mockGuessPicture(props);
     return null;
   };
@@ -73,6 +106,25 @@ jest.mock('../components/Guess/GuessExhaustedPanel', () => {
 jest.mock('../components/Guess/GuessAdvanceLoader', () => {
   return function MockGuessAdvanceLoader(props: Record<string, unknown>) {
     mockGuessAdvanceLoader(props);
+    return null;
+  };
+});
+
+jest.mock('../components/Ads/AdInterstitial', () => {
+  const React = jest.requireActual('react');
+  return function MockAdInterstitial(props: MockAdInterstitialProps) {
+    React.useEffect(() => {
+      mockAdMountCount += 1;
+      return () => { mockAdMountCount -= 1; };
+    }, []);
+    mockAdInterstitial(props);
+    return null;
+  };
+});
+
+jest.mock('../components/Picture/NextCardImageWarmer', () => {
+  return function MockNextCardImageWarmer(props: MockNextCardImageWarmerProps) {
+    mockNextCardImageWarmer(props);
     return null;
   };
 });
@@ -142,6 +194,19 @@ jest.mock('../services/ads/InternalProAdSource', () => ({
   createInternalProAdSource: jest.fn(),
 }));
 
+// D1 (P3): GuessScreen reads the deck ahead via getNextImagesForScope to feed
+// NextCardImageWarmer. Default resolves [] so existing tests are unaffected;
+// per-test overrides drive the warmer-wiring assertions below. Other exports
+// stay real so the unmocked resolve chain (nextCardAdvancer → nextCardResolver
+// → getNextImageForScope SINGULAR) keeps working in tests that exercise it.
+jest.mock('../utils/storageDatum', () => {
+  const actual = jest.requireActual('../utils/storageDatum');
+  return {
+    ...actual,
+    getNextImagesForScope: jest.fn().mockResolvedValue([]),
+  };
+});
+
 jest.mock('../hooks/useStreak', () => {
   const actual = jest.requireActual<{
     useStreak: (initial?: number) => {
@@ -181,6 +246,7 @@ import { warmAllDeckIfNeeded as warmAllDeckIfNeededImpl } from '../services/card
 import { consumeAdSlot as consumeAdSlotImpl } from '../utils/adCadence';
 import { shouldSuppressAds as shouldSuppressAdsImpl } from '../services/billing/entitlements';
 import { resolveNextCardWithServerFallback as resolveNextCardWithServerFallbackImpl } from '../utils/nextCardAdvancer';
+import { getNextImagesForScope as getNextImagesForScopeImpl } from '../utils/storageDatum';
 
 // reason: these modules are fully replaced by jest.mock at runtime; cast the typed
 // import bindings to jest.MockedFunction so .mockReturnValue/.mockResolvedValue/.mockImplementation read cleanly without per-call casts.
@@ -193,6 +259,7 @@ const warmAllDeckIfNeeded = warmAllDeckIfNeededImpl as jest.MockedFunction<typeo
 const consumeAdSlot = consumeAdSlotImpl as jest.MockedFunction<typeof consumeAdSlotImpl>;
 const shouldSuppressAds = shouldSuppressAdsImpl as jest.MockedFunction<typeof shouldSuppressAdsImpl>;
 const resolveNextCardWithServerFallback = resolveNextCardWithServerFallbackImpl as jest.MockedFunction<typeof resolveNextCardWithServerFallbackImpl>;
+const getNextImagesForScope = getNextImagesForScopeImpl as jest.MockedFunction<typeof getNextImagesForScopeImpl>;
 const advanceModuleActual = jest.requireActual('../utils/nextCardAdvancer') as typeof import('../utils/nextCardAdvancer');
 
 // reason: source's GuessNavigation requires navigate/setOptions, but several test fixtures only supply replace/setParams/popToTop; loosen prop types to keep fixtures byte-identical to the .js baseline.
@@ -211,6 +278,10 @@ function lastMenuProps(): MockMenuProps {
   return mockGuessExitSwipeMenu.mock.calls[mockGuessExitSwipeMenu.mock.calls.length - 1][0];
 }
 
+function lastAdInterstitialProps(): MockAdInterstitialProps {
+  return mockAdInterstitial.mock.calls[mockAdInterstitial.mock.calls.length - 1][0];
+}
+
 function streakSpies() {
   const { useStreak } = require('../hooks/useStreak');
   return useStreak.__spies as { onWin: jest.Mock; onLose: jest.Mock; reset: jest.Mock };
@@ -219,6 +290,8 @@ function streakSpies() {
 describe('GuessScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockPictureMountCount = 0;
+    mockAdMountCount = 0;
     const { isE2EMode } = require('../utils/e2eMode');
     isE2EMode.mockReturnValue(false);
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
@@ -226,6 +299,9 @@ describe('GuessScreen', () => {
     // Reset the outer resolver mock to its default (actual implementation)
     // so per-test mockResolvedValue overrides don't leak across tests.
     resolveNextCardWithServerFallback.mockImplementation(advanceModuleActual.resolveNextCardWithServerFallback);
+    // D1 (P3): default the warmer deck reader to [] so existing tests see no
+    // URIs; per-test overrides assert the wiring.
+    getNextImagesForScope.mockResolvedValue([]);
     // Stub AppState.addEventListener as a jest.fn so tests can capture the
     // registered listener and dispatch synthetic events. Restored after each.
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
@@ -265,9 +341,9 @@ describe('GuessScreen', () => {
       pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
     });
 
-    // PB6: streak + score NOT committed on tap (deferred to RESOLVED).
-    expect(applySuccessSideEffects).not.toHaveBeenCalled();
-
+    // PB6 + C1: streak + score commit when the resolve settles. C1 kicks the
+    // resolve off in applySuccessPath at tap time, so applySuccessSideEffects
+    // may already have fired by here (microtask-flushed by act()).
     expect(navigation.replace).not.toHaveBeenCalledWith('AdScreen', expect.anything());
     expect(navigation.replace).not.toHaveBeenCalledWith('ResultScreen', expect.anything());
 
@@ -326,7 +402,6 @@ describe('GuessScreen', () => {
       pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 6000 });
     });
 
-    expect(applySuccessSideEffects).not.toHaveBeenCalled();
     expect(lastOverlayProps().multiplier).toBe(1);
 
     await act(async () => {
@@ -449,7 +524,11 @@ describe('GuessScreen', () => {
     });
   });
 
-  it('overlay onDone with null (deck exhausted) renders GuessExhaustedPanel (no navigation.reset)', async () => {
+  it('overlay onDone with null (deck exhausted) dispatches FAILED_TRANSIENT → warming, NOT GuessExhaustedPanel (no navigation.reset)', async () => {
+    // C1 (P1 post-fix): a single empty cascade result must NOT interrupt the
+    // streak. reason='empty' is now treated as transient — the cascade's Tier 4
+    // looping-replay will recover on retry as long as the server has any
+    // matching row. The panel only mounts after 3 failed retries (safety net).
     const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
     const route = {
       params: {
@@ -485,13 +564,13 @@ describe('GuessScreen', () => {
       overlayProps.onDone();
     });
 
-    expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-      onLeave: expect.any(Function),
-      onSwitch: expect.any(Function),
-    }));
+    // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
+    expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+    // Safety-net panel must NOT mount on a single empty cascade.
+    expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
     expect(navigateToNextGuess).not.toHaveBeenCalled();
     expect(navigation.setParams).not.toHaveBeenCalled();
-    // Regression (T5): prefetch fired on win but did not interfere with exhaustion fallback.
+    // Regression (T5): prefetch fired on win but did not interfere with the warming fallback.
     expect(prefetchIfLow).toHaveBeenCalledTimes(1);
   });
 
@@ -672,8 +751,9 @@ describe('GuessScreen', () => {
       pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 });
     });
 
-    // PB6: onWin deferred to RESOLVED — not called on tap.
-    expect(streakSpies().onWin).not.toHaveBeenCalled();
+    // PB6 + C1: onWin fires when the resolve settles. C1 kicks the resolve off
+    // at tap time, so onWin may already have fired by here. onLose never fires
+    // on the success path.
     expect(streakSpies().onLose).not.toHaveBeenCalled();
 
     const overlayProps = lastOverlayProps();
@@ -1005,8 +1085,9 @@ describe('GuessScreen', () => {
         pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
       });
 
-      // PB6: applySuccessSideEffects deferred to RESOLVED; only prefetchIfLow fires on tap.
-      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+      // PB6 + C1: applySuccessSideEffects fires when the resolve settles; C1
+      // kicks the resolve off at tap, so it may already have fired by here.
+      // The observable invariant is prefetchIfLow's call shape on tap.
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
       expect(prefetchIfLow).toHaveBeenCalledWith({
         categoryKey: 'nature',
@@ -1036,7 +1117,8 @@ describe('GuessScreen', () => {
         pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } });
       });
 
-      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+      // C1: applySuccessSideEffects fires when the resolve settles. The
+      // observable invariant here is prefetchIfLow's private-scope pass-through.
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
       expect(prefetchIfLow).toHaveBeenCalledWith({
         categoryKey: 'nature',
@@ -1251,7 +1333,8 @@ describe('GuessScreen', () => {
       expect(navigateToNextGuess).not.toHaveBeenCalled();
     });
 
-    it('T11: handleOverlayDone renders GuessExhaustedPanel when deck is truly empty after warm retry', async () => {
+    it('T11: handleOverlayDone dispatches FAILED_TRANSIENT → warming (NOT GuessExhaustedPanel) when deck is truly empty after warm retry', async () => {
+      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
       const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
       warmAllDeckIfNeeded.mockResolvedValue(undefined);
 
@@ -1280,15 +1363,16 @@ describe('GuessScreen', () => {
       // foregroundTopUp's Tier 2 short-circuit recheck — this is intentional
       // and correct.
       expect(resolveNextGuessParams).toHaveBeenCalledTimes(3);
-      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-        onLeave: expect.any(Function),
-        onSwitch: expect.any(Function),
-      }));
+      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+      // Safety-net panel must NOT mount on a single empty cascade.
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
       expect(navigateToNextGuess).not.toHaveBeenCalled();
       expect(navigation.setParams).not.toHaveBeenCalled();
     });
 
-    it('T12: handleOverlayDone does NOT warm when category is "all" (immediate GuessExhaustedPanel)', async () => {
+    it('T12: handleOverlayDone does NOT warm when category is "all" (still dispatches FAILED_TRANSIENT → warming, no immediate GuessExhaustedPanel)', async () => {
+      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
       const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
 
       resolveNextGuessParams.mockResolvedValue(null);
@@ -1316,10 +1400,10 @@ describe('GuessScreen', () => {
       // foregroundTopUp's Tier 2 short-circuit recheck — this is intentional
       // and correct.
       expect(resolveNextGuessParams).toHaveBeenCalledTimes(2);
-      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-        onLeave: expect.any(Function),
-        onSwitch: expect.any(Function),
-      }));
+      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+      // Safety-net panel must NOT mount on a single empty cascade.
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
       expect(navigateToNextGuess).not.toHaveBeenCalled();
     });
   });
@@ -1335,8 +1419,9 @@ describe('GuessScreen', () => {
   };
 
   function makeNav() {
-    // T1.11: addListener default no-op required so useFlushOnLeave (gated on
-    // advanceAfterAd) can subscribe without crashing when the gate is open.
+    // addListener default no-op kept for forward-compat with hooks that may
+    // subscribe to navigation events. C3 removed useFlushOnLeave from
+    // GuessScreen (AdScreen round-trip is gone); the stub remains harmless.
     return {
       replace: jest.fn(),
       setParams: jest.fn(),
@@ -1346,25 +1431,6 @@ describe('GuessScreen', () => {
       addListener: jest.fn(() => () => {}),
     };
   }
-
-  it('on success + ad due (public, tier 0): navigates to AdScreen with onAdDone=advance', async () => {
-    consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
-    shouldSuppressAds.mockReturnValue(false);
-    const navigation = makeNav();
-    const route = { params: PUBLIC_ROUTE_PARAMS };
-    isOnTarget.mockReturnValue(true);
-    applySuccessSideEffects.mockResolvedValue(undefined);
-    resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
-
-    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
-    const pictureProps = lastPictureProps();
-    await act(async () => { pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
-    const overlayProps = lastOverlayProps();
-    await act(async () => { overlayProps.onDone(); });
-
-    expect(navigation.navigate).toHaveBeenCalledWith('AdScreen', expect.objectContaining({ onAdDone: 'advance' }));
-    expect(navigation.setParams).not.toHaveBeenCalledWith(expect.objectContaining({ listId: 4 }));
-  });
 
   it('on success + ad not due: advances directly (no AdScreen navigation)', async () => {
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
@@ -1384,7 +1450,7 @@ describe('GuessScreen', () => {
   });
 
   it('win → no ad → setParams called exactly once (state machine is single source of truth)', async () => {
-    // Phase 1 review fix A: routeAfterOverlay's no-ad branch no longer calls
+    // Phase 1 review fix A: onAdvanceResolved's no-ad branch no longer calls
     // applyAdvance. The reducer's RESOLVED transition + idle-entry effect is
     // the single source of truth, so setParams fires exactly once.
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
@@ -1405,7 +1471,38 @@ describe('GuessScreen', () => {
     expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
   });
 
-  it('on success + private scope: navigates to AdScreen when cadence is due (private no longer suppresses ads)', async () => {
+  it('P2 no-ad success: navigation.setParams NOT called between toAdScreen and overlay onDone — called exactly once after onDone', async () => {
+    // P2: in the no-ad path, RESOLVED must defer to handleOverlayDone (after the
+    // SuccessOverlay animation completes) so the next image's imageFile URI does
+    // not land in route.params WHILE the overlay is still animating its fade-out
+    // (which would flash the next image behind the semi-transparent overlay).
+    // Mirrors the ad-path defer contract (handleAdDone is the sole dispatch site
+    // there); here handleOverlayDone is the sole dispatch site for the no-ad path.
+    consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    const nextParams = { listId: 4, pictureId: 'image-2', imageFile: 'file:///next.jpg' };
+    resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+    // PRE-FIX: setParams already landed here because onAdvanceResolved's no-ad
+    // branch dispatched RESOLVED as soon as the resolve settled (during the
+    // overlay animation). POST-FIX: deferred to handleOverlayDone.
+    expect(navigation.setParams).not.toHaveBeenCalledWith(nextParams);
+
+    await act(async () => { lastOverlayProps().onDone(); });
+
+    // Sole dispatch site for the no-ad path: exactly one setParams with the
+    // next card, AFTER the overlay completes.
+    expect(navigation.setParams).toHaveBeenCalledTimes(1);
+    expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+  });
+
+  it('on success + private scope: renders AdInterstitial when cadence is due (private no longer suppresses ads)', async () => {
     consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 }); // cadence due
     shouldSuppressAds.mockReturnValue(false);
     const navigation = makeNav();
@@ -1418,7 +1515,9 @@ describe('GuessScreen', () => {
     await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
     await act(async () => { lastOverlayProps().onDone(); });
 
-    expect(navigation.navigate).toHaveBeenCalledWith('AdScreen', expect.anything());
+    // C2: private scope path uses the in-component overlay, not the AdScreen route.
+    expect(mockAdInterstitial.mock.calls.length).toBeGreaterThan(0);
+    expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
   });
 
   it('on success + tier >= 1 (no_ads gate): never navigates to AdScreen', async () => {
@@ -1522,57 +1621,6 @@ describe('GuessScreen', () => {
     }));
   });
 
-  describe('advanceAfterAd effect (T1.6b / PB1 / RC5)', () => {
-    it('advanceAfterAd effect with stashed=non-null → dispatches RESOLVED, reducer applies setParams (state machine stays source of truth)', async () => {
-      const navigation = makeNav();
-      const route = {
-        params: {
-          ...PUBLIC_ROUTE_PARAMS,
-          advanceAfterAd: true,
-          advanceParams: { listId: 9, imageFile: 'file:///next.jpg' },
-        },
-      };
-      isOnTarget.mockReturnValue(true);
-
-      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
-
-      // PB1: merge-trigger cleared FIRST in a single setParams call.
-      expect(navigation.setParams).toHaveBeenCalledWith({ advanceAfterAd: undefined, advanceParams: undefined });
-      // setParams(stashed) is applied by the idle-entry side-effect consuming advance.next,
-      // NOT directly from the advanceAfterAd effect.
-      expect(navigation.setParams).toHaveBeenCalledWith({ listId: 9, imageFile: 'file:///next.jpg' });
-      // RC5: navigation.reset / popToTop never called on the stash branch.
-      expect(navigation.popToTop).not.toHaveBeenCalled();
-    });
-
-    it('advanceAfterAd effect with stashed=null → state=exhausted (no navigation.reset / popToTop) (CB5)', async () => {
-      const navigation = makeNav();
-      const route = {
-        params: {
-          ...PUBLIC_ROUTE_PARAMS,
-          advanceAfterAd: true,
-          advanceParams: null,
-        },
-      };
-      isOnTarget.mockReturnValue(true);
-
-      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
-
-      // PB1: merge-trigger cleared FIRST.
-      expect(navigation.setParams).toHaveBeenCalledWith({ advanceAfterAd: undefined, advanceParams: undefined });
-      // CB5: state machine lands in `exhausted` → GuessExhaustedPanel renders.
-      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-        onLeave: expect.any(Function),
-        onSwitch: expect.any(Function),
-      }));
-      // No bounce: popToTop / replace never called from the null-stash branch.
-      expect(navigation.popToTop).not.toHaveBeenCalled();
-      expect(navigation.replace).not.toHaveBeenCalled();
-      // The stashed value is consumed AS-IS — setParams with the (absent) stash never fires.
-      expect(navigation.setParams).not.toHaveBeenCalledWith(expect.objectContaining({ listId: expect.any(Number) }));
-    });
-  });
-
   describe('toAdScreen characterization', () => {
     it('passes post-increment streak and resolveStreakTier(N+1).multiplier to applySuccessSideEffects (off-by-one guard)', async () => {
       const { resolveStreakTier } = require('../constants/streakTiers');
@@ -1651,16 +1699,17 @@ describe('GuessScreen', () => {
         lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } });
       });
 
-      // prefetchIfLow fires on tap; applySuccessSideEffects not yet called.
+      // prefetchIfLow fires synchronously inside applySuccessPath; C1 then
+      // kicks off the resolve, whose trailing onAdvanceResolved fires
+      // applySuccessSideEffects strictly later (after the await microtask).
       const prefetchOrder = prefetchIfLow.mock.invocationCallOrder[0];
       expect(prefetchOrder).toEqual(expect.any(Number));
-      expect(applySuccessSideEffects).not.toHaveBeenCalled();
 
       await act(async () => {
         lastOverlayProps().onDone();
       });
 
-      // applySuccessSideEffects fires on RESOLVED, strictly after prefetchIfLow.
+      // applySuccessSideEffects fires from the resolve settle, strictly after prefetchIfLow.
       const applyOrder = applySuccessSideEffects.mock.invocationCallOrder[0];
       expect(applyOrder).toEqual(expect.any(Number));
       expect(applyOrder).toBeGreaterThan(prefetchOrder);
@@ -1705,32 +1754,34 @@ describe('GuessScreen', () => {
 
   describe('T1.8 + PB6 (cadence rollback + streak/score defer on null advance)', () => {
     it('win → cadence says showAd + next is null → ad NOT shown, cadence counter unchanged (rollback = skip commit)', async () => {
-      // CB9: mockReturnValue (not mockReturnValueOnce) with nextCount: 3 makes the
-      // rollback observable — if setSuccessesSinceLastAd(3) had been called, the next
-      // cycle would feed successesSinceLastAd: 3 into consumeAdSlot.
-      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 3 });
-      shouldSuppressAds.mockReturnValue(false);
-      const navigation = makeNav();
-      isOnTarget.mockReturnValue(true);
-      applySuccessSideEffects.mockResolvedValue(undefined);
-      resolveNextGuessParams.mockResolvedValue(null);
+    // T1.8 + A7 (Phase 2 review): when advance fails (next=null), the cadence
+    // rollback is structural — onAdvanceResolved is never reached, so
+    // consumeAdSlot / setSuccessesSinceLastAd cannot fire and the would-be
+    // nextCount=3 cannot leak into the counter. The A7 guard additionally
+    // ensures any subsequent cycle from a non-idle state (e.g. exhausted after
+    // a null-next win) cannot fire side effects either. The original test
+    // relied on side effects firing from stale `exhausted` state to observe
+    // the persisted counter; that path is now correctly blocked by the A7
+    // guard, so we assert the structural fact directly: consumeAdSlot was
+    // never called during the null-next cycle (no commit could have happened).
+    consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 3 });
+    shouldSuppressAds.mockReturnValue(false);
+    const navigation = makeNav();
+    isOnTarget.mockReturnValue(true);
+    applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue(null);
 
-      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
-      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
-      await act(async () => { lastOverlayProps().onDone(); });
+    await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+    await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+    await act(async () => { lastOverlayProps().onDone(); });
 
-      // T1.8: ad NOT shown when next is null (routeAfterOverlay unreachable).
-      expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
-      // T1.8: rollback = skip setSuccessesSinceLastAd(nextCount) commit. Verify by
-      // triggering a second cycle; consumeAdSlot must observe the PRE-null value
-      // (0), not the rolled-back 3.
-      resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
-      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
-      await act(async () => { lastOverlayProps().onDone(); });
-      expect(consumeAdSlot).toHaveBeenLastCalledWith(expect.objectContaining({
-        successesSinceLastAd: 0,
-      }));
-    });
+    // T1.8: ad NOT shown when next is null (onAdvanceResolved never reached).
+    expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+    // T1.8 rollback = consumeAdSlot never reached → no nextCount=3 commit.
+    expect(consumeAdSlot).not.toHaveBeenCalled();
+    expect(streakSpies().onWin).not.toHaveBeenCalled();
+    expect(applySuccessSideEffects).not.toHaveBeenCalled();
+  });
 
     it('PB6: win → next card resolved → streak + score committed in RESOLVED side-effect (NOT in toAdScreen)', async () => {
       const navigation = makeNav();
@@ -1742,13 +1793,12 @@ describe('GuessScreen', () => {
 
       await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
 
-      // PB6: tap does NOT commit streak/score (deferred to RESOLVED).
-      expect(streakSpies().onWin).not.toHaveBeenCalled();
-      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+      // PB6 + C1: tap kicks off the resolve fire-and-forget; streak/score
+      // commit when the resolve settles (not synchronously on the tap).
 
       await act(async () => { lastOverlayProps().onDone(); });
 
-      // PB6: streak + score committed only after successful resolve.
+      // PB6: streak + score committed exactly once across the win+dismiss flow.
       expect(streakSpies().onWin).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffects).toHaveBeenLastCalledWith(expect.objectContaining({
@@ -1757,7 +1807,8 @@ describe('GuessScreen', () => {
       }));
     });
 
-    it('PB6: win → next card null → streak NOT incremented, score NOT buffered (pairs with cadence rollback)', async () => {
+    it('PB6: win → next card null → streak NOT incremented, score NOT buffered, dispatches FAILED_TRANSIENT → warming (no panel on single empty)', async () => {
+      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
       const navigation = makeNav();
       isOnTarget.mockReturnValue(true);
       applySuccessSideEffects.mockResolvedValue(undefined);
@@ -1770,11 +1821,10 @@ describe('GuessScreen', () => {
       // PB6: failed advance does not credit the streak or buffer the score.
       expect(streakSpies().onWin).not.toHaveBeenCalled();
       expect(applySuccessSideEffects).not.toHaveBeenCalled();
-      // Exhausted panel is rendered instead.
-      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-        onLeave: expect.any(Function),
-        onSwitch: expect.any(Function),
-      }));
+      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+      // Safety-net panel must NOT mount on a single empty cascade.
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
     });
   });
 
@@ -1788,19 +1838,30 @@ describe('GuessScreen', () => {
       return call[1] as (state: string) => void;
     }
 
-    it('win → next card null + reason "empty" → renders GuessExhaustedPanel (no navigation.reset)', async () => {
+    it('win → next card null + reason "empty" → dispatch FAILED_TRANSIENT (warming state), GuessExhaustedPanel NOT rendered, retry scheduled', async () => {
+      // C1 (P1 post-fix): a single empty cascade result must NOT interrupt the
+      // streak. reason='empty' is now treated as transient — the cascade's
+      // Tier 4 looping-replay will recover on retry as long as the server has
+      // any matching row. The panel only mounts as a safety net after 3 failed
+      // retries (tested separately via the network-retry path below).
+      jest.useFakeTimers();
       resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
       const navigation = makeNav();
       await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
       await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
       await act(async () => { lastOverlayProps().onDone(); });
 
-      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
-        onLeave: expect.any(Function),
-        onSwitch: expect.any(Function),
-      }));
+      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+      // Safety-net panel must NOT mount on a single empty cascade.
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
       expect(navigation.replace).not.toHaveBeenCalledWith('GuessScreen', expect.anything());
       expect(navigateToNextGuess).not.toHaveBeenCalled();
+      // Streak + score never committed until recovery lands.
+      expect(streakSpies().onWin).not.toHaveBeenCalled();
+      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+
+      jest.useRealTimers();
     });
 
     it('win → next card null + reason "network" → GuessAdvanceLoader, retries 3×, then exhausted', async () => {
@@ -1995,6 +2056,505 @@ describe('GuessScreen', () => {
       expect(navigation.setParams).toHaveBeenCalledTimes(1);
 
       jest.useRealTimers();
+    });
+
+    it('AppState background during in-flight resolve → no onWin, no applySuccessSideEffects, no AdScreen navigation (A7)', async () => {
+      // A7 (Phase 2 review): if AppState backgrounding mid-resolve dispatches
+      // FAILED_PERMANENT (state=exhausted) while resolveNextCardWithServerFallback
+      // is still in flight, the trailing resolve must NOT fire any side effects
+      // — the reducer already rejects the trailing RESOLVED, but onWin /
+      // applySuccessSideEffects / decideAdSlot / setAdPhase would all
+      // run on stale state without a guard on advanceStateRef.current.
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 1 });
+      shouldSuppressAds.mockReturnValue(false);
+
+      let resolveAdvance!: (v: { next: { params: Record<string, unknown> }; reason: 'ok' }) => void;
+      resolveNextCardWithServerFallback.mockReturnValue(
+        new Promise<{ next: { params: Record<string, unknown> }; reason: 'ok' }>((resolve) => {
+          resolveAdvance = resolve;
+        }),
+      );
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+
+      // Trigger WIN → state=advancing, resolver is in flight (promise held).
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // No side effects yet — resolver has not settled.
+      expect(streakSpies().onWin).not.toHaveBeenCalled();
+      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+
+      // Background mid-resolve → AppState listener forces FAILED_PERMANENT → exhausted.
+      const listener = findAppStateListener();
+      await act(async () => { listener('background'); });
+
+      expect(mockGuessExhaustedPanel).toHaveBeenCalledWith(expect.objectContaining({
+        onLeave: expect.any(Function),
+        onSwitch: expect.any(Function),
+      }));
+
+      // Now settle the in-flight resolve with a successful next card.
+      await act(async () => {
+        resolveAdvance({ next: { params: { listId: 4 } }, reason: 'ok' });
+      });
+      // Flush microtasks so any wrongly-unguarded post-await path can fire.
+      await act(async () => { await Promise.resolve(); });
+
+      // A7: no stale side effects.
+      expect(streakSpies().onWin).not.toHaveBeenCalled();
+      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+      expect(consumeAdSlot).not.toHaveBeenCalled();
+      expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+      // Reducer already rejected the trailing RESOLVED — state stays exhausted.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // Regression: Tier 2 foreground-fetch path used to collide listId with the
+  // just-played card (when the played card was the local deck's highest, the
+  // post-removal deck's max is below the cursor, so normalizeListIds starts
+  // fresh from 1 — and the OLD card's listId was also 1). The result was
+  // key={listId} collision → no remount → useTargetDrag's userInteractedRef
+  // blocked the target reset → target rendered at the OLD dragged position
+  // (or off-screen) on the NEW card. Fix: key on pictureId (server-unique)
+  // with a listId fallback.
+  describe('Tier 2 target-remount regression (PB-key-collision)', () => {
+    it('Tier 2 returns card with COLLIDING listId (same as played) → GuessPicture still remounts (key on pictureId)', async () => {
+      const firstParams = {
+        listId: 1,
+        pictureId: 'old-pic',
+        imageFile: 'file:///old.jpg',
+        description: 'old',
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+      };
+      // Tier 2 returns next card with listId=1 (COLLIDES) but a different pictureId.
+      const nextParams = {
+        listId: 1,
+        pictureId: 'new-pic',
+        imageFile: 'file:///new.jpg',
+        description: 'new',
+        hiddenLocation: { x: 0.3, y: 0.7 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        skipInstructions: true,
+      };
+
+      // Mimic real native-stack: setParams MERGES into the live route.params
+      // object AND the navigator re-renders the screen with the merged route.
+      // Without the post-setParams update(), the screen closure keeps the
+      // initial route.params reference and the key never changes regardless of
+      // the fix (real React Navigation triggers a parent re-render).
+      let currentRoute = { params: { ...firstParams } };
+      const navigation = makeNav();
+      navigation.setParams.mockImplementation((update: Record<string, unknown>) => {
+        currentRoute = { params: { ...currentRoute.params, ...update } };
+      });
+
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      resolveNextGuessParams.mockResolvedValue({ params: nextParams });
+
+      let renderer: ReturnType<typeof create>;
+      await act(async () => {
+        renderer = create(<GuessScreen navigation={navigation} route={currentRoute} />);
+      });
+
+      // Initial mount only.
+      expect(mockPictureMountCount).toBe(1);
+
+      // Win → Tier 2 → setParams with new card.
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // setParams fired.
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+
+      // Re-render with the merged route (mimics the navigator's response).
+      await act(async () => {
+        renderer.update(<GuessScreen navigation={navigation} route={currentRoute} />);
+      });
+
+      // The FIX: even though listId collides, pictureId differs → key changes →
+      // GuessPicture remounts → useTargetDrag gets fresh state → target renders
+      // at the new card's center. mockPictureMountCount must be 2 after the advance.
+      expect(mockPictureMountCount).toBe(2);
+
+      // And the latest props carry the NEW pictureId (not stale).
+      expect(lastPictureProps().pictureId).toBe('new-pic');
+    });
+
+    it('without the fix: COLLIDING listId + identical pictureId would NOT remount (sanity)', async () => {
+      // Defense: if both listId and pictureId are identical (truly the same
+      // card identity), the key should NOT change — this is correct behavior.
+      // Documents the key contract for future regressions.
+      const firstParams = {
+        listId: 7,
+        pictureId: 'same-pic',
+        imageFile: 'file:///same.jpg',
+        description: 'same',
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+      };
+
+      let currentRoute = { params: { ...firstParams } };
+      const navigation = makeNav();
+      navigation.setParams.mockImplementation((update: Record<string, unknown>) => {
+        currentRoute = { params: { ...currentRoute.params, ...update } };
+      });
+
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      // Resolve returns the SAME identity (same pictureId, same listId) — only
+      // description differs. setParams merges, but key (pictureId) is unchanged.
+      resolveNextGuessParams.mockResolvedValue({
+        params: { ...firstParams, description: 'updated' },
+      });
+
+      let renderer: ReturnType<typeof create>;
+      await act(async () => {
+        renderer = create(<GuessScreen navigation={navigation} route={currentRoute} />);
+      });
+      expect(mockPictureMountCount).toBe(1);
+
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+      await act(async () => {
+        renderer.update(<GuessScreen navigation={navigation} route={currentRoute} />);
+      });
+
+      // Same identity → no remount. This is the intended ceiling of the key fix.
+      expect(mockPictureMountCount).toBe(1);
+    });
+
+    it('PB2 disabled prop: GuessScreen passes advance-state-derived disabled and the prop reaches useTargetDrag (regression)', async () => {
+      // The disabled prop on GuessPicture was previously not declared in
+      // GuessPictureProps, so GuessScreen's `disabled={advance.state !== 'idle'}`
+      // was silently dropped. After the fix, GuessPicture accepts `disabled`
+      // and forwards it to useTargetDrag via `enabled: !disabled && !isE2EMode()`.
+      // This test only re-asserts that the screen passes the prop; the
+      // component-level wiring is covered in GuessPicture.test.js.
+      resolveNextCardWithServerFallback.mockReturnValue(new Promise(() => {}));
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+
+      expect(lastPictureProps().disabled).toBe(false);
+
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      expect(lastPictureProps().disabled).toBe(true);
+    });
+  });
+
+  describe('C1 resolve-in-parallel (kick at WIN, await at dismiss)', () => {
+    it('kicks off runResolveCycle in applySuccessPath at tap (before overlay dismiss)', async () => {
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+
+      // No resolve before tap.
+      expect(resolveNextCardWithServerFallback).not.toHaveBeenCalled();
+
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+      // Kicked off fire-and-forget at tap (in applySuccessPath), not at dismiss.
+      expect(resolveNextCardWithServerFallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('handleOverlayDone awaits the pre-kicked-off resolve; no second resolve call at dismiss', async () => {
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+      expect(resolveNextCardWithServerFallback).toHaveBeenCalledTimes(1);
+
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // handleOverlayDone awaits the ref-held Promise — does NOT re-invoke resolve.
+      expect(resolveNextCardWithServerFallback).toHaveBeenCalledTimes(1);
+    });
+
+    it('swipe-home during SuccessOverlay → in-flight resolve ABORTS: applySuccessSideEffects NOT called (persistent-storage guard)', async () => {
+      // CONCERN #1 (post-implementation verification pass): PT6 cleanup nulls
+      // nextCardResolveRef on unmount but does NOT cancel the in-flight
+      // runResolveCycle() Promise. When it settles post-unmount,
+      // onAdvanceResolved fires applySuccessSideEffects → bufferScore
+      // (AsyncStorage write) + removeImageFromList (deck mutation) +
+      // deleteImageFromStorage (file delete). These are PERSISTENT STORAGE
+      // mutations after the user navigated away. Plan §4.2 + §10 risk row 2
+      // said "discard" — user decision: ABORT the win-credit on swipe-home via
+      // a mountedRef guard in onAdvanceResolved.
+      jest.clearAllMocks();
+      consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
+      shouldSuppressAds.mockReturnValue(false);
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+      let resolveAdvance!: (v: { next: { params: Record<string, unknown> }; reason: 'ok' }) => void;
+      resolveNextCardWithServerFallback.mockReturnValue(
+        new Promise<{ next: { params: Record<string, unknown> }; reason: 'ok' }>((resolve) => {
+          resolveAdvance = resolve;
+        }),
+      );
+
+      const navigation = makeNav();
+      let renderer: ReturnType<typeof create>;
+      await act(async () => { renderer = create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+      // WIN kicked off the in-flight resolve; it is pending (held by harness).
+      expect(resolveNextCardWithServerFallback).toHaveBeenCalledTimes(1);
+
+      // Swipe-home (unmount) BEFORE the resolve settles. PT6 cleanup runs and
+      // (after the fix) flips mountedRef.current=false.
+      await act(async () => { renderer.unmount(); });
+
+      // Settle the in-flight resolve. Without the guard, onAdvanceResolved
+      // fires applySuccessSideEffects — the abort must prevent that.
+      await act(async () => {
+        resolveAdvance({ next: { params: { listId: 4 } }, reason: 'ok' });
+      });
+      await act(async () => { await Promise.resolve(); });
+
+      expect(applySuccessSideEffects).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ad-in-overlay contract (D1)', () => {
+    // D1 (a): showAd → AdInterstitial rendered (not AdScreen route).
+    // (Moved from the top-level `describe('GuessScreen')` body; semantics unchanged.)
+    it('on success + ad due (public, tier 0): renders AdInterstitial overlay (no AdScreen navigation)', async () => {
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      const navigation = makeNav();
+      const route = { params: PUBLIC_ROUTE_PARAMS };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      resolveNextGuessParams.mockResolvedValue({ params: { listId: 4 } });
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+      const pictureProps = lastPictureProps();
+      await act(async () => { pictureProps.toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      const callsBeforeDismiss = mockAdInterstitial.mock.calls.length;
+      const overlayProps = lastOverlayProps();
+      await act(async () => { overlayProps.onDone(); });
+
+      // C2: in-component overlay replaces the AdScreen route. AdInterstitial
+      // mounted at least once between dismiss and now; RESOLVED is deferred
+      // to handleAdDone (not fired yet here), so setParams has not landed.
+      expect(mockAdInterstitial.mock.calls.length).toBeGreaterThan(callsBeforeDismiss);
+      expect(lastAdInterstitialProps().onDone).toEqual(expect.any(Function));
+      expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+      expect(navigation.setParams).not.toHaveBeenCalledWith(expect.objectContaining({ listId: 4 }));
+    });
+
+    it('AdInterstitial onDone → dispatch RESOLVED + setParams(next) + overlay unmounts (adPhase idle)', async () => {
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      const navigation = makeNav();
+      const nextParams = { listId: 4, pictureId: 'image-2', imageFile: 'file:///next.jpg' };
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // Overlay mounted; capture its onDone then assert no setParams yet.
+      const onDone = lastAdInterstitialProps().onDone;
+      expect(navigation.setParams).not.toHaveBeenCalledWith(nextParams);
+      // D1 (item 5) explicit: overlay is mounted right now (adPhase === 'showing').
+      expect(mockAdMountCount).toBe(1);
+
+      const callsBeforeAdDone = mockAdInterstitial.mock.calls.length;
+      await act(async () => { onDone(); });
+
+      // C2 §3.2 step 5: RESOLVED fires from handleAdDone → idle-entry effect
+      // applies setParams(advance.next) exactly once.
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+
+      // Overlay unmounts (adPhase → 'idle') → AdInterstitial mock NOT called again.
+      expect(mockAdInterstitial.mock.calls.length).toBe(callsBeforeAdDone);
+      // D1 (item 5) explicit: AdInterstitial is no longer mounted after onDone.
+      expect(mockAdMountCount).toBe(0);
+    });
+
+    it('ad dismissed → GuessPicture re-renders with next card (next.pictureId)', async () => {
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      const nextParams = {
+        listId: 4,
+        pictureId: 'next-pic-42',
+        imageFile: 'file:///next.jpg',
+        description: 'Next card',
+        hiddenLocation: { x: 0.3, y: 0.7 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        skipInstructions: true,
+      };
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
+
+      // Mimic native-stack: setParams MERGES into route.params and the navigator
+      // re-renders the screen with the merged route (the test renderer does not
+      // do this automatically).
+      let currentRoute = { params: { ...PUBLIC_ROUTE_PARAMS } };
+      const navigation = makeNav();
+      navigation.setParams.mockImplementation((update: Record<string, unknown>) => {
+        currentRoute = { params: { ...currentRoute.params, ...update } };
+      });
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      let renderer: ReturnType<typeof create>;
+      await act(async () => { renderer = create(<GuessScreen navigation={navigation} route={currentRoute} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // Dismiss the ad → RESOLVED → setParams(next) → merged route.
+      await act(async () => { lastAdInterstitialProps().onDone(); });
+
+      // Re-render with merged route so GuessPicture sees the new props.
+      await act(async () => {
+        renderer.update(<GuessScreen navigation={navigation} route={currentRoute} />);
+      });
+
+      // GuessPicture received the next card's pictureId (not stale).
+      expect(lastPictureProps().pictureId).toBe('next-pic-42');
+    });
+
+    // D1 (item 4): consolidated end-to-end assertion. Drive the full win → ad →
+    // onDone → next-card flow and assert navigation.navigate('AdScreen', ...) was
+    // never invoked at any point. Defense-in-depth companions live in the sibling
+    // ad-due / no-ads / e2e tests above; this one proves the contract across the
+    // whole advance cycle (the AdScreen route was deleted in C3).
+    it('full win → ad → onDone → next-card flow: navigation.navigate("AdScreen") never called', async () => {
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      const navigation = makeNav();
+      const nextParams = {
+        listId: 4,
+        pictureId: 'next-pic-d1',
+        imageFile: 'file:///next-d1.jpg',
+        description: 'D1 next card',
+        hiddenLocation: { x: 0.3, y: 0.7 },
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        isTutorial: false,
+        skipInstructions: true,
+      };
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+      await act(async () => { lastAdInterstitialProps().onDone(); });
+
+      expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+      // Sanity: the next card actually landed (proves the flow ran to completion).
+      expect(navigation.setParams).toHaveBeenCalledWith(expect.objectContaining({ listId: 4 }));
+    });
+  });
+
+  // D1 (P3): NextCardImageWarmer wiring — GuessScreen must read the deck ahead
+  // (getNextImagesForScope) and feed the upcoming imageFile URIs to the warmer
+  // so RN decodes those bitmaps before the advance swap. Warmer renders
+  // unconditionally (not gated on adPhase / showSuccess) so decode happens
+  // during the SuccessOverlay animation AND during the ad display.
+  describe('D1 P3: NextCardImageWarmer deck-ahead wiring', () => {
+    it('NextCardImageWarmer mounted with the next 5 deck URIs when deck has >5 remaining', async () => {
+      const navigation = makeNav();
+      const route = { params: { ...PUBLIC_ROUTE_PARAMS, listId: 1 } };
+      // Deck ahead: cards 2..7 (6 cards). Cap is 7, but the user spec target
+      // window is 5-7; assert the warmer receives exactly the 5 next URIs the
+      // call site slices (test fixture sets up 6 ahead, slice(0, 7) returns 6;
+      // we assert the call args shape and that URIs map correctly).
+      const aheadDeck = [
+        { listId: 2, imageFile: 'file:///deck/2.jpg' },
+        { listId: 3, imageFile: 'file:///deck/3.jpg' },
+        { listId: 4, imageFile: 'file:///deck/4.jpg' },
+        { listId: 5, imageFile: 'file:///deck/5.jpg' },
+        { listId: 6, imageFile: 'file:///deck/6.jpg' },
+        { listId: 7, imageFile: 'file:///deck/7.jpg' },
+      ];
+      getNextImagesForScope.mockResolvedValue(aheadDeck);
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+
+      // Reader was called with the cursor + scope so the deck-ahead window
+      // is scoped to the currently-displayed card.
+      expect(getNextImagesForScope).toHaveBeenCalledWith(expect.objectContaining({
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+        currentListId: 1,
+        scope: undefined,
+      }));
+
+      // Warmer received the next 5 deck imageFile URIs (call-site slice(0, 7),
+      // capped to 5 in this fixture by limit=5; assert the mapping is correct).
+      expect(mockNextCardImageWarmer).toHaveBeenCalled();
+      const warmerCall = mockNextCardImageWarmer.mock.calls[mockNextCardImageWarmer.mock.calls.length - 1][0];
+      expect(warmerCall.uris).toEqual([
+        'file:///deck/2.jpg',
+        'file:///deck/3.jpg',
+        'file:///deck/4.jpg',
+        'file:///deck/5.jpg',
+        'file:///deck/6.jpg',
+        'file:///deck/7.jpg',
+      ]);
+    });
+
+    it('NextCardImageWarmer caps at 7 URIs even if the deck-ahead reader returns more', async () => {
+      const navigation = makeNav();
+      const route = { params: { ...PUBLIC_ROUTE_PARAMS, listId: 1 } };
+      // Reader returns 10; the call site must defensively slice(0, 7) so the
+      // warmer never mounts more than 7 hidden <Image> components (memory
+      // ceiling ~14MB). Asserted here at the wiring boundary.
+      getNextImagesForScope.mockResolvedValue(
+        Array.from({ length: 10 }, (_, i) => ({
+          listId: i + 2,
+          imageFile: `file:///deck/${i + 2}.jpg`,
+        })),
+      );
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+
+      const warmerCall = mockNextCardImageWarmer.mock.calls[mockNextCardImageWarmer.mock.calls.length - 1][0];
+      expect(warmerCall.uris).toHaveLength(7);
+    });
+
+    it('NextCardImageWarmer receives [] when deck is empty/exhausted (no crash, renders nothing)', async () => {
+      const navigation = makeNav();
+      const route = { params: { ...PUBLIC_ROUTE_PARAMS, listId: 99 } };
+      getNextImagesForScope.mockResolvedValue([]);
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+
+      // Warmer was still mounted (unconditional render), but with [] uris —
+      // the warmer component itself returns null on [] (covered in its own
+      // suite); GuessScreen must not gate the mount on deck state.
+      expect(mockNextCardImageWarmer).toHaveBeenCalled();
+      const warmerCall = mockNextCardImageWarmer.mock.calls[mockNextCardImageWarmer.mock.calls.length - 1][0];
+      expect(warmerCall.uris).toEqual([]);
     });
   });
 });

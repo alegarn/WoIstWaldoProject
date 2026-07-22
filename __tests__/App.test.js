@@ -72,7 +72,6 @@ jest.mock('../screens/HideScreens/HideScreen', () => 'HideScreen');
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => 'GuessPathScreen');
 jest.mock('../screens/GuessScreens/GuessFeedScreen', () => 'GuessFeedScreen');
 jest.mock('../screens/GuessScreens/GuessScreen', () => 'GuessScreen');
-jest.mock('../screens/GuessScreens/AdScreen', () => 'AdScreen');
 jest.mock('../screens/GuessScreens/ResultScreen', () => 'ResultScreen');
 jest.mock('../screens/LanguageOnboardingScreen', () => 'LanguageOnboardingScreen');
 jest.mock('../screens/SetInstructionScreen', () => 'SetInstructionScreen');
@@ -198,7 +197,6 @@ describe('App Root', () => {
         'HidingPathScreen',
         'GuessPathScreen',
         'GuessScreen',
-        'AdScreen',
         'ResultScreen',
         'RankingScreen',
       ])

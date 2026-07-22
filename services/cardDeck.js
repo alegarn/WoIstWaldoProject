@@ -96,7 +96,8 @@ export async function appendCardBatch({ cards, categoryKey, categoryId, language
       const cid = resolveCategoryId(categoryId);
       const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
       const prior = existing?.images ?? [];
-      const merged = normalizeListIds([...prior, ...cards]);
+      const deduped = dedupByPictureId(prior, cards);
+      const merged = normalizeListIds([...prior, ...deduped]);
       await writeGroupFeedCache(
         scope.groupId,
         { categoryId: cid, language: lang },
@@ -108,4 +109,25 @@ export async function appendCardBatch({ cards, categoryKey, categoryId, language
     await updateImageList(cards, categoryKey, lang);
     return null;
   });
+}
+
+/**
+ * Drop incoming cards whose `pictureId` already exists in the prior deck.
+ *
+ * RC10/T4.3: the server can re-serve a card already in the local deck when
+ * the cursor (`getLastImageUuid`) is stale. Without dedup, the duplicate
+ * gets a NEW listId (via normalizeListIds) greater than currentListId, and
+ * getNextImage returns it → the just-played card repeats. Drop duplicates
+ * by `pictureId` so the existing card's listId is preserved and the
+ * duplicate never enters the deck.
+ *
+ * Cards with no `pictureId` (legacy server payloads) pass through — there is
+ * no key to dedup against, so dropping them would lose data.
+ */
+function dedupByPictureId(prior, incoming) {
+  if (!Array.isArray(incoming) || incoming.length === 0) return [];
+  const priorIds = new Set(
+    Array.isArray(prior) ? prior.map((c) => c?.pictureId).filter(Boolean) : [],
+  );
+  return incoming.filter((c) => !c?.pictureId || !priorIds.has(c.pictureId));
 }

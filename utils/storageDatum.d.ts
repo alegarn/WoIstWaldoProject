@@ -34,6 +34,16 @@ export function getRemainingDeckCount(args?: RemainingDeckCountArgs): Promise<nu
 export function getDeckCountForScope(args?: ScopeDeckCountArgs): Promise<number>;
 export function normalizeListIds(cards: CardImage[]): CardImage[];
 
+export interface NextImagesForScopeArgs {
+  category?: { key?: string; id?: string | number };
+  language?: string | null;
+  currentListId?: number;
+  scope?: unknown;
+  limit?: number;
+}
+
+export function getNextImagesForScope(args?: NextImagesForScopeArgs): Promise<CardImage[]>;
+
 export function getOnboardingCompleted(): Promise<boolean>;
 export function getSessionLanguageFilter(): Promise<string | null>;
 export function saveSessionLanguageFilter(code: string | null): Promise<null>;

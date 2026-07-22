@@ -38,6 +38,15 @@ export type ForegroundTopUpResult =
   | { ok: true; appended: number }
   | { ok: false; reason: 'empty' | 'network' | 'server' };
 
+/**
+ * Inspect a thrown value and decide whether it represents a transport-level
+ * network failure (TypeError from fetch, etc.) versus an application-level
+ * error. Used by foregroundTopUp to classify typed-result reason.
+ */
+function isNetworkError(e: unknown): boolean {
+  return e instanceof TypeError && /network|fetch|Failed to fetch/i.test(e.message);
+}
+
 // Foreground-fetch a category/scope and append to the local deck. Returns a
 // typed result so the caller can distinguish "server empty" from "transport
 // failure" instead of treating every failure as a silent false. Mirrors
@@ -122,7 +131,7 @@ async function foregroundTopUp(
     });
     return { ok: true, appended: r.images.length };
   } catch (e) {
-    if (e instanceof TypeError && /network|fetch|Failed to fetch/i.test(e.message)) {
+    if (isNetworkError(e)) {
       return { ok: false, reason: 'network' };
     }
     return { ok: false, reason: 'server' };
@@ -173,7 +182,13 @@ export async function resolveNextCardWithServerFallback({
   // 'all' from HEAD and replay. Per-call bound: one fetch + one resolve. If the
   // head re-fetch itself is empty, the server truly has no cards for the
   // language/scope and we return { next: null, reason }.
-  const tier4 = await foregroundTopUp(topUpArgs, 'all', null);
+  //
+  // Tier 4 category bug (Phase 2 review): override the category to { key: 'all' }
+  // so fetchCardBatch sends NO category_id (server returns 'all' cards) and
+  // appendCardBatch writes to the 'all' namespace. Passing the original category
+  // here leaks sports/etc. ids into both the server query and the 'all' write.
+  const tier4Args: AdvancerArgs = { ...topUpArgs, category: { key: 'all' } };
+  const tier4 = await foregroundTopUp(tier4Args, 'all', null);
   if (tier4.ok) {
     next = await resolveNextGuessParams(resolveArgs);
     if (next) return { next, reason: 'ok' };

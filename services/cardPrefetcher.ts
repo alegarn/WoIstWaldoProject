@@ -8,14 +8,10 @@ import { fetchCardBatch, appendCardBatch } from './cardDeck';
 import { getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 
+// Refill when only 3 cards remain — combined with NextCardImageWarmer decode prefetch, the user never waits for cold decode or server round-trip.
+export const LOW_CARD_THRESHOLD = 3;
 /**
- * Per-win prefetch trigger. If `getRemainingDeckCount` (cursor-filtered) drops
- * below this, fire a background fetch. Raised from 5 to 10 to handle
- * fast-streak × slow-network (RC9).
- */
-export const LOW_CARD_THRESHOLD = 10;
-/**
- * Cross-fallback warm-'all'-on-low trigger. Intentionally lower than
+ * Cross-fallback warm-'all'-on-low trigger. Intentionally higher than
  * LOW_CARD_THRESHOLD — gates the 'all' deck warming, not per-win prefetch.
  */
 export const ALL_WARM_THRESHOLD = 5;

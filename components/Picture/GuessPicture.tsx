@@ -62,6 +62,10 @@ type GuessPictureProps = {
   skipInstructions?: boolean;
   pulseTarget?: boolean;
   onInteract?: () => void;
+  // PB2: input gating — when true (advance state machine mid-cycle), disable
+  // tap/drag confirmation so toAdScreen cannot double-fire during a resolve.
+  // Forwards to useTargetDrag via `enabled: !disabled && !isE2EMode()`.
+  disabled?: boolean;
 };
 
 const GuessPicture: FC<GuessPictureProps> = ({
@@ -76,8 +80,10 @@ const GuessPicture: FC<GuessPictureProps> = ({
   skipInstructions,
   pulseTarget = false,
   onInteract,
+  disabled = false,
 }) => {
-  const [showFilter, setShowFilter] = useState(!skipInstructions);
+  const [dismissed, setDismissed] = useState(false);
+  const showFilter = !skipInstructions && !dismissed;
 
   // Reading grace delays the chrono on 2nd+ cards (skipInstructions) while the
   // enigma opens by default. Ends at the earliest of graceMs or description close.
@@ -108,7 +114,11 @@ const GuessPicture: FC<GuessPictureProps> = ({
     panHandlers: targetPanHandlers,
     setSelection,
   } = useTargetDrag({
-    enabled: !isE2EMode(),
+    // PB2: gate input while the advance state machine is mid-cycle so a
+    // double-tap during a Tier 2/3/4 resolve cannot double-fire toAdScreen.
+    // isE2EMode short-circuits panResponder entirely (e2e drives target via
+    // direct surface taps); disabled covers the runtime gating path.
+    enabled: !isE2EMode() && !disabled,
     screenWidth,
     screenHeight,
     imageDimensionStyle,
@@ -122,7 +132,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
   }, [imageIsPortrait]);
 
   const handleFilterClick = () => {
-    setShowFilter(false);
+    setDismissed(true);
   };
 
   const selectPictureLocation = ({ relativeLocation }: { relativeLocation: HiddenLocation }) => {
