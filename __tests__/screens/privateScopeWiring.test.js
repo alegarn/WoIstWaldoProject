@@ -70,9 +70,10 @@ import { act, create } from 'react-test-renderer';
 import GuessScreen from '../../screens/GuessScreens/GuessScreen';
 import HideScreen from '../../screens/HideScreens/HideScreen';
 import RankingScreen from '../../screens/RankingScreen';
+import SuccessOverlay from '../../components/Guess/SuccessOverlay';
 import { isOnTarget } from '../../utils/targetLocation';
 import { getRankingData } from '../../utils/scoreRequests';
-import { applySuccessSideEffects } from '../../utils/handleGuessOutcome';
+import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
 
 const PRIVATE_SCOPE = { kind: 'private', groupId: 'g-123' };
 
@@ -111,6 +112,7 @@ describe('reused screens — private scope wiring', () => {
     };
     isOnTarget.mockReturnValue(true);
     applySuccessSideEffects.mockResolvedValue(undefined);
+    resolveNextGuessParams.mockResolvedValue({ params: { listId: 2 } });
 
     let renderer;
     await act(async () => {
@@ -121,6 +123,11 @@ describe('reused screens — private scope wiring', () => {
 
     await act(async () => {
       guessPictureInstance.props.toAdScreen({ location: { x: 0.5, y: 0.5 } });
+    });
+
+    const successOverlayInstance = renderer.root.findByType(SuccessOverlay);
+    await act(async () => {
+      await successOverlayInstance.props.onDone();
     });
 
     expect(applySuccessSideEffects).toHaveBeenCalledWith(

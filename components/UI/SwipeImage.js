@@ -224,12 +224,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     // 2. Join any in-flight category prefetch (or start one at deck 0) before
     //    declaring the category exhausted. This covers the last-card race where
     //    the background top-up lands just after the first storage read.
+    // SwipeImage intentionally operates cursor-agnostic; pass undefined so
+    // getRemainingDeckCount counts all remaining cards.
     await (categoryPrefetchPromise ?? prefetchIfLow({
       categoryKey: aKey,
       categoryId: aCat?.id,
       language,
       scope,
       authContext: context,
+      currentListId: undefined,
     }).catch(() => {}));
 
     catDeck = await readDeck(aKey, aCat);
@@ -281,12 +284,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         );
       }
 
+      // SwipeImage intentionally operates cursor-agnostic; pass undefined so
+      // getRemainingDeckCount counts all remaining cards.
       const prefetchPromise = prefetchIfLow({
         categoryKey: activeCategoryKeyRef.current,
         categoryId: aCat?.id,
         language,
         scope,
         authContext: context,
+        currentListId: undefined,
       }).catch(() => {});
 
       // Deck-empty fallback: prefer background-prefetched cards, then 'all' deck,

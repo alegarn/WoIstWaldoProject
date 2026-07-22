@@ -391,6 +391,7 @@ describe('SwipeImage', () => {
       language: undefined,
       scope: undefined,
       authContext: contextValue,
+      currentListId: undefined,
     });
     const allPrefetchCalls = getImages.mock.calls.filter(
       ([, , params]) => params?.category_key === 'all' && params?.category_id === undefined,
@@ -724,6 +725,7 @@ describe('SwipeImage — cardPrefetcher integration', () => {
       language: 'fr',
       scope,
       authContext: contextValue,
+      currentListId: undefined,
     });
   });
 

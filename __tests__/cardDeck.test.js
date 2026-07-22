@@ -1,9 +1,13 @@
-jest.mock('../utils/storageDatum', () => ({
-  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
-  getLastImageUuid: jest.fn(),
-  storeImageList: jest.fn(),
-  updateImageList: jest.fn(),
-}));
+jest.mock('../utils/storageDatum', () => {
+  const actual = jest.requireActual('../utils/storageDatum');
+  return {
+    ...actual,
+    PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
+    getLastImageUuid: jest.fn(),
+    storeImageList: jest.fn(),
+    updateImageList: jest.fn(),
+  };
+});
 
 jest.mock('../utils/imagesRequests', () => ({
   getImages: jest.fn(),
@@ -151,6 +155,88 @@ describe('appendCardBatch', () => {
       { categoryId: undefined, language: 'fr' },
       expect.objectContaining({ images: [{ listId: 1 }] }),
     );
+  });
+
+  it('private-scope appendCardBatch normalizes missing listIds (server cards without listId become resolvable)', async () => {
+    readGroupFeedCache.mockResolvedValueOnce({ images: [{ listId: 1 }], nextCursor: null });
+    const cards = [{ uuid: 'a' }, { uuid: 'b', listId: 'oops' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      {
+        images: [
+          { listId: 1 },
+          { uuid: 'a', listId: 2 },
+          { uuid: 'b', listId: 3 },
+        ],
+        nextCursor: null,
+      },
+    );
+  });
+
+  it('concurrent appendCardBatch calls for same scope → serialized (no lost update; deck size = sum of both batches)', async () => {
+    // R2 regression guard. The private-scope path performs its RMW
+    // (read → concat → write) inside appendCardBatch, so we can observe
+    // serialization by backing read/writeGroupFeedCache with shared in-memory
+    // state. The first call's write is held open via a deferred to widen the
+    // window; the second call must not read until the first's write settles.
+    const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+
+    let store = { images: [], nextCursor: null };
+    let releaseFirstWrite;
+    const firstWriteGate = new Promise((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+
+    readGroupFeedCache.mockImplementation(async () => ({
+      images: [...store.images],
+      nextCursor: store.nextCursor,
+    }));
+
+    writeGroupFeedCache.mockImplementation(async (_groupId, _meta, payload) => {
+      if (store.images.length === 0) {
+        await firstWriteGate;
+      }
+      store = { images: payload.images, nextCursor: payload.nextCursor };
+    });
+
+    const sharedArgs = {
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-lock' },
+    };
+
+    const call1 = appendCardBatch({ ...sharedArgs, cards: [{ listId: 1 }, { listId: 2 }] });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(writeGroupFeedCache).toHaveBeenCalledTimes(1);
+
+    const call2 = appendCardBatch({ ...sharedArgs, cards: [{ listId: 3 }, { listId: 4 }] });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(readGroupFeedCache).toHaveBeenCalledTimes(1);
+
+    releaseFirstWrite();
+    await call1;
+    await call2;
+
+    expect(writeGroupFeedCache).toHaveBeenCalledTimes(2);
+    expect(store.images).toEqual([
+      { listId: 1 },
+      { listId: 2 },
+      { listId: 3 },
+      { listId: 4 },
+    ]);
   });
 });
 

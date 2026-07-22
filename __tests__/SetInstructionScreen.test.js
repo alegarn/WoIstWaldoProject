@@ -315,7 +315,7 @@ describe('SetInstructionScreen', () => {
 
     expect(Alert.alert).toHaveBeenCalledWith(
       'Insufficient Permissions',
-      'Access to  Photos and Videos / audio is denied'
+      'Access to  Photos and Videos is denied'
     );
     expect(mockOpenSettings).toHaveBeenCalledTimes(1);
     expect(imageUploader).not.toHaveBeenCalled();

@@ -47,6 +47,7 @@ import {
   getNextImageForScope,
   getOnboardingCompleted,
   getPreferredLanguage,
+  getRemainingDeckCount,
   getSessionLanguageFilter,
   getUserTags,
   removeImageFromList,
@@ -545,6 +546,102 @@ describe('storageDatum utilities', () => {
       });
 
       expect(readGroupFeedCache).toHaveBeenCalledWith('g-1', { categoryId: undefined, language: undefined });
+    });
+  });
+
+  describe('getRemainingDeckCount', () => {
+    it('filters by currentListId and returns only cards with a strictly greater listId', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: 20 },
+        { listId: 30 },
+        { listId: 40 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 20,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(2);
+    });
+
+    it('returns 0 when no cards have a listId greater than currentListId', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: 20 },
+        { listId: 30 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 30,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(0);
+    });
+
+    it('skips cards with non-finite listIds', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: null },
+        { listId: undefined },
+        { listId: NaN },
+        { listId: 'abc' },
+        { listId: 30 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 0,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(2);
+    });
+
+    it('returns 0 when storage is empty or missing', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      const countMissing = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        scope: { kind: 'public' },
+      });
+      expect(countMissing).toBe(0);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+      const countEmpty = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        scope: { kind: 'public' },
+      });
+      expect(countEmpty).toBe(0);
+    });
+
+    it('does not perform a per-card File.exists probe (perf contract)', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 0,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(3);
+      expect(File).not.toHaveBeenCalled();
+      expect(mockDelete).not.toHaveBeenCalled();
     });
   });
 });

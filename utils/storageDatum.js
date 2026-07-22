@@ -115,6 +115,51 @@ export async function getDeckCountForScope({ category, language, scope }) {
   return Array.isArray(cache?.images) ? cache.images.length : 0;
 };
 
+/**
+ * Cursor-filtered remaining deck count.
+ *
+ * Returns the number of cards in the local deck for the given
+ * (category, language, scope) tuple whose `listId` is strictly greater
+ * than `currentListId` — i.e. the cards the cursor can still advance to.
+ *
+ * PERF (PT4): unlike `getLocalImages`, this function reads the AsyncStorage
+ * JSON ONLY and does NOT perform a per-card `File.exists` probe. The
+ * file-exists filter stays at `getLocalImages` call sites for actual card
+ * resolution. This divergence is intentional: `getRemainingDeckCount` is
+ * called per-win (via prefetchIfLow / warmAllDeckIfNeeded) and the O(N) sync
+ * disk probe in `getLocalImages` would block the JS thread on every win.
+ * Full fix of R4 is Phase 4 T4.6.
+ *
+ * Contract: a card is "remaining" if `Number.isFinite(image.listId) && image.listId > currentListId`.
+ * Cards with missing or non-finite listId are NOT counted (they are not
+ * cursor-resolvable; cardDeck appendCardBatch normalizes them on write).
+ *
+ * @param {{ category?: string|null, language?: string|null, currentListId?: number, scope?: unknown }} args
+ * @returns {Promise<number>}
+ */
+export async function getRemainingDeckCount({ category, language, currentListId, scope }) {
+  const cursor = Number.isFinite(currentListId) ? currentListId : -Infinity;
+
+  const isPrivate = scope?.kind === 'private' && scope?.groupId;
+  let images;
+  if (!isPrivate) {
+    const stored = await AsyncStorage.getItem(imageListKey(category?.key || 'all', language));
+    if (!stored) return 0;
+    try {
+      images = JSON.parse(stored);
+    } catch {
+      return 0;
+    }
+  } else {
+    const categoryId = category?.key === 'all' ? undefined : category?.id;
+    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+    images = cache?.images;
+  }
+
+  if (!Array.isArray(images)) return 0;
+  return images.filter((image) => Number.isFinite(image?.listId) && image.listId > cursor).length;
+};
+
 function getLastListId(list) {
   const lastListId = list.reduce((maxId, image) => {
     const imageId = image.listId;

@@ -1,5 +1,5 @@
 // Streak Tier Policy: longer correct-find streaks unlock higher score multipliers and display tiers.
-// Tier table: thresholds 3/7/12/20/50 -> multipliers 1.5/2.0/3.0/5.0/10.0 (highest threshold first).
+// Tier table: thresholds 3/7/12/20/50 -> multipliers 2.0/3.0/5.0/7.0/10.0 (highest threshold first).
 // Add a tier by appending one object to STREAK_TIERS (OCP); keep highest threshold first.
 // Contract: input streak >= 0 (clamped); output always { tier>=0, multiplier>=1.0, label, colorKey }.
 

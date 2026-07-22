@@ -53,6 +53,28 @@ function errorType(status) {
   };
 };
 
+/**
+ * @typedef {'empty' | 'network' | 'server'} GetImagesErrorReason
+ *
+ * @typedef {Object} GetImagesResult
+ * @property {boolean} isError
+ * @property {GetImagesErrorReason} [reason] Tagged outcome so callers can
+ *   distinguish transient failures ('network', 'server') from a genuine
+ *   exhausted feed ('empty'). Absent on the 401 path: the global apiClient
+ *   unauthorized handler owns logout/navigation out-of-band (plan §5.3), so
+ *   no 'auth' reason is ever emitted here.
+ * @property {string} [title]
+ * @property {string} [message]
+ * @property {Array} [images]
+ */
+function classifyImagesErrorReason(error) {
+  const status = error?.response?.status ?? error?.request?.status;
+  if (typeof status === 'number' && status >= 500 && status <= 599) {
+    return 'server';
+  }
+  return 'network';
+};
+
 
 export async function getUploadUrl(context) {
   return prepareImageUpload(context);
@@ -101,10 +123,10 @@ async function getImagesInfos({ config, userId, filters }) {
     return response;
   }).catch((error) => {
     //console.log("error getImagesInfos", error.request);
-    if (error.request.status === 401) {
+    if (error?.request?.status === 401 || error?.response?.status === 401) {
       return { data: 401 };
     };
-    return { data: null };
+    return { data: null, errorReason: classifyImagesErrorReason(error) };
   });
   return response;
 };
@@ -126,10 +148,10 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
       return response;
     }).catch((error) => {
       console.log("error getNextImagesInfos", error.request);
-      if (error?.request?.status === 401) {
+      if (error?.request?.status === 401 || error?.response?.status === 401) {
         return { data: 401 };
       }
-      return { data: null };
+      return { data: null, errorReason: classifyImagesErrorReason(error) };
     });
   return response;
 };
@@ -280,7 +302,12 @@ export async function getImages(pictureId, context, filters = {}) {
       : await getNextImagesInfos({ config, userId, pictureId: nextPictureId, filters });
 
     if (imagesInfos?.data === null) {
-      return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
+      return {
+        isError: true,
+        reason: imagesInfos?.errorReason ?? 'server',
+        title: "There is an error downloading user's images.",
+        message: "Please retry later..."
+      };
     };
 
     if (imagesInfos?.data === 401) {
@@ -290,9 +317,7 @@ export async function getImages(pictureId, context, filters = {}) {
     const imagesInfosData = imagesInfos?.data?.data ?? [];
 
     if (imagesInfosData.length === 0) {
-      await saveLastImageUuid(filters?.category_key, filters?.language);
-
-      return { isError: false, images: [] };
+      return { isError: false, reason: 'empty', images: [] };
     };
 
     const lastBatchPictureId = imagesInfosData[imagesInfosData.length - 1].name;
@@ -308,7 +333,12 @@ export async function getImages(pictureId, context, filters = {}) {
     nextPictureId = lastBatchPictureId;
   }
 
-  return { isError: true, title: "There is an error downloading user's images.", message: "Please retry later..." };
+  return {
+    isError: true,
+    reason: 'server',
+    title: "There is an error downloading user's images.",
+    message: "Please retry later..."
+  };
 };
 
 

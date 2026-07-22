@@ -1,5 +1,6 @@
 import { getImages } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 
 function normalizeLanguage(language) {
@@ -70,23 +71,41 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
  * - Public scope: reuses updateImageList (already appends to AsyncStorage).
  * - Private scope: reads the group feed cache, concatenates, writes back.
  * Returns null (matches persistCardBatch return contract).
+ *
+ * The RMW window (read → concat → write) is serialized per scope via
+ * withScopeLock. Key derivation mirrors getDeckCountForScope / groupFeedListKey:
+ * (categoryKey|categoryId, language, groupId) → one lock per scope. Closes R2:
+ * without the lock, two concurrent appendCardBatch calls for the same scope
+ * would both read the prior deck, each concat its own batch, and the later
+ * write wins → the earlier batch is orphaned on disk and the deck stays empty.
  */
+function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
+  const lang = normalizeLanguage(language);
+  if (isPrivateScope(scope)) {
+    const cid = resolveCategoryId(categoryId);
+    return `cardDeck:append:private:${scope.groupId}:${cid ?? 'all'}:${lang}`;
+  }
+  return `cardDeck:append:public:${categoryKey || 'all'}:${lang}`;
+}
+
 export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 
-  if (isPrivateScope(scope)) {
-    const cid = resolveCategoryId(categoryId);
-    const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
-    const prior = existing?.images ?? [];
-    const merged = [...prior, ...cards];
-    await writeGroupFeedCache(
-      scope.groupId,
-      { categoryId: cid, language: lang },
-      { images: merged, nextCursor: existing?.nextCursor ?? null },
-    );
-    return null;
-  }
+  return withScopeLock(appendCardBatchLockKey({ categoryKey, categoryId, language, scope }), async () => {
+    if (isPrivateScope(scope)) {
+      const cid = resolveCategoryId(categoryId);
+      const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
+      const prior = existing?.images ?? [];
+      const merged = normalizeListIds([...prior, ...cards]);
+      await writeGroupFeedCache(
+        scope.groupId,
+        { categoryId: cid, language: lang },
+        { images: merged, nextCursor: existing?.nextCursor ?? null },
+      );
+      return null;
+    }
 
-  await updateImageList(cards, categoryKey, lang);
-  return null;
+    await updateImageList(cards, categoryKey, lang);
+    return null;
+  });
 }
