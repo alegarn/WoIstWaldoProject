@@ -2,6 +2,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
+import { OverlayZIndex } from '../../constants/overlayZIndex';
 import SwipeHaloHint from './SwipeHaloHint';
 
 const EDGE_WIDTH = 36;
@@ -87,7 +88,7 @@ export default function GuessExitSwipeMenu({ onHome, showHints = false, onIntera
   );
 
   return (
-    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 9000, elevation: 9000 }]}>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: OverlayZIndex.EXIT_MENU_ROOT, elevation: OverlayZIndex.EXIT_MENU_ROOT }]}>
       <View
         testID="guess.exit.edge"
         {...edgePanResponder.panHandlers}
@@ -144,14 +145,14 @@ const styles = StyleSheet.create({
     left: 0,
     width: EDGE_WIDTH,
     backgroundColor: 'transparent',
-    zIndex: 9001,
-    elevation: 9001,
+    zIndex: OverlayZIndex.EXIT_MENU_EDGE,
+    elevation: OverlayZIndex.EXIT_MENU_EDGE,
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
-    zIndex: 9002,
-    elevation: 9002,
+    zIndex: OverlayZIndex.EXIT_MENU_SCRIM,
+    elevation: OverlayZIndex.EXIT_MENU_SCRIM,
   },
   panel: {
     position: 'absolute',
@@ -162,8 +163,8 @@ const styles = StyleSheet.create({
     backgroundColor: GlobalStyle.color.primaryColor900,
     paddingTop: 64,
     paddingHorizontal: 16,
-    zIndex: 9003,
-    elevation: 9003,
+    zIndex: OverlayZIndex.EXIT_MENU_PANEL,
+    elevation: OverlayZIndex.EXIT_MENU_PANEL,
   },
   panelHeader: {
     flexDirection: 'row',

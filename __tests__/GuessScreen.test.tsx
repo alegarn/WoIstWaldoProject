@@ -233,7 +233,7 @@ jest.mock('../hooks/useStreak', () => {
   return { useStreak: useStreakMock };
 });
 
-import { act, create } from 'react-test-renderer';
+import { act, create as reactCreate } from 'react-test-renderer';
 import type { FC } from 'react';
 import { AppState } from 'react-native';
 
@@ -260,6 +260,14 @@ const consumeAdSlot = consumeAdSlotImpl as jest.MockedFunction<typeof consumeAdS
 const shouldSuppressAds = shouldSuppressAdsImpl as jest.MockedFunction<typeof shouldSuppressAdsImpl>;
 const resolveNextCardWithServerFallback = resolveNextCardWithServerFallbackImpl as jest.MockedFunction<typeof resolveNextCardWithServerFallbackImpl>;
 const getNextImagesForScope = getNextImagesForScopeImpl as jest.MockedFunction<typeof getNextImagesForScopeImpl>;
+
+const mountedRenderers: Array<ReturnType<typeof reactCreate>> = [];
+
+function create(...args: Parameters<typeof reactCreate>): ReturnType<typeof reactCreate> {
+  const renderer = reactCreate(...args);
+  mountedRenderers.push(renderer);
+  return renderer;
+}
 const advanceModuleActual = jest.requireActual('../utils/nextCardAdvancer') as typeof import('../utils/nextCardAdvancer');
 
 // reason: source's GuessNavigation requires navigate/setOptions, but several test fixtures only supply replace/setParams/popToTop; loosen prop types to keep fixtures byte-identical to the .js baseline.
@@ -307,7 +315,13 @@ describe('GuessScreen', () => {
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await act(async () => {
+      while (mountedRenderers.length > 0) {
+        mountedRenderers.pop()?.unmount();
+      }
+      await Promise.resolve();
+    });
     jest.restoreAllMocks();
   });
 
@@ -1927,6 +1941,42 @@ describe('GuessScreen', () => {
       jest.useRealTimers();
     });
 
+    it('R4: retry recovery credits the success-time multiplier through the retry loop (not the latest state)', async () => {
+      // §2.4 contract: the multiplier used at retry time MUST equal the value
+      // at the moment of the success that triggered the cycle. Fast tap
+      // (elapsedMs=1000) → multiplier=2 (above SPEED_MULTIPLIER_BASE=1, so a
+      // stale-state read or a ref-mirror regression that falls back to the
+      // initial state would surface as multiplier=1). Threading is via an
+      // explicit arg through runResolveCycle → onAdvanceResolved →
+      // scheduleRetry → runResolveCycle (no mirror ref).
+      jest.useFakeTimers();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
+      resolveNextCardWithServerFallback
+        .mockResolvedValueOnce({ next: null, reason: 'network' })
+        .mockResolvedValueOnce({ next: { params: nextParams }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      // Fast tap → multiplier=2 (under the speed bonus threshold).
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+
+      // Fire retry 1 at 1s — second resolve succeeds → RESOLVED with multiplier=2
+      // threaded from the original success, not a fresh read of state.
+      await act(async () => { jest.advanceTimersByTime(1000); });
+
+      expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
+      expect(applySuccessSideEffects).toHaveBeenLastCalledWith(expect.objectContaining({
+        multiplier: 2,
+      }));
+
+      jest.useRealTimers();
+    });
+
     it('win → next card resolved → setParams called (no remount), useStreak preserved', async () => {
       const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
       resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
@@ -2336,6 +2386,56 @@ describe('GuessScreen', () => {
       await act(async () => { await Promise.resolve(); });
 
       expect(applySuccessSideEffects).not.toHaveBeenCalled();
+    });
+
+    it('swipe-home while success side effects await → cadence and ad state do not update after unmount', async () => {
+      jest.clearAllMocks();
+      shouldSuppressAds.mockReturnValue(false);
+      isOnTarget.mockReturnValue(true);
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+
+      let finishSuccessSideEffects!: () => void;
+      applySuccessSideEffects.mockImplementation(
+        () => new Promise<void>((resolve) => {
+          finishSuccessSideEffects = resolve;
+        }),
+      );
+
+      let resolveAdvance!: (v: { next: { params: Record<string, unknown> }; reason: 'ok' }) => void;
+      resolveNextCardWithServerFallback.mockReturnValue(
+        new Promise<{ next: { params: Record<string, unknown> }; reason: 'ok' }>((resolve) => {
+          resolveAdvance = resolve;
+        }),
+      );
+
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      const navigation = makeNav();
+      let renderer: ReturnType<typeof create>;
+      await act(async () => { renderer = create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+      await act(async () => {
+        resolveAdvance({ next: { params: { listId: 4 } }, reason: 'ok' });
+        await Promise.resolve();
+      });
+
+      expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
+
+      await act(async () => { renderer.unmount(); });
+
+      await act(async () => {
+        finishSuccessSideEffects();
+        await Promise.resolve();
+      });
+
+      expect(consumeAdSlot).not.toHaveBeenCalled();
+      expect(mockAdInterstitial).not.toHaveBeenCalled();
+      const setStateWarning = consoleErrorSpy.mock.calls.find((c: unknown[]) =>
+        /setState after unmount|state update on an unmounted|Can't perform a React state update/i.test(String(c[0] ?? '')),
+      );
+      expect(setStateWarning).toBeUndefined();
+
+      consoleErrorSpy.mockRestore();
     });
   });
 
