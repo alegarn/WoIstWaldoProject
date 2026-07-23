@@ -10,22 +10,29 @@ jest.mock('expo-system-ui', () => ({
   setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
 }));
 
-jest.mock('@react-navigation/native', () => ({
-  CommonActions: {
-    reset: jest.fn((payload) => ({ type: 'RESET', payload })),
-  },
-  DefaultTheme: {
-    colors: {
-      background: '#fff',
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+
+  return {
+    CommonActions: {
+      reset: jest.fn((payload) => ({ type: 'RESET', payload })),
     },
-  },
-  NavigationContainer: ({ children }) => children,
-  useNavigationContainerRef: jest.fn(() => ({
-    isReady: jest.fn(() => false),
-    getCurrentRoute: jest.fn(() => ({ name: 'HomeScreen' })),
-    dispatch: jest.fn(),
-  })),
-}));
+    DefaultTheme: {
+      colors: {
+        background: '#fff',
+      },
+    },
+    NavigationContainer: ({ children }) => children,
+    useNavigationContainerRef: jest.fn(() => ({
+      isReady: jest.fn(() => false),
+      getCurrentRoute: jest.fn(() => ({ name: 'HomeScreen' })),
+      dispatch: jest.fn(),
+    })),
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
 
 jest.mock('@react-navigation/native-stack', () => {
   const React = require('react');
@@ -79,7 +86,6 @@ jest.mock('../screens/HideScreens/HidingPathScreen', () => 'HidingPathScreen');
 jest.mock('../screens/HideScreens/HideScreen', () => 'HideScreen');
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => 'GuessPathScreen');
 jest.mock('../screens/GuessScreens/GuessScreen', () => 'GuessScreen');
-jest.mock('../screens/GuessScreens/AdScreen', () => 'AdScreen');
 jest.mock('../screens/GuessScreens/ResultScreen', () => 'ResultScreen');
 jest.mock('../screens/SetInstructionScreen', () => 'SetInstructionScreen');
 jest.mock('../screens/RankingScreen', () => 'RankingScreen');

@@ -82,7 +82,7 @@ describe('useStreak', () => {
     expect(captured.streak).toBe(3);
     expect(captured.tier.tier).toBe(1);
     expect(captured.tier.label).toBe('Focused');
-    expect(captured.multiplier).toBe(1.5);
+    expect(captured.multiplier).toBe(2.0);
 
     act(() => {
       captured.onWin();
@@ -92,7 +92,7 @@ describe('useStreak', () => {
     });
     expect(captured.streak).toBe(7);
     expect(captured.tier.tier).toBe(2);
-    expect(captured.multiplier).toBe(2.0);
+    expect(captured.multiplier).toBe(3.0);
   });
 
   it('reset() returns streak to 0 and clears the tier', () => {
@@ -140,6 +140,6 @@ describe('useStreak', () => {
 
     expect(captured.streak).toBe(5);
     expect(captured.tier.tier).toBe(1);
-    expect(captured.multiplier).toBe(1.5);
+    expect(captured.multiplier).toBe(2.0);
   });
 });

@@ -20,7 +20,9 @@ export const adMobBridgeSnapshot: HookSnapshotHandle = {
 };
 
 function resolveAdUnitId() {
-  return __DEV__ ? TestIds.INTERSTITIAL : PLACEHOLDER_AD_UNIT_ID;
+  return __DEV__
+    ? TestIds.INTERSTITIAL
+    : (process.env.EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID || PLACEHOLDER_AD_UNIT_ID);
 }
 
 export function AdMobInterstitialBridge(): null {

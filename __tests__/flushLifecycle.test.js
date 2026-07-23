@@ -1,5 +1,17 @@
 jest.mock('expo-dev-client', () => ({}));
 
+// T1.11: required so App.tsx (which flushLifecycle.test.js imports as <Root />)
+// can load — without it, the suite errors on `MobileAds` TurboModule lookup.
+// Mirrors the pattern in __tests__/adHandling.test.js.
+jest.mock('react-native-google-mobile-ads', () => ({
+  __esModule: true,
+  default: jest.fn(),
+  MobileAds: { initialize: jest.fn(() => ({ adapterStatuses: 'ready' })) },
+  MaxAdContentRating: { PG: 'pg' },
+  AdsConsentStatus: {},
+  AdsConsentDebugGeography: { EEA: 'EEA' },
+}));
+
 jest.mock('expo-navigation-bar', () => ({
   NavigationBar: ({ children }) => children,
   setHidden: jest.fn(),
@@ -69,10 +81,14 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
-jest.mock('../utils/sessionScoreStore', () => ({
-  flush: jest.fn(),
-  getPending: jest.fn(),
-}));
+jest.mock('../utils/sessionScoreStore', () => {
+  const actual = jest.requireActual('../utils/sessionScoreStore');
+  return {
+    ...actual,
+    flush: jest.fn().mockImplementation(actual.flush),
+    getPending: jest.fn().mockImplementation(actual.getPending),
+  };
+});
 
 jest.mock('../utils/e2eMode', () => ({
   ensureE2EOnboardingBypass: jest.fn(),
@@ -92,6 +108,7 @@ jest.mock('../utils/storageDatum', () => ({
   getSessionLanguageFilter: jest.fn(),
   saveSessionLanguageFilter: jest.fn(),
   emptyImageList: jest.fn().mockResolvedValue(undefined),
+  getNextImagesForScope: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('../utils/guessNavigation', () => ({
@@ -150,6 +167,97 @@ jest.mock('../store/privateGroupTheme-context', () => {
 
 jest.mock('../components/UI/IconButton', () => () => null);
 jest.mock('../components/UI/LoadingOverlay', () => () => null);
+
+// T1.11: sub-component + util mocks required so the REAL GuessScreen (used by the
+// new "exhausted Leave" regression test) can mount without dragging in deck /
+// billing / ad transport. Mocks mirror GuessScreen.test.tsx's contracts.
+jest.mock('../components/Guess/GuessExitSwipeMenu', () => () => null);
+jest.mock('../components/Picture/GuessPicture', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+  // Interactive stub: tap drives the success path (target on, fast elapsed).
+  return function MockGuessPicture(props) {
+    return React.createElement(
+      Pressable,
+      {
+        testID: 'guess.picture.tap',
+        onPress: () => props.toAdScreen && props.toAdScreen({ location: { x: 0.5, y: 0.5 }, elapsedMs: 1000 }),
+      },
+      React.createElement(Text, null, 'pic')
+    );
+  };
+});
+jest.mock('../components/Guess/SuccessOverlay', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+  return function MockSuccessOverlay(props) {
+    if (!props.visible) return null;
+    return React.createElement(
+      Pressable,
+      { testID: 'guess.overlay.done', onPress: props.onDone },
+      React.createElement(Text, null, 'done')
+    );
+  };
+});
+jest.mock('../components/Guess/GuessExhaustedPanel', () => {
+  const React = require('react');
+  const { Pressable, Text } = require('react-native');
+  return function MockGuessExhaustedPanel({ onLeave }) {
+    return React.createElement(
+      Pressable,
+      { testID: 'guess.exhausted.leave', onPress: onLeave },
+      React.createElement(Text, null, 'leave')
+    );
+  };
+});
+jest.mock('../components/Guess/GuessAdvanceLoader', () => () => null);
+jest.mock('../utils/targetLocation', () => ({ isOnTarget: jest.fn(() => true) }));
+jest.mock('../utils/handleGuessOutcome', () => ({
+  applySuccessSideEffects: jest.fn(() => Promise.resolve()),
+  resolveNextGuessParams: jest.fn(),
+}));
+jest.mock('../utils/nextCardAdvancer', () => {
+  const actual = jest.requireActual('../utils/nextCardAdvancer');
+  return { ...actual, resolveNextCardWithServerFallback: jest.fn(actual.resolveNextCardWithServerFallback) };
+});
+jest.mock('../services/cardDeck', () => ({
+  fetchCardBatch: jest.fn().mockResolvedValue({ images: [] }),
+  appendCardBatch: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../services/cardPrefetcher', () => {
+  const actual = jest.requireActual('../services/cardPrefetcher');
+  return {
+    ...actual,
+    prefetchIfLow: jest.fn(() => Promise.resolve()),
+    warmAllDeckIfNeeded: jest.fn(() => Promise.resolve()),
+  };
+});
+jest.mock('../utils/speedMultiplier', () => {
+  const actual = jest.requireActual('../utils/speedMultiplier');
+  return { ...actual };
+});
+jest.mock('../utils/adCadence', () => ({
+  consumeAdSlot: jest.fn(() => ({ showAd: false, nextCount: 0 })),
+}));
+jest.mock('../services/billing/entitlements', () => ({
+  shouldSuppressAds: jest.fn(() => false),
+}));
+jest.mock('../services/ads/FallbackAdSource', () => ({
+  createFallbackAdSource: jest.fn(() => ({ isReady: () => false })),
+}));
+jest.mock('../services/ads/AdMobInterstitialSource', () => ({
+  createAdMobInterstitialSource: jest.fn(() => ({ isReady: () => false })),
+}));
+jest.mock('../services/ads/InternalProAdSource', () => ({
+  createInternalProAdSource: jest.fn(() => ({ isReady: () => false })),
+}));
+jest.mock('../utils/scoreRequests', () => ({
+  submitScoreBatch: jest.fn().mockResolvedValue(true),
+  updateUserScore: jest.fn(),
+  getRankingData: jest.fn(),
+  getUserScores: jest.fn(),
+}));
+
 jest.mock('../screens/Groups/HomeHeaderRight', () => ({
   HomeHeaderRight: () => null,
 }));
@@ -160,7 +268,6 @@ jest.mock('../screens/HideScreens/HidingPathScreen', () => () => null);
 jest.mock('../screens/HideScreens/HideScreen', () => () => null);
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => () => null);
 jest.mock('../screens/GuessScreens/GuessScreen', () => () => null);
-jest.mock('../screens/GuessScreens/AdScreen', () => () => null);
 jest.mock('../screens/GuessScreens/ResultScreen', () => () => null);
 jest.mock('../screens/LanguageOnboardingScreen', () => () => null);
 jest.mock('../screens/SetInstructionScreen', () => () => null);
@@ -562,5 +669,119 @@ describe('flush lifecycle - rapid multi-trigger wiring', () => {
     for (const call of mockedFlush.mock.calls) {
       expect(call[0]).toEqual({ authContext: authContextValue });
     }
+  });
+});
+
+describe('flush lifecycle - exhausted Leave (real GuessScreen, no double-flush on popToTop)', () => {
+  // CB1 + PT3 + C3: GuessScreen no longer mounts useFlushOnLeave (the AdScreen
+  // round-trip premise is gone — ads render as in-component overlay, no param
+  // merge). On popToTop from GuessExhaustedPanel, only GuessFeedScreen's hook
+  // fires flush; the sessionScoreStore `flushing` guard coalesces any residual
+  // overlap into a single POST. The test asserts the structural invariant:
+  // "no double-flush on popToTop from GuessExhaustedPanel."
+  let RealGuessScreen;
+  let submitScoreBatch;
+  let AsyncStorage;
+
+  beforeAll(() => {
+    RealGuessScreen = jest.requireActual('../screens/GuessScreens/GuessScreen').default;
+    submitScoreBatch = require('../utils/scoreRequests').submitScoreBatch;
+    AsyncStorage = require('@react-native-async-storage/async-storage').default;
+  });
+
+  function buildRealGuessStack({ homeTestId }) {
+    const Stack = createNativeStackNavigator();
+
+    function HomeStandIn({ navigation }) {
+      return React.createElement(
+        Pressable,
+        { testID: homeTestId, onPress: () => navigation.navigate('GuessFeedScreen') },
+        React.createElement(Text, null, 'home')
+      );
+    }
+
+    return function GuessStackRoot() {
+      return React.createElement(
+        NavigationContainer,
+        null,
+        React.createElement(
+          Stack.Navigator,
+          { initialRouteName: 'HomeScreen' },
+          React.createElement(Stack.Screen, { name: 'HomeScreen', component: HomeStandIn }),
+          React.createElement(Stack.Screen, {
+            name: 'GuessFeedScreen',
+            component: GuessFeedScreen,
+            options: { headerShown: false },
+          }),
+          React.createElement(Stack.Screen, {
+            name: 'GuessScreen',
+            component: RealGuessScreen,
+            options: { headerShown: false },
+          })
+        )
+      );
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Pre-populate the buffer so flush has something to POST.
+    AsyncStorage.getItem.mockImplementation((key) => {
+      if (key === 'pendingScoreEvents') {
+        return Promise.resolve(JSON.stringify([
+          { guessId: 'g1', pictureId: 'p1', points: 2, streak: 1, ts: 1, userId: 'user-1' },
+        ]));
+      }
+      return Promise.resolve(null);
+    });
+    AsyncStorage.setItem.mockResolvedValue(undefined);
+    // Use the real flush + flushing guard so POST deduplication is observable.
+    const actual = jest.requireActual('../utils/sessionScoreStore');
+    mockedFlush.mockImplementation(actual.flush);
+    mockedGetPending.mockImplementation(actual.getPending);
+    submitScoreBatch.mockResolvedValue(true);
+  });
+
+  it('exhausted Leave button → popToTop + flush ≤2 + single POST (CB1 + PT3)', async () => {
+    const StackRoot = buildRealGuessStack({ homeTestId: 'real.home.go-feed' });
+    const renderer = await actCreate(React.createElement(StackHost, { contextValue: authContextValue, Root: StackRoot }));
+
+    // Home → GuessFeedScreen (mounts GuessFeedScreen's useFlushOnLeave).
+    await press(renderer, 'real.home.go-feed');
+    // GuessFeedScreen → GuessScreen via the SwipeImage stand-in. C3: GuessScreen
+    // no longer mounts useFlushOnLeave (AdScreen round-trip is gone).
+    await press(renderer, 'guess-feed.stub.start-swipe');
+    await press(renderer, 'guess-feed.stub.swipe');
+
+    // Drive GuessScreen to exhausted (safety-net path): tap picture (success)
+    // → tap overlay Done → resolveNextCardWithServerFallback returns
+    // { next: null, reason: 'empty' } (cardDeck mock returns empty) →
+    // C1 (P1 post-fix): single empty cascade dispatches FAILED_TRANSIENT →
+    // warming, NOT exhausted. The safety-net panel only mounts after 3 failed
+    // retries (RETRY_TICKs at 1s/2s/4s). Fake-timer-drive the retry budget so
+    // GuessExhaustedPanel mounts (safety net intact).
+    jest.useFakeTimers();
+    await press(renderer, 'guess.picture.tap');
+    await press(renderer, 'guess.overlay.done');
+    await act(async () => { await flushPromises(); });
+    await act(async () => { jest.advanceTimersByTime(1000); });
+    await act(async () => { jest.advanceTimersByTime(2000); });
+    await act(async () => { jest.advanceTimersByTime(4000); });
+    jest.useRealTimers();
+
+    expect(renderer.root.findByProps({ testID: 'guess.exhausted.leave' })).toBeDefined();
+
+    mockedFlush.mockClear();
+    submitScoreBatch.mockClear();
+
+    // Tap Leave → handleExitToHome → navigation.popToTop → beforeRemove fires on
+    // every popped screen. C3: GuessScreen has no useFlushOnLeave hook, so only
+    // GuessFeedScreen's hook fires flush. ≤2 calls + flushing guard bounds the
+    // underlying POST to exactly one.
+    await press(renderer, 'guess.exhausted.leave');
+    await act(async () => { await flushPromises(); });
+
+    expect(mockedFlush.mock.calls.length).toBeLessThanOrEqual(2);
+    expect(submitScoreBatch).toHaveBeenCalledTimes(1);
   });
 });

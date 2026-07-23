@@ -45,8 +45,10 @@ import {
   getLocalImages,
   getNextImage,
   getNextImageForScope,
+  getNextImagesForScope,
   getOnboardingCompleted,
   getPreferredLanguage,
+  getRemainingDeckCount,
   getSessionLanguageFilter,
   getUserTags,
   removeImageFromList,
@@ -402,6 +404,123 @@ describe('storageDatum utilities', () => {
     });
   });
 
+  describe('getNextImagesForScope', () => {
+    it('returns the next N public-scope cards with listId strictly greater than currentListId', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+        { listId: 4, imageFile: 'file:///cache/4.jpg' },
+      ]));
+
+      const cards = await getNextImagesForScope({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        limit: 3,
+        scope: { kind: 'public' },
+      });
+
+      expect(cards).toEqual([
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+        { listId: 4, imageFile: 'file:///cache/4.jpg' },
+      ]);
+      expect(readGroupFeedCache).not.toHaveBeenCalled();
+    });
+
+    it('caps the result at limit and never returns more than what the deck holds', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+      ]));
+
+      const cards = await getNextImagesForScope({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        limit: 5,
+        scope: { kind: 'public' },
+      });
+
+      expect(cards).toHaveLength(2);
+    });
+
+    it('returns [] when the public deck is missing, empty, or has no further cards', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      expect(await getNextImagesForScope({
+        category: { key: 'all' }, language: 'any', currentListId: 1, limit: 3, scope: { kind: 'public' },
+      })).toEqual([]);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+      expect(await getNextImagesForScope({
+        category: { key: 'all' }, language: 'any', currentListId: 1, limit: 3, scope: { kind: 'public' },
+      })).toEqual([]);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1, imageFile: 'file:///cache/1.jpg' }]));
+      expect(await getNextImagesForScope({
+        category: { key: 'all' }, language: 'any', currentListId: 5, limit: 3, scope: { kind: 'public' },
+      })).toEqual([]);
+    });
+
+    it('starts from the deck head when currentListId is not finite', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 7, imageFile: 'file:///cache/7.jpg' },
+        { listId: 8, imageFile: 'file:///cache/8.jpg' },
+      ]));
+
+      const cards = await getNextImagesForScope({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: undefined,
+        limit: 2,
+        scope: { kind: 'public' },
+      });
+
+      expect(cards).toEqual([
+        { listId: 7, imageFile: 'file:///cache/7.jpg' },
+        { listId: 8, imageFile: 'file:///cache/8.jpg' },
+      ]);
+    });
+
+    it('reads the private group feed cache and returns the next N cards', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [
+          { listId: 1, imageFile: 'file:///cache/p1.jpg' },
+          { listId: 2, imageFile: 'file:///cache/p2.jpg' },
+          { listId: 3, imageFile: 'file:///cache/p3.jpg' },
+        ],
+        nextCursor: null,
+      });
+
+      const cards = await getNextImagesForScope({
+        category: { key: 'city', id: 7 },
+        language: 'fr',
+        currentListId: 1,
+        limit: 2,
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(cards).toEqual([
+        { listId: 2, imageFile: 'file:///cache/p2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/p3.jpg' },
+      ]);
+      expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr' });
+    });
+
+    it('returns [] for a private scope when the cache is empty or missing', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+      expect(await getNextImagesForScope({
+        category: { key: 'all' }, language: 'fr', currentListId: 1, limit: 3, scope: { kind: 'private', groupId: 'g-3' },
+      })).toEqual([]);
+
+      readGroupFeedCache.mockResolvedValueOnce(null);
+      expect(await getNextImagesForScope({
+        category: { key: 'all' }, language: 'fr', currentListId: 1, limit: 3, scope: { kind: 'private', groupId: 'g-3' },
+      })).toEqual([]);
+    });
+  });
+
   describe('getDeckCountForScope', () => {
     it('returns the getLocalImages array length for the public scope', async () => {
       AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
@@ -545,6 +664,102 @@ describe('storageDatum utilities', () => {
       });
 
       expect(readGroupFeedCache).toHaveBeenCalledWith('g-1', { categoryId: undefined, language: undefined });
+    });
+  });
+
+  describe('getRemainingDeckCount', () => {
+    it('filters by currentListId and returns only cards with a strictly greater listId', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: 20 },
+        { listId: 30 },
+        { listId: 40 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 20,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(2);
+    });
+
+    it('returns 0 when no cards have a listId greater than currentListId', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: 20 },
+        { listId: 30 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 30,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(0);
+    });
+
+    it('skips cards with non-finite listIds', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 10 },
+        { listId: null },
+        { listId: undefined },
+        { listId: NaN },
+        { listId: 'abc' },
+        { listId: 30 },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 0,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(2);
+    });
+
+    it('returns 0 when storage is empty or missing', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      const countMissing = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        scope: { kind: 'public' },
+      });
+      expect(countMissing).toBe(0);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([]));
+      const countEmpty = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 1,
+        scope: { kind: 'public' },
+      });
+      expect(countEmpty).toBe(0);
+    });
+
+    it('does not perform a per-card File.exists probe (perf contract)', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+        { listId: 3, imageFile: 'file:///cache/3.jpg' },
+      ]));
+
+      const count = await getRemainingDeckCount({
+        category: { key: 'all' },
+        language: 'any',
+        currentListId: 0,
+        scope: { kind: 'public' },
+      });
+
+      expect(count).toBe(3);
+      expect(File).not.toHaveBeenCalled();
+      expect(mockDelete).not.toHaveBeenCalled();
     });
   });
 });

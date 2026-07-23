@@ -1,9 +1,13 @@
-jest.mock('../utils/storageDatum', () => ({
-  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
-  getLastImageUuid: jest.fn(),
-  storeImageList: jest.fn(),
-  updateImageList: jest.fn(),
-}));
+jest.mock('../utils/storageDatum', () => {
+  const actual = jest.requireActual('../utils/storageDatum');
+  return {
+    ...actual,
+    PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
+    getLastImageUuid: jest.fn(),
+    storeImageList: jest.fn(),
+    updateImageList: jest.fn(),
+  };
+});
 
 jest.mock('../utils/imagesRequests', () => ({
   getImages: jest.fn(),
@@ -14,10 +18,13 @@ jest.mock('../services/groups/groupFeedCache', () => ({
   writeGroupFeedCache: jest.fn(),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getLastImageUuid, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
 import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { appendCardBatch, fetchCardBatch } from '../services/cardDeck';
+
+const realUpdateImageList = jest.requireActual('../utils/storageDatum').updateImageList;
 
 describe('appendCardBatch', () => {
   beforeEach(() => {
@@ -151,6 +158,217 @@ describe('appendCardBatch', () => {
       { categoryId: undefined, language: 'fr' },
       expect.objectContaining({ images: [{ listId: 1 }] }),
     );
+  });
+
+  it('private-scope appendCardBatch normalizes missing listIds (server cards without listId become resolvable)', async () => {
+    readGroupFeedCache.mockResolvedValueOnce({ images: [{ listId: 1 }], nextCursor: null });
+    const cards = [{ uuid: 'a' }, { uuid: 'b', listId: 'oops' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      {
+        images: [
+          { listId: 1 },
+          { uuid: 'a', listId: 2 },
+          { uuid: 'b', listId: 3 },
+        ],
+        nextCursor: null,
+      },
+    );
+  });
+
+  it('concurrent appendCardBatch calls for same scope → serialized (no lost update; deck size = sum of both batches)', async () => {
+    // R2 regression guard. The private-scope path performs its RMW
+    // (read → concat → write) inside appendCardBatch, so we can observe
+    // serialization by backing read/writeGroupFeedCache with shared in-memory
+    // state. The first call's write is held open via a deferred to widen the
+    // window; the second call must not read until the first's write settles.
+    const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+
+    let store = { images: [], nextCursor: null };
+    let releaseFirstWrite;
+    const firstWriteGate = new Promise((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+
+    readGroupFeedCache.mockImplementation(async () => ({
+      images: [...store.images],
+      nextCursor: store.nextCursor,
+    }));
+
+    writeGroupFeedCache.mockImplementation(async (_groupId, _meta, payload) => {
+      if (store.images.length === 0) {
+        await firstWriteGate;
+      }
+      store = { images: payload.images, nextCursor: payload.nextCursor };
+    });
+
+    const sharedArgs = {
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-lock' },
+    };
+
+    const call1 = appendCardBatch({ ...sharedArgs, cards: [{ listId: 1 }, { listId: 2 }] });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(writeGroupFeedCache).toHaveBeenCalledTimes(1);
+
+    const call2 = appendCardBatch({ ...sharedArgs, cards: [{ listId: 3 }, { listId: 4 }] });
+    await flushMicrotasks();
+    await flushMicrotasks();
+    expect(readGroupFeedCache).toHaveBeenCalledTimes(1);
+
+    releaseFirstWrite();
+    await call1;
+    await call2;
+
+    expect(writeGroupFeedCache).toHaveBeenCalledTimes(2);
+    expect(store.images).toEqual([
+      { listId: 1 },
+      { listId: 2 },
+      { listId: 3 },
+      { listId: 4 },
+    ]);
+  });
+});
+
+describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+  });
+
+  it('does NOT append a card whose pictureId is already in the private deck', async () => {
+    // RC10/T4.3: the server can re-serve a card already in the local deck
+    // (stale cursor). Without pictureId dedup, the duplicate gets a NEW
+    // listId > currentListId and getNextImage returns it → the just-played
+    // card repeats. Drop duplicates by pictureId before normalizeListIds.
+    readGroupFeedCache.mockResolvedValueOnce({
+      images: [{ listId: 1, pictureId: 'card-A' }],
+      nextCursor: null,
+    });
+    const cards = [{ pictureId: 'card-A' }, { pictureId: 'card-B' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      {
+        images: [
+          { listId: 1, pictureId: 'card-A' },
+          { pictureId: 'card-B', listId: 2 },
+        ],
+        nextCursor: null,
+      },
+    );
+  });
+
+  it('appends cards with undefined pictureId (legacy) without dropping them', async () => {
+    // Legacy server payloads may omit pictureId. There is no key to dedup
+    // against, so dropping them would lose data — they must pass through.
+    readGroupFeedCache.mockResolvedValueOnce({
+      images: [{ listId: 1, pictureId: 'card-A' }],
+      nextCursor: null,
+    });
+    const cards = [{ pictureId: undefined }, { pictureId: 'card-B' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      {
+        images: [
+          { listId: 1, pictureId: 'card-A' },
+          { pictureId: undefined, listId: 2 },
+          { pictureId: 'card-B', listId: 3 },
+        ],
+        nextCursor: null,
+      },
+    );
+  });
+
+  it('preserves the existing card listId when a duplicate pictureId arrives', async () => {
+    // The existing card keeps its assigned listId; the duplicate is dropped
+    // (NOT re-normalized to a new listId, which would shadow the original).
+    readGroupFeedCache.mockResolvedValueOnce({
+      images: [{ listId: 5, pictureId: 'card-A' }],
+      nextCursor: null,
+    });
+    const cards = [{ pictureId: 'card-A' }, { pictureId: 'card-B' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      {
+        images: [
+          { listId: 5, pictureId: 'card-A' },
+          { pictureId: 'card-B', listId: 6 },
+        ],
+        nextCursor: null,
+      },
+    );
+  });
+
+  it('does NOT append a card whose pictureId is already in the public deck', async () => {
+    // Public scope: appendCardBatch delegates to updateImageList, so the
+    // dedup must live in updateImageList (the storage-write boundary). Use
+    // the REAL updateImageList against AsyncStorage mocks to verify the
+    // post-append deck has no pictureId duplicate.
+    updateImageList.mockImplementation(realUpdateImageList);
+    AsyncStorage.getItem.mockResolvedValueOnce(
+      JSON.stringify([{ listId: 1, pictureId: 'card-A' }]),
+    );
+    AsyncStorage.setItem.mockResolvedValue(undefined);
+    const cards = [{ pictureId: 'card-A' }, { pictureId: 'card-B' }];
+
+    await appendCardBatch({
+      cards,
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    const writtenPayload = AsyncStorage.setItem.mock.calls[0][1];
+    const writtenImages = JSON.parse(writtenPayload);
+    const pictureIds = writtenImages.map((c) => c.pictureId);
+    expect(pictureIds).toEqual(['card-A', 'card-B']);
+    expect(new Set(pictureIds).size).toBe(pictureIds.length);
   });
 });
 

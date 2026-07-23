@@ -25,15 +25,16 @@ export const handleOrientation = async (orientation) => {
 
 export const handleImageOrientation = async ({ imageIsPortrait }) => {
 
-  const orientation = await checkOrientation();
+  const currentLock = await ScreenOrientation.getOrientationLockAsync();
+  const desiredLock = imageIsPortrait
+    ? ScreenOrientation.OrientationLock.PORTRAIT_UP
+    : ScreenOrientation.OrientationLock.LANDSCAPE_LEFT;
 
-  if ( imageIsPortrait && (orientation === 3 || orientation === 4 || orientation === 0)) {
-    changeOrientation(ScreenOrientation.OrientationLock.PORTRAIT_UP);
+  if (currentLock === desiredLock) {
+    return null;
   };
 
-  if ((orientation === 1 || orientation === 2 || orientation === 0) && !imageIsPortrait) {
-    changeOrientation(ScreenOrientation.OrientationLock.LANDSCAPE_LEFT);
-  };
+  await changeOrientation(desiredLock);
 
   return null;
 };

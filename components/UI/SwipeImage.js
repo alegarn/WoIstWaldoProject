@@ -7,7 +7,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -107,6 +107,16 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     };
   }, [lang, scope]);
 
+  /**
+   * Fetch+append path: call `fetchCardBatch` with the active category/language/
+   * scope, then hand the response to `handleData`. Translates the fetch outcome
+   * into the same result contract as `handleImagesLoading`.
+   * @param {string|null|undefined} [pictureIdOverride] - When provided, sent as
+   *   the server cursor; `undefined` → caller-side persisted cursor, `null` →
+   *   fresh head query.
+   * @returns {Promise<boolean|'error'|void>} `true`/`false` from handleData,
+   *   `'error'` when the fetch errored (alert already shown).
+   */
   const loadNewImages = useCallback(async (pictureIdOverride) => {
     console.log("loadNewImages");
     const response = await fetchCardBatch({
@@ -129,6 +139,23 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     };
   }, [context, handleData, language, scope]);
 
+  /**
+   * Centralized image-loading entry. Drives the `asyncImagesAreLoading` and
+   * `noMoreCard` flags around `loadNewImages`, and RETURNS its result so the
+   * caller can branch on the fetch outcome.
+   *
+   * `pictureIdOverride`:
+   * - `undefined` (omitted) → `loadNewImages` reads the persisted feed cursor.
+   * - `null` → fresh head query (no cursor).
+   *
+   * Result semantics:
+   * - truthy / `true` → cards arrived; `noMoreCard` cleared.
+   * - `false` → server returned an empty batch; `noMoreCard` set to 'exhausted'.
+   * - `'error'` → fetch failed; alert already shown, `noMoreCard` set to 'error'.
+   *
+   * @param {string|null|undefined} [pictureIdOverride] - Cursor override; see above.
+   * @returns {Promise<boolean|'error'|void>} The `loadNewImages` result.
+   */
   /* centralized function for loading images / set when imgs are loading */
   const handleImagesLoading = useCallback(async (pictureIdOverride) => {
     console.log("handleImagesLoading");
@@ -139,15 +166,27 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       setNoMoreCard('error');
     } else if (result === false) {
       setNoMoreCard('exhausted');
+    } else if (result === true) {
+      setNoMoreCard(null);
     }
     setAsyncImagesAreLoading(false);
+    return result;
   }, [loadNewImages]);
 
-  /*
-  * Handles the retrieval of the list of images.
-  *
-  * @return {null} Returns null if the localImageList is not null and has a length of at least 4.
-  */
+  /**
+   * Mount loader. Reads the local deck for the active (category, language) and
+   * branches by deck size (e2e mode short-circuits to a fixture/saved card):
+   * - cold (null / length 0) → `handleImagesLoading(null)` (fresh head query,
+   *   bypassing any stale cursor so newly-uploaded images can surface).
+   * - full (length ≥ 4) → use the local deck directly (no fetch).
+   * - partial (1–3) → cursor-based `handleImagesLoading()` (no override → reads
+   *   the persisted cursor); if it returns `false` (cursor exhausted), write the
+   *   `PUBLIC_FEED_END_CURSOR` sentinel and do ONE fresh
+   *   `handleImagesLoading(null)` so newly-available server images can be
+   *   reached. The cached deck is NOT wiped — only the cursor is replaced.
+   *
+   * @returns {Promise<void>}
+   */
   const handleGetImagesList = useCallback(async () => {
     console.log("handleGetImagesList");
 
@@ -182,7 +221,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       await handleImagesLoading(null);
     } else {
       setImageList(normalizeListIds(localImageList));
-      await handleImagesLoading();
+      const cursorResult = await handleImagesLoading();
+      if (cursorResult === false) {
+        await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, categoryKey, lang);
+        await handleImagesLoading(null);
+      }
     };
   }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 
@@ -224,12 +267,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     // 2. Join any in-flight category prefetch (or start one at deck 0) before
     //    declaring the category exhausted. This covers the last-card race where
     //    the background top-up lands just after the first storage read.
+    // SwipeImage intentionally operates cursor-agnostic; pass undefined so
+    // getRemainingDeckCount counts all remaining cards.
     await (categoryPrefetchPromise ?? prefetchIfLow({
       categoryKey: aKey,
       categoryId: aCat?.id,
       language,
       scope,
       authContext: context,
+      currentListId: undefined,
     }).catch(() => {}));
 
     catDeck = await readDeck(aKey, aCat);
@@ -281,12 +327,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         );
       }
 
+      // SwipeImage intentionally operates cursor-agnostic; pass undefined so
+      // getRemainingDeckCount counts all remaining cards.
       const prefetchPromise = prefetchIfLow({
         categoryKey: activeCategoryKeyRef.current,
         categoryId: aCat?.id,
         language,
         scope,
         authContext: context,
+        currentListId: undefined,
       }).catch(() => {});
 
       // Deck-empty fallback: prefer background-prefetched cards, then 'all' deck,

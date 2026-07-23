@@ -41,11 +41,11 @@ describe('streakTiers', () => {
   describe('resolveStreakTier — boundaries', () => {
     it.each([
       [2, 0, 1.0, '', 'neutral'],
-      [3, 1, 1.5, 'Focused', 'blue'],
-      [6, 1, 1.5, 'Focused', 'blue'],
-      [7, 2, 2.0, 'In the Zone', 'orange'],
-      [12, 3, 3.0, 'On Fire', 'red'],
-      [20, 4, 5.0, 'Legendary', 'purple'],
+      [3, 1, 2.0, 'Focused', 'blue'],
+      [6, 1, 2.0, 'Focused', 'blue'],
+      [7, 2, 3.0, 'In the Zone', 'orange'],
+      [12, 3, 5.0, 'On Fire', 'red'],
+      [20, 4, 7.0, 'Legendary', 'purple'],
       [50, 5, 10.0, "Waldo's Nemesis", 'white'],
     ])(
       'streak %p -> tier %p, multiplier %p, label %p, colorKey %p',

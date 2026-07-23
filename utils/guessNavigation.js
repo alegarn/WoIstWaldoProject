@@ -1,6 +1,15 @@
 import { resolveNextCard } from './nextCardResolver';
 
 /**
+ * @deprecated As of the streak-continuity refactor (planning/features/streak-continuity-guess-path.md T1.10),
+ *             this function is NOT called from the GuessScreen advance path. The advance path now uses
+ *             `useReducer(advanceReducer, …)` (utils/advanceState.ts) and never bounces to the feed.
+ *             Retained for external callers (ShowSuccess.js, ShowFailure.js). Do NOT add new callers —
+ *             new advance logic should go through the state machine in GuessScreen.
+ *
+ *             Navigates the player to the next guess card by bouncing through GuessFeedScreen.
+ *             This is a bounce — it breaks the streak. Prefer the in-screen advance path.
+ *
  * Resolve the next playable card (read-only resolver: AsyncStorage + private
  * cache only, no network) and reset to a clean navigation stack so Back from
  * GuessScreen lands on the feed (decision D3). Mirrors the GuessScreen param

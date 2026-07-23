@@ -3,16 +3,18 @@ jest.mock('../services/cardDeck', () => ({
   appendCardBatch: jest.fn(),
 }));
 jest.mock('../utils/storageDatum', () => ({
-  getDeckCountForScope: jest.fn(),
+  getRemainingDeckCount: jest.fn(),
+  normalizeListIds: jest.fn((cards) => cards),
 }));
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
 
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getDeckCountForScope } from '../utils/storageDatum';
+import { getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import {
   LOW_CARD_THRESHOLD,
   ALL_WARM_THRESHOLD,
+  LOOKAHEAD_PREFETCH,
   prefetchIfLow,
   warmAllDeckIfNeeded,
   __resetForTests,
@@ -20,8 +22,9 @@ import {
 
 const fetchMock = fetchCardBatch as jest.MockedFunction<typeof fetchCardBatch>;
 const appendMock = appendCardBatch as jest.MockedFunction<typeof appendCardBatch>;
-const countMock = getDeckCountForScope as jest.MockedFunction<typeof getDeckCountForScope>;
+const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
 const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
+const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
 
 const IMAGES = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
 
@@ -34,18 +37,25 @@ describe('cardPrefetcher', () => {
     __resetForTests();
     jest.clearAllMocks();
     e2eMock.mockReturnValue(false);
-    countMock.mockResolvedValue(0);
+    remainingMock.mockResolvedValue(0);
     fetchMock.mockResolvedValue({ isError: false, images: IMAGES } as never);
     appendMock.mockResolvedValue(null as never);
   });
 
-  it('exports thresholds equal to 5', () => {
-    expect(LOW_CARD_THRESHOLD).toBe(5);
+  it('exports LOW_CARD_THRESHOLD equal to 3 (lowered for warmer decode pipeline)', () => {
+    expect(LOW_CARD_THRESHOLD).toBe(3);
+  });
+
+  it('exports ALL_WARM_THRESHOLD equal to 5 (intentionally unchanged)', () => {
     expect(ALL_WARM_THRESHOLD).toBe(5);
   });
 
+  it('exports LOOKAHEAD_PREFETCH equal to 3', () => {
+    expect(LOOKAHEAD_PREFETCH).toBe(3);
+  });
+
   it('does not fetch when count >= LOW_CARD_THRESHOLD', async () => {
-    countMock.mockResolvedValue(7);
+    remainingMock.mockResolvedValue(12);
 
     await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
 
@@ -54,7 +64,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('fetches and appends when count < LOW_CARD_THRESHOLD', async () => {
-    countMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: { token: 'x' } });
 
@@ -77,7 +87,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('skips append when fetchCardBatch returns isError', async () => {
-    countMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockResolvedValue({ isError: true } as never);
 
     await expect(
@@ -88,7 +98,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('swallows errors from fetchCardBatch', async () => {
-    countMock.mockResolvedValue(3);
+    remainingMock.mockResolvedValue(2);
     fetchMock.mockRejectedValue(new Error('network down') as never);
 
     await expect(
@@ -99,8 +109,8 @@ describe('cardPrefetcher', () => {
   });
 
   it('dedups concurrent calls for the same deck key (one fetchCardBatch total)', async () => {
-    countMock.mockResolvedValue(3);
-    fetchMock.mockImplementation(okResponse);
+    remainingMock.mockResolvedValue(2);
+    fetchMock.mockImplementation(() => okResponse());
 
     const a = prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
     const b = prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -112,8 +122,8 @@ describe('cardPrefetcher', () => {
   });
 
   it('allows a new prefetch after the in-flight promise resolves (dedup cleared)', async () => {
-    countMock.mockResolvedValue(3);
-    fetchMock.mockImplementation(okResponse);
+    remainingMock.mockResolvedValue(2);
+    fetchMock.mockImplementation(() => okResponse());
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
     await Promise.resolve();
@@ -124,7 +134,8 @@ describe('cardPrefetcher', () => {
   });
 
   it('warms the "all" deck in addition to the category fetch when categoryKey !== "all" and count is low', async () => {
-    countMock.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+    remainingMock.mockResolvedValueOnce(2);
+    remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation((params) =>
       okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : IMAGES),
     );
@@ -144,7 +155,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('does not re-warm while the persisted "all" deck still has cards', async () => {
-    countMock.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
     fetchMock.mockImplementation(() => okResponse());
 
     await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -156,7 +167,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('cold-starts the all-deck warm from the head when the persisted all deck is empty', async () => {
-    countMock.mockResolvedValueOnce(0);
+    remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation(() => okResponse());
 
     await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -171,8 +182,8 @@ describe('cardPrefetcher', () => {
   });
 
   it('does not warm when categoryKey === "all"', async () => {
-    countMock.mockResolvedValue(3);
-    fetchMock.mockImplementation(okResponse);
+    remainingMock.mockResolvedValue(2);
+    fetchMock.mockImplementation(() => okResponse());
 
     await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
     await Promise.resolve();
@@ -187,9 +198,46 @@ describe('cardPrefetcher', () => {
 
     await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
 
-    expect(countMock).not.toHaveBeenCalled();
+    expect(remainingMock).not.toHaveBeenCalled();
     expect(fetchMock).not.toHaveBeenCalled();
     expect(appendMock).not.toHaveBeenCalled();
+  });
+
+  it('prefetchIfLow passes currentListId through to getRemainingDeckCount', async () => {
+    remainingMock.mockResolvedValue(7);
+
+    await prefetchIfLow({
+      categoryKey: 'city',
+      categoryId: 7,
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: {},
+      currentListId: 42,
+    });
+
+    expect(remainingMock).toHaveBeenCalledTimes(1);
+    expect(remainingMock).toHaveBeenCalledWith({
+      category: { key: 'city', id: 7 },
+      language: 'fr',
+      currentListId: 42,
+      scope: { kind: 'public' },
+    });
+  });
+
+  it('prefetchIfLow forwards currentListId: undefined when not provided (cursor-agnostic)', async () => {
+    remainingMock.mockResolvedValue(7);
+
+    await prefetchIfLow({
+      categoryKey: 'city',
+      categoryId: 7,
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: {},
+    });
+
+    expect(remainingMock).toHaveBeenCalledWith(expect.objectContaining({
+      currentListId: undefined,
+    }));
   });
 
   it('is a no-op in e2e mode (warmAllDeckIfNeeded)', async () => {
@@ -230,7 +278,7 @@ describe('cardPrefetcher', () => {
   });
 
   it('warm-all fetches again when the persisted all deck drains back to zero', async () => {
-    countMock.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
+    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
     fetchMock.mockImplementation(() => okResponse());
 
     await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -252,5 +300,71 @@ describe('cardPrefetcher', () => {
     const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
     expect(allCalls).toHaveLength(2);
     expect(appendMock).not.toHaveBeenCalled();
+  });
+
+  it('prefetcher normalizeListIds is called on fetched cards before append (T2.6 defense-in-depth)', async () => {
+    remainingMock.mockResolvedValue(2);
+    normalizeMock.mockImplementation((cards) => cards);
+
+    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+    expect(normalizeMock).toHaveBeenCalledTimes(1);
+    expect(normalizeMock).toHaveBeenCalledWith(IMAGES);
+    expect(appendMock).toHaveBeenCalledTimes(1);
+    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({ cards: IMAGES }));
+  });
+
+  it('warmAllDeckIfNeeded uses cursor-filtered count (RC8/CB3): count=N>0 but no listId > currentListId → fires warm (not short-circuited)', async () => {
+    // Without T2.8, warmAllDeckIfNeeded called getDeckCountForScope which
+    // returns the TOTAL 'all' deck size (5 here). The cursor is exhausted
+    // (no listId > currentListId=42), so the cursor-aware count is 0. With
+    // the T2.8 swap, warm fires; under the old bug it would short-circuit
+    // and Tier 3 would return empty.
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation(() => okResponse());
+
+    await warmAllDeckIfNeeded({
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: {},
+      currentListId: 42,
+    });
+
+    expect(remainingMock).toHaveBeenCalledWith({
+      category: { key: 'all' },
+      language: 'fr',
+      currentListId: 42,
+      scope: { kind: 'public' },
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
+  });
+
+  it('warmAllDeckIfNeeded short-circuits when cursor-filtered remaining > 0 (RC8/CB3)', async () => {
+    // Same persisted 'all' deck, but now listId=10 leaves cursor-ahead cards
+    // (listIds 11+). The cursor-aware count is 2 → warm short-circuits even
+    // though a count-only check would also have short-circuited; this test
+    // pins that the cursor-aware path still gates correctly when ahead > 0.
+    remainingMock.mockResolvedValue(2);
+
+    await warmAllDeckIfNeeded({
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: {},
+      currentListId: 10,
+    });
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(appendMock).not.toHaveBeenCalled();
+  });
+
+  it('warmAllDeckIfNeeded forwards currentListId: undefined when not provided (cursor-agnostic)', async () => {
+    remainingMock.mockResolvedValue(0);
+
+    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+    expect(remainingMock).toHaveBeenCalledWith(expect.objectContaining({
+      currentListId: undefined,
+    }));
   });
 });
