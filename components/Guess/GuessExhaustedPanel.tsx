@@ -1,4 +1,3 @@
-import React from 'react';
 import {
   StyleSheet,
   Text,
@@ -7,6 +6,7 @@ import {
 } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
+import { OverlayZIndex } from '../../constants/overlayZIndex';
 
 type Props = {
   onSwitch: () => void;
@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0, 0, 0, 0.55)',
     justifyContent: 'center',
     alignItems: 'center',
-    zIndex: 9999,
+    zIndex: OverlayZIndex.EXHAUSTED_PANEL,
   },
   card: {
     width: '85%',

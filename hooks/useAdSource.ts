@@ -6,9 +6,8 @@ import { createInternalProAdSource } from '../services/ads/InternalProAdSource';
 import type { AdSource } from '../services/ads/AdSource';
 
 // On iOS the whole ad feature is a no-op (Q1): the AdMob source is never ready, and
-// the InternalProAdSource is suppressed via consumeAdSlot by a platform gate in
-// GuessScreen. We still construct the composite for shape parity; the platform gate
-// is enforced in decideAdSlot via Platform.OS !== 'android' (no overlay shown).
+// the InternalProAdSource is suppressed by useAdCadence's platform gate before
+// any overlay is shown. We still construct the composite for shape parity.
 //
 // NOTE (F2/F3): GuessScreen deliberately constructs AdMob WITHOUT a hookSnapshot —
 // GuessScreen never reads AdMob readiness at runtime; it only checks the composite's

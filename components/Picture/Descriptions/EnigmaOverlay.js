@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import IconButton from '../../UI/IconButton';
+import { OverlayZIndex } from '../../../constants/overlayZIndex';
 import { GlobalStyle } from '../../../constants/theme';
 
 const SWIPE_THRESHOLD_PX = 40;
@@ -99,7 +100,7 @@ export default function EnigmaOverlay({ description, screenHeight, defaultOpen, 
   const text = description && description !== '' ? description : 'No description';
 
   return (
-    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: 9000, elevation: 9000 }]}>
+    <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: OverlayZIndex.ENIGMA_ROOT, elevation: OverlayZIndex.ENIGMA_ROOT }]}>
       {!isOpen ? (
         <View
           {...handlePanResponder.panHandlers}
@@ -153,14 +154,14 @@ const styles = StyleSheet.create({
     backgroundColor: GlobalStyle.color.primaryColor900,
     borderTopLeftRadius: 12,
     borderTopRightRadius: 12,
-    zIndex: 9001,
-    elevation: 9001,
+    zIndex: OverlayZIndex.ENIGMA_HANDLE,
+    elevation: OverlayZIndex.ENIGMA_HANDLE,
   },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
-    zIndex: 9002,
-    elevation: 9002,
+    zIndex: OverlayZIndex.ENIGMA_SCRIM,
+    elevation: OverlayZIndex.ENIGMA_SCRIM,
   },
   panel: {
     position: 'absolute',
@@ -171,8 +172,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 16,
-    zIndex: 9003,
-    elevation: 9003,
+    zIndex: OverlayZIndex.ENIGMA_PANEL,
+    elevation: OverlayZIndex.ENIGMA_PANEL,
   },
   panelHeader: {
     flexDirection: 'row',

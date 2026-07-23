@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import { useRef, useEffect } from 'react';
 import { Animated, Easing, StyleSheet, View, Text } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import { GlobalStyle } from '../../constants/theme';
+import { OverlayZIndex } from '../../constants/overlayZIndex';
 import { NEUTRAL_TIER } from '../../constants/streakTiers';
 
 // Single source of truth for the speed-bonus color (spokes, chrono, pill).
@@ -259,7 +260,7 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
 }
 
 const styles = StyleSheet.create({
-  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 9999 },
+  overlay: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: OverlayZIndex.SUCCESS_OVERLAY },
   panel: {
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.45)',

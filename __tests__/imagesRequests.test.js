@@ -236,6 +236,7 @@ describe('imagesRequests utilities', () => {
           Authorization: 'Bearer token',
           HTTP_AUTHORIZATION: 'Bearer token',
         },
+        timeout: 15000,
       }
     );
     expect(File).toHaveBeenCalledWith(
@@ -301,7 +302,7 @@ describe('imagesRequests utilities', () => {
     expect(axios.post).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/next_image_batch',
       { image: { name: 'broken-img' } },
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
     expect(response).toEqual({
       isError: false,
@@ -325,6 +326,7 @@ describe('imagesRequests utilities', () => {
       {
         headers: { Authorization: 'Bearer token' },
         params: { category_id: 'X', language: 'fr' },
+        timeout: 15000,
       }
     );
   });
@@ -337,7 +339,7 @@ describe('imagesRequests utilities', () => {
     expect(axios.post).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/next_image_batch',
       { image: { name: 'first-img', category_id: 'X', language: 'fr' } },
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
   });
 
@@ -379,7 +381,7 @@ describe('imagesRequests utilities', () => {
 
     expect(axios.get).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/get_image_batch',
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
   });
 
