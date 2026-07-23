@@ -506,6 +506,7 @@ describe('GuessScreen', () => {
       category: { id: 'cat-1', key: 'nature' },
       language: 'fr',
       currentListId: 3,
+      currentPictureId: 'image-1',
       isTutorial: false,
       scope: undefined,
     });
@@ -1960,8 +1961,10 @@ describe('GuessScreen', () => {
       expect(lastPictureProps().disabled).toBe(true);
       // Overlay hidden — does not double as a loading spinner (R1).
       expect(lastOverlayProps().visible).toBe(false);
-      // Spinner+loader UI not yet warming (still advancing, resolve pending).
-      expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+      // Loader now shown during `advancing && !showSuccess` to cover the
+      // foreground-fetch gap after the success animation dismisses; deliberate
+      // fix for the "frozen screen after animation" symptom.
+      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
     });
 
     it('PT2: warming → app backgrounded → state=exhausted on foreground', async () => {

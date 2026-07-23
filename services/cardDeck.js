@@ -27,25 +27,75 @@ function isPrivateScope(scope) {
   return !!scope && scope.kind === 'private' && !!scope.groupId;
 }
 
-export async function fetchCardBatch({ categoryKey, categoryId, language, scope, authContext, pictureIdOverride } = {}) {
+/**
+ * In-flight dedup for fetchCardBatch. Concurrent callers for the SAME scope
+ * AND fetch mode collapse onto ONE in-flight promise; different modes
+ * (cursor vs head vs explicit uuid) and different scopes run independently.
+ * Mirrors the `inFlight` Map pattern in services/cardPrefetcher.ts.
+ *
+ * Why: nothing previously deduped concurrent fetchCardBatch calls. When the
+ * deck ran low, prefetchIfLow / foregroundTopUp / SwipeImage.loadNewImages
+ * all fired near-simultaneously, each reading the SAME persisted cursor
+ * (which only advances deep inside getImages) and each POSTing the identical
+ * next_image_batch → the same batch downloaded 2×–4×. appendCardBatch's
+ * dedup hid the duplicate from the persisted deck but the network work and
+ * base64 decode still repeated. Collapsing the callers onto one promise
+ * eliminates the duplicate network round-trip at the source.
+ */
+const fetchInFlight = new Map();
+
+function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride }) {
   const lang = normalizeLanguage(language);
-  const lastImageUuid = await getLastImageUuid(categoryKey, lang);
-  const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
+  const mode = pictureIdOverride === undefined
+    ? 'cursor'
+    : pictureIdOverride === null
+      ? 'head'
+      : `uuid:${pictureIdOverride}`;
+  let scopePart;
+  if (isPrivateScope(scope)) {
+    scopePart = `private:${scope.groupId}:${resolveCategoryId(categoryId) ?? 'all'}`;
+  } else {
+    scopePart = 'public';
+  }
+  return `${categoryKey || 'all'}:${lang}:${scopePart}:${mode}`;
+}
 
-  // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
-  // mark a category exhausted. The cold-mount path now bypasses the cursor
-  // (always passes null), but refillOrFallback's foreground load and the
-  // background prefetcher still call fetchCardBatch with no override. Treat
-  // the stale sentinel as a fresh cursor so those paths also re-query from
-  // head; the next non-empty batch overwrites the stale key with a real uuid.
-  const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
+export function fetchCardBatch({ categoryKey, categoryId, language, scope, authContext, pictureIdOverride } = {}) {
+  const key = fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride });
+  const existing = fetchInFlight.get(key);
+  if (existing) {
+    return existing;
+  }
 
-  return getImages(effectivePictureId, authContext, {
-    category_id: resolveCategoryId(categoryId),
-    category_key: categoryKey || 'all',
-    language: resolveServerLanguage(language),
-    scope,
+  const p = (async () => {
+    const lang = normalizeLanguage(language);
+    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
+    const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
+
+    // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
+    // mark a category exhausted. The cold-mount path now bypasses the cursor
+    // (always passes null), but refillOrFallback's foreground load and the
+    // background prefetcher still call fetchCardBatch with no override. Treat
+    // the stale sentinel as a fresh cursor so those paths also re-query from
+    // head; the next non-empty batch overwrites the stale key with a real uuid.
+    const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
+
+    return getImages(effectivePictureId, authContext, {
+      category_id: resolveCategoryId(categoryId),
+      category_key: categoryKey || 'all',
+      language: resolveServerLanguage(language),
+      scope,
+    });
+  })();
+
+  fetchInFlight.set(key, p);
+  p.finally(() => {
+    if (fetchInFlight.get(key) === p) {
+      fetchInFlight.delete(key);
+    }
   });
+
+  return p;
 }
 
 export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {

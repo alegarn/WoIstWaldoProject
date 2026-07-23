@@ -474,7 +474,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   // resolve — see onAdvanceResolved (PB6).
   async function runResolveCycle() {
     const { next, reason } = await resolveNextCardWithServerFallback({
-      category, language, currentListId: listId, isTutorial, scope, authContext,
+      category, language, currentListId: listId, currentPictureId: pictureId, isTutorial, scope, authContext,
     });
 
     if (next) {
@@ -643,7 +643,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
         <AdInterstitial adSource={adSource} onDone={handleAdDone} />
       </View>
     )}
-    {advance.state === 'warming' && (
+    {(advance.state === 'warming' || (advance.state === 'advancing' && !showSuccess)) && (
       <GuessAdvanceLoader />
     )}
     {advance.state === 'exhausted' && (

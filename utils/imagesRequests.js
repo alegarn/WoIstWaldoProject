@@ -111,7 +111,7 @@ export async function prepareImageUpload(context, { contentType, contentLength }
 async function getImagesInfos({ config, userId, filters }) {
   //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
-  const requestConfig = { ...config };
+  const requestConfig = { ...config, timeout: 15000 };
   const params = {};
   if (filters?.category_id != null) params.category_id = filters.category_id;
   if (filters?.language != null) params.language = filters.language;
@@ -142,7 +142,7 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
   const imageData = {
     image: imageBody
   };
-  const response = await axios.post(url, imageData, config )
+  const response = await axios.post(url, imageData, { ...config, timeout: 15000 })
     .then((response) => {
       //console.log("response getNextImagesInfos", response);
       return response;
@@ -158,12 +158,15 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
 
 async function getImageFromStorage({ storageUrl, token }) {
   console.log("getImageFromStorage");
-  const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token) } : {};
+  const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token), timeout: 15000 } : { timeout: 15000 };
   const imageData = await axios.get(storageUrl, config)
   .then((response) => {
     //console.log("imageData response, getImageFromStorage");
     return response.data;
-  }).catch((error) => console.log("error getImageFromStorage", error.request));
+  }).catch((error) => {
+    const reason = error?.response?.status ?? error?.code ?? error?.message ?? 'unknown';
+    console.warn("getImageFromStorage failed", storageUrl, reason);
+  });
   // if "The specified key does not exist" -> send server image is not in aws -> error
   return imageData;
 };
@@ -321,10 +324,10 @@ export async function getImages(pictureId, context, filters = {}) {
     };
 
     const lastBatchPictureId = imagesInfosData[imagesInfosData.length - 1].name;
+    await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
     const images = await downloadImageBatch(imagesInfosData, token);
 
     if (images.length > 0) {
-      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
       return { isError: false, images: images };
     }
 

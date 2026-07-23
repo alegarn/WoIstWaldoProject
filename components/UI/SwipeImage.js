@@ -7,7 +7,7 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage } from '../../utils/storageDatum';
+import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -139,8 +139,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       setNoMoreCard('error');
     } else if (result === false) {
       setNoMoreCard('exhausted');
+    } else if (result === true) {
+      setNoMoreCard(null);
     }
     setAsyncImagesAreLoading(false);
+    return result;
   }, [loadNewImages]);
 
   /*
@@ -182,7 +185,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       await handleImagesLoading(null);
     } else {
       setImageList(normalizeListIds(localImageList));
-      await handleImagesLoading();
+      const cursorResult = await handleImagesLoading();
+      if (cursorResult === false) {
+        await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, categoryKey, lang);
+        await handleImagesLoading(null);
+      }
     };
   }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 

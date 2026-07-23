@@ -55,9 +55,16 @@ export async function getLocalImages(categoryKey, language) {
  * - otherwise (undefined/null/NaN) → first item of the deck.
  * Returns null when the deck is missing or empty.
  */
-export async function getNextImage(categoryKey, language, currentListId) {
-  const images = await getLocalImages(categoryKey, language);
-  if (!Array.isArray(images) || images.length === 0) {
+export async function getNextImage(categoryKey, language, currentListId, excludePictureId) {
+  const raw = await getLocalImages(categoryKey, language);
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null;
+  }
+
+  const images = excludePictureId
+    ? raw.filter((image) => image?.pictureId !== excludePictureId)
+    : raw;
+  if (images.length === 0) {
     return null;
   }
 
@@ -74,16 +81,23 @@ export async function getNextImage(categoryKey, language, currentListId) {
  * categoryId is undefined for "all", otherwise the numeric category id).
  * Read-only.
  */
-export async function getNextImageForScope({ category, language, currentListId, scope }) {
+export async function getNextImageForScope({ category, language, currentListId, scope, excludePictureId }) {
   const isPrivate = scope?.kind === 'private' && scope?.groupId;
   if (!isPrivate) {
-    return getNextImage(category?.key || 'all', language, currentListId);
+    return getNextImage(category?.key || 'all', language, currentListId, excludePictureId);
   }
 
   const categoryId = category?.key === 'all' ? undefined : category?.id;
   const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
-  const images = cache?.images;
-  if (!Array.isArray(images) || images.length === 0) {
+  const raw = cache?.images;
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null;
+  }
+
+  const images = excludePictureId
+    ? raw.filter((image) => image?.pictureId !== excludePictureId)
+    : raw;
+  if (images.length === 0) {
     return null;
   }
 

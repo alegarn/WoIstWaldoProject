@@ -26,8 +26,8 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
   }
 }
 
-export async function resolveNextGuessParams({ category, language, currentListId, isTutorial, scope }) {
-  const result = await resolveNextCard({ category, language, currentListId, scope });
+export async function resolveNextGuessParams({ category, language, currentListId, isTutorial, scope, currentPictureId }) {
+  const result = await resolveNextCard({ category, language, currentListId, scope, currentPictureId });
   if (!result || !result.card) return null;
 
   const card = result.card;

@@ -29,6 +29,7 @@ export type AdvancerArgs = {
   category?: { id?: string | number | null; key?: string } | null;
   language?: string | null;
   currentListId?: number;
+  currentPictureId?: string;
   isTutorial?: boolean;
   scope?: unknown;
   authContext?: unknown;
@@ -103,6 +104,7 @@ async function foregroundTopUp(
       category: args.category,
       language: args.language,
       currentListId: args.currentListId,
+      currentPictureId: args.currentPictureId,
       isTutorial: args.isTutorial,
       scope: args.scope,
     });
@@ -142,12 +144,13 @@ export async function resolveNextCardWithServerFallback({
   category,
   language,
   currentListId,
+  currentPictureId,
   isTutorial,
   scope,
   authContext,
 }: AdvancerArgs): Promise<ResolveNextCardResult> {
   const categoryKey = category?.key || 'all';
-  const resolveArgs = { category, language, currentListId, isTutorial, scope };
+  const resolveArgs = { category, language, currentListId, currentPictureId, isTutorial, scope };
   const topUpArgs: AdvancerArgs = { ...resolveArgs, authContext };
 
   // Tier 1 — local deck.
