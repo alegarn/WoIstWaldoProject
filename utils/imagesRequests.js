@@ -108,6 +108,18 @@ export async function prepareImageUpload(context, { contentType, contentLength }
 
 
 
+/**
+ * Fetch the head (first) image-metadata batch for a user. Used when no cursor
+ * exists yet (`pictureId === null` in `getImages`). Hits `get_image_batch`.
+ * `timeout: 15000` on every request. Returns `{ data: 401 }` on auth failure
+ * or `{ data: null, errorReason }` on other failures — never throws.
+ *
+ * @param {Object}  params
+ * @param {Object}  params.config  Axios config (headers) to merge with timeout.
+ * @param {string|number} params.userId Target user id.
+ * @param {Object}  [params.filters] Optional `category_id` / `language` filters.
+ * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
+ */
 async function getImagesInfos({ config, userId, filters }) {
   //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
@@ -131,6 +143,21 @@ async function getImagesInfos({ config, userId, filters }) {
   return response;
 };
 
+/**
+ * Fetch the next image-metadata batch using keyset pagination "after" a cursor.
+ * Posts the last picture's `name` as `{ image: { name: pictureId } }` to
+ * `next_image_batch`; the server returns strictly newer rows. Same timeout
+ * (15000) and same `{ data: 401 }` / `{ data: null, errorReason }` error
+ * contract as `getImagesInfos` — never throws.
+ *
+ * @param {Object}  params
+ * @param {Object}  params.config    Axios config (headers) to merge with timeout.
+ * @param {string|number} params.userId Target user id.
+ * @param {string}  params.pictureId Keyset cursor: the `name` of the last
+ *   image of the previous batch.
+ * @param {Object}  [params.filters] Optional `category_id` / `language` filters.
+ * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
+ */
 async function getNextImagesInfos({ config, userId, pictureId, filters }){
   //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
@@ -156,6 +183,20 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
   return response;
 };
 
+/**
+ * Download one image's bytes from its storage URL (backend or external).
+ * GET with `timeout: 15000`; auth headers are attached only when the URL is
+ * backend-hosted (`usesBackendStorage`). On failure it `console.warn`s the URL
+ * + reason and resolves `undefined` (a falsy sentinel) — it does NOT throw, so
+ * a `Promise.all` batch keeps the successful downloads and the caller drops
+ * failures.
+ *
+ * @param {Object} params
+ * @param {string} params.storageUrl Absolute URL to fetch.
+ * @param {string} [params.token]    Auth token, attached only for backend URLs.
+ * @returns {Promise<string|undefined>} Resolves to the response body on
+ *   success, or `undefined` on failure.
+ */
 async function getImageFromStorage({ storageUrl, token }) {
   console.log("getImageFromStorage");
   const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token), timeout: 15000 } : { timeout: 15000 };
@@ -192,6 +233,17 @@ async function ensureDirExists() {
   Paths.cache.create({ idempotent: true, intermediates: true });
 };
 
+/**
+ * Decode a base64 data-URL and persist it to the cache dir as a file.
+ * Writes `<filename>.<ext>` under `Paths.cache` and returns its `file://` uri.
+ * Returns `false` when `imageData` is not a base64 data-URL (caller treats
+ * falsy as "skip this image"). Does not throw.
+ *
+ * @param {string|*} imageData The raw base64 data-URL from storage.
+ * @param {string}   filename  Filename stem (no extension); extension is
+ *   parsed from the data-URL prefix.
+ * @returns {Promise<string|false>} The written file's `file://` uri, or `false`.
+ */
 async function extractBase64(imageData, filename) {
   console.log("extract base64 filename", filename);
 
@@ -215,6 +267,15 @@ async function extractBase64(imageData, filename) {
 
 };
 
+/**
+ * Fetch one image's bytes and decode to a cached `file://` path. Composes
+ * `getImageFromStorage` → `extractBase64`. Returns the file uri, or `false`
+ * (from `extractBase64`) when the payload is not base64. Does not throw.
+ *
+ * @param {Object} image Metadata row with at least `storage_url` and `name`.
+ * @param {string} token Auth token forwarded to `getImageFromStorage`.
+ * @returns {Promise<string|false>} Cached file uri or `false`.
+ */
 async function handleImagesDownload(image, token) {
   console.log("handleImagesDownload");
   console.log("image location", image.storage_url);
@@ -258,6 +319,16 @@ export function buildImageObject(image, filePath) {
   return imageObject;
 }
 
+/**
+ * Download + decode every image in a metadata batch concurrently. Uses
+ * `Promise.all`, so it resolves when the slowest image finishes (failures do
+ * not short-circuit). Per-image failures resolve falsy and are dropped by
+ * `.filter(Boolean)`, so the result holds only the partial successes.
+ *
+ * @param {Array<Object>} imagesInfosData Batch of metadata rows.
+ * @param {string}        token           Auth token for `getImageFromStorage`.
+ * @returns {Promise<Array<Object>>} Built `Image` objects (failures excluded).
+ */
 async function downloadImageBatch(imagesInfosData, token) {
   const downloadedImages = await Promise.all(
     imagesInfosData.map(async (image) => {
@@ -275,6 +346,34 @@ async function downloadImageBatch(imagesInfosData, token) {
 }
 
 
+/**
+ * Main feed entry. Resolves one playable batch of images for the public feed
+ * (private scopes are delegated to `fetchPrivateFeedPageForGame`).
+ *
+ * Bounded retry loop: at most `MAX_EMPTY_DOWNLOAD_BATCHES` (3) consecutive
+ * "broken" batches — a batch whose metadata fetched OK but yielded zero
+ * downloaded images — are skipped before giving up with a `reason: 'server'`
+ * error. Each iteration:
+ *   1. fetch metadata (`getImagesInfos` for the head / `getNextImagesInfos`
+ *      for an "after cursor" batch keyed by the previous tail `name`);
+ *   2. early returns: `data === null` → `{ isError: true, reason }`;
+ *      `data === 401` → auth error (no 'auth' `reason`; global apiClient
+ *      unauthorized handler owns logout/nav out-of-band);
+ *      empty `imagesInfosData.length === 0` → `{ isError: false, reason:'empty',
+ *      images: [] }` BEFORE any cursor write;
+ *   3. CURSOR ADVANCE: `saveLastImageUuid(lastBatchPictureId, ...)` is fired
+ *      for every valid non-empty batch — strictly BEFORE `downloadImageBatch`.
+ *      So the cursor never freezes on a broken batch: if every download in a
+ *      batch fails, the cursor has already advanced past it and the loop
+ *      re-queries beyond it next pass instead of re-querying the same batch
+ *      forever. Accepted trade-off over the old freeze behaviour.
+ *
+ * @param {string|null} pictureId Cursor: `name` of the last image of the
+ *   previous page, or `null` for the first page.
+ * @param {Object}      context   Auth context (forwarded to `getBackendHeaders`).
+ * @param {Object}      [filters] Optional `{ category_id, language, category_key, scope }`.
+ * @returns {Promise<GetImagesResult>}
+ */
 export async function getImages(pictureId, context, filters = {}) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
@@ -297,7 +396,6 @@ export async function getImages(pictureId, context, filters = {}) {
 
   let nextPictureId = pictureId;
   let skippedBrokenBatches = 0;
-  let lastSkippedPictureId = null;
 
   while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES) {
     const imagesInfos = nextPictureId === null
@@ -332,7 +430,6 @@ export async function getImages(pictureId, context, filters = {}) {
     }
 
     skippedBrokenBatches += 1;
-    lastSkippedPictureId = lastBatchPictureId;
     nextPictureId = lastBatchPictureId;
   }
 

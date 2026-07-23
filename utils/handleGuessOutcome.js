@@ -3,6 +3,16 @@ import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
 import { resolveNextCard } from './nextCardResolver';
 import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
 
+/**
+ * Best-effort side effects of a correct guess: buffer the score, remove the
+ * played card from its OWN deck namespace (removeImageFromList by listId) so
+ * the deck advances past it, and delete the cached image file. Score buffering
+ * runs first; storage cleanup is wrapped so a failure there cannot unwind an
+ * already-buffered score.
+ *
+ * @param {object} args - { listId, categoryKey, language, imageFile, pictureId, scope, userId, points, multiplier, streak, streakMultiplier }
+ * @returns {Promise<void>}
+ */
 export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }) {
   await bufferScore({
     guessId: mintGuessId(),
@@ -26,6 +36,15 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
   }
 }
 
+/**
+ * Resolve the params for the next card after a guess. Forwards
+ * currentPictureId (the just-played card) into resolveNextCard so it can be
+ * excluded from the next pick. Read-only: performs no network or storage
+ * mutation. Returns null if no next card is available.
+ *
+ * @param {object} args - { category, language, currentListId, isTutorial, scope, currentPictureId }
+ * @returns {Promise<{params: object}|null>}
+ */
 export async function resolveNextGuessParams({ category, language, currentListId, isTutorial, scope, currentPictureId }) {
   const result = await resolveNextCard({ category, language, currentListId, scope, currentPictureId });
   if (!result || !result.card) return null;

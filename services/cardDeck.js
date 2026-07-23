@@ -44,6 +44,22 @@ function isPrivateScope(scope) {
  */
 const fetchInFlight = new Map();
 
+/**
+ * Build the dedup key for an in-flight fetchCardBatch call.
+ *
+ * The key encodes BOTH scope identity and fetch mode so unrelated calls stay
+ * independent:
+ * - scope: `public`, or `private:<groupId>:<categoryId|all>`.
+ * - mode: derived from pictureIdOverride — `'cursor'` when undefined (read
+ *   getLastImageUuid), `'head'` when null (fresh-from-start fetch),
+ *   `uuid:<id>` when an explicit picture id is requested.
+ *
+ * Consequence: two concurrent cursor calls for the same scope collapse onto
+ * one promise; a cursor call and a head call do NOT (different batches).
+ *
+ * @param {object} args - { categoryKey, categoryId, language, scope, pictureIdOverride }
+ * @returns {string} dedup key used by fetchInFlight
+ */
 function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride }) {
   const lang = normalizeLanguage(language);
   const mode = pictureIdOverride === undefined
@@ -60,6 +76,27 @@ function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureI
   return `${categoryKey || 'all'}:${lang}:${scopePart}:${mode}`;
 }
 
+/**
+ * Shared transport for EVERY card-fetch caller (background prefetcher,
+ * foreground top-up, SwipeImage.loadNewImages). Resolves the next batch from
+ * the backend for the given scope.
+ *
+ * pictureIdOverride resolution:
+ * - `undefined` → read the persisted cursor via getLastImageUuid.
+ * - `null` → head fetch (query from start, ignore cursor).
+ * - `PUBLIC_FEED_END_CURSOR` sentinel → coerced to null (legacy self-heal).
+ * - any other value → fetch the batch following that exact picture id.
+ *
+ * In-flight collapse: concurrent callers with the same dedup key share ONE
+ * promise. The promise is stored in fetchInFlight BEFORE the first await so
+ * the second caller sees it synchronously; the entry is deleted in `.finally`,
+ * identity-guarded so a late clear cannot evict a newer promise for the key.
+ * Eliminates the duplicate network round-trip + base64 decode that previously
+ * occurred when prefetch/top-up/loadNewImages fired near-simultaneously.
+ *
+ * @param {object} opts - { categoryKey, categoryId, language, scope, authContext, pictureIdOverride }
+ * @returns {Promise<object>} backend batch response from getImages
+ */
 export function fetchCardBatch({ categoryKey, categoryId, language, scope, authContext, pictureIdOverride } = {}) {
   const key = fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride });
   const existing = fetchInFlight.get(key);
@@ -98,6 +135,14 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
   return p;
 }
 
+/**
+ * Overwrite (not append) the persisted deck for the scope with the given cards.
+ * Public scope → storeImageList; private scope → writeGroupFeedCache.
+ * Always returns null (callers ignore the deck contents here).
+ *
+ * @param {object} args - { cards, categoryKey, categoryId, language, scope }
+ * @returns {Promise<null>}
+ */
 export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 
@@ -138,6 +183,17 @@ function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
   return `cardDeck:append:public:${categoryKey || 'all'}:${lang}`;
 }
 
+/**
+ * Append a batch to the persisted deck, scope-aware (mirrors persistCardBatch
+ * but appends instead of overwriting). Dedups incoming cards against the
+ * existing deck via dedupByPictureId, then serializes the read-modify-write
+ * per scope under withScopeLock. The append lock key (appendCardBatchLockKey)
+ * is deliberately separate from the fetch dedup key (fetchBatchDedupKey), so
+ * the append lock never blocks the fetch path — no deadlock.
+ *
+ * @param {object} args - { cards, categoryKey, categoryId, language, scope }
+ * @returns {Promise<null>} always null (matches persistCardBatch contract)
+ */
 export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 

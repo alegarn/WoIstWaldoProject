@@ -18,6 +18,13 @@ function lastImageUuidKey(categoryKey, language) {
   return `lastImageUuid:${categoryKey || 'all'}:${language || 'any'}`;
 };
 
+/**
+ * Read the persisted deck for (categoryKey, language) and drop entries whose
+ * local image file no longer exists, persisting the trimmed list when needed.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<Array<object>|null>} Viable cards, or null when none stored/unparseable.
+ */
 export async function getLocalImages(categoryKey, language) {
   const stored = await AsyncStorage.getItem(imageListKey(categoryKey, language));
   if (!stored) {
@@ -53,7 +60,17 @@ export async function getLocalImages(categoryKey, language) {
  * is ordered ascending by listId (see getLastImageId / getLastListId).
  * - currentListId is a finite number → first item whose listId is strictly greater.
  * - otherwise (undefined/null/NaN) → first item of the deck.
- * Returns null when the deck is missing or empty.
+ *
+ * When `excludePictureId` is provided, any card whose `pictureId === excludePictureId`
+ * is dropped BEFORE selection, so the just-played card is never re-served.
+ *
+ * Returns null when the deck is missing or empty after filtering.
+ *
+ * @param {string} categoryKey - Category key (use 'all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @param {number} [currentListId] - Cursor listId; non-finite → deck head.
+ * @param {string} [excludePictureId] - pictureId to filter out before selecting.
+ * @returns {Promise<object|null>} The next card, or null.
  */
 export async function getNextImage(categoryKey, language, currentListId, excludePictureId) {
   const raw = await getLocalImages(categoryKey, language);
@@ -79,7 +96,15 @@ export async function getNextImage(categoryKey, language, currentListId, exclude
  * Scope-aware next-card reader. Public scope delegates to getNextImage; private
  * scope reads the group feed cache instead (mirrors SwipeImage's derivation:
  * categoryId is undefined for "all", otherwise the numeric category id).
+ *
+ * In both branches the `excludePictureId` pre-filter (drop cards whose
+ * `pictureId === excludePictureId` BEFORE selection) is applied identically,
+ * so the just-played card is never re-served regardless of scope.
+ *
  * Read-only.
+ *
+ * @param {{ category?: { key?: string, id?: unknown }|null, language?: string|null, currentListId?: number, scope?: unknown, excludePictureId?: string }} args
+ * @returns {Promise<object|null>} The next card, or null.
  */
 export async function getNextImageForScope({ category, language, currentListId, scope, excludePictureId }) {
   const isPrivate = scope?.kind === 'private' && scope?.groupId;
@@ -239,11 +264,29 @@ export async function getLastImageId(categoryKey, language) {
   return 0;
 };
 
+/**
+ * Persist the feed cursor (last-served image uuid) for (categoryKey, language).
+ * Stored at `lastImageUuid:<categoryKey|'all'>:<language|'any'>`. Callers may
+ * write the `PUBLIC_FEED_END_CURSOR` sentinel to mark the public feed as
+ * exhausted; readers treat that sentinel as null.
+ * @param {string} imageUuid - Cursor value (or PUBLIC_FEED_END_CURSOR sentinel).
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<null>}
+ */
 export async function saveLastImageUuid(imageUuid, categoryKey, language) {
   await AsyncStorage.setItem(lastImageUuidKey(categoryKey, language), imageUuid);
   return null;
 };
 
+/**
+ * Read the persisted feed cursor for (categoryKey, language).
+ * Key: `lastImageUuid:<categoryKey|'all'>:<language|'any'>`. May return the
+ * `PUBLIC_FEED_END_CURSOR` sentinel; callers MUST treat that as null/exhausted.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<string|null>} Stored cursor, sentinel, or null when unset.
+ */
 export async function getLastImageUuid(categoryKey, language) {
   const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKey(categoryKey, language));
   return lastImageUuid;
@@ -365,6 +408,13 @@ async function removeFromCache(localUri) {
   deleteFileIfPresent(new File(localUri));
 };
 
+/**
+ * Wipe the persisted deck for (categoryKey, language): delete each card's
+ * cached image file, drop the deck key, and clear the feed cursor.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<void>}
+ */
 export async function emptyImageList(categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const localList = await AsyncStorage.getItem(listKey)
@@ -437,6 +487,15 @@ function dedupByPictureId(prior, incoming) {
   return incoming.filter((c) => !c?.pictureId || !priorIds.has(c.pictureId));
 }
 
+/**
+ * Read-modify-write the deck for (categoryKey, language): read the persisted
+ * deck, `dedupByPictureId` the incoming batch against it, `normalizeListIds`
+ * the merged result, and write back.
+ * @param {Array<object>} updatedImageList - Incoming cards to merge.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<Array<object>>} The new persisted deck (post-dedup/normalize).
+ */
 export async function updateImageList(updatedImageList, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
@@ -448,6 +507,16 @@ export async function updateImageList(updatedImageList, categoryKey, language) {
 };
 
 
+/**
+ * Splice the card whose `listId === listId` out of the persisted deck for
+ * (categoryKey, language). NOTE: removes from ONE (categoryKey, language)
+ * namespace only — used to drop the just-played card from its own category.
+ * No-op (returns null) when the deck key is unset.
+ * @param {number} listId - listId of the card to remove.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<null>}
+ */
 export async function removeImageFromList(listId, categoryKey, language) {
   const listKey = imageListKey(categoryKey, language);
   const imageList = await AsyncStorage.getItem(listKey);
