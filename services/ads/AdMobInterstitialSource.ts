@@ -1,7 +1,7 @@
 // Android-only AdMob interstitial source. Wraps react-native-google-mobile-ads.
 // On iOS: isReady() always returns false (Q1 — iOS ships no interstitial this phase).
 //
-// GDPR/ATT consent (see AdScreen.js lines 12-34) is a RELEASE OBLIGATION, not coded here.
+// GDPR/ATT consent is a RELEASE OBLIGATION, not coded here.
 // Deploy checklist:
 //   - Configure GDPR/IDFA messaging in AdMob console (Privacy & messaging).
 //   - Add extraProguardRules to app.json per expo guide.
