@@ -1,10 +1,19 @@
 import { useRef, useEffect } from 'react';
-import { Animated, Easing, StyleSheet, View, Text } from 'react-native';
+import type { ReactElement } from 'react';
+import { Animated, Easing, StyleSheet, View, Text, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 
 import { GlobalStyle } from '../../constants/theme';
 import { OverlayZIndex } from '../../constants/overlayZIndex';
 import { NEUTRAL_TIER } from '../../constants/streakTiers';
+import { resolveCelebration } from '../../constants/streakCelebration';
+import CelebrationBackground from './celebration/CelebrationBackground';
+import ShockwaveRing from './celebration/ShockwaveRing';
+import ParticleField from './celebration/ParticleField';
+import LightRays from './celebration/LightRays';
+import ScreenShake from './celebration/ScreenShake';
+import ChromaticFlash from './celebration/ChromaticFlash';
+import { pulse } from './celebration/animations';
 
 // Single source of truth for the speed-bonus color (spokes, chrono, pill).
 const SPEED_COLOR = GlobalStyle.color.win;
@@ -19,7 +28,6 @@ const SPOKE_RADIUS = 80;
 const BURST_STAGGER_MS = 30;
 const BURST_IN_MS = 150;
 const BURST_OUT_MS = 350;
-const FADE_OUT_MS = 600;
 const BADGE_DELAY_MS = 120;
 const BURST_SPIN_DEG = 45;
 const CHRONO_ICON = 'timer-outline';
@@ -38,20 +46,39 @@ const STREAK_RING_SCALE_START = 1.0;
 const STREAK_RING_BORDER_WIDTH = 2;
 const STREAK_RING_RADIUS = 36;
 const STREAK_RING_SIZE = (STREAK_RING_RADIUS + STREAK_RING_BORDER_WIDTH) * 2;
+const LIGHT_RAYS_SIZE_PAD = 1.05;
 
-function breathe(value, high, low, durationMs) {
-  return Animated.sequence([
-    Animated.timing(value, { toValue: low, duration: durationMs, useNativeDriver: true }),
-    Animated.timing(value, { toValue: high, duration: durationMs, useNativeDriver: true }),
-  ]);
+type StreakPalette = typeof GlobalStyle.color.streak;
+
+function breathe(value: Animated.Value, high: number, low: number, durationMs: number): Animated.CompositeAnimation {
+  return pulse(value, { from: high, to: low, durationMs });
 }
 
-export default function SuccessOverlay({ visible, onDone, multiplier = 1, points = 1, streakTier = NEUTRAL_TIER }) {
+export type StreakTierLike = { tier: number; multiplier: number; label: string; colorKey: string };
+
+interface SuccessOverlayProps {
+  visible: boolean;
+  onDone: () => void;
+  multiplier?: number;
+  points?: number;
+  streakTier?: StreakTierLike;
+}
+
+export default function SuccessOverlay({
+  visible,
+  onDone,
+  multiplier = 1,
+  points = 1,
+  streakTier = NEUTRAL_TIER as StreakTierLike,
+}: SuccessOverlayProps): null | ReactElement {
   const isSpeedBonus = multiplier > 1;
-  const scale = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(0)).current;
-  const badgeScale = useRef(new Animated.Value(0)).current;
-  const burstRotation = useRef(new Animated.Value(0)).current;
+  const { width, height } = useWindowDimensions();
+  const fx = resolveCelebration(streakTier.tier);
+  const diagonal = Math.hypot(width, height) * LIGHT_RAYS_SIZE_PAD;
+  const scale = useRef<Animated.Value>(new Animated.Value(0)).current;
+  const opacity = useRef<Animated.Value>(new Animated.Value(0)).current;
+  const badgeScale = useRef<Animated.Value>(new Animated.Value(0)).current;
+  const burstRotation = useRef<Animated.Value>(new Animated.Value(0)).current;
   const burstRotateStr = burstRotation.interpolate({
     inputRange: [0, BURST_SPIN_DEG],
     outputRange: ['0deg', `${BURST_SPIN_DEG}deg`],
@@ -62,16 +89,17 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
       opacity: new Animated.Value(0),
     }))
   ).current;
-  const onDoneRef = useRef(onDone);
+  const onDoneRef = useRef<(() => void) | null>(onDone);
   onDoneRef.current = onDone;
-  const animRef = useRef(null);
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
 
   const isStreak = streakTier.tier > 0;
-  const flameColor = GlobalStyle.color.streak[streakTier.colorKey];
-  const pulseOpacity = useRef(new Animated.Value(STREAK_PULSE_OPACITY_MAX)).current;
-  const pulseScale = useRef(new Animated.Value(STREAK_PULSE_SCALE_MAX)).current;
-  const ringA = useRef({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
-  const ringB = useRef({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
+  const flameColor = GlobalStyle.color.streak[streakTier.colorKey as keyof StreakPalette];
+  const pulseOpacity = useRef<Animated.Value>(new Animated.Value(STREAK_PULSE_OPACITY_MAX)).current;
+  const pulseScale = useRef<Animated.Value>(new Animated.Value(STREAK_PULSE_SCALE_MAX)).current;
+  const ringA = useRef<{ scale: Animated.Value; opacity: Animated.Value }>({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
+  const ringB = useRef<{ scale: Animated.Value; opacity: Animated.Value }>({ scale: new Animated.Value(STREAK_RING_SCALE_START), opacity: new Animated.Value(STREAK_RING_OPACITY_START) }).current;
+  const loopBRef = useRef<Animated.CompositeAnimation | null>(null);
 
   useEffect(() => {
     if (!visible || streakTier.tier !== 1) return undefined;
@@ -85,16 +113,18 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
 
   useEffect(() => {
     if (!visible || streakTier.tier < 2) return undefined;
-    const ripple = (ring) => Animated.loop(Animated.parallel([
+    const ripple = (ring: { scale: Animated.Value; opacity: Animated.Value }) => Animated.loop(Animated.parallel([
       Animated.timing(ring.scale, { toValue: STREAK_RING_SCALE_MAX, duration: STREAK_RING_MS, useNativeDriver: true }),
       Animated.timing(ring.opacity, { toValue: STREAK_RING_OPACITY_END, duration: STREAK_RING_MS, useNativeDriver: true }),
     ]));
     const loopA = ripple(ringA);
     loopA.start();
-    const loopBHandle = setTimeout(() => ripple(ringB).start(), STREAK_RING_STAGGER_MS);
+    loopBRef.current = ripple(ringB);
+    const loopBHandle = setTimeout(() => loopBRef.current?.start(), STREAK_RING_STAGGER_MS);
     return () => {
       loopA.stop();
       clearTimeout(loopBHandle);
+      loopBRef.current?.stop();
     };
   }, [visible, streakTier.tier, flameColor, ringA, ringB]);
 
@@ -117,10 +147,10 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
 
     const baseAnim = Animated.sequence([
       Animated.spring(scale, { toValue: 1, friction, tension, useNativeDriver: true }),
-      Animated.timing(opacity, { toValue: 0, duration: FADE_OUT_MS, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: fx.durationMs, useNativeDriver: true }),
     ]);
 
-    let animation = baseAnim;
+    let animation: Animated.CompositeAnimation = baseAnim;
     if (isSpeedBonus) {
       const burst = Animated.stagger(
         BURST_STAGGER_MS,
@@ -157,12 +187,42 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
     return () => {
       animRef.current?.stop();
     };
-  }, [visible, isSpeedBonus, scale, opacity, spokes, badgeScale, burstRotation]);
+  }, [visible, isSpeedBonus, fx.durationMs, scale, opacity, spokes, badgeScale, burstRotation]);
 
   if (!visible) return null;
 
-  return (
+  const overlay = (
     <View style={styles.overlay} pointerEvents="none" testID="guess.success.overlay">
+      <CelebrationBackground
+        visible={visible}
+        color={flameColor}
+        opacity={fx.tintOpacity}
+        durationMs={fx.durationMs}
+      />
+      {fx.shockwave && (
+        <ShockwaveRing visible={visible} color={flameColor} width={width} height={height} />
+      )}
+      {fx.particles > 0 && fx.particleMode && (
+        <ParticleField
+          visible={visible}
+          count={fx.particles}
+          color={flameColor}
+          mode={fx.particleMode}
+          width={width}
+          height={height}
+          durationMs={fx.durationMs}
+        />
+      )}
+      {fx.rays > 0 && (
+        <LightRays
+          visible={visible}
+          color={flameColor}
+          count={fx.rays}
+          size={diagonal}
+          durationMs={fx.durationMs}
+        />
+      )}
+      {fx.flash && <ChromaticFlash visible={visible} />}
       <Animated.View style={[styles.panel, { transform: [{ scale }], opacity }]}>
         {isSpeedBonus && (
           <Animated.View
@@ -257,6 +317,16 @@ export default function SuccessOverlay({ visible, onDone, multiplier = 1, points
       </Animated.View>
     </View>
   );
+
+  if (fx.shakePx > 0) {
+    return (
+      <ScreenShake active intensity={fx.shakePx} durationMs={fx.durationMs}>
+        {overlay}
+      </ScreenShake>
+    );
+  }
+
+  return overlay;
 }
 
 const styles = StyleSheet.create({
