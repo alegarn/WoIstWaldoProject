@@ -172,6 +172,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     kickoffResolve,
     awaitResolve,
     consumePendingNext,
+    consumeDeferredAd,
     handleAdDone,
     clearRetryTimer,
     clearPendingNext,
@@ -363,16 +364,18 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // (showSuccess is only true after applySuccessPath); no fallback branch
     // per agent-defaults §2.2.
     await awaitResolve();
-    // P2: in the no-ad path, RESOLVED is dispatched HERE (after the overlay
-    // animation completes) instead of inside onAdvanceResolved so the next
-    // card's imageFile URI does not land in route.params WHILE the overlay is
-    // still animating its fade-out (which would flash the next image behind
-    // the semi-transparent overlay). The ad path sets adPhase='showing' before
-    // this point, so the guard skips the dispatch here and leaves it to
-    // handleAdDone (sole dispatch site for the ad path). handleOverlayDone is
-    // not memoized (re-created every render) and SuccessOverlay reads onDone
-    // through an internal ref kept fresh on every parent render, so the
-    // adPhase read sees the latest committed value — no stale-closure risk.
+    // P2 / F1 (G1): after applyShowSuccess(false) + awaitResolve, three
+    // branches reach here: (a) no-ad path dispatches RESOLVED here; (b)
+    // deferred-ad path (overlay was still animating when resolve settled)
+    // triggers setAdPhase('showing') here via consumeDeferredAd — pendingNext
+    // was already staged on the hook, handleAdDone will commit RESOLVED on
+    // dismiss; (c) non-deferred ad path (overlay-down fast path at resolve
+    // time) already set adPhase='showing' inside onAdvanceResolved, so the
+    // guard skips the dispatch here and leaves RESOLVED to handleAdDone.
+    if (consumeDeferredAd()) {
+      setAdPhase('showing');
+      return;
+    }
     if (adPhase !== 'showing') {
       const next = consumePendingNext();
       if (next) {

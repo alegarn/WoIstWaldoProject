@@ -64,6 +64,14 @@ export type UseResolveLifecycleResult = {
   handleAdDone: () => void;
   clearRetryTimer: () => void;
   clearPendingNext: () => void;
+  /**
+   * F1 (G1): single-read-and-reset of the deferred-ad flag. Returns true when
+   * the showAd branch staged the next on pendingNextRef BUT deferred
+   * setAdPhase('showing') because overlayVisibleRef.current was true at
+   * resolve time. handleOverlayDone calls this after applyShowSuccess(false)
+   * so the ad trigger lands only after the success burst has dismissed.
+   */
+  consumeDeferredAd: () => boolean;
 };
 
 // Owns the resolve-lifecycle machinery: the in-flight next-card Promise ref,
@@ -106,6 +114,13 @@ export function useResolveLifecycle({
   // deferred RESOLVED (staged in onAdvanceResolved, consumed by
   // handleOverlayDone via consumePendingNext).
   const pendingNextRef = useRef<NonNullable<NextGuessResult> | null>(null);
+  // F1 (G1): mirror of the no-ad branch's overlayVisibleRef commit gate,
+  // applied to the showAd branch's setAdPhase('showing') trigger. Set when
+  // the ad slot is consumed while the SuccessOverlay is still animating;
+  // consumed by handleOverlayDone after applyShowSuccess(false) so the
+  // interstitial never mounts under the success burst. Drained on terminal
+  // transitions + unmount so a backgrounded cycle cannot orphan an ad.
+  const adDeferredRef = useRef<boolean>(false);
 
   // PT6: clear any pending retry timer on unmount so we never setState after
   // unmount (Leave tap during warming, navigation.popToTop, etc.). C1: also
@@ -122,6 +137,9 @@ export function useResolveLifecycle({
       // F4 nit: drop a staged next on unmount so a warming-stages-next +
       // background orphan cannot leak across screen lifetime.
       pendingNextRef.current = null;
+      // F1 (G1): also drop a deferred-ad flag so a re-mount cannot observe a
+      // stale deferred state from the prior instance.
+      adDeferredRef.current = false;
       mountedRef.current = false;
     };
   }, []);
@@ -169,6 +187,10 @@ export function useResolveLifecycle({
     // staged-next-then-background orphan cannot leak (the next WIN overwrites
     // the ref before read, but null-on-terminal is cheap defense).
     pendingNextRef.current = null;
+    // F1 (G1): clear the deferred-ad flag on terminal transition so a later
+    // handleOverlayDone (overlay animation completing post-backgrounding)
+    // cannot orphan an ad on top of the exhausted panel.
+    adDeferredRef.current = false;
     dispatch({ type: 'FAILED_PERMANENT' });
   }
 
@@ -231,11 +253,20 @@ export function useResolveLifecycle({
       return;
     }
 
-    // C2 (ad-in-screen-overlay §3.2 step 3-5): showAd branch renders the
-    // in-component overlay. Stage the resolved next on the ref + flip
-    // adPhase → 'showing'. RESOLVED is deferred to handleAdDone so the
-    // reducer lands in `idle` only after the ad dismisses.
+    // C2 (ad-in-screen-overlay §3.2 step 3-5) + F1 (G1): showAd branch stages
+    // the resolved next on pendingNextRef for handleAdDone. setAdPhase('showing')
+    // is gated on overlayVisibleRef.current (mirror of the no-ad branch's
+    // commit gate at :225-229) so AdInterstitial never mounts under the
+    // still-animating success burst. When the overlay is up at resolve time,
+    // the trigger is deferred to handleOverlayDone via adDeferredRef; when the
+    // overlay is already down (slow resolve past tier-0 duration, or a
+    // no-overlay win path), the ad mounts immediately. RESOLVED is always
+    // deferred to handleAdDone.
     pendingNextRef.current = next;
+    if (overlayVisibleRef.current) {
+      adDeferredRef.current = true;
+      return;
+    }
     setAdPhase('showing');
   }
 
@@ -272,6 +303,10 @@ export function useResolveLifecycle({
 
   const kickoffResolve = (multiplier: number) => {
     retryCountRef.current = 0;
+    // F1 (G1): reset the deferred-ad flag at cycle start so a stale flag from
+    // a prior win cannot leak across consecutive cycles. Belt-and-suspenders
+    // alongside the advancing/warming tap-gate (disabled={state !== 'idle'}).
+    adDeferredRef.current = false;
     nextCardResolveRef.current = runResolveCycle(multiplier);
   };
 
@@ -285,12 +320,24 @@ export function useResolveLifecycle({
     return next;
   };
 
+  // F1 (G1): single-read-and-reset of the deferred-ad flag. Mirrors
+  // consumePendingNext's pattern so handleOverlayDone can decide whether to
+  // trigger the deferred ad or fall through to the no-ad RESOLVED dispatch.
+  const consumeDeferredAd = () => {
+    const prev = adDeferredRef.current;
+    adDeferredRef.current = false;
+    return prev;
+  };
+
   // F4 nit: terminal-cleanup callback for call sites that dispatch
   // FAILED_PERMANENT directly (GuessScreen's AppState backgrounding listener)
   // so they also drop any staged next — mirrors the nulling done at the hook's
-  // own FAILED_PERMANENT dispatch and at unmount.
+  // own FAILED_PERMANENT dispatch and at unmount. F1 (G1): also clears the
+  // deferred-ad flag for the same orphan-prevention reason. Single helper for
+  // both refs minimizes call-site churn.
   const clearPendingNext = useCallback(() => {
     pendingNextRef.current = null;
+    adDeferredRef.current = false;
   }, []);
 
   return {
@@ -300,5 +347,6 @@ export function useResolveLifecycle({
     handleAdDone,
     clearRetryTimer,
     clearPendingNext,
+    consumeDeferredAd,
   };
 }

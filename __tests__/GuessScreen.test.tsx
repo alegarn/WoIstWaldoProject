@@ -63,6 +63,18 @@ let mockPictureMountCount = 0;
 // Prefixed with `mock` for jest.mock factory out-of-scope visibility.
 let mockAdMountCount = 0;
 
+// F1 (test-fidelity): configurable auto-dismiss delay for the SuccessOverlay
+// mock. Default null = no auto-fire (preserves the manual-call semantics every
+// existing test relies on — lastOverlayProps().onDone() is authoritative).
+// Timing-sensitive tests (G1a/G1b/G1c) call setMockOverlayDismissDelayMs(ms)
+// to schedule props.onDone() via setTimeout(ms) on mount with visible===true;
+// manual calls still preempt the timer via wrappedOnDone's clear. Prefixed
+// with `mock` for jest.mock factory out-of-scope visibility.
+let mockOverlayDismissDelayMs: number | null = null;
+function setMockOverlayDismissDelayMs(ms: number | null): void {
+  mockOverlayDismissDelayMs = ms;
+}
+
 jest.mock('../components/Picture/GuessPicture', () => {
   const React = jest.requireActual('react');
   return function MockGuessPicture(props: MockPictureProps) {
@@ -90,8 +102,46 @@ jest.mock('../components/Guess/GuessExitSwipeMenu', () => {
 });
 
 jest.mock('../components/Guess/SuccessOverlay', () => {
+  // Cast to typed React so useRef<T>(...) accepts type arguments (the
+  // untyped jest.requireActual returns `any`, which TS2347-rejects generics).
+  const React = jest.requireActual('react') as typeof import('react');
   return function MockSuccessOverlay(props: MockOverlayProps) {
-    mockSuccessOverlay(props);
+    // Mirror real SuccessOverlay's onDoneRef pattern: the auto-fire timer
+    // always invokes the LATEST onDone, surviving parent re-renders without
+    // rescheduling.
+    const onDoneRef = React.useRef<() => void | Promise<void>>(props.onDone);
+    onDoneRef.current = props.onDone;
+    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // wrappedOnDone is what tests reach via lastOverlayProps().onDone(). A
+    // manual call from a test preempts the scheduled auto-fire by clearing
+    // the timer BEFORE delegating to the real handler — this preserves the
+    // existing manual-call semantics while keeping the auto-fire path honest.
+    const wrappedOnDone = () => {
+      if (timerRef.current !== null) {
+        clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+      onDoneRef.current();
+    };
+
+    React.useEffect(() => {
+      if (!props.visible) return undefined;
+      if (mockOverlayDismissDelayMs === null) return undefined;
+      const ms = mockOverlayDismissDelayMs;
+      timerRef.current = setTimeout(() => {
+        timerRef.current = null;
+        onDoneRef.current();
+      }, ms);
+      return () => {
+        if (timerRef.current !== null) {
+          clearTimeout(timerRef.current);
+          timerRef.current = null;
+        }
+      };
+    }, [props.visible]);
+
+    mockSuccessOverlay({ ...props, onDone: wrappedOnDone });
     return null;
   };
 });
@@ -303,6 +353,9 @@ describe('GuessScreen', () => {
     jest.clearAllMocks();
     mockPictureMountCount = 0;
     mockAdMountCount = 0;
+    // F1: reset the SuccessOverlay mock's auto-dismiss delay so per-test
+    // overrides do not leak across tests.
+    setMockOverlayDismissDelayMs(null);
     const { isE2EMode } = require('../utils/e2eMode');
     isE2EMode.mockReturnValue(false);
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
@@ -2862,6 +2915,124 @@ describe('GuessScreen', () => {
       expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
       // Sanity: the next card actually landed (proves the flow ran to completion).
       expect(navigation.setParams).toHaveBeenCalledWith(expect.objectContaining({ listId: 4 }));
+    });
+  });
+
+  // F1 (G1): win-animation / ad overlap fix. Mirror the E1 no-ad commit gate
+  // onto the showAd branch: defer setAdPhase('showing') until the SuccessOverlay
+  // has dismissed so AdInterstitial never mounts under the still-animating
+  // success burst. Terminal-drain defense prevents an orphan ad firing on top
+  // of the exhausted panel after a backgrounding mid-deferred cycle.
+  describe('F1 G1: ad trigger deferred until SuccessOverlay dismisses', () => {
+    function findAppStateListener(): (state: string) => void {
+      const mock = AppState.addEventListener as unknown as jest.Mock;
+      const call = mock.mock.calls.find((c: unknown[]) => c[0] === 'change');
+      if (!call || typeof call[1] !== 'function') {
+        throw new Error('AppState "change" listener was not registered');
+      }
+      return call[1] as (state: string) => void;
+    }
+
+    it('G1a: win + ad due + FAST resolve (overlay still up) → AdInterstitial NOT mounted until SuccessOverlay onDone fires', async () => {
+      jest.useFakeTimers();
+      setMockOverlayDismissDelayMs(100);
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: { listId: 4 } }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      // Resolve settles fast while overlay still animating → ad must be deferred.
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      // Ad NOT mounted yet (overlayVisibleRef.current === true at resolve time).
+      expect(mockAdMountCount).toBe(0);
+
+      // Advance LESS than the dismiss delay — overlay still up, ad still deferred.
+      await act(async () => { jest.advanceTimersByTime(50); });
+      expect(mockAdMountCount).toBe(0);
+
+      // Advance PAST the dismiss delay — SuccessOverlay's auto-fire triggers
+      // handleOverlayDone → consumeDeferredAd → setAdPhase('showing') → mount.
+      await act(async () => { jest.advanceTimersByTime(60); });
+      expect(mockAdMountCount).toBe(1);
+
+      jest.useRealTimers();
+    });
+
+    it('G1b: deferred-ad set → AppState backgrounding dispatches FAILED_PERMANENT → onDone fires → AdInterstitial NOT mounted (drain prevents orphan)', async () => {
+      jest.useFakeTimers();
+      setMockOverlayDismissDelayMs(100);
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: { listId: 4 } }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+      // Deferred state: ad deferred, overlay still up.
+      expect(mockAdMountCount).toBe(0);
+
+      // Background mid-deferred → AppState listener dispatches FAILED_PERMANENT;
+      // the terminal drain MUST also clear adDeferredRef so a later onDone
+      // cannot orphan an ad on top of the exhausted panel.
+      const listener = findAppStateListener();
+      await act(async () => { listener('background'); });
+
+      // State landed on exhausted; safety-net panel mounted.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+
+      // Fire onDone (animation completes / overlay auto-dismisses). Without the
+      // drain, handleOverlayDone would see adDeferred===true and trigger the ad
+      // on top of the exhausted panel. Drain must prevent this.
+      await act(async () => { jest.advanceTimersByTime(150); });
+
+      expect(mockAdMountCount).toBe(0);
+
+      jest.useRealTimers();
+    });
+
+    it('G1c: win + ad due + SLOW resolve (overlay already down) → AdInterstitial mounted immediately on resolve (no extra wait)', async () => {
+      jest.useFakeTimers();
+      setMockOverlayDismissDelayMs(100);
+      consumeAdSlot.mockReturnValue({ showAd: true, nextCount: 0 });
+      shouldSuppressAds.mockReturnValue(false);
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      let resolveAdvance!: (v: { next: { params: Record<string, unknown> }; reason: string }) => void;
+      resolveNextCardWithServerFallback.mockReturnValue(new Promise((r) => {
+        resolveAdvance = r as (v: { next: { params: Record<string, unknown> }; reason: string }) => void;
+      }));
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+
+      // Advance PAST the dismiss delay while resolve is still pending — overlay
+      // auto-dismisses; handleOverlayDone awaits the still-pending resolve and
+      // consumes no deferred ad (the flag was never set: resolve hasn't run).
+      await act(async () => { jest.advanceTimersByTime(150); });
+      expect(mockAdMountCount).toBe(0);
+
+      // Resolve settles AFTER the overlay is already down → overlayVisibleRef
+      // === false in the ad branch → setAdPhase('showing') fires immediately
+      // (fast-path), no extra wait for a second onDone.
+      await act(async () => {
+        resolveAdvance({ next: { params: { listId: 4 } }, reason: 'ok' });
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(mockAdMountCount).toBe(1);
+
+      jest.useRealTimers();
     });
   });
 

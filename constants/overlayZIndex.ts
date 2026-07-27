@@ -17,10 +17,10 @@
  *
  * Why AdInterstitial (9998) sits BELOW SuccessOverlay / GuessExhaustedPanel
  * (9999):
- *   - SuccessOverlay animates over the picture right after a correct guess;
- *     the interstitial only mounts later (advance state 'showing'). The +1
- *     margin guarantees a still-visible success burst is never obscured if
- *     both ever overlap during the brief swap window.
+ *   - AdInterstitial (9998) mounts only AFTER SuccessOverlay (9999) has
+ *     dismissed (see `useResolveLifecycle` ad-branch `overlayVisibleRef`
+ *     gate); the z-order is defense-in-depth only, not the primary
+ *     race-prevention mechanism.
  *   - GuessExhaustedPanel is the terminal "no more cards" gate; it must sit
  *     above every gameplay layer (including any lingering ad) so the user
  *     always sees the exit CTA.
