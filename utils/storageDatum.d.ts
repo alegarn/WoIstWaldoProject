@@ -47,3 +47,10 @@ export function getNextImagesForScope(args?: NextImagesForScopeArgs): Promise<Ca
 export function getOnboardingCompleted(): Promise<boolean>;
 export function getSessionLanguageFilter(): Promise<string | null>;
 export function saveSessionLanguageFilter(code: string | null): Promise<null>;
+
+// F3a exhausted-category cache (scope-aware: PUBLIC → AsyncStorage, PRIVATE →
+// group feed cache namespace via services/groups/groupFeedCache).
+export function exhaustedCategoryKey(categoryKey: string | null | undefined, language?: string | null): string;
+export function markCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;
+export function isCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<boolean>;
+export function clearExhaustedCategory(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;

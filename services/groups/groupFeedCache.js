@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 
 const PREFIX = 'groupFeed';
+const EXHAUSTED_PREFIX = 'groupFeedExhausted';
 
 function groupFeedListKey(groupId, categoryKey, language) {
   return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
@@ -11,7 +12,11 @@ function groupFeedCursorKey(groupId, categoryKey, language) {
   return `${groupFeedListKey(groupId, categoryKey, language)}:cursor`;
 }
 
-export { groupFeedListKey, groupFeedCursorKey };
+function groupFeedExhaustedKey(groupId, categoryKey, language) {
+  return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
+}
+
+export { groupFeedListKey, groupFeedCursorKey, groupFeedExhaustedKey };
 
 function localFileExists(uri) {
   try {
@@ -103,6 +108,27 @@ export async function clearAllGroupFeedCaches() {
   }
 }
 
+export async function markGroupCategoryExhausted(groupId, categoryKey, language) {
+  await AsyncStorage.setItem(groupFeedExhaustedKey(groupId, categoryKey, language), '1');
+}
+
+export async function isGroupCategoryExhausted(groupId, categoryKey, language) {
+  return (await AsyncStorage.getItem(groupFeedExhaustedKey(groupId, categoryKey, language))) === '1';
+}
+
+export async function clearGroupCategoryExhausted(groupId, categoryKey, language) {
+  await AsyncStorage.removeItem(groupFeedExhaustedKey(groupId, categoryKey, language));
+}
+
+export async function clearAllGroupFeedExhaustedMarkers() {
+  const keys = await AsyncStorage.getAllKeys();
+  const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${EXHAUSTED_PREFIX}:`));
+
+  if (target.length > 0) {
+    await AsyncStorage.multiRemove(target);
+  }
+}
+
 // Private group feed images are written under Paths.cache with a `private-`
 // basename prefix (see services/groups/groupFeedApi.js extractBase64) so the
 // purge below can target them without touching public cache files written by
@@ -123,6 +149,7 @@ function isPrivateCacheUri(uri) {
 
 export async function purgeAllPrivateCaches() {
   await clearAllGroupFeedCaches();
+  await clearAllGroupFeedExhaustedMarkers();
 
   try {
     Paths.cache.create({ idempotent: true, intermediates: true });

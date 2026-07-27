@@ -50,6 +50,11 @@ export type UseResolveLifecycleArgs = {
   // Cadence state stays owned by useAdCadence; the lifecycle only asks it to
   // consume the current slot after success side effects commit.
   consumeAdSlot: () => ConsumeAdSlotResult;
+  // F4: mirrors `showSuccess` from GuessScreen as a synchronous ref so the
+  // warming-retry commit gate can read overlay visibility WITHOUT waiting for
+  // a passive effect flush. Writer lives in GuessScreen (`applyShowSuccess`);
+  // a useEffect([showSuccess]) mirror is kept there as belt-and-suspenders.
+  overlayVisibleRef: RefObject<boolean>;
 };
 
 export type UseResolveLifecycleResult = {
@@ -58,6 +63,7 @@ export type UseResolveLifecycleResult = {
   consumePendingNext: () => NonNullable<NextGuessResult> | null;
   handleAdDone: () => void;
   clearRetryTimer: () => void;
+  clearPendingNext: () => void;
 };
 
 // Owns the resolve-lifecycle machinery: the in-flight next-card Promise ref,
@@ -75,6 +81,7 @@ export function useResolveLifecycle({
   resolveArgs,
   sideEffectArgs,
   consumeAdSlot,
+  overlayVisibleRef,
 }: UseResolveLifecycleArgs): UseResolveLifecycleResult {
   const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const retryCountRef = useRef<number>(0);
@@ -112,6 +119,9 @@ export function useResolveLifecycle({
         retryTimerRef.current = null;
       }
       nextCardResolveRef.current = null;
+      // F4 nit: drop a staged next on unmount so a warming-stages-next +
+      // background orphan cannot leak across screen lifetime.
+      pendingNextRef.current = null;
       mountedRef.current = false;
     };
   }, []);
@@ -131,7 +141,7 @@ export function useResolveLifecycle({
   // read from a ref) so the retry-loop recovery credits the success-time
   // multiplier even if state has since moved on.
   async function runResolveCycle(multiplier: number) {
-    const { next } = await resolveNextCardWithServerFallback({
+    const { next, reason } = await resolveNextCardWithServerFallback({
       category: resolveArgs.category,
       language: resolveArgs.language,
       currentListId: resolveArgs.currentListId,
@@ -146,11 +156,20 @@ export function useResolveLifecycle({
       return;
     }
 
-    // P1 (ad-overlay post-fix §1 C1): all non-ok reasons are transient.
-    // FAILED_TRANSIENT is a no-op when already in warming (reducer rejects it);
-    // legal only from advancing.
-    dispatch({ type: 'FAILED_TRANSIENT' });
-    scheduleRetry(multiplier);
+    // F3b: retry only on network. The cascade (nextCardAdvancer) already tried
+    // Tier 3 'all' cross-fallback + Tier 4 looping-replay before returning null,
+    // so a non-network null is deterministic — retrying just burns 1s+2s+4s.
+    // 'empty' | 'server' (and any unmapped reason) → FAILED_PERMANENT → exhausted.
+    if (reason === 'network') {
+      dispatch({ type: 'FAILED_TRANSIENT' });
+      scheduleRetry(multiplier);
+      return;
+    }
+    // F4 nit: terminal transition — drop any staged next so a
+    // staged-next-then-background orphan cannot leak (the next WIN overwrites
+    // the ref before read, but null-on-terminal is cheap defense).
+    pendingNextRef.current = null;
+    dispatch({ type: 'FAILED_PERMANENT' });
   }
 
   // PB6: streak + score commit lives here — only on a successfully resolved
@@ -189,26 +208,22 @@ export function useResolveLifecycle({
 
     const { showAd } = consumeAdSlot();
 
-    // P2: when no ad is due, RESOLVED is NOT dispatched here in the INITIAL
-    // resolve (state=advancing) — the resolved next is staged on
-    // pendingNextRef and the dispatch is deferred to handleOverlayDone
-    // (mirrors the ad-path defer to handleAdDone) so the next image's
-    // imageFile URI does not land in route.params while the SuccessOverlay is
-    // still animating. The ad branch below stages on the same ref + flips
-    // adPhase → 'showing'; RESOLVED fires from handleAdDone after the ad
-    // dismisses.
-    //
-    // WARMING EXCEPTION: when state=warming, the resolve that fired this
-    // onAdvanceResolved came from scheduleRetry's fire-and-forget
-    // runResolveCycle() (NOT the promise stored in nextCardResolveRef). By
-    // this point handleOverlayDone has already returned (its await on the
-    // original nextCardResolveRef completed when the first runResolveCycle
-    // returned null+network and dispatched FAILED_TRANSIENT). No later
-    // callback exists to commit a staged next, so we dispatch immediately to
-    // preserve the "RESOLVED exactly once per win cycle" invariant. The A7
-    // guard above already admitted state=warming as a valid resolving state.
+    // F4 (ref-as-control-flow): the no-ad commit gate reads
+    // `overlayVisibleRef.current` (a synchronous mirror of GuessScreen's
+    // `showSuccess` state) instead of `advanceStateRef.current`. This unifies
+    // the advancing + warming branches into a single rule and closes the
+    // animation-overlap race: for tier1+ wins the SuccessOverlay dismisses at
+    // ~1200-2600ms while the first warming retry fires at 1000ms, so the retry
+    // can land WHILE the overlay is still animating. The previous
+    // `advanceStateRef.current === 'advancing'` predicate was FALSE for warming,
+    // so the warming branch fell through to an UNCONDITIONAL `RESOLVED` dispatch
+    // → the next image swapped behind the still-visible overlay. Now: when the
+    // overlay is up (advancing OR warming retry mid-overlay) → stage on
+    // pendingNextRef (commit deferred to handleOverlayDone after the fade); when
+    // the overlay is already down (success-first-try with no overlay, OR a
+    // warming retry landing after overlay dismissed) → dispatch immediately.
     if (!showAd) {
-      if (advanceStateRef.current === 'advancing') {
+      if (overlayVisibleRef.current) {
         pendingNextRef.current = next;
         return;
       }
@@ -270,11 +285,20 @@ export function useResolveLifecycle({
     return next;
   };
 
+  // F4 nit: terminal-cleanup callback for call sites that dispatch
+  // FAILED_PERMANENT directly (GuessScreen's AppState backgrounding listener)
+  // so they also drop any staged next — mirrors the nulling done at the hook's
+  // own FAILED_PERMANENT dispatch and at unmount.
+  const clearPendingNext = useCallback(() => {
+    pendingNextRef.current = null;
+  }, []);
+
   return {
     kickoffResolve,
     awaitResolve,
     consumePendingNext,
     handleAdDone,
     clearRetryTimer,
+    clearPendingNext,
   };
 }

@@ -199,11 +199,14 @@ jest.mock('../services/ads/InternalProAdSource', () => ({
 // per-test overrides drive the warmer-wiring assertions below. Other exports
 // stay real so the unmocked resolve chain (nextCardAdvancer → nextCardResolver
 // → getNextImageForScope SINGULAR) keeps working in tests that exercise it.
+// E1: clearExhaustedCategory is mocked (jest.fn) so handleSwitchCategory tests
+// can assert the call without invoking AsyncStorage / groupFeedCache.
 jest.mock('../utils/storageDatum', () => {
   const actual = jest.requireActual('../utils/storageDatum');
   return {
     ...actual,
     getNextImagesForScope: jest.fn().mockResolvedValue([]),
+    clearExhaustedCategory: jest.fn().mockResolvedValue(undefined),
   };
 });
 
@@ -539,11 +542,10 @@ describe('GuessScreen', () => {
     });
   });
 
-  it('overlay onDone with null (deck exhausted) dispatches FAILED_TRANSIENT → warming, NOT GuessExhaustedPanel (no navigation.reset)', async () => {
-    // C1 (P1 post-fix): a single empty cascade result must NOT interrupt the
-    // streak. reason='empty' is now treated as transient — the cascade's Tier 4
-    // looping-replay will recover on retry as long as the server has any
-    // matching row. The panel only mounts after 3 failed retries (safety net).
+  it('overlay onDone with null (deck empty) dispatches FAILED_PERMANENT → exhausted, mounts GuessExhaustedPanel (no retry)', async () => {
+    // F3b: reason='empty' (default cardDeck mock) is deterministic — the
+    // cascade already tried Tier 3 'all' cross-fallback + Tier 4 looping-replay
+    // before returning null. No retry; straight to exhausted + safety-net panel.
     const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
     const route = {
       params: {
@@ -579,13 +581,13 @@ describe('GuessScreen', () => {
       overlayProps.onDone();
     });
 
-    // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
-    expect(mockGuessAdvanceLoader).toHaveBeenCalled();
-    // Safety-net panel must NOT mount on a single empty cascade.
-    expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+    // No warming — deterministic empty → straight to exhausted.
+    expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+    // Safety-net panel mounts immediately on FAILED_PERMANENT.
+    expect(mockGuessExhaustedPanel).toHaveBeenCalled();
     expect(navigateToNextGuess).not.toHaveBeenCalled();
     expect(navigation.setParams).not.toHaveBeenCalled();
-    // Regression (T5): prefetch fired on win but did not interfere with the warming fallback.
+    // Regression (T5): prefetch fired on win but did not interfere with the exhausted transition.
     expect(prefetchIfLow).toHaveBeenCalledTimes(1);
   });
 
@@ -1348,8 +1350,10 @@ describe('GuessScreen', () => {
       expect(navigateToNextGuess).not.toHaveBeenCalled();
     });
 
-    it('T11: handleOverlayDone dispatches FAILED_TRANSIENT → warming (NOT GuessExhaustedPanel) when deck is truly empty after warm retry', async () => {
-      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
+    it('T11: handleOverlayDone dispatches FAILED_PERMANENT → exhausted (mounts GuessExhaustedPanel, no retry) when deck is truly empty after warm retry', async () => {
+      // F3b: empty is deterministic. The cascade already tried Tier 3 'all'
+      // cross-fallback + Tier 4 looping-replay before returning null. No retry;
+      // exhausted panel mounts immediately.
       const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
       warmAllDeckIfNeeded.mockResolvedValue(undefined);
 
@@ -1378,16 +1382,16 @@ describe('GuessScreen', () => {
       // foregroundTopUp's Tier 2 short-circuit recheck — this is intentional
       // and correct.
       expect(resolveNextGuessParams).toHaveBeenCalledTimes(3);
-      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
-      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
-      // Safety-net panel must NOT mount on a single empty cascade.
-      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+      // No warming — deterministic empty → straight to exhausted.
+      expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+      // Safety-net panel mounts on FAILED_PERMANENT.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
       expect(navigateToNextGuess).not.toHaveBeenCalled();
       expect(navigation.setParams).not.toHaveBeenCalled();
     });
 
-    it('T12: handleOverlayDone does NOT warm when category is "all" (still dispatches FAILED_TRANSIENT → warming, no immediate GuessExhaustedPanel)', async () => {
-      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
+    it('T12: handleOverlayDone does NOT warm when category is "all" (dispatches FAILED_PERMANENT → exhausted, mounts GuessExhaustedPanel, no retry)', async () => {
+      // F3b: empty is deterministic. No retry; exhausted panel mounts.
       const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
 
       resolveNextGuessParams.mockResolvedValue(null);
@@ -1415,10 +1419,10 @@ describe('GuessScreen', () => {
       // foregroundTopUp's Tier 2 short-circuit recheck — this is intentional
       // and correct.
       expect(resolveNextGuessParams).toHaveBeenCalledTimes(2);
-      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
-      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
-      // Safety-net panel must NOT mount on a single empty cascade.
-      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+      // No warming — deterministic empty → straight to exhausted.
+      expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+      // Safety-net panel mounts on FAILED_PERMANENT.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
       expect(navigateToNextGuess).not.toHaveBeenCalled();
     });
   });
@@ -1822,8 +1826,8 @@ describe('GuessScreen', () => {
       }));
     });
 
-    it('PB6: win → next card null → streak NOT incremented, score NOT buffered, dispatches FAILED_TRANSIENT → warming (no panel on single empty)', async () => {
-      // C1 (P1 post-fix): single empty cascade → warming, no panel interrupt.
+    it('PB6: win → next card null → streak NOT incremented, score NOT buffered, dispatches FAILED_PERMANENT → exhausted (no retry)', async () => {
+      // F3b: deterministic empty → exhausted, no warming, no commit.
       const navigation = makeNav();
       isOnTarget.mockReturnValue(true);
       applySuccessSideEffects.mockResolvedValue(undefined);
@@ -1836,10 +1840,10 @@ describe('GuessScreen', () => {
       // PB6: failed advance does not credit the streak or buffer the score.
       expect(streakSpies().onWin).not.toHaveBeenCalled();
       expect(applySuccessSideEffects).not.toHaveBeenCalled();
-      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
-      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
-      // Safety-net panel must NOT mount on a single empty cascade.
-      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+      // No warming — deterministic empty → straight to exhausted.
+      expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+      // Safety-net panel mounts on FAILED_PERMANENT.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
     });
   });
 
@@ -1853,12 +1857,10 @@ describe('GuessScreen', () => {
       return call[1] as (state: string) => void;
     }
 
-    it('win → next card null + reason "empty" → dispatch FAILED_TRANSIENT (warming state), GuessExhaustedPanel NOT rendered, retry scheduled', async () => {
-      // C1 (P1 post-fix): a single empty cascade result must NOT interrupt the
-      // streak. reason='empty' is now treated as transient — the cascade's
-      // Tier 4 looping-replay will recover on retry as long as the server has
-      // any matching row. The panel only mounts as a safety net after 3 failed
-      // retries (tested separately via the network-retry path below).
+    it('F3b: win → next card null + reason "empty" → dispatch FAILED_PERMANENT → exhausted, mounts GuessExhaustedPanel, NO retry scheduled', async () => {
+      // F3b: reason='empty' is deterministic — the cascade already tried Tier 3
+      // 'all' cross-fallback + Tier 4 looping-replay before returning null. Do
+      // NOT retry; straight to exhausted + safety-net panel.
       jest.useFakeTimers();
       resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
       const navigation = makeNav();
@@ -1866,15 +1868,20 @@ describe('GuessScreen', () => {
       await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
       await act(async () => { lastOverlayProps().onDone(); });
 
-      // Warming observable: GuessAdvanceLoader renders only when state==='warming'.
-      expect(mockGuessAdvanceLoader).toHaveBeenCalled();
-      // Safety-net panel must NOT mount on a single empty cascade.
-      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+      // No warming — deterministic empty → straight to exhausted.
+      expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+      // Safety-net panel mounts on FAILED_PERMANENT.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
       expect(navigation.replace).not.toHaveBeenCalledWith('GuessScreen', expect.anything());
       expect(navigateToNextGuess).not.toHaveBeenCalled();
-      // Streak + score never committed until recovery lands.
+      // Streak + score never committed.
       expect(streakSpies().onWin).not.toHaveBeenCalled();
       expect(applySuccessSideEffects).not.toHaveBeenCalled();
+
+      // NO retry scheduled — advancing timers must NOT re-invoke the resolver.
+      const callsAfterAdvance = resolveNextCardWithServerFallback.mock.calls.length;
+      await act(async () => { jest.advanceTimersByTime(10000); });
+      expect(resolveNextCardWithServerFallback.mock.calls.length).toBe(callsAfterAdvance);
 
       jest.useRealTimers();
     });
@@ -1914,8 +1921,19 @@ describe('GuessScreen', () => {
       jest.useRealTimers();
     });
 
-    it('warming → background prefetch resolves mid-retry → transitions to idle + advances (N3)', async () => {
+    it('F4 (WHILE-overlay-up): warming retry succeeds WHILE SuccessOverlay still mounted → setParams NOT called until handleOverlayDone (N3 + race fix)', async () => {
+      // F4 race: for tier1+ wins the SuccessOverlay dismisses at ~1200-2600ms
+      // while the first warming retry fires at 1000ms — so the retry can land
+      // WHILE showSuccess===true. Without the overlayVisibleRef commit gate,
+      // onAdvanceResolved's warming branch dispatched RESOLVED unconditionally
+      // → setParams swapped route.params.imageFile BEHIND the still-visible
+      // overlay (next image flashes under the win animation). Fixed by staging
+      // on pendingNextRef when overlayVisibleRef.current===true and deferring
+      // the dispatch to handleOverlayDone (after the fade). This test advances
+      // the retry timer BEFORE firing onDone to exercise the race window.
       jest.useFakeTimers();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
       const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
       resolveNextCardWithServerFallback
         .mockResolvedValueOnce({ next: null, reason: 'network' })
@@ -1924,19 +1942,195 @@ describe('GuessScreen', () => {
       const navigation = makeNav();
       await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
       await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      // Flush the in-flight resolve chain (runResolveCycle awaits the mocked
+      // resolver, then dispatches FAILED_TRANSIENT + schedules the retry). NO
+      // onDone yet — overlay stays mounted to exercise the race window.
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      // PRE-CHECK: setParams has not been called yet (no resolve has succeeded).
+      expect(navigation.setParams).not.toHaveBeenCalledWith(nextParams);
+
+      // Advance 1s WHILE overlay is still up — retry 1 succeeds. With the fix
+      // the next is staged on pendingNextRef and NO RESOLVED dispatch fires
+      // (no setParams) — imageFile does NOT swap behind the overlay.
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(navigation.setParams).not.toHaveBeenCalledWith(nextParams);
+
+      // NOW dismiss the overlay — handleOverlayDone drains pendingNextRef and
+      // dispatches RESOLVED → idle → setParams. The next image appears AFTER
+      // the fade.
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+      expect(navigation.setParams).toHaveBeenCalledTimes(1);
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+      // PB6: streak + score committed exactly once on the recovered advance.
+      expect(streakSpies().onWin).toHaveBeenCalledTimes(1);
+      expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
+
+      jest.useRealTimers();
+    });
+
+    it('F4 (b) AFTER-overlay-down: warming retry succeeds after handleOverlayDone returned → RESOLVED dispatched immediately, setParams called exactly once, NO 7s strand', async () => {
+      // F4 (b): the inverse of the WHILE-overlay-up case. Overlay dismissed
+      // BEFORE the retry fires (tier0 race: dismiss ≈900ms < retry 1000ms).
+      // overlayVisibleRef.current===false at retry time → dispatch RESOLVED
+      // immediately (no staging, no strand). The previous design's effect-only
+      // overlayVisible mirror would have stranded the user in `warming` here
+      // (no transition to re-trigger the effect commit); the ref-as-control-
+      // flow design closes both sides.
+      jest.useFakeTimers();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
+      resolveNextCardWithServerFallback
+        .mockResolvedValueOnce({ next: null, reason: 'network' })
+        .mockResolvedValueOnce({ next: { params: nextParams }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      // Overlay dismissed FIRST → overlayVisibleRef.current===false.
       await act(async () => { lastOverlayProps().onDone(); });
 
       expect(mockGuessAdvanceLoader).toHaveBeenCalled();
       expect(navigation.setParams).not.toHaveBeenCalledWith(nextParams);
 
-      // Fire retry 1 at 1s — second resolve succeeds → RESOLVED → idle + setParams.
+      // Retry 1 at 1s — second resolve succeeds, overlay already down →
+      // dispatch RESOLVED immediately → idle → setParams exactly once.
       await act(async () => { jest.advanceTimersByTime(1000); });
 
       expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+      expect(navigation.setParams).toHaveBeenCalledTimes(1);
       expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
-      // PB6: streak + score committed on the recovered advance.
-      expect(streakSpies().onWin).toHaveBeenCalledTimes(1);
-      expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
+
+      // NO 7s strand: advance well past the retry budget; nothing else fires.
+      const resolveCallsAfterRecovery = resolveNextCardWithServerFallback.mock.calls.length;
+      await act(async () => { jest.advanceTimersByTime(10000); });
+      expect(resolveNextCardWithServerFallback.mock.calls.length).toBe(resolveCallsAfterRecovery);
+      expect(navigation.setParams).toHaveBeenCalledTimes(1);
+
+      jest.useRealTimers();
+    });
+
+    it('F4 (c) warming recovery while overlay up → setParams NOT called until handleOverlayDone (deferred commit invariant)', async () => {
+      // F4 (c): belts-and-suspenders companion to the WHILE-overlay-up rewrite.
+      // Asserts the deferred-commit invariant in isolation: while the overlay is
+      // visible, setParams MUST stay at 0 calls regardless of how many resolves
+      // succeed; only handleOverlayDone unblocks the commit. Guards against a
+      // future regression that re-introduces an unconditional dispatch.
+      jest.useFakeTimers();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
+      resolveNextCardWithServerFallback
+        .mockResolvedValueOnce({ next: null, reason: 'network' })
+        .mockResolvedValueOnce({ next: { params: nextParams }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      // Overlay still up. Fire the successful retry.
+      await act(async () => { jest.advanceTimersByTime(1000); });
+
+      // Deferred-commit invariant: staging happened, dispatch did NOT.
+      expect(navigation.setParams).not.toHaveBeenCalled();
+      // The panel must not have appeared either (state stays warming).
+      expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+
+      // Commit fires ONLY after handleOverlayDone.
+      await act(async () => { lastOverlayProps().onDone(); });
+      expect(navigation.setParams).toHaveBeenCalledTimes(1);
+      expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+
+      jest.useRealTimers();
+    });
+
+    it('F4 (d) handleSwitchCategory → clearExhaustedCategory called for current category+language+scope before navigate', async () => {
+      // F3a invalidation (E1): switching category clears the exhausted-cache
+      // entry for the CURRENT category+language+scope so re-entering re-queries
+      // the server (handles newly uploaded images since the category was
+      // marked empty). Fire-and-forget; navigation proceeds without waiting.
+      const { clearExhaustedCategory } = require('../utils/storageDatum');
+      const navigation = makeNav();
+      // Force the exhausted panel to mount so handleSwitchCategory is reachable.
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      // Exhausted panel mounted; grab its onSwitch callback.
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+      const panelCall = mockGuessExhaustedPanel.mock.calls[mockGuessExhaustedPanel.mock.calls.length - 1][0];
+      expect(panelCall.onSwitch).toEqual(expect.any(Function));
+
+      clearExhaustedCategory.mockClear();
+      await act(async () => { panelCall.onSwitch(); });
+
+      // Cleared for the CURRENT category (PUBLIC_ROUTE_PARAMS: key='nature',
+      // language='fr', scope=undefined → public branch).
+      expect(clearExhaustedCategory).toHaveBeenCalledWith('nature', 'fr', undefined);
+      // And then navigated.
+      expect(navigation.navigate).toHaveBeenCalledWith('GuessPathScreen', {});
+    });
+
+    it('F4 (d-private) handleSwitchCategory → clearExhaustedCategory called for current category+scope in PRIVATE scope', async () => {
+      // F3a private isolation (E1): in a private scope the clear call MUST
+      // carry the scope so the group feed cache (not AsyncStorage) is cleared.
+      const { clearExhaustedCategory } = require('../utils/storageDatum');
+      const navigation = makeNav();
+      const scope = { kind: 'private', groupId: 'g-42' };
+      const route = { params: { ...PUBLIC_ROUTE_PARAMS, scope } };
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      const panelCall = mockGuessExhaustedPanel.mock.calls[mockGuessExhaustedPanel.mock.calls.length - 1][0];
+      clearExhaustedCategory.mockClear();
+      await act(async () => { panelCall.onSwitch(); });
+
+      expect(clearExhaustedCategory).toHaveBeenCalledWith('nature', 'fr', scope);
+      expect(navigation.navigate).toHaveBeenCalledWith('GuessPathScreen', { scope });
+    });
+
+    it('F4 (f) staged-then-background orphan: warming stages next on pendingNextRef → AppState backgrounding → FAILED_PERMANENT → pendingNextRef is null (no leak)', async () => {
+      // F4 nit defense: a warming-stages-next followed by AppState
+      // backgrounding dispatches FAILED_PERMANENT. The terminal transition
+      // MUST null pendingNextRef so a foregrounded session does not observe a
+      // stale staged next from the abandoned cycle. Next WIN overwrites the
+      // ref before read, but null-on-terminal is cheap defense.
+      jest.useFakeTimers();
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+      const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
+      resolveNextCardWithServerFallback
+        .mockResolvedValueOnce({ next: null, reason: 'network' })
+        .mockResolvedValueOnce({ next: { params: nextParams }, reason: 'ok' });
+
+      const navigation = makeNav();
+      await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+      // Overlay still up; fire the successful retry → stages on pendingNextRef
+      // (overlayVisibleRef.current === true).
+      await act(async () => { jest.advanceTimersByTime(1000); });
+      expect(navigation.setParams).not.toHaveBeenCalled();
+
+      // Background mid-stage → AppState listener dispatches FAILED_PERMANENT.
+      const listener = findAppStateListener();
+      await act(async () => { listener('background'); });
+
+      // State lands on exhausted; pendingNextRef has been nulled by the
+      // terminal transition (F4 nit). Verify by dismissing the overlay: the
+      // consumePendingNext + RESOLVED dispatch path must find nothing staged,
+      // so setParams stays at 0 (no orphan commit from the abandoned cycle).
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+      await act(async () => { lastOverlayProps().onDone(); });
+      expect(navigation.setParams).not.toHaveBeenCalled();
 
       jest.useRealTimers();
     });
@@ -2015,6 +2209,99 @@ describe('GuessScreen', () => {
       // foreground-fetch gap after the success animation dismisses; deliberate
       // fix for the "frozen screen after animation" symptom.
       expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+    });
+
+    describe('F3b: retry gating on reason (D1)', () => {
+      // F3b contract: retry only on 'network'. 'empty' | 'server' (and any
+      // unmapped reason) are deterministic — the cascade already tried Tier 3
+      // 'all' cross-fallback + Tier 4 looping-replay before returning null, so
+      // retrying just burns 1s+2s+4s. FAILED_PERMANENT → exhausted, no retry.
+
+      it('(a) reason="network" → FAILED_TRANSIENT dispatched + scheduleRetry fires 3 ticks (1s/2s/4s) → exhausted', async () => {
+        jest.useFakeTimers();
+        resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'network' });
+        const navigation = makeNav();
+        await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+        await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+        await act(async () => { lastOverlayProps().onDone(); });
+
+        // Warming observable: state=warming → loader mounted, panel NOT yet.
+        expect(mockGuessAdvanceLoader).toHaveBeenCalled();
+        expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+
+        // Tick 1 @1s — still warming (retry 1 of 3).
+        await act(async () => { jest.advanceTimersByTime(1000); });
+        expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+
+        // Tick 2 @2s — still warming (retry 2 of 3).
+        await act(async () => { jest.advanceTimersByTime(2000); });
+        expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+
+        // Tick 3 @4s — final RETRY_TICK transitions reducer to exhausted.
+        await act(async () => { jest.advanceTimersByTime(4000); });
+        expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+
+        // Initial resolve + 2 retry resolves (tick 3 only transitions to
+        // exhausted via RETRY_TICK; n < DEFAULT_RETRY_BUDGET gates the resolve).
+        expect(resolveNextCardWithServerFallback.mock.calls.length).toBe(3);
+
+        jest.useRealTimers();
+      });
+
+      it('(b) reason="empty" → FAILED_PERMANENT dispatched, scheduleRetry NOT called (no further resolves)', async () => {
+        jest.useFakeTimers();
+        resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+        const navigation = makeNav();
+        await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+        await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+        await act(async () => { lastOverlayProps().onDone(); });
+
+        // No warming — straight to exhausted.
+        expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+        expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+
+        const callsAfterAdvance = resolveNextCardWithServerFallback.mock.calls.length;
+        await act(async () => { jest.advanceTimersByTime(10000); });
+        expect(resolveNextCardWithServerFallback.mock.calls.length).toBe(callsAfterAdvance);
+
+        jest.useRealTimers();
+      });
+
+      it('(c) reason="server" → FAILED_PERMANENT dispatched, scheduleRetry NOT called (no further resolves)', async () => {
+        jest.useFakeTimers();
+        resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'server' });
+        const navigation = makeNav();
+        await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+        await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+        await act(async () => { lastOverlayProps().onDone(); });
+
+        // No warming — straight to exhausted.
+        expect(mockGuessAdvanceLoader).not.toHaveBeenCalled();
+        expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+
+        const callsAfterAdvance = resolveNextCardWithServerFallback.mock.calls.length;
+        await act(async () => { jest.advanceTimersByTime(10000); });
+        expect(resolveNextCardWithServerFallback.mock.calls.length).toBe(callsAfterAdvance);
+
+        jest.useRealTimers();
+      });
+
+      it('(d) reason="ok" with next → onAdvanceResolved called, setParams with next.params (unchanged)', async () => {
+        const nextParams = { listId: 4, imageFile: 'file:///next.jpg', pictureId: 'p-2' };
+        resolveNextCardWithServerFallback.mockResolvedValue({ next: { params: nextParams }, reason: 'ok' });
+        isOnTarget.mockReturnValue(true);
+        applySuccessSideEffects.mockResolvedValue(undefined);
+
+        const navigation = makeNav();
+        await act(async () => { create(<GuessScreen navigation={navigation} route={{ params: PUBLIC_ROUTE_PARAMS }} />); });
+        await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+        await act(async () => { lastOverlayProps().onDone(); });
+
+        expect(navigation.setParams).toHaveBeenCalledWith(nextParams);
+        expect(mockGuessExhaustedPanel).not.toHaveBeenCalled();
+        expect(streakSpies().onWin).toHaveBeenCalledTimes(1);
+        expect(applySuccessSideEffects).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('PT2: warming → app backgrounded → state=exhausted on foreground', async () => {

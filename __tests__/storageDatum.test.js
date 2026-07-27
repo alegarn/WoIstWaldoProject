@@ -6,6 +6,9 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
 
 jest.mock('../services/groups/groupFeedCache', () => ({
   readGroupFeedCache: jest.fn(),
+  markGroupCategoryExhausted: jest.fn(),
+  isGroupCategoryExhausted: jest.fn(),
+  clearGroupCategoryExhausted: jest.fn(),
 }));
 
 const mockDelete = jest.fn();
@@ -32,12 +35,14 @@ jest.mock('expo-file-system', () => {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
-import { readGroupFeedCache } from '../services/groups/groupFeedCache';
+import { readGroupFeedCache, markGroupCategoryExhausted, isGroupCategoryExhausted, clearGroupCategoryExhausted } from '../services/groups/groupFeedCache';
 
 import {
   clearE2EHiddenGuessCard,
+  clearExhaustedCategory,
   deleteImageFromStorage,
   emptyImageList,
+  exhaustedCategoryKey,
   getDeckCountForScope,
   getE2EHiddenGuessCard,
   getLastImageId,
@@ -51,6 +56,8 @@ import {
   getRemainingDeckCount,
   getSessionLanguageFilter,
   getUserTags,
+  isCategoryExhausted,
+  markCategoryExhausted,
   removeImageFromList,
   saveE2EHiddenGuessCard,
   saveLastImageUuid,
@@ -70,6 +77,12 @@ describe('storageDatum utilities', () => {
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
     readGroupFeedCache.mockReset();
+    markGroupCategoryExhausted.mockReset();
+    isGroupCategoryExhausted.mockReset();
+    clearGroupCategoryExhausted.mockReset();
+    markGroupCategoryExhausted.mockResolvedValue(undefined);
+    isGroupCategoryExhausted.mockResolvedValue(false);
+    clearGroupCategoryExhausted.mockResolvedValue(undefined);
   });
 
   it('reads the local image list and returns null when none is stored', async () => {
@@ -760,6 +773,58 @@ describe('storageDatum utilities', () => {
       expect(count).toBe(3);
       expect(File).not.toHaveBeenCalled();
       expect(mockDelete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('exhaustedCategory cache (F3a)', () => {
+    it('exhaustedCategoryKey mirrors lastImageUuidKey format and falls back to all/any', () => {
+      expect(exhaustedCategoryKey('city', 'fr')).toBe('exhaustedCategory:city:fr');
+      expect(exhaustedCategoryKey(undefined, undefined)).toBe('exhaustedCategory:all:any');
+      expect(exhaustedCategoryKey(null, null)).toBe('exhaustedCategory:all:any');
+    });
+
+    it('PUBLIC scope round-trips mark → is → clear against AsyncStorage', async () => {
+      await markCategoryExhausted('city', 'fr', { kind: 'public' });
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr', '1');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('1');
+      expect(await isCategoryExhausted('city', 'fr', { kind: 'public' })).toBe(true);
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      expect(await isCategoryExhausted('city', 'fr', { kind: 'public' })).toBe(false);
+
+      await clearExhaustedCategory('city', 'fr', { kind: 'public' });
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    });
+
+    it('PRIVATE scope delegates to groupFeedCache helpers with scope.groupId (isolation)', async () => {
+      const privateScope = { kind: 'private', groupId: 'g-7' };
+
+      await markCategoryExhausted('city', 'fr', privateScope);
+      expect(markGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+
+      await isCategoryExhausted('city', 'fr', privateScope);
+      expect(isGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
+
+      await clearExhaustedCategory('city', 'fr', privateScope);
+      expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
+      expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    });
+
+    it('PUBLIC scope without kind still uses AsyncStorage (defensive default)', async () => {
+      await markCategoryExhausted('city', 'fr', undefined);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr', '1');
+      expect(markGroupCategoryExhausted).not.toHaveBeenCalled();
+    });
+
+    it('emptyImageList now also drops the public exhausted key for the tuple', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+      await emptyImageList('city', 'fr');
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
     });
   });
 });

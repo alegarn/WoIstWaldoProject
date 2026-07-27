@@ -5,15 +5,17 @@ jest.mock('../services/cardDeck', () => ({
 jest.mock('../utils/storageDatum', () => ({
   getRemainingDeckCount: jest.fn(),
   normalizeListIds: jest.fn((cards) => cards),
+  isCategoryExhausted: jest.fn().mockResolvedValue(false),
+  markCategoryExhausted: jest.fn().mockResolvedValue(undefined),
 }));
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
 
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
+import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import {
   LOW_CARD_THRESHOLD,
-  ALL_WARM_THRESHOLD,
+  TARGET_BATCH_SIZE,
   LOOKAHEAD_PREFETCH,
   prefetchIfLow,
   warmAllDeckIfNeeded,
@@ -25,6 +27,8 @@ const appendMock = appendCardBatch as jest.MockedFunction<typeof appendCardBatch
 const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
 const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
 const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
+const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
+const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
 
 const IMAGES = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
 
@@ -40,14 +44,16 @@ describe('cardPrefetcher', () => {
     remainingMock.mockResolvedValue(0);
     fetchMock.mockResolvedValue({ isError: false, images: IMAGES } as never);
     appendMock.mockResolvedValue(null as never);
+    isExhaustedMock.mockResolvedValue(false);
+    markExhaustedMock.mockResolvedValue(undefined);
   });
 
-  it('exports LOW_CARD_THRESHOLD equal to 3 (lowered for warmer decode pipeline)', () => {
-    expect(LOW_CARD_THRESHOLD).toBe(3);
+  it('exports LOW_CARD_THRESHOLD equal to 4 (refill at ≤3 remaining)', () => {
+    expect(LOW_CARD_THRESHOLD).toBe(4);
   });
 
-  it('exports ALL_WARM_THRESHOLD equal to 5 (intentionally unchanged)', () => {
-    expect(ALL_WARM_THRESHOLD).toBe(5);
+  it('exports TARGET_BATCH_SIZE equal to 5 (single source of truth for category top-up + all-deck fill)', () => {
+    expect(TARGET_BATCH_SIZE).toBe(5);
   });
 
   it('exports LOOKAHEAD_PREFETCH equal to 3', () => {
@@ -84,6 +90,14 @@ describe('cardPrefetcher', () => {
       language: 'fr',
       scope: { kind: 'public' },
     });
+  });
+
+  it('fires prefetch when count === 3 (the previously-broken boundary)', async () => {
+    remainingMock.mockResolvedValue(3);
+
+    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: { token: 'x' } });
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it('skips append when fetchCardBatch returns isError', async () => {
@@ -133,8 +147,10 @@ describe('cardPrefetcher', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
-  it('warms the "all" deck in addition to the category fetch when categoryKey !== "all" and count is low', async () => {
-    remainingMock.mockResolvedValueOnce(2);
+  it('warms the "all" deck in addition to the category fetch when the total deck is below TARGET_BATCH_SIZE', async () => {
+    // count=0 + category returns 3 (IMAGES) = 3 < TARGET_BATCH_SIZE=5 → top-up
+    // of 2 fires from 'all'. Pins the (count + appendedCount) gate at deck level.
+    remainingMock.mockResolvedValueOnce(0);
     remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation((params) =>
       okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : IMAGES),
@@ -154,8 +170,11 @@ describe('cardPrefetcher', () => {
     expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }], categoryKey: 'all' });
   });
 
-  it('does not re-warm while the persisted "all" deck still has cards', async () => {
-    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(2);
+  it('does not re-warm while the persisted "all" deck already has >= TARGET_BATCH_SIZE cards', async () => {
+    // B1/F1: the gate is now `count >= target` (was `count > 0`). A partial
+    // 'all' deck (e.g. 2 cards) MUST top up to TARGET_BATCH_SIZE=5; only a
+    // deck already at >= target short-circuits.
+    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(TARGET_BATCH_SIZE);
     fetchMock.mockImplementation(() => okResponse());
 
     await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
@@ -340,12 +359,12 @@ describe('cardPrefetcher', () => {
     expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
   });
 
-  it('warmAllDeckIfNeeded short-circuits when cursor-filtered remaining > 0 (RC8/CB3)', async () => {
-    // Same persisted 'all' deck, but now listId=10 leaves cursor-ahead cards
-    // (listIds 11+). The cursor-aware count is 2 → warm short-circuits even
-    // though a count-only check would also have short-circuited; this test
-    // pins that the cursor-aware path still gates correctly when ahead > 0.
-    remainingMock.mockResolvedValue(2);
+  it('warmAllDeckIfNeeded short-circuits when cursor-filtered remaining >= target (RC8/CB3 + B1 gate)', async () => {
+    // B1/F1: the early-return gate is now `count >= target` (default
+    // TARGET_BATCH_SIZE=5). Same persisted 'all' deck semantics as before —
+    // the cursor-aware count is consulted with currentListId and short-
+    // circuits when the deck already has enough cards ahead of the cursor.
+    remainingMock.mockResolvedValue(TARGET_BATCH_SIZE);
 
     await warmAllDeckIfNeeded({
       language: 'fr',
@@ -366,5 +385,136 @@ describe('cardPrefetcher', () => {
     expect(remainingMock).toHaveBeenCalledWith(expect.objectContaining({
       currentListId: undefined,
     }));
+  });
+
+  // ─── B1 / F1: download 5 at once, topping up from 'all' ───
+
+  it('B1(a): category returns 2 + count=0 → fetches 3 from "all" to reach TARGET_BATCH_SIZE=5', async () => {
+    remainingMock.mockResolvedValue(0); // count=0; 'all' count=0
+    fetchMock.mockImplementation((params) =>
+      okResponse(
+        (params as { categoryKey: string }).categoryKey === 'all'
+          ? [{ listId: 100 }, { listId: 101 }, { listId: 102 }]
+          : [{ listId: 1 }, { listId: 2 }],
+      ),
+    );
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
+    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(categoryCalls).toHaveLength(1);
+    expect(allCalls).toHaveLength(1);
+    // count(0) + appended(2) = 2 → target = 5 - 2 = 3
+    expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
+  });
+
+  it('B1(b): category returns 5 → no "all" top-up (total deck already at target)', async () => {
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation(() => okResponse([
+      { listId: 1 }, { listId: 2 }, { listId: 3 }, { listId: 4 }, { listId: 5 },
+    ]));
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(allCalls).toHaveLength(0);
+  });
+
+  it('B1(c): category known-empty (isCategoryExhausted true) → skips category fetch, fetches 5 from "all"', async () => {
+    isExhaustedMock.mockResolvedValue(true);
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation((params) =>
+      okResponse(
+        (params as { categoryKey: string }).categoryKey === 'all'
+          ? [{ listId: 100 }, { listId: 101 }, { listId: 102 }, { listId: 103 }, { listId: 104 }]
+          : [],
+      ),
+    );
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(isExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+    const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
+    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(categoryCalls).toHaveLength(0);
+    expect(allCalls).toHaveLength(1);
+  });
+
+  it('B1(d): categoryKey === "all" → never tops up (single fetch, single cycle)', async () => {
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation(() => okResponse([{ listId: 1 }]));
+
+    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(isExhaustedMock).not.toHaveBeenCalled();
+  });
+
+  it('B1(e): category fetch returns 0 + non-"all" → markCategoryExhausted called (prefetcher writes cache)', async () => {
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation((params) =>
+      okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : []),
+    );
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+  });
+
+  it('B1(e-CC4): isError (5xx) → markCategoryExhausted NOT called (transient blip must not poison cache)', async () => {
+    remainingMock.mockResolvedValue(0);
+    fetchMock.mockImplementation((params) =>
+      (params as { categoryKey: string }).categoryKey === 'all'
+        ? okResponse([{ listId: 100 }])
+        : Promise.resolve({ isError: true } as never),
+    );
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(markExhaustedMock).not.toHaveBeenCalled();
+  });
+
+  it('B1(f): deck-level gate pin — count=2 + category returns 2 → fetches 1 from "all"; count=2 + category returns 4 → no top-up', async () => {
+    // Branch 1: count=2 + appended=2 = 4 < 5 → top-up of 1.
+    remainingMock.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
+    fetchMock.mockImplementationOnce(() => okResponse([{ listId: 1 }, { listId: 2 }]));
+    fetchMock.mockImplementation(() => okResponse([{ listId: 100 }]));
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const allCallsBranch1 = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(allCallsBranch1).toHaveLength(1);
+
+    __resetForTests();
+    jest.clearAllMocks();
+    e2eMock.mockReturnValue(false);
+    remainingMock.mockResolvedValue(0);
+    isExhaustedMock.mockResolvedValue(false);
+
+    // Branch 2: count=2 + appended=4 = 6 >= 5 → no top-up.
+    remainingMock.mockResolvedValueOnce(2);
+    fetchMock.mockImplementation(() => okResponse([{ listId: 1 }, { listId: 2 }, { listId: 3 }, { listId: 4 }]));
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    const allCallsBranch2 = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(allCallsBranch2).toHaveLength(0);
   });
 });

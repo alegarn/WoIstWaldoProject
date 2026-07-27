@@ -16,6 +16,7 @@
 import { resolveNextGuessParams } from './handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
 import { warmAllDeckIfNeeded, getInFlightPrefetch, getPrefetchScopeKey } from '../services/cardPrefetcher';
+import { isCategoryExhausted, markCategoryExhausted } from './storageDatum';
 
 export type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
 
@@ -77,6 +78,13 @@ async function foregroundTopUp(
   categoryKey: string,
   pictureIdOverride?: string | null,
 ): Promise<ForegroundTopUpResult> {
+  // Tier 4 (looping replay) passes pictureIdOverride: null to reset the cursor
+  // to head. The exhausted-category cache is meaningless there — newly-uploaded
+  // cards must surface — so gate every cache interaction on !isHeadReplay.
+  // Tier 2 passes pictureIdOverride: undefined; the local distinguishes null
+  // (head replay) from undefined (cursor advance).
+  const isHeadReplay = pictureIdOverride === null;
+
   // PB4 (T2.7) Option A: consult the prefetcher's in-flight dedup WITHOUT
   // triggering a new prefetch. The scopeKey derivation must match
   // `prefetchIfLow`'s internal `dedupKey` (shared via `getPrefetchScopeKey`).
@@ -92,6 +100,15 @@ async function foregroundTopUp(
     // source of truth for "do we have cards?" via the post-fetch resolve the
     // caller already performs.
     await inFlight.catch(() => {});
+  }
+
+  // F3a: short-circuit exhausted non-'all' categories before issuing a server
+  // round-trip. Only the cursor-based Tier 2 path (no head replay) and only a
+  // real category (the 'all' deck is the Tier 3/4 fallback and must stay live
+  // so newly-uploaded images surface). On hit, returns 'empty' so control
+  // flows straight to the Tier 3 'all' cross-fallback below.
+  if (!isHeadReplay && categoryKey !== 'all' && await isCategoryExhausted(categoryKey, args.language, args.scope)) {
+    return { ok: false, reason: 'empty' };
   }
 
   // PB4 (T2.7): Tier 2 short-circuit. After the prefetch-await, re-check the
@@ -123,7 +140,22 @@ async function foregroundTopUp(
       ...(pictureIdOverride !== undefined ? { pictureIdOverride } : {}),
     });
     if (!r || r.isError === true) return { ok: false, reason: 'server' };
-    if (!r.images || r.images.length === 0) return { ok: false, reason: 'empty' };
+    if (!r.images || r.images.length === 0) {
+      // F3a: cache the empty result so subsequent advances short-circuit at
+      // Tier 2 with zero server round-trips. ONLY the genuine-empty branch
+      // writes — the 5xx branch above MUST NOT poison the cache (a transient
+      // server blip must not permanently mark a category exhausted). 'all' and
+      // Tier-4 head-replay paths are excluded so newly-uploaded cards surface.
+      // Paired-write note (CC1): services/cardPrefetcher.ts (B1) writes the
+      // SAME cache with a DIFFERENT guard (categoryKey !== 'all' only — the
+      // prefetcher has no pictureIdOverride context and never runs on the
+      // Tier-4 head path). Both sites use the SAME helper; first-wins is
+      // defense-in-depth. Keep this comment in sync with the prefetcher site.
+      if (!isHeadReplay && categoryKey !== 'all') {
+        await markCategoryExhausted(categoryKey, args.language, args.scope).catch(() => {});
+      }
+      return { ok: false, reason: 'empty' };
+    }
     await appendCardBatch({
       cards: r.images,
       categoryKey,
