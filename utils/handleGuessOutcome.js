@@ -43,7 +43,7 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
  * mutation. Returns null if no next card is available.
  *
  * @param {object} args - { category, language, currentListId, isTutorial, scope, currentPictureId }
- * @returns {Promise<{params: object}|null>}
+ * @returns {Promise<{params: Object<string, *>}|null>}
  */
 export async function resolveNextGuessParams({ category, language, currentListId, isTutorial, scope, currentPictureId }) {
   const result = await resolveNextCard({ category, language, currentListId, scope, currentPictureId });

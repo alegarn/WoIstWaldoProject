@@ -15,7 +15,7 @@ import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
-import { getNextImagesForScope } from '../../utils/storageDatum';
+import { getNextImagesForScope, clearExhaustedCategory } from '../../utils/storageDatum';
 import { computeMultiplier, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
 import { computePoints } from '../../utils/guessPoints';
 import { useAdvanceStateMachine } from '../../hooks/useAdvanceStateMachine';
@@ -124,6 +124,20 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
+  // F4: synchronous mirror of `showSuccess` so useResolveLifecycle's no-ad
+  // commit gate can read overlay visibility WITHOUT waiting for a passive
+  // effect flush. Written synchronously by `applyShowSuccess` at every
+  // setShowSuccess call site; the effect mirror below is belt-and-suspenders.
+  const overlayVisibleRef = useRef(false);
+  // F4 (CC2): single source of truth for `showSuccess` writes — writes
+  // `overlayVisibleRef.current` SYNCHRONOUSLY before the state update so the
+  // warming-retry commit gate in useResolveLifecycle never observes a stale
+  // false-while-overlay-mounted. A passive effect mirror (below) catches any
+  // call site that slips past this helper.
+  const applyShowSuccess = (next: boolean) => {
+    overlayVisibleRef.current = next;
+    setShowSuccess(next);
+  };
   const [successMultiplier, setSuccessMultiplier] = useState<number>(SPEED_MULTIPLIER_BASE);
   const { streak, tier, multiplier: streakMultiplier, onWin, onLose, reset } = useStreak();
   const { advance, dispatch, advanceStateRef } = useAdvanceStateMachine({
@@ -158,14 +172,17 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     kickoffResolve,
     awaitResolve,
     consumePendingNext,
+    consumeDeferredAd,
     handleAdDone,
     clearRetryTimer,
+    clearPendingNext,
   } = useResolveLifecycle({
     dispatch,
     advanceStateRef,
     setAdPhase,
     currentStreak: streak,
     onWin,
+    overlayVisibleRef,
     resolveArgs: {
       category,
       language,
@@ -190,6 +207,11 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   // PT6 cleanup ownership stays in GuessScreen: clear retry timers only when a
   // real mid-advance -> terminal/idle transition happens, not on every render.
   const previousAdvanceStateRef = useRef(advance.state);
+  
+  useEffect(() => {
+    overlayVisibleRef.current = showSuccess;
+  }, [showSuccess]);
+  
   useEffect(() => {
     const previousState = previousAdvanceStateRef.current;
     previousAdvanceStateRef.current = advance.state;
@@ -234,11 +256,14 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       const current = advanceStateRef.current;
       if (current !== 'idle' && current !== 'exhausted') {
         clearRetryTimer();
+        // F4 nit: terminal transition dispatched outside the hook — also drop
+        // any staged next so a staged-next-then-background orphan cannot leak.
+        clearPendingNext();
         dispatch({ type: 'FAILED_PERMANENT' });
       }
     });
     return () => sub.remove();
-  }, [dispatch, clearRetryTimer]);
+  }, [dispatch, clearRetryTimer, clearPendingNext]);
 
   const { width: screenWidth, height: screenHeight } = useWindowDimensions();
   const uri = imageFile;
@@ -295,7 +320,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       currentListId: listId,
     }).catch(() => {});
     setSuccessMultiplier(multiplier);
-    setShowSuccess(true);
+    applyShowSuccess(true);
     // C1 (§4.2): the WIN dispatch + resolve kickoff both fire at WIN time so
     // the ~2-3s SuccessOverlay window covers a Tier-1/Tier-2 fetch. The A7
     // guard in onAdvanceResolved requires advanceStateRef to read 'advancing'
@@ -333,22 +358,24 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // R1 (§5.10): hide the success overlay FIRST so it never reads as a
     // "frozen" loading spinner. The advance state machine takes over the UI
     // (advancing/warming) while the next card resolves.
-    setShowSuccess(false);
+    applyShowSuccess(false);
     // C1 (§4.2): await the resolve kicked off in applySuccessPath. The
     // in-flight ref is always populated when handleOverlayDone fires
     // (showSuccess is only true after applySuccessPath); no fallback branch
     // per agent-defaults §2.2.
     await awaitResolve();
-    // P2: in the no-ad path, RESOLVED is dispatched HERE (after the overlay
-    // animation completes) instead of inside onAdvanceResolved so the next
-    // card's imageFile URI does not land in route.params WHILE the overlay is
-    // still animating its fade-out (which would flash the next image behind
-    // the semi-transparent overlay). The ad path sets adPhase='showing' before
-    // this point, so the guard skips the dispatch here and leaves it to
-    // handleAdDone (sole dispatch site for the ad path). handleOverlayDone is
-    // not memoized (re-created every render) and SuccessOverlay reads onDone
-    // through an internal ref kept fresh on every parent render, so the
-    // adPhase read sees the latest committed value — no stale-closure risk.
+    // P2 / F1 (G1): after applyShowSuccess(false) + awaitResolve, three
+    // branches reach here: (a) no-ad path dispatches RESOLVED here; (b)
+    // deferred-ad path (overlay was still animating when resolve settled)
+    // triggers setAdPhase('showing') here via consumeDeferredAd — pendingNext
+    // was already staged on the hook, handleAdDone will commit RESOLVED on
+    // dismiss; (c) non-deferred ad path (overlay-down fast path at resolve
+    // time) already set adPhase='showing' inside onAdvanceResolved, so the
+    // guard skips the dispatch here and leaves RESOLVED to handleAdDone.
+    if (consumeDeferredAd()) {
+      setAdPhase('showing');
+      return;
+    }
     if (adPhase !== 'showing') {
       const next = consumePendingNext();
       if (next) {
@@ -362,6 +389,11 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }
 
   function handleSwitchCategory() {
+    // F3a invalidation (E1): clear the exhausted-cache entry for the CURRENT
+    // category+scope so re-entering re-queries the server (handles newly
+    // uploaded images since the category was marked empty). Fire-and-forget —
+    // navigation proceeds without waiting; the next mount re-queries fresh.
+    clearExhaustedCategory(category?.key, language, scope).catch(() => {});
     navigation.navigate('GuessPathScreen', isPrivate ? { scope } : {});
   }
 

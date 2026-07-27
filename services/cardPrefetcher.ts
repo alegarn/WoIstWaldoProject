@@ -5,16 +5,18 @@ import { fetchCardBatch, appendCardBatch } from './cardDeck';
  * normalization cannot leak cards with missing/NaN listIds into storage.
  * Idempotent — normalizing already-normalized cards is a no-op.
  */
-import { getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
+import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 
 // Refill when only 3 cards remain — combined with NextCardImageWarmer decode prefetch, the user never waits for cold decode or server round-trip.
-export const LOW_CARD_THRESHOLD = 3;
+export const LOW_CARD_THRESHOLD = 4;
 /**
- * Cross-fallback warm-'all'-on-low trigger. Intentionally higher than
- * LOW_CARD_THRESHOLD — gates the 'all' deck warming, not per-win prefetch.
+ * Single source of truth for the deck-fill target. Gates BOTH the category
+ * top-up decision in `prefetchIfLow` (fetch from 'all' when the total deck
+ * `(count + appendedCount) < TARGET_BATCH_SIZE`) AND the early-return inside
+ * `warmAllDeckIfNeeded` (skip when the 'all' deck already has ≥ target cards).
  */
-export const ALL_WARM_THRESHOLD = 5;
+export const TARGET_BATCH_SIZE = 5;
 /**
  * Per-win look-ahead window for image preload (Phase 3, gated on spike).
  * Kept here so threshold tuning lives in one place.
@@ -40,6 +42,13 @@ export type WarmAllParams = Omit<PrefetchParams, 'categoryKey' | 'categoryId'> &
    * Default `undefined` = cursor-agnostic (counts the whole 'all' deck).
    */
   currentListId?: number;
+  /**
+   * Target deck size for the early-return gate. The function fills the 'all'
+   * deck until it has ≥ `target` cards; previously it only warmed when empty
+   * (`count > 0` gate skipped any partial deck). Default `TARGET_BATCH_SIZE`.
+   * B1/F1: callers pass an explicit remainder to top up a partial deck.
+   */
+  target?: number;
 };
 
 const inFlight = new Map<string, Promise<void>>();
@@ -124,29 +133,77 @@ export async function prefetchIfLow({
   }
 
   const p = (async () => {
-    try {
-      const r = await fetchCardBatch({
-        categoryKey,
-        categoryId,
-        language,
-        scope,
-        authContext,
-      });
-      if (r && !r.isError && r.images?.length) {
-        // T2.6 defense-in-depth: normalize before append (aligns with T1.9).
-        const cards = normalizeListIds(r.images);
-        await appendCardBatch({
-          cards,
+    let appendedCount = 0;
+
+    // F1/B1: consult C1's exhausted-category cache before the category fetch.
+    // If the category is known-empty (cache hit), skip the round-trip and let
+    // the top-up below fetch the full TARGET_BATCH_SIZE from 'all'. 'all' is
+    // never cached (Tier 3/4 fallback must stay live), so the consult is
+    // guarded on `categoryKey !== 'all'`.
+    let skipCategoryFetch = false;
+    if (categoryKey !== 'all') {
+      try {
+        skipCategoryFetch = await isCategoryExhausted(categoryKey, language, scope);
+      } catch {
+        skipCategoryFetch = false;
+      }
+    }
+
+    if (!skipCategoryFetch) {
+      try {
+        const r = await fetchCardBatch({
           categoryKey,
           categoryId,
           language,
           scope,
+          authContext,
         });
+        if (r && !r.isError && r.images?.length) {
+          // T2.6 defense-in-depth: normalize before append (aligns with T1.9).
+          const cards = normalizeListIds(r.images);
+          await appendCardBatch({
+            cards,
+            categoryKey,
+            categoryId,
+            language,
+            scope,
+          });
+          appendedCount = cards.length;
+        } else if (
+          r &&
+          !r.isError &&
+          Array.isArray(r.images) &&
+          r.images.length === 0 &&
+          categoryKey !== 'all'
+        ) {
+          // F3a/B1: server returned genuine empty (NOT a 5xx isError — a
+          // transient server blip MUST NOT poison the cache; mirror C1's CC4
+          // defensive pin at nextCardAdvancer.ts:142-158). Paired-write note
+          // (CC1): utils/nextCardAdvancer.ts#foregroundTopUp writes the SAME
+          // cache with a DIFFERENT guard (`pictureIdOverride !== null &&
+          // categoryKey !== 'all'` — Tier-4 head path excluded so newly-
+          // uploaded images surface). The prefetcher has no pictureIdOverride
+          // context (it never runs on the Tier-4 head path), so its guard is
+          // `categoryKey !== 'all'` only. Both sites use the SAME helper;
+          // first-wins is defense-in-depth. Keep this comment in sync with
+          // nextCardAdvancer.ts:144-156.
+          await markCategoryExhausted(categoryKey, language, scope).catch(() => {});
+        }
+      } catch (e) {
+        if (__DEV__) {
+          console.warn('[cardPrefetcher] prefetch failed', dk, e);
+        }
       }
-    } catch (e) {
-      if (__DEV__) {
-        console.warn('[cardPrefetcher] prefetch failed', dk, e);
-      }
+    }
+
+    // F1/B1: deck-level top-up. When the total deck `(count + appendedCount)`
+    // is still below TARGET_BATCH_SIZE AND we are not already on the 'all'
+    // deck, fill the remainder from 'all' in the same cycle. The resolver
+    // merges category + 'all' decks at read time. Replaces the old
+    // side-effect gated on `count < ALL_WARM_THRESHOLD`.
+    if (categoryKey !== 'all' && count + appendedCount < TARGET_BATCH_SIZE) {
+      const target = TARGET_BATCH_SIZE - (count + appendedCount);
+      warmAllDeckIfNeeded({ language, scope, authContext, target });
     }
   })();
 
@@ -157,10 +214,6 @@ export async function prefetchIfLow({
     }
   });
 
-  if (categoryKey !== 'all' && count < ALL_WARM_THRESHOLD) {
-    warmAllDeckIfNeeded({ language, scope, authContext });
-  }
-
   return p;
 }
 
@@ -168,12 +221,19 @@ export async function prefetchIfLow({
  * Warm the 'all' deck in the background. Concurrent callers share the in-flight
  * promise, and callers re-check the persisted 'all' deck on each attempt so a
  * drained fallback deck can be warmed again later in the session.
+ *
+ * B1/F1: contract broadened — fills the 'all' deck until it has ≥ `target`
+ * cards (default `TARGET_BATCH_SIZE`). The previous `count > 0` early-return
+ * skipped warming whenever the deck had ANY cards, so a partial 'all' deck
+ * (e.g. 2 cards) never got topped up to 5. The retuned `count >= target` gate
+ * is the actual F1 fix. Name retained to minimize churn.
  */
 export async function warmAllDeckIfNeeded({
   language,
   scope,
   authContext,
   currentListId,
+  target = TARGET_BATCH_SIZE,
 }: WarmAllParams): Promise<void> {
   if (isE2EMode()) {
     return;
@@ -191,7 +251,7 @@ export async function warmAllDeckIfNeeded({
     currentListId,
     scope,
   });
-  if (count > 0) {
+  if (count >= target) {
     return;
   }
 

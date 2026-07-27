@@ -8,7 +8,7 @@ jest.mock('../services/cardDeck', () => ({
 
 let mockFileExists = true;
 jest.mock('expo-file-system', () => {
-  const File = jest.fn().mockImplementation(function MockFile(firstArg: string | { uri?: string }, secondArg?: string) {
+  const File = jest.fn().mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, firstArg: string | { uri?: string }, secondArg?: string) {
     const baseUri = typeof firstArg === 'string' ? firstArg : firstArg?.uri;
     this.uri = secondArg ? `${baseUri}${secondArg}` : baseUri;
     this.exists = mockFileExists;
@@ -30,6 +30,8 @@ jest.mock('../utils/storageDatum', () => {
     getDeckCountForScope: jest.fn(),
     getRemainingDeckCount: jest.fn(),
     normalizeListIds: jest.fn((cards) => cards),
+    isCategoryExhausted: jest.fn(),
+    markCategoryExhausted: jest.fn(),
   };
 });
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
@@ -46,7 +48,7 @@ jest.mock('../services/cardPrefetcher', () => {
 
 import { resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds } from '../utils/storageDatum';
+import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { warmAllDeckIfNeeded, prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
@@ -60,6 +62,18 @@ const countMock = getDeckCountForScope as jest.MockedFunction<typeof getDeckCoun
 const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
 const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
 const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
+const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
+const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
+
+// jest.setup.js globally mocks AsyncStorage; cast to a typed mock view so
+// .mockResolvedValue / .mockImplementation are visible to TypeScript.
+const mockAsyncStorage = AsyncStorage as unknown as {
+  getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
+  setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
+  removeItem: jest.MockedFunction<(key: string) => Promise<void>>;
+  getAllKeys: jest.MockedFunction<() => Promise<readonly string[]>>;
+  multiRemove: jest.MockedFunction<(keys: readonly string[]) => Promise<void>>;
+};
 
 const CARD_PARAMS = { listId: 9, pictureId: 'img-9', imageFile: 'file:///nine.jpg' };
 const A_CARD_RESULT = { params: CARD_PARAMS };
@@ -84,6 +98,9 @@ describe('resolveNextCardWithServerFallback', () => {
     // (returns before touching inFlight) for the existing Tier-2/3/4 tests.
     remainingMock.mockResolvedValue(100);
     countMock.mockResolvedValue(100);
+    // F3a defaults: cache miss (don't short-circuit) + write resolves silently.
+    isExhaustedMock.mockResolvedValue(false);
+    markExhaustedMock.mockResolvedValue(undefined);
   });
 
   it('returns the locally-resolved card without any server fetch when the deck has a next card', async () => {
@@ -433,7 +450,7 @@ describe('resolveNextCardWithServerFallback', () => {
       appendMock.mockImplementation(realCardDeck.appendCardBatch as never);
       resolveMock.mockImplementation(realHandleGuess.resolveNextGuessParams as never);
       normalizeMock.mockImplementation(realStorage.normalizeListIds as never);
-      AsyncStorage.setItem.mockResolvedValue(undefined);
+      mockAsyncStorage.setItem.mockResolvedValue(undefined);
     });
 
     it('does NOT return the just-played card when the server re-serves it in Tier 2', async () => {
@@ -446,8 +463,8 @@ describe('resolveNextCardWithServerFallback', () => {
         'imageList:city:fr',
         JSON.stringify([{ listId: 1, pictureId: 'played-card', imageFile: 'file:///cache/played.jpg' }]),
       );
-      AsyncStorage.getItem.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
-      AsyncStorage.setItem.mockImplementation((key: string, value: string) => {
+      mockAsyncStorage.getItem.mockImplementation((key: string) => Promise.resolve(store.get(key) ?? null));
+      mockAsyncStorage.setItem.mockImplementation((key: string, value: string) => {
         store.set(key, value);
         return Promise.resolve();
       });
@@ -471,6 +488,164 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(result.reason).toBe('ok');
       expect(result.next).not.toBeNull();
       expect((result.next as { params: { pictureId?: string } }).params.pictureId).toBe('new-card');
+    });
+  });
+
+  // ─── F3a — exhausted-category cache (Tier 2 short-circuit) ──────────────
+  //
+  // When the server returned 0 cards for a (categoryKey, language, scope)
+  // tuple on a prior advance, the tuple is cached as exhausted. Subsequent
+  // advances short-circuit at Tier 2 → straight to Tier 3 ('all' cross-
+  // fallback) with zero server round-trips. Guards: never cache 'all'; never
+  // read/write on the Tier-4 head-replay path; only the genuine-empty branch
+  // writes (5xx MUST NOT poison).
+  describe('resolveNextCardWithServerFallback — F3a exhausted-category cache', () => {
+    it('(a) isCategoryExhausted=false → foregroundTopUp fetches normally (no short-circuit)', async () => {
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never);
+      fetchMock.mockResolvedValue({ isError: false, images: [{ listId: 9 }] } as never);
+      isExhaustedMock.mockResolvedValue(false);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.reason).toBe('ok');
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'city' }));
+    });
+
+    it('(b) isCategoryExhausted=true + non-null override + non-"all" → returns {ok:false,reason:"empty"} WITHOUT fetchCardBatch; Tier 3 still runs', async () => {
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all' hits
+      isExhaustedMock.mockResolvedValue(true);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.reason).toBe('ok');
+      // The city fetch was short-circuited — no fetchCardBatch for the category.
+      expect(fetchMock).not.toHaveBeenCalled();
+      // Read happened for the city tuple (Tier 2 path, pictureIdOverride=undefined).
+      expect(isExhaustedMock).toHaveBeenCalledWith('city', 'fr', BASE_ARGS.scope);
+      // Control reached Tier 3 (cache short-circuit does NOT bypass T3).
+      expect(warmMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('(c) server returns empty + non-null override + non-"all" → markCategoryExhausted called for the tuple', async () => {
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck (still empty)
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
+
+      await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', BASE_ARGS.scope);
+    });
+
+    it('(d) categoryKey === "all" → NEVER writes cache even on empty', async () => {
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
+
+      await resolveNextCardWithServerFallback({ ...BASE_ARGS, category: { key: 'all' } });
+
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
+    it('(e) Tier 4 (pictureIdOverride=null) → NEVER reads AND NEVER writes the cache', async () => {
+      // category='all' end-to-end so the only non-trivial tier is Tier 4
+      // (head replay with pictureIdOverride=null). Both Tier 2 and Tier 4 have
+      // categoryKey='all' AND Tier 4 has isHeadReplay=true, so cache is never
+      // consulted.
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
+
+      await resolveNextCardWithServerFallback({ ...BASE_ARGS, category: { key: 'all' } });
+
+      expect(isExhaustedMock).not.toHaveBeenCalled();
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
+    it('(h) cache-hit at Tier 2 → control still reaches Tier 3 ("all" cross-fallback runs)', async () => {
+      // Tier 2 short-circuits with reason='empty' (cache hit). The cascade
+      // pushes the reason and continues to Tier 3 — the cache hit must NOT
+      // bypass T3. Tier 3 warms 'all' and resolves a card.
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      isExhaustedMock.mockResolvedValue(true);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.reason).toBe('ok');
+      expect(warmMock).toHaveBeenCalledTimes(1);
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it('(j) CC4 defensive pin: 5xx (r.isError=true → reason="server") does NOT write the exhausted cache', async () => {
+      // Only the genuine-empty branch writes. A 5xx blip must not poison the
+      // cache — otherwise a transient server error permanently marks a
+      // category exhausted.
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: true } as never);
+
+      await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
+    describe('private scope isolation + purge (real AsyncStorage)', () => {
+      const realStorage = jest.requireActual('../utils/storageDatum');
+      const realGroupFeedCache = jest.requireActual('../services/groups/groupFeedCache');
+
+      // In-memory AsyncStorage so the real helpers' writes are observable
+      // across groups without leaking between tests.
+      let store: Map<string, string>;
+      const memoryAsyncStorage = () => ({
+        getItem: (key: string) => Promise.resolve(store.has(key) ? store.get(key)! : null),
+        setItem: (key: string, value: string) => { store.set(key, value); return Promise.resolve(); },
+        removeItem: (key: string) => { store.delete(key); return Promise.resolve(); },
+        getAllKeys: () => Promise.resolve(Array.from(store.keys())),
+        multiRemove: (keys: string[]) => { for (const k of keys) store.delete(k); return Promise.resolve(); },
+      });
+
+      beforeEach(() => {
+        store = new Map();
+        const mem = memoryAsyncStorage();
+        mockAsyncStorage.getItem.mockImplementation(mem.getItem as never);
+        mockAsyncStorage.setItem.mockImplementation(mem.setItem as never);
+        mockAsyncStorage.removeItem.mockImplementation(mem.removeItem as never);
+        mockAsyncStorage.getAllKeys.mockImplementation(mem.getAllKeys as never);
+        mockAsyncStorage.multiRemove.mockImplementation(mem.multiRemove as never);
+      });
+
+      it('(g) group A marking category exhausted does NOT mark it for group B (distinct groupFeedCache keys)', async () => {
+        await realStorage.markCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' });
+
+        expect(await realStorage.isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' })).toBe(true);
+        // Group B reads the same (categoryKey, language) but its own groupId — MUST be false.
+        expect(await realStorage.isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupB' })).toBe(false);
+
+        // Keys are groupId-scoped (no cross-contamination).
+        const keys = await AsyncStorage.getAllKeys();
+        expect(keys).toContain('groupFeedExhausted:groupA:city:fr');
+        expect(keys).not.toContain('groupFeedExhausted:groupB:city:fr');
+      });
+
+      it('(i) purgeAllPrivateCaches drops the private exhausted marker', async () => {
+        await realStorage.markCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' });
+        expect(await realStorage.isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' })).toBe(true);
+
+        await realGroupFeedCache.purgeAllPrivateCaches();
+
+        expect(await realStorage.isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' })).toBe(false);
+        const keys = await AsyncStorage.getAllKeys();
+        expect(keys).not.toContain('groupFeedExhausted:groupA:city:fr');
+      });
     });
   });
 });

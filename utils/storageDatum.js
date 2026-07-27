@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
-import { readGroupFeedCache } from "../services/groups/groupFeedCache";
+import {
+  readGroupFeedCache,
+  markGroupCategoryExhausted,
+  isGroupCategoryExhausted,
+  clearGroupCategoryExhausted,
+} from "../services/groups/groupFeedCache";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
@@ -16,6 +21,54 @@ function imageListKey(categoryKey, language) {
 
 function lastImageUuidKey(categoryKey, language) {
   return `lastImageUuid:${categoryKey || 'all'}:${language || 'any'}`;
+};
+
+export function exhaustedCategoryKey(categoryKey, language) {
+  return `exhaustedCategory:${categoryKey || 'all'}:${language || 'any'}`;
+};
+
+function isPrivateScope(scope) {
+  return scope?.kind === 'private' && scope?.groupId;
+}
+
+/**
+ * Mark (categoryKey, language) as server-exhausted for `scope`. PUBLIC scope
+ * writes AsyncStorage; PRIVATE scope writes a per-group marker (isolation:
+ * group A exhausting category X MUST NOT mark X for group B).
+ * @param {string} categoryKey - Category key ('all' is intentionally NEVER cached by callers).
+ * @param {string} language - Language code ('any' when unset).
+ * @param {{ kind?: string, groupId?: string }|null|undefined} scope
+ * @returns {Promise<void>}
+ */
+export async function markCategoryExhausted(categoryKey, language, scope) {
+  if (isPrivateScope(scope)) {
+    await markGroupCategoryExhausted(scope.groupId, categoryKey, language);
+    return;
+  }
+  await AsyncStorage.setItem(exhaustedCategoryKey(categoryKey, language), '1');
+};
+
+/**
+ * Read the exhausted flag for (categoryKey, language, scope).
+ * @returns {Promise<boolean>}
+ */
+export async function isCategoryExhausted(categoryKey, language, scope) {
+  if (isPrivateScope(scope)) {
+    return isGroupCategoryExhausted(scope.groupId, categoryKey, language);
+  }
+  return (await AsyncStorage.getItem(exhaustedCategoryKey(categoryKey, language))) === '1';
+};
+
+/**
+ * Clear the exhausted flag for (categoryKey, language, scope).
+ * @returns {Promise<void>}
+ */
+export async function clearExhaustedCategory(categoryKey, language, scope) {
+  if (isPrivateScope(scope)) {
+    await clearGroupCategoryExhausted(scope.groupId, categoryKey, language);
+    return;
+  }
+  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
 };
 
 /**
@@ -429,6 +482,7 @@ export async function emptyImageList(categoryKey, language) {
 
   await AsyncStorage.removeItem(listKey);
   await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language));
+  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
 };
 
 export async function storeImageList(imageList, categoryKey, language) {
