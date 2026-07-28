@@ -70,6 +70,17 @@ describe('e2eMode helpers', () => {
           left: 92,
           top: 42,
         },
+        dragSize: 32,
+        dragStyle: {
+          position: 'absolute',
+          width: 32,
+          height: 32,
+          left: 84,
+          top: 34,
+          borderRadius: 16,
+          alignItems: 'center',
+          justifyContent: 'center',
+        },
       },
     });
   });

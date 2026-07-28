@@ -21,6 +21,7 @@ import CenteredModal from '../../components/UI/CenteredModal';
 import { LANGUAGES } from '../../constants/languages';
 import { getCategories } from '../../utils/categoryRequests';
 import {
+  getPreferredLanguage,
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
 } from '../../utils/storageDatum';
@@ -49,7 +50,6 @@ const NAVIGATION_ANY_LANGUAGE = 'any';
 
 export default function GuessPathScreen({ navigation, route }) {
   const context = useContext(AuthContext);
-  const { data: groupsHubData } = useGroupsHub();
   const [categories, setCategories] = useState([]);
   const [sessionLanguage, setSessionLanguage] = useState(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
@@ -67,6 +67,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
+  const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope });
   const isOwner = isPrivateScope && (groupsHubData?.owned ?? []).some(
     (g) => g.id === scope.groupId
   );
@@ -123,11 +124,14 @@ export default function GuessPathScreen({ navigation, route }) {
     let cancelled = false;
 
     async function loadLanguage() {
-      const stored = await getSessionLanguageFilter();
+      const [stored, preferred] = await Promise.all([
+        getSessionLanguageFilter(),
+        getPreferredLanguage(),
+      ]);
       if (cancelled) {
         return;
       }
-      setSessionLanguage(stored);
+      setSessionLanguage(stored ?? preferred ?? null);
     }
 
     loadLanguage();

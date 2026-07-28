@@ -1,40 +1,67 @@
-import { View, Pressable, StyleSheet, ImageBackground } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Animated, View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
-import MoveableTextBox from '../UI/MovableTextBox';
+import EnigmaOverlay from './Descriptions/EnigmaOverlay';
+import SpeedRing from '../Guess/SpeedRing';
+import { GlobalStyle } from '../../constants/theme';
+import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
 
-//debug
-//import { useEffect, useLayoutEffect, useState } from 'react';
-//import ClipboardModal from '../UI/ClipboardModal';
+const PULSE_DURATION_MS = 1200;
+const PULSE_HALF_DURATION_MS = PULSE_DURATION_MS / 2;
+const PULSE_SCALE_MIN = 1;
+const PULSE_SCALE_MAX = 1.18;
+const PULSE_OPACITY_MIN = 0.55;
+const PULSE_OPACITY_MAX = 1;
+const PULSE_NATIVE_DRIVER = { useNativeDriver: true };
 
-export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setShowDebugModal,*/ uri, guess, description, /* screenWidth, screenHeight, isPortrait, */  touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetPanHandlers, defaultOpen, onDescriptionClosed, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
+  const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
+  const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
 
-/* mode debug */
-/*  const [debugText, setDebugText] = useState("");
+  useEffect(() => {
+    if (!pulseTarget) {
+      return undefined;
+    }
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulseScale, {
+            toValue: PULSE_SCALE_MAX,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseScale, {
+            toValue: PULSE_SCALE_MIN,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(pulseOpacity, {
+            toValue: PULSE_OPACITY_MIN,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+          Animated.timing(pulseOpacity, {
+            toValue: PULSE_OPACITY_MAX,
+            duration: PULSE_HALF_DURATION_MS,
+            ...PULSE_NATIVE_DRIVER,
+          }),
+        ]),
+      ])
+    );
+    loop.start();
+    return () => {
+      loop.stop();
+      loop.reset();
+    };
+  }, [pulseTarget, pulseScale, pulseOpacity]);
 
-   useEffect(() => {
-    const text = `touchLocation, guess, target \n\n
-    Those are datas to help me debug your phone (location, guess, target): \n
-    touchLocation:
-    if not like {}, problem
-    is: ${JSON.stringify(touchLocation)} \n 
-    guess: is ${guess} \n
-    if undefinied/null, problem
-    target: like {}, if not,problem 
-    is: ${JSON.stringify(target)} \n
-    Other bug ? 
-    add it here: \n`
-    setDebugText(text)
-    setShowDebugModal();
-  }, [touchLocation]);
-
-  useLayoutEffect(() => {
-    Alert.alert("Debug", `Tap on the screen, if the little target cannot be seen, copy the text from the modal (pop up) \n\n Button "Copy \n\n
-    mail: alexgarnier78310@protonmail.com`);
-  }, []); */
-
-  /* mode debug */
+  const pulseStyle = pulseTarget
+    ? { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }
+    : null;
 
   return (
     <View style={styles.container} >
@@ -55,25 +82,28 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
           >
 {/* target not showing for guessscreen */}
             { guess ? (
-              <MoveableTextBox description={description} screenHeight={imageDimensionStyle.height} screenWidth={imageDimensionStyle.width}/>
+              <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} defaultOpen={defaultOpen} onClose={onDescriptionClosed}/>
             ) : null }
-
-            {/* {hiddenLocation && (
-              <IconButton icon={"close-circle-outline"} color={"green"} size={target.targetSize} style={hiddenTargetStyle}/>
-            )} */}
-
-            {}
           </ImageBackground>
 
         </Pressable>
 
 {/* no cross, when guess, if null  */}
-        {touchLocation && target?.targetStyle && (
-          <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} style={target.targetStyle} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
+        {touchLocation && target?.dragStyle && (
+          <Animated.View
+            {...(targetPanHandlers || {})}
+            style={[target.dragStyle, styles.dragRing, pulseStyle]}
+            testID={guess ? 'game.picture.guess-target-wrap' : 'game.picture.hide-target-wrap'}
+          >
+            <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
+            {guess && speedRingActive && target?.dragSize > 0 && (
+              <View style={[StyleSheet.absoluteFill, styles.speedRingWrap]} pointerEvents="none">
+                <SpeedRing size={target.dragSize} durationMs={speedDurationMs} active={speedRingActive} />
+              </View>
+            )}
+          </Animated.View>
         )}
       </View>
-
-
 
       {
         showModal &&
@@ -86,15 +116,6 @@ export default function ShowPicture({ /* hiddenLocation,  showDebugModal, setSho
             {"Do you want to validate this ?"}
           </CenteredModal>
       }
-{/*  */}
-{/*         { showDebugModal ?
-        <ClipboardModal 
-          onPress={setShowDebugModal} 
-          onCancel={setShowDebugModal} 
-          isModalVisible={showDebugModal} 
-          debugText={debugText}>
-        </ClipboardModal> : null} */}
-{/*  */}
     </View>
   );
 };
@@ -118,52 +139,13 @@ const styles = StyleSheet.create({
     width: '100%',
     height: '100%',
   },
-  locationText: {
-    position: 'absolute',
-    bottom: 90,
-    left: 50,
-    backgroundColor: 'white',
-    padding: 10,
-    borderRadius: 5,
-    fontSize: 16,
+  dragRing: {
+    borderWidth: 2,
+    borderColor: GlobalStyle.color.primaryColor,
+    backgroundColor: 'transparent',
   },
-  target: {
-    borderColor: 'white',
+  speedRingWrap: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  descriptionViewStyle: {
-    justifyContent: "space",
-    alignItems: "center",
-    overflow: "scroll",
-  },
-  descriptionTitleStyle: {
-    fontWeight: "bold",
-  },
-  descriptionTextStyle: {
-    padding: 10
-  }
 });
-
-
-  /*  */
-/*
-  function handletargetSize(screenWidth, screenHeight) {
-    const targetSize = Math.min(screenWidth, screenHeight) * 0.1;
-    return targetSize;
-  };
-
-  const targetSize = handletargetSize(screenWidth, screenHeight);
-
-  const hiddenTargetStyle = {
-    position: 'absolute',
-    width: targetSize,
-    height: targetSize,
-    borderWidth: 1,
-    borderStyle: "solid",
-    borderColor: "white",
-    borderRadius: 0,
-
-    left: hiddenLocation ? (hiddenLocation.x * screenWidth - targetSize / 2) : null,
-    top: hiddenLocation ? (hiddenLocation.y * screenHeight - targetSize / 2): null,
-  }; */
-
-  /*  */

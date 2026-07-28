@@ -23,7 +23,7 @@ import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 
-const NON_UPLOAD_CATEGORY_KEYS = new Set(['all', 'other']);
+const NON_UPLOAD_CATEGORY_KEYS = new Set(['all']);
 const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
 
 function isUploadableCategoryKey(categoryKey) {
@@ -43,7 +43,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const [categories, setCategories] = useState([]);
   const [categoriesError, setCategoriesError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState(null);
-  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions();
+  const [permissionResponse, requestPermission] = MediaLibrary.usePermissions({
+    granularPermissions: ['photo'],
+  });
   const [isLoading, setIsLoading] = useState(false);
   const isSubmittingRef = useRef(false);
   const languageTouchedRef = useRef(false);
@@ -146,7 +148,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       currentPermission = await requestPermission();
     };
     if (!currentPermission?.canAskAgain || currentPermission?.status === "denied") {
-      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos / audio is denied');
+      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos is denied');
       Linking.openSettings();
     } else {
       if (currentPermission?.status === "granted") {

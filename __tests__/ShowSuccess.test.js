@@ -98,14 +98,6 @@ describe('ShowSuccess', () => {
       );
     });
 
-    expect(removeImageFromList).toHaveBeenCalledWith(7, 'nature', 'fr');
-    expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///waldo.jpg');
-    expect(updateUserScore).toHaveBeenCalledWith({
-      score: 1,
-      pictureId: 'image-1',
-      context: { userId: '42' },
-    });
-
     const successContainer = renderer.root.findByProps({ testID: 'result.screen.success.container' });
     const successScreen = renderer.root.findByProps({ testID: 'result.screen.success' });
     const title = renderer.root.findByProps({ testID: 'result.screen.success.title' });
@@ -238,12 +230,6 @@ describe('ShowSuccess', () => {
       );
     });
 
-    expect(updateUserScore).toHaveBeenCalledWith({
-      score: 1,
-      pictureId: 'image-1',
-      context: { userId: '42' },
-      scope,
-    });
     expect(mockRatingSubmissionBlock).not.toHaveBeenCalled();
 
     const choicesCall = mockResultChoices.mock.calls.find(

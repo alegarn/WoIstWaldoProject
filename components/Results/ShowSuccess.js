@@ -1,11 +1,9 @@
-import { useState, useEffect, useContext } from 'react';
+import { useState, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 
 import ResultChoices from './ResultChoices';
 import RatingSubmissionBlock from './RatingSubmissionBlock';
 import ScoreCelebration from './ScoreCelebration';
-import { deleteImageFromStorage, removeImageFromList } from '../../utils/storageDatum';
-import { updateUserScore } from '../../utils/scoreRequests';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
@@ -20,34 +18,12 @@ export default function ShowSuccess({ navigation, route }) {
   const pictureId = route.params?.pictureId;
 
   const listId = route.params?.listId;
-  const imageFilePath = route.params?.imageFile;
   const isTutorial = route.params?.isTutorial;
-  const categoryKey = route.params?.category?.key;
   const language = route.params?.language;
 
   const context = useContext(AuthContext);
 
   /* Functions ________________________________________________ */
-
-  // used to point the users earning points
-  const handleScore = async () => {
-    const payload = {
-      score: 1,
-      pictureId: pictureId,
-      context: context,
-    };
-
-    if (isPrivateScope) {
-      payload.scope = scope;
-    }
-
-    const response = await updateUserScore(payload);
-  };
-
-  async function handleRemoveImageFromList(listId, imageFilePath) {
-    await removeImageFromList(listId, categoryKey, language);
-    await deleteImageFromStorage(imageFilePath);
-  };
 
   const handleNextCard = () => navigateToNextGuess(navigation, {
     category: route.params?.category,
@@ -56,13 +32,6 @@ export default function ShowSuccess({ navigation, route }) {
     isTutorial,
     scope: isPrivateScope ? scope : undefined,
   });
-
-/* useEffect________________________________________________ */
-
-  useEffect(() => {
-    handleRemoveImageFromList(listId, imageFilePath);
-    handleScore();
-  }, [categoryKey, imageFilePath, language, listId, pictureId]);
 
   return (
     <View style={styles.container} testID="result.screen.success.container">

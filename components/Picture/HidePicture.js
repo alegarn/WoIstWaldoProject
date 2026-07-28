@@ -1,7 +1,7 @@
-import  { useState, useLayoutEffect, useEffect } from 'react';
+import  { useState, useLayoutEffect } from 'react';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress, determineImageCorners } from '../../utils/targetLocation';
+import { handlePicturePress } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
@@ -33,24 +33,10 @@ export default function HidePicture({
   const { maxImageHeight, maxImageWidth } = setImageDimensions({ imageHeight, imageWidth, screenHeight, screenWidth, isPortrait });
   const imageDimensionStyle = { width: maxImageWidth, height: maxImageHeight };
 
-
-/* debug */
-const [showDebugModal, setShowDebugModal] = useState(false);
-
-const toggleDebugModal = () => {
-  setShowDebugModal(!showDebugModal);
-};
-/*  */
-
-
   useLayoutEffect(() => {
     /* from "../../utils/orientation" */
     handleImageOrientation({ imageIsPortrait });
   }, [navigation]);
-
-  useEffect(() => {
-    showUpdatedLocation();
-  }, [target]);
 
   const handleFilterClick = () => {
     setShowFilter(false);
@@ -64,9 +50,7 @@ const toggleDebugModal = () => {
           imageDimensionStyle,
           relativeLocation: getE2EHideLocation(),
         })
-      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle/* , topLeft */});
-
-    //const { topLeft } = determineImageCorners({ maxImageHeight, maxImageWidth, screenHeight, screenWidth });
+      : handlePicturePress({event, screenWidth, screenHeight, imageDimensionStyle});
 
     /* from '../../utils/targetLocation' */
     let { location, target } = selection;
@@ -76,7 +60,7 @@ const toggleDebugModal = () => {
     };
   };
 
-  const showUpdatedLocation = () => {
+  const renderPicture = () => {
     return (
       <ShowPicture
         uri={uri}
@@ -92,9 +76,6 @@ const toggleDebugModal = () => {
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
-        /* debug */
-        showDebugModal={showDebugModal}
-        setShowDebugModal={toggleDebugModal}
         />
     );
   }
@@ -157,7 +138,7 @@ const toggleDebugModal = () => {
 
   if (!showFilter) {
     return(
-      showUpdatedLocation()
+      renderPicture()
     );
   };
 };

@@ -3,7 +3,7 @@
     "name": "WoIstWaldoProject",
     "slug": "WoIstWaldoProject",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/logo.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
@@ -27,9 +27,6 @@
         "backgroundColor": "#ffffff"
       },
       "permissions": [
-        "android.permission.RECORD_AUDIO",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE",
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "package": "com.alegarn.WoIstWaldoProject"
@@ -110,12 +107,26 @@
           "statusBarHidden": true
         }
       ],
-      "@react-native-vector-icons/ionicons"
+      "@react-native-vector-icons/ionicons",
+      [
+        "expo-updates",
+        {
+          "enabled": true,
+          "checkAutomatically": "ON_LOAD",
+          "fallbackToCacheTimeout": 0
+        }
+      ]
     ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
     "extra": {
       "eas": {
         "projectId": "bae9f76d-70c6-43e3-a288-094a4b9daf9a"
       }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bae9f76d-70c6-43e3-a288-094a4b9daf9a"
     }
   }
 }

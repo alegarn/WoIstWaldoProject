@@ -1,15 +1,20 @@
 import { useContext, useEffect, useRef, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 
 import { CommonActions, DefaultTheme, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { NavigationBar } from 'expo-navigation-bar';
 //import * as SecureStore from 'expo-secure-store';
 import * as SystemUI from 'expo-system-ui';
+import { MobileAds } from 'react-native-google-mobile-ads';
 
 import { GlobalStyle } from './constants/theme';
-import IconButton from './components/UI/IconButton';
+import _IconButton from './components/UI/IconButton';
+// IconButton.js is unmigrated; its destructured-props-with-defaults are inferred
+// as required by TS. Permissive cast mirrors the GuessScreen convention below.
+// Runtime behavior unchanged; no JSX edits, no edit to IconButton.js.
+const IconButton = _IconButton as React.ComponentType<any>;
 //import LoadingOverlay from './components/UI/LoadingOverlay';
 
 // Auth screens
@@ -24,7 +29,7 @@ import HideScreen from './screens/HideScreens/HideScreen';
 import GuessPathScreen from './screens/GuessScreens/GuessPathScreen';
 import GuessFeedScreen from './screens/GuessScreens/GuessFeedScreen';
 import GuessScreen from './screens/GuessScreens/GuessScreen';
-import AdScreen from './screens/GuessScreens/AdScreen';
+import { AdMobInterstitialBridge } from './services/ads/AdMobInterstitialBridge';
 import ResultScreen from './screens/GuessScreens/ResultScreen';
 
 import LanguageOnboardingScreen from './screens/LanguageOnboardingScreen';
@@ -52,7 +57,7 @@ import LoadingOverlay from './components/UI/LoadingOverlay';
 
 import 'expo-dev-client';
 
-const MockPreviewScreen = __DEV__ ? require('./screens/MockPreviewScreen').default : null;
+const MockPreviewScreen: React.ComponentType | null = __DEV__ ? require('./screens/MockPreviewScreen').default : null;
 
 // AdMob
 /* import { useInterstitialAd, TestIds } from 'react-native-google-mobile-ads';
@@ -68,6 +73,17 @@ import {
 } from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
 import { getOnboardingCompleted } from './utils/storageDatum';
+import { flush, getPending } from './utils/sessionScoreStore';
+
+// File-local structural view of the auth context. No central ParamList exists;
+// .js screens/contexts stay loosely typed via allowJs, so this captures only
+// the fields App.tsx itself reads.
+type AuthContextValue = {
+  IsAuthenticated: boolean;
+  logout: () => void | Promise<void>;
+  restoreSession: (session: any) => void | Promise<void>;
+  premiumTier?: number;
+};
 
 
 const Stack = createNativeStackNavigator();
@@ -94,7 +110,7 @@ function AuthStack() {
   );
 };
 
-function LanguageOnboardingStack({ onDone }) {
+function LanguageOnboardingStack({ onDone }: { onDone: () => void }) {
   return (
     <Stack.Navigator
       screenOptions={{
@@ -110,7 +126,7 @@ function LanguageOnboardingStack({ onDone }) {
 }
 
 
-function AuthenticatedStack({ authContext }) {
+function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) {
   /* Start loading ads */
 /*   const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
@@ -236,7 +252,7 @@ function AuthenticatedStack({ authContext }) {
           })} />
         <Stack.Screen
           name="GuessFeedScreen"
-          component={GuessFeedScreen}
+          component={GuessFeedScreen as React.ComponentType<any>}
           options={({ navigation }) => ({
             presentation: "modal",
             headerShown: true,
@@ -253,14 +269,10 @@ function AuthenticatedStack({ authContext }) {
           })} />
         <Stack.Screen
           name="GuessScreen"
-          component={GuessScreen}
-          options={{
-            presentation: "modal",
-            headerShown: false,
-          }} />
-        <Stack.Screen
-          name="AdScreen"
-          component={AdScreen}
+          // Narrow cast: GuessScreen.tsx declares GuessScreenProps which is
+          // structurally narrower than this untyped Stack's generic
+          // ScreenComponent. Behavior unchanged.
+          component={GuessScreen as React.ComponentType<any>}
           options={{
             presentation: "modal",
             headerShown: false,
@@ -343,7 +355,7 @@ function AuthenticatedStack({ authContext }) {
             presentation: "modal",
             headerShown: true,
           }} />
-        {__DEV__ && process.env.EXPO_PUBLIC_E2E_MODE !== 'true' && (
+        {__DEV__ && process.env.EXPO_PUBLIC_E2E_MODE !== 'true' && MockPreviewScreen && (
           <Stack.Screen
             name="MockPreview"
             component={MockPreviewScreen}
@@ -355,9 +367,9 @@ function AuthenticatedStack({ authContext }) {
 };
 
 
-function Navigation({ authContext }) {
+function Navigation({ authContext }: { authContext: AuthContextValue }) {
   const navigationRef = useNavigationContainerRef();
-  const e2eHomeResetTimerRef = useRef(null);
+  const e2eHomeResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOnboardingResolved, setIsOnboardingResolved] = useState(!authContext.IsAuthenticated);
   const [showLanguageOnboarding, setShowLanguageOnboarding] = useState(false);
 
@@ -472,18 +484,37 @@ function Navigation({ authContext }) {
   }, [authContext.IsAuthenticated]);
 
   useEffect(() => {
-    if (!isE2EMode() || !authContext.IsAuthenticated) {
+    if (!authContext.IsAuthenticated) {
       return undefined;
     }
 
+    if (isE2EMode()) {
+      const subscription = AppState.addEventListener('change', (nextState) => {
+        if (nextState === 'active') {
+          scheduleHomeResetForE2E();
+        }
+      });
+
+      return () => subscription.remove();
+    }
+
     const subscription = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background') {
+        void flush({ authContext });
+        return;
+      }
+
       if (nextState === 'active') {
-        scheduleHomeResetForE2E();
+        getPending().then((pending) => {
+          if (pending && pending.length > 0) {
+            void flush({ authContext });
+          }
+        });
       }
     });
 
     return () => subscription.remove();
-  }, [authContext.IsAuthenticated, showLanguageOnboarding]);
+  }, [authContext.IsAuthenticated, authContext, showLanguageOnboarding]);
 
   if (!isOnboardingResolved) {
     return <LoadingOverlay message="Loading preferences..." />;
@@ -569,7 +600,7 @@ export function Root() {
         if (status === 401 || status === 403) {
           await authContext.logout();
         }
-      } catch (error) {
+      } catch (error: any) {
         const status = error?.response?.status ?? error?.status;
 
         if (!cancelled && (status === 401 || status === 403)) {
@@ -595,8 +626,17 @@ export default function App() {
     SystemUI.setBackgroundColorAsync(GlobalStyle.color.primaryColor900).catch(() => undefined);
   }, []);
 
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    MobileAds().initialize().catch(() => {
+      // Initialization failure is non-fatal; ads will retry on next load().
+    });
+  }, []);
+
   return (
     <AuthContextProvider>
+      {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
+      <AdMobInterstitialBridge />
       <NavigationBar hidden />
       <Root />
     </AuthContextProvider>

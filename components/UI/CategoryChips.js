@@ -1,5 +1,6 @@
 import { Pressable, Text, View, Image, StyleSheet } from 'react-native';
 
+import { getCategoryAssetSource } from '../../utils/categoryAssets';
 import { GlobalStyle } from '../../constants/theme';
 
 const OTHER_CATEGORY = {
@@ -20,8 +21,9 @@ export default function CategoryChips({ selected, onSelect, categories = [], tes
       {visibleCategories.map((category) => {
         const chipValue = category.key === OTHER_CATEGORY.key ? null : category.key;
         const isSelected = category.key === OTHER_CATEGORY.key ? selected == null : selected === category.key;
-        const hasThumbnail = Boolean(category.thumbnailUrl);
-        // TODO: backend serves placeholder thumbnail_url (seeds set nil); fallback renders until real assets are uploaded.
+        const thumbnailSource = typeof category?.thumbnailUrl === 'string' && category.thumbnailUrl.length > 0
+          ? { uri: category.thumbnailUrl }
+          : getCategoryAssetSource(category);
         return (
           <Pressable
             key={category.key}
@@ -33,8 +35,8 @@ export default function CategoryChips({ selected, onSelect, categories = [], tes
               isSelected && styles.chipSelected,
               isSelected && isOverlay && styles.chipSelectedOverlay,
             ]}>
-            {hasThumbnail ? (
-              <Image source={{ uri: category.thumbnailUrl }} style={styles.thumbnail} />
+            {thumbnailSource ? (
+              <Image source={thumbnailSource} style={styles.thumbnail} />
             ) : (
               <View
                 testID={`${testIDPrefix}.chip.${category.key}.fallback`}

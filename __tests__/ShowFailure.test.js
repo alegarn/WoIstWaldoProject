@@ -5,6 +5,21 @@ jest.mock('../utils/guessNavigation', () => ({
   navigateToNextGuess: jest.fn(),
 }));
 
+jest.mock('../utils/sessionScoreStore', () => ({
+  flush: jest.fn().mockResolvedValue({ ok: true, sent: 0, retained: 0 }),
+}));
+
+jest.mock('../store/auth-context', () => {
+  const React = require('react');
+  const authContext = { token: 'Bearer token-1', userId: 'user-1', scoreId: 'score-1' };
+
+  return {
+    __esModule: true,
+    AuthContext: React.createContext(authContext),
+    useAuthContext: () => authContext,
+  };
+});
+
 jest.mock('../components/Results/ResultChoices', () => {
   return function MockResultChoices(props) {
     mockResultChoices(props);
@@ -24,6 +39,7 @@ import { act, create } from 'react-test-renderer';
 
 import ShowFailure from '../components/Results/ShowFailure';
 import { navigateToNextGuess as mockedNavigateToNextGuess } from '../utils/guessNavigation';
+import { flush as mockedFlush } from '../utils/sessionScoreStore';
 
 function buildRoute(overrides = {}) {
   return {
@@ -58,6 +74,23 @@ describe('ShowFailure', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockedNavigateToNextGuess.mockReset();
+    mockedFlush.mockReset();
+    mockedFlush.mockResolvedValue({ ok: true, sent: 0, retained: 0 });
+  });
+
+  it('flushes the buffered score streak on mount because failure ends the session', async () => {
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute();
+
+    await renderShowFailure({ navigation, route });
+
+    expect(mockedFlush).toHaveBeenCalledTimes(1);
+    expect(mockedFlush).toHaveBeenCalledWith({
+      authContext: expect.objectContaining({
+        token: 'Bearer token-1',
+        userId: 'user-1',
+      }),
+    });
   });
 
   it('shows the failure result state immediately with retry choices (no pre-animation)', async () => {

@@ -10,22 +10,29 @@ jest.mock('expo-system-ui', () => ({
   setBackgroundColorAsync: jest.fn(() => Promise.resolve()),
 }));
 
-jest.mock('@react-navigation/native', () => ({
-  CommonActions: {
-    reset: jest.fn((payload) => ({ type: 'RESET', payload })),
-  },
-  DefaultTheme: {
-    colors: {
-      background: '#fff',
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+
+  return {
+    CommonActions: {
+      reset: jest.fn((payload) => ({ type: 'RESET', payload })),
     },
-  },
-  NavigationContainer: ({ children }) => children,
-  useNavigationContainerRef: jest.fn(() => ({
-    isReady: jest.fn(() => false),
-    getCurrentRoute: jest.fn(() => ({ name: 'HomeScreen' })),
-    dispatch: jest.fn(),
-  })),
-}));
+    DefaultTheme: {
+      colors: {
+        background: '#fff',
+      },
+    },
+    NavigationContainer: ({ children }) => children,
+    useNavigationContainerRef: jest.fn(() => ({
+      isReady: jest.fn(() => false),
+      getCurrentRoute: jest.fn(() => ({ name: 'HomeScreen' })),
+      dispatch: jest.fn(),
+    })),
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
 
 jest.mock('@react-navigation/native-stack', () => {
   const React = require('react');
@@ -79,7 +86,6 @@ jest.mock('../screens/HideScreens/HidingPathScreen', () => 'HidingPathScreen');
 jest.mock('../screens/HideScreens/HideScreen', () => 'HideScreen');
 jest.mock('../screens/GuessScreens/GuessPathScreen', () => 'GuessPathScreen');
 jest.mock('../screens/GuessScreens/GuessScreen', () => 'GuessScreen');
-jest.mock('../screens/GuessScreens/AdScreen', () => 'AdScreen');
 jest.mock('../screens/GuessScreens/ResultScreen', () => 'ResultScreen');
 jest.mock('../screens/SetInstructionScreen', () => 'SetInstructionScreen');
 jest.mock('../screens/RankingScreen', () => 'RankingScreen');
@@ -93,6 +99,7 @@ jest.mock('../store/auth-context', () => {
     __esModule: true,
     AuthContext,
     default: ({ children }) => children,
+    useAuthContext: () => React.useContext(AuthContext),
   };
 });
 
@@ -108,6 +115,10 @@ jest.mock('../utils/storageDatum', () => ({
 
 jest.mock('../hooks/useGroupsHub', () => ({
   useGroupsHub: () => ({ data: null, isLoading: false, error: null, refresh: jest.fn() }),
+}));
+
+jest.mock('../hooks/useFlushOnLeave', () => ({
+  useFlushOnLeave: () => {},
 }));
 
 import React from 'react';
@@ -192,7 +203,7 @@ describe('GuessFeedScreen', () => {
   }
 
   it('prefers explicit route language over stored session filter on mount', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: 'de' });
     const renderer = await renderScreen(navigation, route);
 
@@ -215,7 +226,7 @@ describe('GuessFeedScreen', () => {
   });
 
   it('falls back to stored session filter when route does not provide language', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
     const deferredLanguage = createDeferred();
 
@@ -242,7 +253,7 @@ describe('GuessFeedScreen', () => {
   });
 
   it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ isTutorial: true });
 
     const renderer = await renderScreen(navigation, route);
@@ -263,7 +274,7 @@ describe('GuessFeedScreen', () => {
       });
     });
 
-    expect(navigation.replace).toHaveBeenCalledWith('GuessScreen', {
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessScreen', {
       category: { id: 'cat-1', key: 'nature' },
       language: 'fr',
       isTutorial: true,
@@ -277,7 +288,7 @@ describe('GuessFeedScreen', () => {
   });
 
   it('continues to host SwipeImage in e2e mode so the saved-card stack renders', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
 
     const renderer = await renderScreen(navigation, route);
@@ -292,7 +303,7 @@ describe('GuessFeedScreen', () => {
   });
 
   it('opens the language filter modal when SwipeImage requests it', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
     const renderer = await renderScreen(navigation, route);
 
@@ -310,7 +321,7 @@ describe('GuessFeedScreen', () => {
   });
 
   it('persists the selected language and rerenders SwipeImage with the updated filter', async () => {
-    const navigation = { replace: jest.fn(), goBack: jest.fn() };
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
     const renderer = await renderScreen(navigation, route);
 

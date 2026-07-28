@@ -138,6 +138,52 @@ describe('imagesRequests utilities', () => {
       title: 'There is an authentication error.',
       message: 'Please reconnect',
     });
+    expect(response.reason).toBeUndefined();
+  });
+
+  it('classifies a 5xx image batch response as a server error', async () => {
+    axios.get.mockRejectedValueOnce({
+      response: { status: 503 },
+      request: { status: 503 },
+      message: 'Boom',
+    });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual({
+      isError: true,
+      reason: 'server',
+      title: "There is an error downloading user's images.",
+      message: 'Please retry later...',
+    });
+  });
+
+  it('classifies a network failure as a network error', async () => {
+    axios.get.mockRejectedValueOnce({ message: 'Network Error' });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual({
+      isError: true,
+      reason: 'network',
+      title: "There is an error downloading user's images.",
+      message: 'Please retry later...',
+    });
+  });
+
+  it('tags a successful empty batch with the empty reason', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [],
+      },
+    });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response.isError).toBe(false);
+    expect(response.reason).toBe('empty');
+    expect(response.images).toEqual([]);
+    expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
   it('returns an empty list without trying to download files when the backend batch is empty', async () => {
@@ -149,8 +195,13 @@ describe('imagesRequests utilities', () => {
 
     const response = await getImages(null, { token: 'Bearer token' });
 
-    expect(response).toEqual({ isError: false, images: [] });
+    expect(response).toEqual({ isError: false, reason: 'empty', images: [] });
     expect(axios.get).toHaveBeenCalledTimes(1);
+    // Regression: an empty batch must NOT persist the exhausted sentinel.
+    // Saving it bricked the category forever (no new uploads ever surfaced).
+    // The caller decides exhaustion via the empty images array; the cursor
+    // stays on the last successfully fetched image so a later retry can page.
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
   });
 
   it('downloads backend-hosted images with auth headers', async () => {
@@ -185,6 +236,7 @@ describe('imagesRequests utilities', () => {
           Authorization: 'Bearer token',
           HTTP_AUTHORIZATION: 'Bearer token',
         },
+        timeout: 15000,
       }
     );
     expect(File).toHaveBeenCalledWith(
@@ -250,7 +302,7 @@ describe('imagesRequests utilities', () => {
     expect(axios.post).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/next_image_batch',
       { image: { name: 'broken-img' } },
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
     expect(response).toEqual({
       isError: false,
@@ -274,6 +326,7 @@ describe('imagesRequests utilities', () => {
       {
         headers: { Authorization: 'Bearer token' },
         params: { category_id: 'X', language: 'fr' },
+        timeout: 15000,
       }
     );
   });
@@ -286,7 +339,7 @@ describe('imagesRequests utilities', () => {
     expect(axios.post).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/next_image_batch',
       { image: { name: 'first-img', category_id: 'X', language: 'fr' } },
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
   });
 
@@ -328,7 +381,7 @@ describe('imagesRequests utilities', () => {
 
     expect(axios.get).toHaveBeenCalledWith(
       'https://backend.example/api/v1/users/42/get_image_batch',
-      { headers: { Authorization: 'Bearer token' } }
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
   });
 

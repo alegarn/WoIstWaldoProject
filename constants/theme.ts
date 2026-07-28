@@ -1,3 +1,13 @@
+export const adPanel = {
+  padding: 24,
+  titleFontSize: 20,
+  titleFontWeight: '600',
+  titleMarginBottom: 12,
+  bodyFontSize: 16,
+  bodyColor: '#555',
+  bodyMarginBottom: 24,
+} as const;
+
 export const GlobalStyle = {
   color: {
     primaryColor: "#6528F7",
@@ -46,6 +56,17 @@ export const GlobalStyle = {
     warning: '#FFCC00',
     info: '#17a2b8',
     win: '#FFD700',
+    danger: '#FF3B30',
+    onSurface: '#FFFFFF',
+    // streak hex values mirror sibling tokens above (DIP fallback: GlobalStyle is in TDZ while its initializer evaluates).
+    streak: {
+      neutral: '#7895CB',
+      blue:    '#17a2b8',
+      orange:  '#f37c13',
+      red:     '#FF3B30',
+      purple:  '#6528F7',
+      white:   '#FFFFFF',
+    },
   },
 };
 
