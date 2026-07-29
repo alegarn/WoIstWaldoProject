@@ -1,5 +1,7 @@
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 
 jest.mock('axios', () => ({
@@ -23,6 +25,7 @@ import {
   hasCompleteAuthState,
   isPersistedBearerToken,
   login,
+  migrateLegacyPremiumKeys,
   updateUser,
 } from '../utils/auth';
 
@@ -159,9 +162,9 @@ describe('auth utilities', () => {
         guessPathDone: true,
         hidePathDone: true,
       },
-      isPremium: null,
-      premiumTier: null,
-      premiumExpiresAt: null,
+      isPaid: null,
+      paidTier: null,
+      paidExpiresAt: null,
       isGroupOwner: null,
       activeGroupId: null,
       isPrivateMode: null,
@@ -171,9 +174,9 @@ describe('auth utilities', () => {
   it('rehydrates the persisted entitlement and group fields as parsed values', async () => {
     mockStoredValues({
       ...storedSession,
-      isPremium: JSON.stringify(true),
-      premiumTier: JSON.stringify(2),
-      premiumExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
+      isPaid: JSON.stringify(true),
+      paidTier: JSON.stringify(2),
+      paidExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
       isGroupOwner: JSON.stringify(true),
       activeGroupId: JSON.stringify(77),
       isPrivateMode: JSON.stringify(false),
@@ -181,9 +184,9 @@ describe('auth utilities', () => {
 
     const authState = await getStoredAuthState();
 
-    expect(authState.isPremium).toBe(true);
-    expect(authState.premiumTier).toBe(2);
-    expect(authState.premiumExpiresAt).toBe('2026-12-31T23:59:59Z');
+    expect(authState.isPaid).toBe(true);
+    expect(authState.paidTier).toBe(2);
+    expect(authState.paidExpiresAt).toBe('2026-12-31T23:59:59Z');
     expect(authState.isGroupOwner).toBe(true);
     expect(authState.activeGroupId).toBe(77);
     expect(authState.isPrivateMode).toBe(false);
@@ -326,6 +329,56 @@ describe('auth utilities', () => {
     expect(response).toEqual({
       status: 401,
       data: expect.objectContaining({ message: 'Unauthorized' }),
+    });
+  });
+
+  describe('migrateLegacyPremiumKeys', () => {
+    function withMemoryStore(store) {
+      SecureStore.getItemAsync.mockImplementation(async (key) => store[key] ?? null);
+      SecureStore.setItemAsync.mockImplementation(async (key, value) => {
+        store[key] = value;
+      });
+      SecureStore.deleteItemAsync.mockImplementation(async (key) => {
+        delete store[key];
+      });
+    }
+
+    it('moves old persisted premium keys to the new names and removes the old keys', async () => {
+      const store = {
+        isPremium: JSON.stringify(true),
+        premiumTier: JSON.stringify(2),
+        premiumExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
+      };
+      withMemoryStore(store);
+
+      await migrateLegacyPremiumKeys();
+
+      expect(store.isPaid).toBe(JSON.stringify(true));
+      expect(store.paidTier).toBe(JSON.stringify(2));
+      expect(store.paidExpiresAt).toBe(JSON.stringify('2026-12-31T23:59:59Z'));
+      expect(store.isPremium).toBeUndefined();
+      expect(store.premiumTier).toBeUndefined();
+      expect(store.premiumExpiresAt).toBeUndefined();
+    });
+
+    it('is idempotent: a second run is a no-op when only the new keys exist', async () => {
+      const store = {
+        isPaid: JSON.stringify(true),
+        paidTier: JSON.stringify(2),
+        paidExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
+      };
+      withMemoryStore(store);
+
+      SecureStore.setItemAsync.mockClear();
+      SecureStore.deleteItemAsync.mockClear();
+
+      await migrateLegacyPremiumKeys();
+
+      expect(store.isPaid).toBe(JSON.stringify(true));
+      expect(store.paidTier).toBe(JSON.stringify(2));
+      expect(store.paidExpiresAt).toBe(JSON.stringify('2026-12-31T23:59:59Z'));
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
+      expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
     });
   });
 });

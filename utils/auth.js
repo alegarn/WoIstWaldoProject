@@ -2,8 +2,30 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const AUTH_STORAGE_KEYS = ['token', 'userId'];
-const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished', 'isPremium', 'premiumTier', 'premiumExpiresAt', 'isGroupOwner', 'activeGroupId', 'isPrivateMode'];
+const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished', 'isPaid', 'paidTier', 'paidExpiresAt', 'isGroupOwner', 'activeGroupId', 'isPrivateMode'];
 const BEARER_TOKEN_REGEX = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
+
+const LEGACY_PREMIUM_KEY_MIGRATIONS = [
+  { oldKey: 'isPremium', newKey: 'isPaid' },
+  { oldKey: 'premiumTier', newKey: 'paidTier' },
+  { oldKey: 'premiumExpiresAt', newKey: 'paidExpiresAt' },
+];
+
+export async function migrateLegacyPremiumKeys() {
+  for (const { oldKey, newKey } of LEGACY_PREMIUM_KEY_MIGRATIONS) {
+    const oldValue = await SecureStore.getItemAsync(oldKey);
+    if (oldValue === null || oldValue === undefined) {
+      continue;
+    }
+
+    const newValue = await SecureStore.getItemAsync(newKey);
+    if (newValue === null || newValue === undefined) {
+      await SecureStore.setItemAsync(newKey, oldValue);
+    }
+
+    await SecureStore.deleteItemAsync(oldKey);
+  }
+}
 
 
 function isNullOrUndefined(value) {
@@ -49,16 +71,18 @@ export async function getStoredAuthState() {
   return {
     ...storedState,
     isTutorialFinished: parseStoredJsonValue(storedState.isTutorialFinished),
-    isPremium: parseStoredJsonValue(storedState.isPremium),
-    premiumTier: parseStoredJsonValue(storedState.premiumTier),
-    premiumExpiresAt: parseStoredJsonValue(storedState.premiumExpiresAt),
+    isPaid: parseStoredJsonValue(storedState.isPaid),
+    paidTier: parseStoredJsonValue(storedState.paidTier),
+    paidExpiresAt: parseStoredJsonValue(storedState.paidExpiresAt),
     isGroupOwner: parseStoredJsonValue(storedState.isGroupOwner),
     activeGroupId: parseStoredJsonValue(storedState.activeGroupId),
     isPrivateMode: parseStoredJsonValue(storedState.isPrivateMode),
   };
-};
+}
 
 export async function bootstrapStoredAuthSession(restoreSession) {
+  await migrateLegacyPremiumKeys();
+
   const storedAuthState = await getStoredAuthState();
 
   if (!hasCompleteAuthState(storedAuthState) || !isPersistedBearerToken(storedAuthState.token)) {

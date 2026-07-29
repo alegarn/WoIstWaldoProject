@@ -41,12 +41,43 @@ import {
   deleteCategoryThumbnailFile,
 } from '../../services/groups/groupCategoryThumbnails';
 import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
+import { fetchGroups } from '../../services/groups/groupApi';
 
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 export { RECENT_ALL_CATEGORY };
 
 const DEFAULT_LANGUAGE = 'en';
 const NAVIGATION_ANY_LANGUAGE = 'any';
+
+function buildActiveGroupSnapshot(groupsHubData, groupId) {
+  const groups = [
+    ...(groupsHubData?.owned ?? []),
+    ...(groupsHubData?.joined ?? []),
+  ];
+  const activeGroup = groups.find((group) => group?.id === groupId);
+
+  if (!activeGroup) {
+    return null;
+  }
+
+  return {
+    isOwnedByViewer: activeGroup.role === 'owner',
+    memberCount: Number(activeGroup.memberCount ?? activeGroup.member_count ?? 0),
+  };
+}
+
+async function resolveActiveGroupSnapshot({ activeGroup, context, scope }) {
+  if (activeGroup || scope?.kind !== 'private') {
+    return activeGroup;
+  }
+
+  const response = await fetchGroups(context);
+  if (response?.status !== 200) {
+    return null;
+  }
+
+  return buildActiveGroupSnapshot(response.data, scope.groupId);
+}
 
 export default function GuessPathScreen({ navigation, route }) {
   const context = useContext(AuthContext);
@@ -68,9 +99,8 @@ export default function GuessPathScreen({ navigation, route }) {
   const scope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
   const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope });
-  const isOwner = isPrivateScope && (groupsHubData?.owned ?? []).some(
-    (g) => g.id === scope.groupId
-  );
+  const activeGroup = isPrivateScope ? buildActiveGroupSnapshot(groupsHubData, scope.groupId) : null;
+  const isOwner = activeGroup?.isOwnedByViewer === true;
   const { group, theme } = useScopedPrivateGroupTheme(routeScope);
 
   function normalizePrivateCategory(category, resolvedThumbnailUrl = null) {
@@ -153,14 +183,20 @@ export default function GuessPathScreen({ navigation, route }) {
   const resolvedLanguage = sessionLanguage ?? DEFAULT_LANGUAGE;
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
 
-  const handleCategoryPress = (category) => {
+  const handleCategoryPress = async (category) => {
     const params = {
       category,
       language: navigationLanguage,
     };
 
     if (isPrivateScope) {
+      const resolvedActiveGroup = await resolveActiveGroupSnapshot({
+        activeGroup,
+        context,
+        scope,
+      });
       params.scope = scope;
+      params.activeGroup = resolvedActiveGroup;
     }
 
     navigation.navigate('GuessFeedScreen', params);

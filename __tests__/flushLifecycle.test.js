@@ -239,7 +239,7 @@ jest.mock('../utils/speedMultiplier', () => {
 jest.mock('../utils/adCadence', () => ({
   consumeAdSlot: jest.fn(() => ({ showAd: false, nextCount: 0 })),
 }));
-jest.mock('../services/billing/entitlements', () => ({
+jest.mock('../services/billing/adPolicy', () => ({
   shouldSuppressAds: jest.fn(() => false),
 }));
 jest.mock('../services/ads/FallbackAdSource', () => ({

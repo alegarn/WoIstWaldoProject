@@ -12,7 +12,7 @@ import {
 } from '../../utils/purchases';
 
 function tierLabel(tier) {
-  if (tier >= 3) return 'Extended Group';
+  if (tier >= 3) return 'Premium';
   if (tier === 2) return 'Private Group';
   if (tier === 1) return 'No-ads';
   return 'Free';
@@ -68,7 +68,7 @@ export default function SubscriptionManagementScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Current plan</Text>
-      <Text style={styles.tier}>{tierLabel(authContext?.premiumTier ?? 0)}</Text>
+      <Text style={styles.tier}>{tierLabel(authContext?.paidTier ?? 0)}</Text>
 
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
@@ -77,7 +77,7 @@ export default function SubscriptionManagementScreen({ navigation }) {
       )}
 
       <View style={styles.buttonGroup}>
-        {(authContext?.premiumTier ?? 0) < 3 && (
+        {(authContext?.paidTier ?? 0) < 3 && (
           <Button
             accessibilityLabel="Upgrade"
             onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}

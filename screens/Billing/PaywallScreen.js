@@ -55,9 +55,9 @@ export default function PaywallScreen({ navigation, route }) {
     const entitlement = response?.data;
     if (ok && entitlement) {
       authContext.setEntitlement({
-        isPremium: entitlement.is_premium,
-        premiumTier: entitlement.premium_tier,
-        premiumExpiresAt: entitlement.premium_expires_at,
+        isPaid: entitlement.is_paid,
+        paidTier: entitlement.paid_tier,
+        paidExpiresAt: entitlement.paid_expires_at,
       });
     }
     if (!ok) {
@@ -84,9 +84,9 @@ export default function PaywallScreen({ navigation, route }) {
       if (hasActiveEntitlement(customerInfo)) {
         try {
           authContext.setEntitlement({
-            isPremium: true,
-            premiumTier: undefined,
-            premiumExpiresAt: undefined,
+            isPaid: true,
+            paidTier: undefined,
+            paidExpiresAt: undefined,
           });
         } catch (_) {}
       }

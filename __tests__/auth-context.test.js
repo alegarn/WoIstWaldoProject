@@ -47,7 +47,7 @@ describe('AuthContextProvider', () => {
     process.env.EXPO_PUBLIC_REVENUECAT_IOS_API_KEY = 'test-ios-key';
     syncEntitlement.mockResolvedValue({
       status: 200,
-      data: { is_premium: true, premium_tier: 2, premium_expires_at: '2027-01-01T00:00:00Z' },
+      data: { is_paid: true, paid_tier: 2, paid_expires_at: '2027-01-01T00:00:00Z' },
     });
   });
 
@@ -251,8 +251,8 @@ describe('AuthContextProvider', () => {
       });
 
       expect(syncEntitlement).toHaveBeenCalledTimes(1);
-      expect(latestContext.isPremium).toBe(true);
-      expect(latestContext.premiumTier).toBe(2);
+      expect(latestContext.isPaid).toBe(true);
+      expect(latestContext.paidTier).toBe(2);
     } finally {
       jest.useRealTimers();
     }

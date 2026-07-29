@@ -37,7 +37,7 @@ describe('LockedGroupOwnerModal', () => {
     const renderer = render({ visible: true, groupName: 'Waldos' });
 
     expect(renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.title' }).props.children)
-      .toBe('Your Premium+ subscription ended');
+      .toBe('Your private-group access ended');
     expect(renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.button.renew' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.button.transfer' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.button.dismiss' })).toBeTruthy();
@@ -63,6 +63,16 @@ describe('LockedGroupOwnerModal', () => {
     const content = renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.content' });
     expect(content.props.children.some((node) =>
       typeof node?.props?.children === 'string' && node.props.children.includes('this group')
+    )).toBe(true);
+  });
+
+  it('describes transfer as requiring a member with private-group access', () => {
+    const renderer = render({ visible: true, groupName: 'Waldos' });
+    const content = renderer.root.findByProps({ testID: 'private-home.locked-owner-modal.content' });
+
+    expect(content.props.children.some((node) =>
+      typeof node?.props?.children === 'string'
+        && node.props.children.includes('member with private-group access')
     )).toBe(true);
   });
 

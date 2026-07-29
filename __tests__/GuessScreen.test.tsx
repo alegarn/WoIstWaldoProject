@@ -226,7 +226,7 @@ jest.mock('../services/cardPrefetcher', () => {
   };
 });
 
-jest.mock('../services/billing/entitlements', () => ({
+jest.mock('../services/billing/adPolicy', () => ({
   shouldSuppressAds: jest.fn(() => false),
 }));
 
@@ -297,7 +297,7 @@ import { navigateToNextGuess as navigateToNextGuessImpl } from '../utils/guessNa
 import { prefetchIfLow as prefetchIfLowImpl } from '../services/cardPrefetcher';
 import { warmAllDeckIfNeeded as warmAllDeckIfNeededImpl } from '../services/cardPrefetcher';
 import { consumeAdSlot as consumeAdSlotImpl } from '../utils/adCadence';
-import { shouldSuppressAds as shouldSuppressAdsImpl } from '../services/billing/entitlements';
+import { shouldSuppressAds as shouldSuppressAdsImpl } from '../services/billing/adPolicy';
 import { resolveNextCardWithServerFallback as resolveNextCardWithServerFallbackImpl } from '../utils/nextCardAdvancer';
 import { getNextImagesForScope as getNextImagesForScopeImpl } from '../utils/storageDatum';
 
@@ -1590,6 +1590,25 @@ describe('GuessScreen', () => {
     // C2: private scope path uses the in-component overlay, not the AdScreen route.
     expect(mockAdInterstitial.mock.calls.length).toBeGreaterThan(0);
     expect(navigation.navigate).not.toHaveBeenCalledWith('AdScreen', expect.anything());
+  });
+
+  it('passes the active private-group snapshot into shouldSuppressAds', async () => {
+    const navigation = makeNav();
+    const route = {
+      params: {
+        ...PUBLIC_ROUTE_PARAMS,
+        scope: { kind: 'private', groupId: 'g-1' },
+        activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+      },
+    };
+
+    await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+
+    expect(shouldSuppressAds).toHaveBeenCalledWith(expect.objectContaining({
+      paidTier: expect.any(Number),
+      scope: 'private',
+      activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+    }));
   });
 
   it('on success + tier >= 1 (no_ads gate): never navigates to AdScreen', async () => {

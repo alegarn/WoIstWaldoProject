@@ -19,9 +19,9 @@ export const AuthContext = createContext({
   headers: {},
   IsAuthenticated: false,
   isAuthenticated: false,
-  isPremium: false,
-  premiumTier: 0,
-  premiumExpiresAt: null,
+  isPaid: false,
+  paidTier: 0,
+  paidExpiresAt: null,
   isGroupOwner: false,
   activeGroupId: null,
   isPrivateMode: false,
@@ -96,9 +96,9 @@ function configureCreatorBilling({ userId, authContextRef }) {
 
             if (entitlement) {
               context.setEntitlement({
-                isPremium: entitlement.is_premium,
-                premiumTier: entitlement.premium_tier,
-                premiumExpiresAt: entitlement.premium_expires_at,
+                isPaid: entitlement.is_paid,
+                paidTier: entitlement.paid_tier,
+                paidExpiresAt: entitlement.paid_expires_at,
                 isGroupOwner: entitlement.is_group_owner,
                 activeGroupId: entitlement.active_group_id,
               });
@@ -150,9 +150,9 @@ export default function AuthContextProvider({ children }) {
   const [scoreId, setScoreId] = useState('');
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
-  const [isPremium, setIsPremium] = useState(false);
-  const [premiumTier, setPremiumTier] = useState(0);
-  const [premiumExpiresAt, setPremiumExpiresAt] = useState(null);
+  const [isPaid, setIsPaid] = useState(false);
+  const [paidTier, setPaidTier] = useState(0);
+  const [paidExpiresAt, setPaidExpiresAt] = useState(null);
   const [isGroupOwner, setIsGroupOwner] = useState(false);
   const [activeGroupId, setActiveGroupIdState] = useState(null);
   const [isPrivateMode, setIsPrivateModeState] = useState(false);
@@ -190,16 +190,16 @@ export default function AuthContextProvider({ children }) {
     return { token, userId, scoreId, email, username };
   };
 
-  function restoreSession({ token, userId, email, username, scoreId, isTutorialFinished, isPremium, premiumTier, premiumExpiresAt, isGroupOwner, activeGroupId, isPrivateMode }) {
+  function restoreSession({ token, userId, email, username, scoreId, isTutorialFinished, isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId, isPrivateMode }) {
     setAuthToken(token);
     setUserId(userId ?? '');
     setScoreId(scoreId ?? '');
     setUsername((username && username !== 'undefined') ? username : '');
     setEmail(email ?? '');
     setHeaders(buildHeaders({ token, userId, scoreId, email, username }));
-    setIsPremium(!!isPremium);
-    setPremiumTier(Number.isFinite(premiumTier) ? premiumTier : 0);
-    setPremiumExpiresAt(premiumExpiresAt ?? null);
+    setIsPaid(!!isPaid);
+    setPaidTier(Number.isFinite(paidTier) ? paidTier : 0);
+    setPaidExpiresAt(paidExpiresAt ?? null);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(!!isPrivateMode);
@@ -225,7 +225,7 @@ export default function AuthContextProvider({ children }) {
     };
   };
 
-  async function authenticate({token, userId, email, username, isTutorialFinished, scoreId, isPremium, premiumTier, premiumExpiresAt, isGroupOwner, activeGroupId}) {
+  async function authenticate({token, userId, email, username, isTutorialFinished, scoreId, isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId}) {
     await emptyImageList();
 
     setAuthToken(token);
@@ -234,9 +234,9 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('email', email);
     await SecureStore.setItemAsync('username', username ?? '');
     await SecureStore.setItemAsync('scoreId', scoreId);
-    await SecureStore.setItemAsync('isPremium', JSON.stringify(!!isPremium));
-    await SecureStore.setItemAsync('premiumTier', JSON.stringify(Number.isFinite(premiumTier) ? premiumTier : 0));
-    await SecureStore.setItemAsync('premiumExpiresAt', JSON.stringify(premiumExpiresAt ?? null));
+    await SecureStore.setItemAsync('isPaid', JSON.stringify(!!isPaid));
+    await SecureStore.setItemAsync('paidTier', JSON.stringify(Number.isFinite(paidTier) ? paidTier : 0));
+    await SecureStore.setItemAsync('paidExpiresAt', JSON.stringify(paidExpiresAt ?? null));
     await SecureStore.setItemAsync('isGroupOwner', JSON.stringify(!!isGroupOwner));
     await SecureStore.setItemAsync('activeGroupId', JSON.stringify(activeGroupId ?? null));
     await SecureStore.setItemAsync('isPrivateMode', JSON.stringify(false));
@@ -246,9 +246,9 @@ export default function AuthContextProvider({ children }) {
     setUsername(username);
     setEmail(email);
     setHeaders(buildHeaders({ token, userId, scoreId, email, username }));
-    setIsPremium(!!isPremium);
-    setPremiumTier(Number.isFinite(premiumTier) ? premiumTier : 0);
-    setPremiumExpiresAt(premiumExpiresAt ?? null);
+    setIsPaid(!!isPaid);
+    setPaidTier(Number.isFinite(paidTier) ? paidTier : 0);
+    setPaidExpiresAt(paidExpiresAt ?? null);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(false);
@@ -279,9 +279,9 @@ export default function AuthContextProvider({ children }) {
     setEmail('');
     setHeaders({});
     setIsTutorialFinished({});
-    setIsPremium(false);
-    setPremiumTier(0);
-    setPremiumExpiresAt(null);
+    setIsPaid(false);
+    setPaidTier(0);
+    setPaidExpiresAt(null);
     setIsGroupOwner(false);
     setActiveGroupIdState(null);
     setIsPrivateModeState(false);
@@ -294,9 +294,9 @@ export default function AuthContextProvider({ children }) {
       await SecureStore.deleteItemAsync('username');
       await SecureStore.deleteItemAsync('isTutorialFinished');
       await SecureStore.deleteItemAsync('scoreId');
-      await SecureStore.deleteItemAsync('isPremium');
-      await SecureStore.deleteItemAsync('premiumTier');
-      await SecureStore.deleteItemAsync('premiumExpiresAt');
+      await SecureStore.deleteItemAsync('isPaid');
+      await SecureStore.deleteItemAsync('paidTier');
+      await SecureStore.deleteItemAsync('paidExpiresAt');
       await SecureStore.deleteItemAsync('isGroupOwner');
       await SecureStore.deleteItemAsync('activeGroupId');
       await SecureStore.deleteItemAsync('isPrivateMode');
@@ -331,20 +331,20 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('username', username ?? '');
   };
 
-  async function setEntitlement({ isPremium, premiumTier, premiumExpiresAt, isGroupOwner, activeGroupId } = {}) {
-    if (isPremium !== undefined) {
-      setIsPremium(!!isPremium);
-      await SecureStore.setItemAsync('isPremium', JSON.stringify(!!isPremium));
+  async function setEntitlement({ isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId } = {}) {
+    if (isPaid !== undefined) {
+      setIsPaid(!!isPaid);
+      await SecureStore.setItemAsync('isPaid', JSON.stringify(!!isPaid));
     }
-    if (premiumTier !== undefined) {
-      const tier = Number.isFinite(premiumTier) ? premiumTier : 0;
-      setPremiumTier(tier);
-      await SecureStore.setItemAsync('premiumTier', JSON.stringify(tier));
+    if (paidTier !== undefined) {
+      const tier = Number.isFinite(paidTier) ? paidTier : 0;
+      setPaidTier(tier);
+      await SecureStore.setItemAsync('paidTier', JSON.stringify(tier));
     }
-    if (premiumExpiresAt !== undefined) {
-      const expiresAt = premiumExpiresAt ?? null;
-      setPremiumExpiresAt(expiresAt);
-      await SecureStore.setItemAsync('premiumExpiresAt', JSON.stringify(expiresAt));
+    if (paidExpiresAt !== undefined) {
+      const expiresAt = paidExpiresAt ?? null;
+      setPaidExpiresAt(expiresAt);
+      await SecureStore.setItemAsync('paidExpiresAt', JSON.stringify(expiresAt));
     }
     if (isGroupOwner !== undefined) {
       setIsGroupOwner(!!isGroupOwner);
@@ -405,9 +405,9 @@ export default function AuthContextProvider({ children }) {
     username: username,
     email: email,
     isTutorialFinished: isTutorialFinished,
-    isPremium: isPremium,
-    premiumTier: premiumTier,
-    premiumExpiresAt: premiumExpiresAt,
+    isPaid: isPaid,
+    paidTier: paidTier,
+    paidExpiresAt: paidExpiresAt,
     isGroupOwner: isGroupOwner,
     activeGroupId: activeGroupId,
     isPrivateMode: isPrivateMode,

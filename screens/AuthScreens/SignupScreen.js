@@ -23,9 +23,9 @@ function SignupScreen({navigation}) {
       username: data?.username,
       scoreId: data?.score_id,
       isTutorialFinished: data?.finished_tutorial,
-      isPremium: data?.is_premium,
-      premiumTier: data?.premium_tier,
-      premiumExpiresAt: data?.premium_expires_at,
+      isPaid: data?.is_paid,
+      paidTier: data?.paid_tier,
+      paidExpiresAt: data?.paid_expires_at,
       isGroupOwner: data?.is_group_owner,
       activeGroupId: data?.active_group_id,
     });

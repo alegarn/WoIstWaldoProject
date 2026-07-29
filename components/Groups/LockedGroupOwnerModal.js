@@ -25,10 +25,10 @@ export default function LockedGroupOwnerModal({
           testID={`${testIDPrefix}.content`}
         >
           <Text style={[styles.title, { color: theme.lightText }]} testID={`${testIDPrefix}.title`}>
-            Your Premium+ subscription ended
+            Your private-group access ended
           </Text>
           <Text style={[styles.body, { color: theme.lightMuted }] }>
-            {`${name} is now locked and read-only. Members can still view existing images and rankings, but new private games are paused until you renew your Premium+ subscription or transfer ownership to an active Premium+ member.`}
+            {`${name} is now locked and read-only. Members can still view existing images and rankings, but new private games are paused until you renew your private-group subscription or transfer ownership to a member with private-group access.`}
           </Text>
 
           <View style={styles.actions}>

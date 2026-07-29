@@ -89,7 +89,7 @@ describe('GroupsListScreen store entry points', () => {
   }
 
   it('renders the Create group and Store buttons for a TIER-0 user (Fix A: gate removed)', async () => {
-    const { renderer } = await renderScreen({ premiumTier: 0 });
+    const { renderer } = await renderScreen({ paidTier: 0 });
 
     expect(renderer.root.findByProps({ testID: 'groups-list.container' })).toBeTruthy();
 
@@ -99,7 +99,7 @@ describe('GroupsListScreen store entry points', () => {
   });
 
   it('routes the Store button to the paywall with intent=store', async () => {
-    const { navigation } = await renderScreen({ premiumTier: 0 });
+    const { navigation } = await renderScreen({ paidTier: 0 });
 
     const storeCall = mockBigButton.mock.calls.find(([{ testID }]) => testID === 'groups-list.button.store');
     expect(storeCall).toBeTruthy();

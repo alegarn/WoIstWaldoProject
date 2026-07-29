@@ -306,14 +306,14 @@ const SettingsScreen = ({ navigation }) => {
               style={styles.button}
               testID="settings.button.subscription"
             />
-            {(context?.premiumTier ?? 0) < 1 && (
+            {(context?.paidTier ?? 0) < 3 && (
               <Button
-                accessibilityLabel="Go premium"
-                children="Go Premium (no ads)"
+                accessibilityLabel="View plans"
+                children="View plans"
                 mode="flat"
                 onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
                 style={styles.button}
-                testID="settings.button.go-premium"
+                testID="settings.button.view-plans"
               />
             )}
           </View>

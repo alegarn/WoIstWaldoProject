@@ -233,10 +233,10 @@ describe('MemberManagementScreen', () => {
     expect(removeMember).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a Premium+ explanation when transfer fails with recipient_not_creator', async () => {
+  it('surfaces a private-group-access explanation when transfer fails with recipient_not_creator', async () => {
     transferOwnership.mockResolvedValue({
       status: 422,
-      data: { error: 'recipient_not_creator', message: 'Recipient is not premium+' },
+      data: { error: 'recipient_not_creator', message: 'Recipient does not have private-group access' },
     });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 

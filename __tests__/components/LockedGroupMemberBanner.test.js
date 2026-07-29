@@ -23,7 +23,7 @@ describe('LockedGroupMemberBanner', () => {
     const texts = renderer.root.findAllByType('Text');
     const joined = texts.map((t) => t.props.children).join('\n');
     expect(joined).toContain('Waldos is temporarily locked');
-    expect(joined).toContain("owner's Premium+ subscription ended");
+    expect(joined).toContain("owner's private-group subscription ended");
     expect(joined).toContain('read-only');
   });
 

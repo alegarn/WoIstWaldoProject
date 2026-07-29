@@ -82,7 +82,7 @@ type AuthContextValue = {
   IsAuthenticated: boolean;
   logout: () => void | Promise<void>;
   restoreSession: (session: any) => void | Promise<void>;
-  premiumTier?: number;
+  paidTier?: number;
 };
 
 
@@ -343,7 +343,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="PaywallScreen"
           component={PaywallScreen}
           options={{
-            title: "Premium",
+            title: "Plans",
             presentation: "modal",
             headerShown: true,
           }} />

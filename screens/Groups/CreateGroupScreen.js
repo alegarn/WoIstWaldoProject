@@ -24,7 +24,7 @@ export default function CreateGroupScreen({ navigation }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
 
   const owned = data?.owned ?? [];
-  const isPremiumPlus = (authContext?.premiumTier ?? 0) >= 2;
+  const isPaidCreator = (authContext?.paidTier ?? 0) >= 2;
   const alreadyOwns = owned.length > 0;
 
   if (isLoading && !data) {
@@ -59,7 +59,7 @@ export default function CreateGroupScreen({ navigation }) {
     );
   }
 
-  if (!isPremiumPlus) {
+  if (!isPaidCreator) {
     return (
       <View style={styles.lockedContainer}>
         <Text style={styles.lockedMessage}>
