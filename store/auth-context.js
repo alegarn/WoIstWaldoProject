@@ -91,17 +91,12 @@ function configureCreatorBilling({ userId, authContextRef }) {
             }
 
             const { syncEntitlement } = require('../services/billing/billingApi');
+            const { entitlementToContextPayload } = require('../utils/purchases');
             const response = await syncEntitlement(context);
             const entitlement = response?.data;
 
             if (entitlement) {
-              context.setEntitlement({
-                isPaid: entitlement.is_paid,
-                paidTier: entitlement.paid_tier,
-                paidExpiresAt: entitlement.paid_expires_at,
-                isGroupOwner: entitlement.is_group_owner,
-                activeGroupId: entitlement.active_group_id,
-              });
+              context.setEntitlement(entitlementToContextPayload(entitlement));
             }
           } catch (error) {
             console.warn('customerInfo listener sync failed', error?.message ?? error);

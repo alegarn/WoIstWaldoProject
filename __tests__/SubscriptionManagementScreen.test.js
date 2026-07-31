@@ -15,6 +15,17 @@ jest.mock('../components/UI/LoadingOverlay', () => {
   };
 });
 
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
+
 jest.mock('../services/billing/billingApi', () => ({
   syncEntitlement: jest.fn(),
 }));

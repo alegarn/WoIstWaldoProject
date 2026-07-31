@@ -25,7 +25,6 @@ import {
   hasCompleteAuthState,
   isPersistedBearerToken,
   login,
-  migrateLegacyPremiumKeys,
   updateUser,
 } from '../utils/auth';
 
@@ -329,56 +328,6 @@ describe('auth utilities', () => {
     expect(response).toEqual({
       status: 401,
       data: expect.objectContaining({ message: 'Unauthorized' }),
-    });
-  });
-
-  describe('migrateLegacyPremiumKeys', () => {
-    function withMemoryStore(store) {
-      SecureStore.getItemAsync.mockImplementation(async (key) => store[key] ?? null);
-      SecureStore.setItemAsync.mockImplementation(async (key, value) => {
-        store[key] = value;
-      });
-      SecureStore.deleteItemAsync.mockImplementation(async (key) => {
-        delete store[key];
-      });
-    }
-
-    it('moves old persisted premium keys to the new names and removes the old keys', async () => {
-      const store = {
-        isPremium: JSON.stringify(true),
-        premiumTier: JSON.stringify(2),
-        premiumExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
-      };
-      withMemoryStore(store);
-
-      await migrateLegacyPremiumKeys();
-
-      expect(store.isPaid).toBe(JSON.stringify(true));
-      expect(store.paidTier).toBe(JSON.stringify(2));
-      expect(store.paidExpiresAt).toBe(JSON.stringify('2026-12-31T23:59:59Z'));
-      expect(store.isPremium).toBeUndefined();
-      expect(store.premiumTier).toBeUndefined();
-      expect(store.premiumExpiresAt).toBeUndefined();
-    });
-
-    it('is idempotent: a second run is a no-op when only the new keys exist', async () => {
-      const store = {
-        isPaid: JSON.stringify(true),
-        paidTier: JSON.stringify(2),
-        paidExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
-      };
-      withMemoryStore(store);
-
-      SecureStore.setItemAsync.mockClear();
-      SecureStore.deleteItemAsync.mockClear();
-
-      await migrateLegacyPremiumKeys();
-
-      expect(store.isPaid).toBe(JSON.stringify(true));
-      expect(store.paidTier).toBe(JSON.stringify(2));
-      expect(store.paidExpiresAt).toBe(JSON.stringify('2026-12-31T23:59:59Z'));
-      expect(SecureStore.setItemAsync).not.toHaveBeenCalled();
-      expect(SecureStore.deleteItemAsync).not.toHaveBeenCalled();
     });
   });
 });

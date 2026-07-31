@@ -258,6 +258,49 @@ describe('AuthContextProvider', () => {
     }
   });
 
+  it('maps the synced entitlement to the context payload via customer info listener', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+      });
+    });
+
+    const listener = Purchases.addCustomerInfoUpdateListener.mock.calls.at(-1)[0];
+    const setEntitlementSpy = jest.spyOn(latestContext, 'setEntitlement');
+    syncEntitlement.mockResolvedValueOnce({
+      status: 200,
+      data: { is_paid: true, paid_tier: 3, paid_expires_at: null, is_group_owner: true, active_group_id: 'g1' },
+    });
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        listener({});
+        jest.advanceTimersByTime(1000);
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(setEntitlementSpy).toHaveBeenCalledWith({
+        isPaid: true,
+        paidTier: 3,
+        paidExpiresAt: null,
+        isGroupOwner: true,
+        activeGroupId: 'g1',
+      });
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('removes the registered customer info listener on logout', async () => {
     await renderProvider();
 

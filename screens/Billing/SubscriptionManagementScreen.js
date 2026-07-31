@@ -1,5 +1,6 @@
 import { useCallback, useContext, useState } from 'react';
-import { View, Text, StyleSheet, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Alert, Platform, TouchableOpacity } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 
 import Button from '../../components/UI/Button';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -9,6 +10,7 @@ import {
   getPurchasesModule,
   applyEntitlementToContext,
   restoreAndSync,
+  refreshEntitlement,
 } from '../../utils/purchases';
 
 function tierLabel(tier) {
@@ -28,6 +30,22 @@ export default function SubscriptionManagementScreen({ navigation }) {
   const authContext = useContext(AuthContext);
   const [isWorking, setIsWorking] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshError, setRefreshError] = useState(false);
+
+  const refreshFromBackend = useCallback(async () => {
+    setRefreshing(true);
+    setRefreshError(false);
+    const { ok } = await refreshEntitlement(authContext);
+    setRefreshError(!ok);
+    setRefreshing(false);
+  }, [authContext]);
+
+  useFocusEffect(
+    useCallback(() => {
+      refreshFromBackend();
+    }, [refreshFromBackend])
+  );
 
   const handleRestore = useCallback(async () => {
     const Purchases = getPurchasesModule();
@@ -69,6 +87,25 @@ export default function SubscriptionManagementScreen({ navigation }) {
     <View style={styles.container}>
       <Text style={styles.title}>Current plan</Text>
       <Text style={styles.tier}>{tierLabel(authContext?.paidTier ?? 0)}</Text>
+
+      {refreshing && (
+        <Text style={styles.refreshHint} testID="subscription-refresh.hint">
+          Refreshing plan…
+        </Text>
+      )}
+
+      {refreshError && (
+        <View style={styles.refreshErrorRow}>
+          <Text style={styles.error}>Couldn’t refresh plan.</Text>
+          <TouchableOpacity
+            accessibilityLabel="Retry plan refresh"
+            onPress={refreshFromBackend}
+            testID="subscription-refresh.retry"
+          >
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
@@ -124,4 +161,7 @@ const styles = StyleSheet.create({
     backgroundColor: GlobalStyle.color.primaryColor100,
   },
   error: { color: GlobalStyle.color.error500, marginTop: 12 },
+  refreshHint: { color: '#cfcfcf', fontSize: 13, marginTop: 8 },
+  refreshErrorRow: { flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8 },
+  retryText: { color: GlobalStyle.color.primaryColor100, fontWeight: '700', marginLeft: 8 },
 });

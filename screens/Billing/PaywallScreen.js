@@ -10,7 +10,6 @@ import { BILLING_TIERS } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   getPurchasesModule,
-  hasActiveEntitlement,
   applyEntitlementToContext,
   restoreAndSync,
 } from '../../utils/purchases';
@@ -80,16 +79,7 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setIsPurchasing(true);
     try {
-      const customerInfo = await Purchases.purchasePackage(pkg);
-      if (hasActiveEntitlement(customerInfo)) {
-        try {
-          authContext.setEntitlement({
-            isPaid: true,
-            paidTier: undefined,
-            paidExpiresAt: undefined,
-          });
-        } catch (_) {}
-      }
+      await Purchases.purchasePackage(pkg);
       await applySyncAndRoute();
     } catch (error) {
       if (error?.userCancelled) {

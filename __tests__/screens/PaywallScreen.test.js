@@ -156,7 +156,7 @@ describe('PaywallScreen', () => {
     expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
   });
 
-  it('optimistically flips entitlement to premium after purchase before syncEntitlement resolves', async () => {
+  it('does not apply entitlement optimistically; tier is applied only from the syncEntitlement result', async () => {
     let resolveSync;
     syncEntitlement.mockReturnValue(new Promise((resolve) => { resolveSync = resolve; }));
     Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { private_group_creator: {} } } });
@@ -182,13 +182,20 @@ describe('PaywallScreen', () => {
     });
 
     expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
-    expect(authContext.setEntitlement).toHaveBeenCalledWith(expect.objectContaining({ isPaid: true }));
+    expect(authContext.setEntitlement).not.toHaveBeenCalled();
     expect(syncEntitlement).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveSync({ status: 200, data: { is_paid: true, paid_tier: 1 } });
+      resolveSync({ status: 200, data: { is_paid: true, paid_tier: 3, paid_expires_at: null } });
       await Promise.resolve();
       await Promise.resolve();
+    });
+
+    expect(authContext.setEntitlement).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledWith({
+      isPaid: true,
+      paidTier: 3,
+      paidExpiresAt: null,
     });
   });
 
