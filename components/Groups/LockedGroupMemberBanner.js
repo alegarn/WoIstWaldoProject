@@ -19,7 +19,7 @@ export default function LockedGroupMemberBanner({
     >
       <Text style={[styles.title, { color: theme.warning }]}>{`${name} is temporarily locked`}</Text>
       <Text style={[styles.body, { color: theme.text }] }>
-        {`The owner's Premium+ subscription ended. The group is read-only — you can still view existing images and rankings, but new games are paused until the owner renews.`}
+        {`The owner's private-group subscription ended. The group is read-only — you can still view existing images and rankings, but new games are paused until the owner renews.`}
       </Text>
     </View>
   );

@@ -1,5 +1,7 @@
 jest.mock('expo-secure-store', () => ({
   getItemAsync: jest.fn(),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
 }));
 
 jest.mock('axios', () => ({
@@ -159,9 +161,9 @@ describe('auth utilities', () => {
         guessPathDone: true,
         hidePathDone: true,
       },
-      isPremium: null,
-      premiumTier: null,
-      premiumExpiresAt: null,
+      isPaid: null,
+      paidTier: null,
+      paidExpiresAt: null,
       isGroupOwner: null,
       activeGroupId: null,
       isPrivateMode: null,
@@ -171,9 +173,9 @@ describe('auth utilities', () => {
   it('rehydrates the persisted entitlement and group fields as parsed values', async () => {
     mockStoredValues({
       ...storedSession,
-      isPremium: JSON.stringify(true),
-      premiumTier: JSON.stringify(2),
-      premiumExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
+      isPaid: JSON.stringify(true),
+      paidTier: JSON.stringify(2),
+      paidExpiresAt: JSON.stringify('2026-12-31T23:59:59Z'),
       isGroupOwner: JSON.stringify(true),
       activeGroupId: JSON.stringify(77),
       isPrivateMode: JSON.stringify(false),
@@ -181,9 +183,9 @@ describe('auth utilities', () => {
 
     const authState = await getStoredAuthState();
 
-    expect(authState.isPremium).toBe(true);
-    expect(authState.premiumTier).toBe(2);
-    expect(authState.premiumExpiresAt).toBe('2026-12-31T23:59:59Z');
+    expect(authState.isPaid).toBe(true);
+    expect(authState.paidTier).toBe(2);
+    expect(authState.paidExpiresAt).toBe('2026-12-31T23:59:59Z');
     expect(authState.isGroupOwner).toBe(true);
     expect(authState.activeGroupId).toBe(77);
     expect(authState.isPrivateMode).toBe(false);

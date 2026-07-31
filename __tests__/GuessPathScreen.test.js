@@ -77,6 +77,10 @@ jest.mock('../services/groups/categoryThumbnailUpload', () => ({
   uploadCategoryThumbnail: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupApi', () => ({
+  fetchGroups: jest.fn(),
+}));
+
 jest.mock('../store/auth-context', () => {
   const React = require('react');
 
@@ -109,6 +113,7 @@ import {
   deleteCategoryThumbnailFile,
 } from '../services/groups/groupCategoryThumbnails';
 import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
+import { fetchGroups } from '../services/groups/groupApi';
 
 const CATEGORIES = [
   { id: '1', key: 'nature', name: 'Nature', thumbnailUrl: 'x', count: 5 },
@@ -160,6 +165,7 @@ describe('GuessPathScreen', () => {
     resolveCategoryThumbnail.mockResolvedValue(null);
     deleteCategoryThumbnailFile.mockReturnValue(undefined);
     uploadCategoryThumbnail.mockResolvedValue(null);
+    fetchGroups.mockResolvedValue({ status: 200, data: { owned: [], joined: [] } });
     getPreferredLanguage.mockResolvedValue(null);
     getSessionLanguageFilter.mockResolvedValue(null);
     saveSessionLanguageFilter.mockResolvedValue(undefined);
@@ -345,6 +351,66 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
       language: 'fr',
+    });
+  });
+
+  it('threads the active private-group ad snapshot into GuessFeedScreen navigation', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-1', role: 'owner', member_count: 6 }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    listGroupCategories.mockResolvedValue({
+      status: 200,
+      data: [{ id: 'c-1', key: 'c-1', name: 'Cats' }],
+    });
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1');
+
+    await act(async () => {
+      privateCard.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
+      language: 'any',
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+    });
+  });
+
+  it('fetches groups on press when private hub data is still missing and then threads the active-group snapshot', async () => {
+    mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
+    listGroupCategories.mockResolvedValue({
+      status: 200,
+      data: [{ id: 'c-1', key: 'c-1', name: 'Cats' }],
+    });
+    fetchGroups.mockResolvedValue({
+      status: 200,
+      data: {
+        owned: [{ id: 'g-1', role: 'owner', member_count: 7 }],
+        joined: [],
+      },
+    });
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1');
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    expect(fetchGroups).toHaveBeenCalledWith(contextValue);
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
+      language: 'any',
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: { isOwnedByViewer: true, memberCount: 7 },
     });
   });
 

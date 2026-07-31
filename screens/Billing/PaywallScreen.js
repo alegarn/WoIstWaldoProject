@@ -10,7 +10,6 @@ import { BILLING_TIERS } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   getPurchasesModule,
-  hasActiveEntitlement,
   applyEntitlementToContext,
   restoreAndSync,
 } from '../../utils/purchases';
@@ -55,9 +54,9 @@ export default function PaywallScreen({ navigation, route }) {
     const entitlement = response?.data;
     if (ok && entitlement) {
       authContext.setEntitlement({
-        isPremium: entitlement.is_premium,
-        premiumTier: entitlement.premium_tier,
-        premiumExpiresAt: entitlement.premium_expires_at,
+        isPaid: entitlement.is_paid,
+        paidTier: entitlement.paid_tier,
+        paidExpiresAt: entitlement.paid_expires_at,
       });
     }
     if (!ok) {
@@ -80,16 +79,7 @@ export default function PaywallScreen({ navigation, route }) {
     }
     setIsPurchasing(true);
     try {
-      const customerInfo = await Purchases.purchasePackage(pkg);
-      if (hasActiveEntitlement(customerInfo)) {
-        try {
-          authContext.setEntitlement({
-            isPremium: true,
-            premiumTier: undefined,
-            premiumExpiresAt: undefined,
-          });
-        } catch (_) {}
-      }
+      await Purchases.purchasePackage(pkg);
       await applySyncAndRoute();
     } catch (error) {
       if (error?.userCancelled) {

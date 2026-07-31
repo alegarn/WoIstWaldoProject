@@ -93,20 +93,24 @@ describe('SettingsScreen', () => {
     await Promise.resolve();
   }
 
-  async function renderScreen() {
+  async function renderScreen({ contextOverride = {}, navigationOverride = {} } = {}) {
     let renderer;
+    const navigation = {
+      navigate: jest.fn(),
+      ...navigationOverride,
+    };
 
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={contextValue}>
-          <SettingsScreen />
+        <AuthContext.Provider value={{ ...contextValue, ...contextOverride }}>
+          <SettingsScreen navigation={navigation} />
         </AuthContext.Provider>
       );
 
       await flushEffects();
     });
 
-    return renderer;
+    return { renderer, navigation };
   }
 
   function getButtonProps(testID) {
@@ -119,7 +123,7 @@ describe('SettingsScreen', () => {
   }
 
   it('preloads the stored email and username into the form fields', async () => {
-    const renderer = await renderScreen();
+    const { renderer } = await renderScreen();
 
     expect(renderer.root.findByProps({ testID: 'settings.input.email' }).props.value).toBe('stored@example.com');
     expect(renderer.root.findByProps({ testID: 'settings.input.username' }).props.value).toBe('stored-user');
@@ -133,7 +137,7 @@ describe('SettingsScreen', () => {
       },
     });
 
-    const renderer = await renderScreen();
+    const { renderer } = await renderScreen();
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'settings.input.email' }).props.onChangeText('new@example.com');
@@ -196,7 +200,7 @@ describe('SettingsScreen', () => {
   });
 
   it('renders the preferred language row with the expected testID and label', async () => {
-    const renderer = await renderScreen();
+    const { renderer } = await renderScreen();
 
     expect(
       renderer.root.findByProps({ testID: 'settings.input.preferred-language' })
@@ -242,5 +246,42 @@ describe('SettingsScreen', () => {
       'Preferred language saved!',
       'Your preferred language for new enigmas is now: de'
     );
+  });
+
+  it('shows the View plans CTA for tier 2 users and routes to the paywall', async () => {
+    const { navigation } = await renderScreen({ contextOverride: { paidTier: 2 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+
+    await act(async () => {
+      buttonProps.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });
+  });
+
+  it('shows the View plans CTA for free users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 0 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+  });
+
+  it('shows the View plans CTA for tier 1 users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 1 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+  });
+
+  it('hides the View plans CTA for tier 3 users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 3 } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
   });
 });

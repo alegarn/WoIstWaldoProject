@@ -20,13 +20,13 @@ function isE2EModeActive({ isE2E }: { isE2E: boolean }): boolean {
 
 // Single source of skip-condition truth. Consumed internally by consumeAdSlot;
 // exported for direct unit testing of the skip predicate in isolation.
-// Skip conditions are ONLY isAdFree and isE2E: private scope no longer suppresses
-// ads (private games show ads like public ones).
-// `scope` is retained for game context but no longer gates ads.
+// Skip conditions are ONLY isAdFree and isE2E.
+// Scope-specific billing rules live in services/billing/adPolicy and are resolved
+// upstream into the isAdFree flag passed here.
 export function isAdSlotActive({ scope, isAdFree, isE2E }: AdSlotInput): boolean {
   if (isE2EModeActive({ isE2E })) return false;
   if (isAdFree) return false;
-  // scope retained as game context; no longer suppresses ads.
+  // scope retained as game context; cadence itself does not decide billing policy.
   return true;
 }
 

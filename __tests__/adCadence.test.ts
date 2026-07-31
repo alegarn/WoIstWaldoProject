@@ -44,7 +44,7 @@ describe('utils/adCadence', () => {
       expect(result).toEqual({ showAd: true, nextCount: 0 });
     });
 
-    it('private scope behaves like public: at threshold, source ready → shows ad and resets', () => {
+    it('private scope can still show ads when policy passes isAdFree=false: at threshold it shows an ad and resets', () => {
       const result = consumeAdSlot({
         successesSinceLastAd: 2,
         scope: { kind: 'private', groupId: 'g-1' },
@@ -54,7 +54,7 @@ describe('utils/adCadence', () => {
       expect(result).toEqual({ showAd: true, nextCount: 0 });
     });
 
-    it('private scope behaves like public: counter above threshold fires and resets (e.g. 4)', () => {
+    it('private scope can still show ads when policy passes isAdFree=false: above threshold it fires and resets', () => {
       const result = consumeAdSlot({
         successesSinceLastAd: 4,
         scope: { kind: 'private', groupId: 'g-1' },

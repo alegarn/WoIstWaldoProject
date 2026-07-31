@@ -254,7 +254,11 @@ describe('GuessFeedScreen', () => {
 
   it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = makeRoute({ isTutorial: true });
+    const route = makeRoute({
+      isTutorial: true,
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+    });
 
     const renderer = await renderScreen(navigation, route);
 
@@ -278,6 +282,8 @@ describe('GuessFeedScreen', () => {
       category: { id: 'cat-1', key: 'nature' },
       language: 'fr',
       isTutorial: true,
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: { isOwnedByViewer: true, memberCount: 6 },
       pictureId: 'img-1',
       imageFile: 'file:///waldo.jpg',
       listId: 7,

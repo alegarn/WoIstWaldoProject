@@ -27,6 +27,7 @@ import { resolveStreakTier } from '../../constants/streakTiers';
 import { OverlayZIndex } from '../../constants/overlayZIndex';
 import type { AdScope } from '../../utils/adCadence';
 import type { AdSource } from '../../services/ads/AdSource';
+import type { ActiveGroupAdContext } from '../../services/billing/adPolicy';
 
 type HiddenLocation = { x: number; y: number };
 type GuessCategory = { id?: string; key?: string };
@@ -53,6 +54,7 @@ type GuessRouteParams = {
   category?: GuessCategory;
   language?: string;
   scope?: AdScope;
+  activeGroup?: ActiveGroupAdContext | null;
   skipInstructions?: boolean;
 };
 
@@ -120,7 +122,7 @@ const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComp
 
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, skipInstructions } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, activeGroup, skipInstructions } = route.params;
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -156,7 +158,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   const {
     consumeAdSlot,
     resetSuccessesSinceLastAd,
-  } = useAdCadence({ scope, authContext, adSource });
+  } = useAdCadence({ scope, activeGroup, authContext, adSource });
 
   // C2 (ad-in-screen-overlay §4.4): in-component overlay state. adPhase gates
   // the conditional <AdInterstitial> render.

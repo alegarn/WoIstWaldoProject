@@ -30,7 +30,7 @@ describe('services/billing/billingApi', () => {
   it('syncEntitlement POSTs to the sync_entitlement endpoint with the bearer token', async () => {
     axios.post.mockResolvedValue({
       status: 200,
-      data: { is_premium: true, premium_tier: 2 },
+      data: { is_paid: true, paid_tier: 2 },
     });
 
     const response = await syncEntitlement(CONTEXT);
@@ -42,7 +42,7 @@ describe('services/billing/billingApi', () => {
     );
     expect(response).toEqual({
       status: 200,
-      data: { is_premium: true, premium_tier: 2 },
+      data: { is_paid: true, paid_tier: 2 },
     });
   });
 

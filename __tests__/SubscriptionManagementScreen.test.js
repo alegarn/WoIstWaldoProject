@@ -15,6 +15,17 @@ jest.mock('../components/UI/LoadingOverlay', () => {
   };
 });
 
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
+
 jest.mock('../services/billing/billingApi', () => ({
   syncEntitlement: jest.fn(),
 }));
@@ -60,7 +71,7 @@ describe('SubscriptionManagementScreen upgrade entry point', () => {
   }
 
   it('renders the upgrade button when tier < 3 and routes to the paywall with intent=store', async () => {
-    const { navigation } = await renderScreen({ premiumTier: 0 });
+    const { navigation } = await renderScreen({ paidTier: 0 });
 
     const testIDs = buttonTestIDs();
     expect(testIDs).toContain('subscription-manage.button.upgrade');
@@ -77,7 +88,7 @@ describe('SubscriptionManagementScreen upgrade entry point', () => {
   });
 
   it('hides the upgrade button when tier === 3', async () => {
-    await renderScreen({ premiumTier: 3 });
+    await renderScreen({ paidTier: 3 });
 
     const testIDs = buttonTestIDs();
     expect(testIDs).not.toContain('subscription-manage.button.upgrade');

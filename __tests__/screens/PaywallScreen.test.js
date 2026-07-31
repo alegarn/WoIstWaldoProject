@@ -42,7 +42,7 @@ describe('PaywallScreen', () => {
       all: {
         no_ads_offering: { availablePackages: [ { identifier: '$rc_custom_c', product: { identifier: 'no_ads', priceString: '$2.99' } } ] },
         private_group_creator_offering: { availablePackages: [ { identifier: '$rc_custom_b', product: { identifier: 'private_group_creator', priceString: '$9.99' } } ] },
-        private_group_extension_offering: { availablePackages: [ { identifier: '$rc_custom_a', product: { identifier: 'private_group_extension', priceString: '$4.99' } } ] },
+        premium: { availablePackages: [ { identifier: '$rc_custom_a', product: { identifier: 'premium', priceString: '$12.99' } } ] },
       },
     });
     Purchases.purchasePackage.mockResolvedValue({});
@@ -51,7 +51,7 @@ describe('PaywallScreen', () => {
     });
     syncEntitlement.mockResolvedValue({
       status: 200,
-      data: { is_premium: true, premium_tier: 2, premium_expires_at: null },
+      data: { is_paid: true, paid_tier: 2, paid_expires_at: null },
     });
   });
 
@@ -69,24 +69,24 @@ describe('PaywallScreen', () => {
     return renderer;
   }
 
-  it('renders one distinct tier testID per available package (private-group-extension, private-group-creator, no-ads)', async () => {
+  it('renders one distinct tier testID per available package (premium, private-group-creator, no-ads)', async () => {
     const renderer = await renderScreen();
 
-    const extendedGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension' });
+    const premiumCards = renderer.root.findAllByProps({ testID: 'paywall.tier.premium' });
     const privateGroupCards = renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator' });
     const noAdsCards = renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads' });
 
-    expect(extendedGroupCards.length).toBeGreaterThanOrEqual(1);
+    expect(premiumCards.length).toBeGreaterThanOrEqual(1);
     expect(privateGroupCards.length).toBeGreaterThanOrEqual(1);
     expect(noAdsCards.length).toBeGreaterThanOrEqual(1);
 
     const subscribeByTier = {
-      'paywall.tier.private-group-extension.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-extension.subscribe' }),
+      'paywall.tier.premium.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.premium.subscribe' }),
       'paywall.tier.private-group-creator.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.private-group-creator.subscribe' }),
       'paywall.tier.no-ads.subscribe': renderer.root.findAllByProps({ testID: 'paywall.tier.no-ads.subscribe' }),
     };
 
-    expect(subscribeByTier['paywall.tier.private-group-extension.subscribe'].length).toBeGreaterThanOrEqual(1);
+    expect(subscribeByTier['paywall.tier.premium.subscribe'].length).toBeGreaterThanOrEqual(1);
     expect(subscribeByTier['paywall.tier.private-group-creator.subscribe'].length).toBeGreaterThanOrEqual(1);
     expect(subscribeByTier['paywall.tier.no-ads.subscribe'].length).toBeGreaterThanOrEqual(1);
   });
@@ -126,7 +126,7 @@ describe('PaywallScreen', () => {
 
   it('surfaces the subscription-error testID when restore finds no active entitlement', async () => {
     Purchases.restorePurchases.mockResolvedValue({ entitlements: { active: {} } });
-    syncEntitlement.mockResolvedValue({ status: 200, data: { is_premium: false } });
+    syncEntitlement.mockResolvedValue({ status: 200, data: { is_paid: false } });
 
     const renderer = await renderScreen({ authContext: { setEntitlement: jest.fn() } });
 
@@ -139,7 +139,24 @@ describe('PaywallScreen', () => {
     expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
   });
 
-  it('optimistically flips entitlement to premium after purchase before syncEntitlement resolves', async () => {
+  it('surfaces the subscription-error testID when customerInfo is active but backend says the user is free', async () => {
+    Purchases.restorePurchases.mockResolvedValue({ entitlements: { active: { pro: {} } } });
+    syncEntitlement.mockResolvedValue({ status: 200, data: { is_paid: false } });
+
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({ authContext });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'paywall.button.restore' }).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(authContext.setEntitlement).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'subscription-error' })).toBeTruthy();
+  });
+
+  it('does not apply entitlement optimistically; tier is applied only from the syncEntitlement result', async () => {
     let resolveSync;
     syncEntitlement.mockReturnValue(new Promise((resolve) => { resolveSync = resolve; }));
     Purchases.purchasePackage.mockResolvedValue({ entitlements: { active: { private_group_creator: {} } } });
@@ -165,13 +182,20 @@ describe('PaywallScreen', () => {
     });
 
     expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
-    expect(authContext.setEntitlement).toHaveBeenCalledWith(expect.objectContaining({ isPremium: true }));
+    expect(authContext.setEntitlement).not.toHaveBeenCalled();
     expect(syncEntitlement).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveSync({ status: 200, data: { is_premium: true, premium_tier: 1 } });
+      resolveSync({ status: 200, data: { is_paid: true, paid_tier: 3, paid_expires_at: null } });
       await Promise.resolve();
       await Promise.resolve();
+    });
+
+    expect(authContext.setEntitlement).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledWith({
+      isPaid: true,
+      paidTier: 3,
+      paidExpiresAt: null,
     });
   });
 

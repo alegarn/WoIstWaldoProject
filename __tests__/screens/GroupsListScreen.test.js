@@ -81,7 +81,7 @@ describe('GroupsListScreen', () => {
 
   it('renders the empty state with the groups-list.container and groups-list.empty testIDs when no groups', async () => {
     const renderer = await renderScreen({
-      authContext: { premiumTier: 1 },
+      authContext: { paidTier: 1 },
       hubData: { owned: [], joined: [], pendingInvites: [] },
     });
 
@@ -91,14 +91,14 @@ describe('GroupsListScreen', () => {
 
   it('always offers the create-group CTA regardless of tier or ownership (Fix A: gate removed)', async () => {
     const renderer = await renderScreen({
-      authContext: { premiumTier: 0 },
+      authContext: { paidTier: 0 },
       hubData: { owned: [], joined: [], pendingInvites: [] },
     });
 
     expect(renderer.root.findByProps({ testID: 'groups-list.button.create' })).toBeTruthy();
 
     const ownedRenderer = await renderScreen({
-      authContext: { premiumTier: 0 },
+      authContext: { paidTier: 0 },
       hubData: {
         owned: [{ id: 'g-1', role: 'owner', name: 'Mine' }],
         joined: [],
@@ -128,7 +128,7 @@ describe('GroupsListScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ premiumTier: 2 }}>
+        <AuthContext.Provider value={{ paidTier: 2 }}>
           <GroupsListScreen navigation={navigation} />
         </AuthContext.Provider>
       );
@@ -167,7 +167,7 @@ describe('GroupsListScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ premiumTier: 2 }}>
+        <AuthContext.Provider value={{ paidTier: 2 }}>
           <GroupsListScreen navigation={navigation} />
         </AuthContext.Provider>
       );

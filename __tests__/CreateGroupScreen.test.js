@@ -98,7 +98,7 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
   }
 
   it('renders the unlock CTA (not a loading overlay) and routes to the paywall with intent=create-group', async () => {
-    const { renderer, navigation } = await renderScreen({ premiumTier: 0 });
+    const { renderer, navigation } = await renderScreen({ paidTier: 0 });
 
     expect(mockLoadingOverlay).not.toHaveBeenCalled();
 
@@ -113,7 +113,7 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
     expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
   });
 
-  it('shows the already-owns message and not the unlock CTA when a Premium+ user owns a group', async () => {
+  it('shows the already-owns message and not the unlock CTA when the viewer already owns a group', async () => {
     const setActive = jest.fn().mockResolvedValue(undefined);
     useGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-owned' }], joined: [] },
@@ -128,7 +128,7 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
       activeGroupId: null,
     });
 
-    const { renderer, navigation } = await renderScreen({ premiumTier: 2 });
+    const { renderer, navigation } = await renderScreen({ paidTier: 2 });
 
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
 
@@ -146,7 +146,7 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
     });
   });
 
-  it('shows the already-owns message without the unlock CTA even when the user is not Premium+', async () => {
+  it('shows the already-owns message without the unlock CTA even when the viewer lacks paid creator access', async () => {
     const setActive = jest.fn().mockResolvedValue(undefined);
     useGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-owned' }], joined: [] },
@@ -161,7 +161,7 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
       activeGroupId: null,
     });
 
-    const { renderer } = await renderScreen({ premiumTier: 0 });
+    const { renderer } = await renderScreen({ paidTier: 0 });
 
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' }).props.children).toBe('You can only create 1 group.');

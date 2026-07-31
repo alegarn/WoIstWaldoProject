@@ -103,9 +103,9 @@ describe('CreateGroupScreen', () => {
     return { renderer, navigation };
   }
 
-  it('renders the unlock CTA when the user premium tier is below 2 and routes to PaywallScreen on tap', async () => {
+  it('renders the unlock CTA when the user paid tier is below 2 and routes to PaywallScreen on tap', async () => {
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { premiumTier: 1 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 1 }, navigation });
 
     expect(renderer.root.findByProps({ testID: 'create-group.button.unlock' })).toBeTruthy();
 
@@ -116,13 +116,13 @@ describe('CreateGroupScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
   });
 
-  it('keeps the user on the create form when premium tier >= 2 and submit calls createGroup with the entered payload', async () => {
+  it('keeps the user on the create form when paid tier >= 2 and submit calls createGroup with the entered payload', async () => {
     createGroup.mockResolvedValue({ status: 201, data: { id: 'g-new' } });
     const setActive = jest.fn().mockResolvedValue(undefined);
     mockUseActiveGroup.mockReturnValue({ setActive });
 
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 2 }, navigation });
 
     expect(navigation.replace).not.toHaveBeenCalledWith('PaywallScreen', expect.anything());
 
@@ -146,7 +146,7 @@ describe('CreateGroupScreen', () => {
     });
 
     expect(createGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ premiumTier: 2 }),
+      expect.objectContaining({ paidTier: 2 }),
       { name: 'Waldos', primaryColor: PRIMARY_SHADE, secondaryColor: SECONDARY_SHADE }
     );
     expect(setActive).toHaveBeenCalledWith('g-new');
@@ -159,7 +159,7 @@ describe('CreateGroupScreen', () => {
     createGroup.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
 
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 2 }, navigation });
 
     await act(async () => {
       renderer.root.findByProps({ testID: 'create-group.input.name' }).props.onChangeText('Waldos');
@@ -185,7 +185,7 @@ describe('CreateGroupScreen', () => {
     expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
   });
 
-  it('shows the already-owns message without the unlock CTA when a Premium+ user owns a group', async () => {
+  it('shows the already-owns message without the unlock CTA when the viewer already owns a group', async () => {
     mockUseGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
       isLoading: false,
@@ -196,7 +196,7 @@ describe('CreateGroupScreen', () => {
     mockUseActiveGroup.mockReturnValue({ setActive });
 
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { premiumTier: 2 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 2 }, navigation });
 
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
 
@@ -218,7 +218,7 @@ describe('CreateGroupScreen', () => {
     });
   });
 
-  it('shows the already-owns message without the unlock CTA even when the user is not Premium+', async () => {
+  it('shows the already-owns message without the unlock CTA even when the viewer lacks paid creator access', async () => {
     mockUseGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
       isLoading: false,
@@ -228,7 +228,7 @@ describe('CreateGroupScreen', () => {
     mockUseActiveGroup.mockReturnValue({ setActive: jest.fn().mockResolvedValue(undefined) });
 
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { premiumTier: 0 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 0 }, navigation });
 
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'create-group.message.already-owns' }).props.children).toBe('You can only create 1 group.');
