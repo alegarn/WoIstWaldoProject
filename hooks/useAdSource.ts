@@ -2,20 +2,19 @@ import { useRef } from 'react';
 
 import { createFallbackAdSource } from '../services/ads/FallbackAdSource';
 import { createAdMobInterstitialSource } from '../services/ads/AdMobInterstitialSource';
+import { adMobBridgeSnapshot } from '../services/ads/AdMobInterstitialBridge';
 import { createInternalProAdSource } from '../services/ads/InternalProAdSource';
 import type { AdSource } from '../services/ads/AdSource';
 
-// On iOS the whole ad feature is a no-op (Q1): the AdMob source is never ready, and
-// the InternalProAdSource is suppressed by useAdCadence's platform gate before
-// any overlay is shown. We still construct the composite for shape parity.
-//
-// NOTE (F2/F3): GuessScreen deliberately constructs AdMob WITHOUT a hookSnapshot —
-// GuessScreen never reads AdMob readiness at runtime; it only checks the composite's
-// `isReady()` to feed `consumeAdSlot({ isSourceReady })`, which on Android reduces to
-// `true` because InternalProAdSource.isReady() is always true. The real AdMob hook
-// wiring lives in App.tsx (<AdMobInterstitialBridge />, hoisted for app lifetime).
+// Composite ad source for the free-tier ad slot. AdMob is bound to the App-level
+// bridge snapshot (mounted once for app lifetime in App.tsx via
+// <AdMobInterstitialBridge />): on Android, when the bridge has a loaded native
+// interstitial, adMob.isReady() is true and FallbackAdSource picks it; otherwise
+// the InternalProAdSource fallback panel renders on every platform (its
+// isReady() is always true). Ads fire on all platforms for the free tier —
+// paid tier and e2e are still skipped by consumeAdSlot.
 let defaultAdSourceFactory: () => AdSource = () => {
-  const adMob = createAdMobInterstitialSource();
+  const adMob = createAdMobInterstitialSource({ hookSnapshot: adMobBridgeSnapshot });
   const internal = createInternalProAdSource();
   return createFallbackAdSource(adMob, internal);
 };

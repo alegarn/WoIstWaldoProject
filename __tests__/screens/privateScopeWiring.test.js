@@ -34,6 +34,16 @@ jest.mock('../../components/UI/LoadingOverlay', () => () => null);
 
 jest.mock('../../components/Guess/SuccessOverlay', () => () => null);
 
+// GuessScreen renders a localized <GestureHandlerRootView>; stub it so the
+// screen renders under jest (RNGH's real root calls a native install()).
+jest.mock('react-native-gesture-handler', () => {
+  const React = require('react');
+  return {
+    GestureHandlerRootView: ({ children }) =>
+      React.createElement('GestureHandlerRootView', null, children),
+  };
+});
+
 jest.mock('../../utils/handleGuessOutcome', () => ({
   applySuccessSideEffects: jest.fn(),
   resolveNextGuessParams: jest.fn(),

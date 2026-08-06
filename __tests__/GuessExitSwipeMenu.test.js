@@ -1,5 +1,3 @@
-let mockCapturedPanResponders;
-
 jest.mock('react-native', () => {
   const React = require('react');
 
@@ -7,7 +5,6 @@ jest.mock('react-native', () => {
     constructor(value) {
       this._value = value;
     }
-
     setValue = (nextValue) => {
       this._value = nextValue;
     };
@@ -19,7 +16,6 @@ jest.mock('react-native', () => {
         if (typeof config?.toValue !== 'undefined' && value?.setValue) {
           value.setValue(config.toValue);
         }
-
         callback?.();
       },
     };
@@ -40,12 +36,6 @@ jest.mock('react-native', () => {
     Dimensions: {
       get: jest.fn(() => ({ width: 320, height: 640, scale: 1, fontScale: 1 })),
     },
-    PanResponder: {
-      create: jest.fn((config) => {
-        mockCapturedPanResponders.push(config);
-        return { panHandlers: {} };
-      }),
-    },
     Pressable: ({ children, ...props }) => React.createElement('Pressable', props, children),
     StyleSheet: {
       absoluteFill: {},
@@ -57,159 +47,119 @@ jest.mock('react-native', () => {
   };
 });
 
+jest.mock('../components/Guess/SwipeHaloHint', () => {
+  const React = require('react');
+  return function MockSwipeHaloHint(props) {
+    return React.createElement('SwipeHaloHint', props);
+  };
+});
+
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import GuessExitSwipeMenu from '../components/Guess/GuessExitSwipeMenu';
 
-function edgePanResponder() {
-  return mockCapturedPanResponders[0];
-}
-
-function scrimPanResponder() {
-  return mockCapturedPanResponders[1];
-}
-
-describe('GuessExitSwipeMenu', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockCapturedPanResponders = [];
-  });
-
-  async function renderMenu(props = {}) {
+describe('GuessExitSwipeMenu (controlled)', () => {
+  function renderMenu(props = {}) {
     let renderer;
-
-    await act(async () => {
-      renderer = create(<GuessExitSwipeMenu onHome={jest.fn()} {...props} />);
+    act(() => {
+      renderer = create(
+        <GuessExitSwipeMenu
+          onHome={jest.fn()}
+          onClose={jest.fn()}
+          {...props}
+        />
+      );
     });
-
     return renderer;
   }
 
-  function openViaEdgeSwipe() {
-    edgePanResponder().onPanResponderRelease(null, { x0: 20, dx: 50, dy: 0 });
-  }
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
 
-  it('hides the panel and Home button by default', async () => {
-    const renderer = await renderMenu();
+  it('hides the panel, scrim, close, and Home when isOpen=false', () => {
+    const renderer = renderMenu({ isOpen: false });
 
-    expect(renderer.root.findByProps({ testID: 'guess.exit.edge' })).toBeTruthy();
     expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
+    expect(() => renderer.root.findByProps({ testID: 'guess.exit.scrim' })).toThrow();
+    expect(() => renderer.root.findByProps({ testID: 'guess.exit.close' })).toThrow();
     expect(() => renderer.root.findByProps({ testID: 'guess.exit.home' })).toThrow();
   });
 
-  it('opens the panel on a valid left-edge swipe-right', async () => {
-    const renderer = await renderMenu();
+  it('does NOT render the legacy edge strip', () => {
+    const renderer = renderMenu({ isOpen: false });
+    expect(() => renderer.root.findByProps({ testID: 'guess.exit.edge' })).toThrow();
+  });
 
-    expect(edgePanResponder().onStartShouldSetPanResponder(null, { x0: 20 })).toBe(true);
-
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
+  it('renders scrim + panel + close + Home when isOpen=true', () => {
+    const renderer = renderMenu({ isOpen: true });
 
     expect(renderer.root.findByProps({ testID: 'guess.exit.panel' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'guess.exit.scrim' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'guess.exit.close' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'guess.exit.home' })).toBeTruthy();
   });
 
-  it('does not open on a non-edge gesture (x0 > EDGE_WIDTH)', async () => {
-    const renderer = await renderMenu();
+  it('calls onClose when the scrim is tapped', () => {
+    const onClose = jest.fn();
+    const renderer = renderMenu({ isOpen: true, onClose });
 
-    expect(edgePanResponder().onStartShouldSetPanResponder(null, { x0: 50 })).toBe(false);
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
+    act(() => {
+      renderer.root.findByProps({ testID: 'guess.exit.scrim' }).props.onPress();
+    });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('does not open on a rightward swipe just under the threshold', async () => {
-    const renderer = await renderMenu();
+  it('calls onClose when the close button is pressed', () => {
+    const onClose = jest.fn();
+    const renderer = renderMenu({ isOpen: true, onClose });
 
-    expect(edgePanResponder().onStartShouldSetPanResponder(null, { x0: 20 })).toBe(true);
-
-    await act(async () => {
-      edgePanResponder().onPanResponderRelease(null, { x0: 20, dx: 39, dy: 0 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
-  });
-
-  it('does not open on a mostly-vertical gesture even in the edge zone', async () => {
-    const renderer = await renderMenu();
-
-    expect(edgePanResponder().onStartShouldSetPanResponder(null, { x0: 20 })).toBe(true);
-
-    await act(async () => {
-      edgePanResponder().onPanResponderRelease(null, { x0: 20, dx: 50, dy: 80 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
-  });
-
-  it('closes the panel on a swipe-left while open', async () => {
-    const renderer = await renderMenu();
-
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
-
-    await act(async () => {
-      scrimPanResponder().onPanResponderRelease(null, { dx: -50, dy: 0 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
-  });
-
-  it('does not close on a leftward swipe just under the close threshold', async () => {
-    const renderer = await renderMenu();
-
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
-
-    await act(async () => {
-      scrimPanResponder().onPanResponderRelease(null, { dx: -39, dy: 0 });
-    });
-
-    expect(renderer.root.findByProps({ testID: 'guess.exit.panel' })).toBeTruthy();
-  });
-
-  it('closes the panel when the scrim is tapped', async () => {
-    const renderer = await renderMenu();
-
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
-
-    await act(async () => {
-      scrimPanResponder().onPanResponderRelease(null, { dx: 0, dy: 0 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
-  });
-
-  it('closes the panel when the Close button is pressed', async () => {
-    const renderer = await renderMenu();
-
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
-
-    await act(async () => {
+    act(() => {
       renderer.root.findByProps({ testID: 'guess.exit.close' }).props.onPress();
     });
 
-    expect(() => renderer.root.findByProps({ testID: 'guess.exit.panel' })).toThrow();
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onHome exactly once when the Home action is pressed', async () => {
+  it('calls onHome exactly once when the Home button is pressed', () => {
     const onHome = jest.fn();
-    const renderer = await renderMenu({ onHome });
+    const renderer = renderMenu({ isOpen: true, onHome });
 
-    await act(async () => {
-      openViaEdgeSwipe();
-    });
-
-    await act(async () => {
+    act(() => {
       renderer.root.findByProps({ testID: 'guess.exit.home' }).props.onPress();
     });
 
     expect(onHome).toHaveBeenCalledTimes(1);
+  });
+
+  it('fires onInteract when isOpen flips to true (hint dismissal)', () => {
+    const onInteract = jest.fn();
+    let renderer;
+    act(() => {
+      renderer = create(
+        <GuessExitSwipeMenu
+          isOpen={false}
+          onHome={jest.fn()}
+          onClose={jest.fn()}
+          onInteract={onInteract}
+        />
+      );
+    });
+    expect(onInteract).not.toHaveBeenCalled();
+
+    act(() => {
+      renderer.update(
+        <GuessExitSwipeMenu
+          isOpen={true}
+          onHome={jest.fn()}
+          onClose={jest.fn()}
+          onInteract={onInteract}
+        />
+      );
+    });
+
+    expect(onInteract).toHaveBeenCalledTimes(1);
   });
 });

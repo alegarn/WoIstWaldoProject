@@ -1,119 +1,45 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
 import { OverlayZIndex } from '../../constants/overlayZIndex';
 import SwipeHaloHint from './SwipeHaloHint';
 
-const EDGE_WIDTH = 36;
-const SWIPE_THRESHOLD_PX = 40;
-const TAP_THRESHOLD = 8;
 const PANEL_WIDTH = 160;
 
-export default function GuessExitSwipeMenu({ onHome, showHints = false, onInteract }) {
-  const [isOpen, setIsOpen] = useState(false);
-  const translateX = useRef(new Animated.Value(-PANEL_WIDTH)).current;
-  const panelOpacity = useRef(new Animated.Value(0)).current;
-
-  const openPanel = useCallback(() => {
-    onInteract?.();
-    setIsOpen(true);
-    Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: 0,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-      Animated.timing(panelOpacity, {
-        toValue: 1,
-        duration: 180,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, [translateX, panelOpacity, onInteract]);
-
-  const closePanel = useCallback(() => {
-    Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: -PANEL_WIDTH,
-        duration: 140,
-        useNativeDriver: true,
-      }),
-      Animated.timing(panelOpacity, {
-        toValue: 0,
-        duration: 140,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setIsOpen(false);
-    });
-  }, [translateX, panelOpacity]);
-
-  const edgePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: (_e, gs) => gs.x0 <= EDGE_WIDTH,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponderCapture: () => false,
-        onPanResponderRelease: (_e, gs) => {
-          if (gs.dx >= SWIPE_THRESHOLD_PX && Math.abs(gs.dx) > Math.abs(gs.dy)) {
-            openPanel();
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [openPanel]
-  );
-
-  const scrimPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponderCapture: () => false,
-        onPanResponderRelease: (_e, gs) => {
-          const isSwipeLeft =
-            gs.dx <= -SWIPE_THRESHOLD_PX && Math.abs(gs.dx) > Math.abs(gs.dy);
-          const isTap =
-            Math.abs(gs.dx) < TAP_THRESHOLD && Math.abs(gs.dy) < TAP_THRESHOLD;
-          if (isSwipeLeft || isTap) {
-            closePanel();
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [closePanel]
-  );
+// Controlled exit menu. The legacy PanResponder-based edge strip lived in this
+// separate higher-zIndex subtree, where it intercepted touches in the left
+// 36px and the target circle's responder chain was never consulted there. The
+// edge strip is removed; the right-edge swipe now lives in the picture subtree
+// (ShowPicture's nested RNGH surface detector) and drives `isOpen` from the
+// parent. This component is purely presentational.
+export default function GuessExitSwipeMenu({ isOpen, onClose, onHome, showHints = false, onInteract }) {
+  useEffect(() => {
+    if (isOpen) {
+      onInteract?.();
+    }
+  }, [isOpen, onInteract]);
 
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: OverlayZIndex.EXIT_MENU_ROOT, elevation: OverlayZIndex.EXIT_MENU_ROOT }]}>
-      <View
-        testID="guess.exit.edge"
-        {...edgePanResponder.panHandlers}
-        style={styles.edge}
-      />
-
       {isOpen ? (
         <>
           <Pressable
             accessibilityLabel="Close exit panel"
             accessibilityRole="button"
-            onPress={closePanel}
-            {...scrimPanResponder.panHandlers}
+            onPress={onClose}
             style={styles.scrim}
             testID="guess.exit.scrim"
           />
           <Animated.View
-            style={[styles.panel, { transform: [{ translateX }] }, { opacity: panelOpacity }]}
+            style={[styles.panel]}
             testID="guess.exit.panel"
           >
             <View style={styles.panelHeader}>
               <Pressable
                 accessibilityLabel="Close exit panel"
                 accessibilityRole="button"
-                onPress={closePanel}
+                onPress={onClose}
                 style={styles.closeButton}
                 testID="guess.exit.close"
               >
@@ -138,16 +64,6 @@ export default function GuessExitSwipeMenu({ onHome, showHints = false, onIntera
 }
 
 const styles = StyleSheet.create({
-  edge: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    left: 0,
-    width: EDGE_WIDTH,
-    backgroundColor: 'transparent',
-    zIndex: OverlayZIndex.EXIT_MENU_EDGE,
-    elevation: OverlayZIndex.EXIT_MENU_EDGE,
-  },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',

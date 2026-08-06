@@ -1,15 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, PanResponder, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Animated } from 'react-native';
 
 import IconButton from '../../UI/IconButton';
 import { OverlayZIndex } from '../../../constants/overlayZIndex';
 import { GlobalStyle } from '../../../constants/theme';
 
-const SWIPE_THRESHOLD_PX = 40;
-const TAP_THRESHOLD = 8;
 const PANEL_HEIGHT_RATIO = 0.35;
 const PANEL_MIN_HEIGHT = 120;
-const HANDLE_HEIGHT = 28;
 const CLOSE_ICON_SIZE = 24;
 
 function buildPanelHeight(screenHeight) {
@@ -17,146 +14,50 @@ function buildPanelHeight(screenHeight) {
   return Math.max(computed, PANEL_MIN_HEIGHT);
 }
 
-export default function EnigmaOverlay({ description, screenHeight, defaultOpen, onClose }) {
+// Controlled enigma overlay. The legacy PanResponder-based handle lived in this
+// separate higher-zIndex subtree, where it intercepted touches in the bottom
+// 28px and the target circle's responder chain was never consulted there. The
+// handle is removed; the open-surface up-swipe now lives in the picture subtree
+// (ShowPicture's nested RNGH surface detector) and drives `isOpen` from the
+// parent. This component is purely presentational.
+export default function EnigmaOverlay({ description, screenHeight, isOpen, onClose }) {
   const panelHeight = buildPanelHeight(screenHeight);
-  const [isOpen, setIsOpen] = useState(!!defaultOpen);
-  const translateY = useRef(new Animated.Value(defaultOpen ? 0 : panelHeight)).current;
-  const previousDefaultOpenRef = useRef(!!defaultOpen);
-
-  useEffect(() => {
-    const previousDefaultOpen = previousDefaultOpenRef.current;
-    if (previousDefaultOpen === !!defaultOpen) {
-      return;
-    }
-
-    previousDefaultOpenRef.current = !!defaultOpen;
-    if (defaultOpen) {
-      setIsOpen(true);
-      translateY.setValue(0);
-      return;
-    }
-
-    translateY.setValue(panelHeight);
-    setIsOpen(false);
-  }, [defaultOpen, panelHeight, translateY]);
-
-  const openPanel = useCallback(() => {
-    setIsOpen(true);
-    Animated.timing(translateY, {
-      toValue: 0,
-      duration: 180,
-      useNativeDriver: true,
-    }).start();
-  }, [translateY]);
-
-  const closePanel = useCallback(() => {
-    onClose?.();
-    Animated.timing(translateY, {
-      toValue: panelHeight,
-      duration: 140,
-      useNativeDriver: true,
-    }).start(() => {
-      setIsOpen(false);
-    });
-  }, [translateY, panelHeight, onClose]);
-
-  const handlePanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponderCapture: () => false,
-        onPanResponderRelease: (_e, gs) => {
-          const isUpSwipe = gs.dy <= -SWIPE_THRESHOLD_PX && Math.abs(gs.dy) > Math.abs(gs.dx);
-          if (isUpSwipe) {
-            openPanel();
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [openPanel]
-  );
-
-  const dismissPanResponder = useMemo(
-    () =>
-      PanResponder.create({
-        onStartShouldSetPanResponder: () => true,
-        onStartShouldSetPanResponderCapture: () => false,
-        onMoveShouldSetPanResponder: () => false,
-        onMoveShouldSetPanResponderCapture: () => false,
-        onPanResponderRelease: (_e, gs) => {
-          const isDownSwipe = gs.dy >= SWIPE_THRESHOLD_PX && Math.abs(gs.dy) > Math.abs(gs.dx);
-          const isTap = Math.abs(gs.dx) < TAP_THRESHOLD && Math.abs(gs.dy) < TAP_THRESHOLD;
-          if (isDownSwipe || isTap) {
-            closePanel();
-          }
-        },
-        onPanResponderTerminationRequest: () => false,
-      }),
-    [closePanel]
-  );
-
   const text = description && description !== '' ? description : 'No description';
+
+  if (!isOpen) {
+    return null;
+  }
 
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: OverlayZIndex.ENIGMA_ROOT, elevation: OverlayZIndex.ENIGMA_ROOT }]}>
-      {!isOpen ? (
-        <View
-          {...handlePanResponder.panHandlers}
-          style={styles.handle}
-          testID="guess.enigma.handle"
-        />
-      ) : null}
-
-      {isOpen ? (
-        <>
-          <Pressable
+      <Pressable
+        accessibilityLabel="Close enigma"
+        accessibilityRole="button"
+        onPress={() => onClose?.()}
+        style={styles.scrim}
+        testID="guess.enigma.scrim"
+      />
+      <Animated.View
+        style={[styles.panel, { height: panelHeight }]}
+        testID="guess.enigma.panel"
+      >
+        <View style={styles.panelHeader}>
+          <IconButton
             accessibilityLabel="Close enigma"
-            accessibilityRole="button"
-            onPress={closePanel}
-            {...dismissPanResponder.panHandlers}
-            style={styles.scrim}
-            testID="guess.enigma.scrim"
+            color="white"
+            icon="chevron-down"
+            onPress={() => onClose?.()}
+            size={CLOSE_ICON_SIZE}
+            testID="guess.enigma.close"
           />
-          <Animated.View
-            style={[styles.panel, { height: panelHeight, transform: [{ translateY }] }]}
-            testID="guess.enigma.panel"
-            {...dismissPanResponder.panHandlers}
-          >
-            <View style={styles.panelHeader}>
-              <IconButton
-                accessibilityLabel="Close enigma"
-                color="white"
-                icon="chevron-down"
-                onPress={closePanel}
-                size={CLOSE_ICON_SIZE}
-                testID="guess.enigma.close"
-              />
-            </View>
-            <Text style={styles.text} testID="guess.enigma.text">{text}</Text>
-          </Animated.View>
-        </>
-      ) : null}
+        </View>
+        <Text style={styles.text} testID="guess.enigma.text">{text}</Text>
+      </Animated.View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  handle: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: HANDLE_HEIGHT,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: GlobalStyle.color.primaryColor900,
-    borderTopLeftRadius: 12,
-    borderTopRightRadius: 12,
-    zIndex: OverlayZIndex.ENIGMA_HANDLE,
-    elevation: OverlayZIndex.ENIGMA_HANDLE,
-  },
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0, 0, 0, 0.28)',
