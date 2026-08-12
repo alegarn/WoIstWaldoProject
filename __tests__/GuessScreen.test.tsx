@@ -3216,8 +3216,8 @@ describe('GuessScreen', () => {
   });
 
   describe('private exit routing', () => {
-    it('private scope: exit-menu Home calls navigation.popTo("PrivateHomeScreen") and does NOT call popToTop', async () => {
-      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), popTo: jest.fn() };
+    it('private scope: exit-menu Home resets stack to [HomeScreen, PrivateHomeScreen(scope)] and does NOT call popToTop', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), reset: jest.fn() };
       const route = {
         params: {
           ...PUBLIC_ROUTE_PARAMS,
@@ -3233,12 +3233,18 @@ describe('GuessScreen', () => {
         lastMenuProps().onHome();
       });
 
-      expect(navigation.popTo).toHaveBeenCalledWith('PrivateHomeScreen');
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: { kind: 'private', groupId: 'g-1' } } },
+        ],
+      });
       expect(navigation.popToTop).not.toHaveBeenCalled();
     });
 
-    it('public scope (no scope): exit-menu Home calls navigation.popToTop and does NOT call popTo', async () => {
-      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), popTo: jest.fn() };
+    it('public scope (no scope): exit-menu Home calls navigation.popToTop and does NOT call reset', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), reset: jest.fn() };
       const route = { params: { ...PUBLIC_ROUTE_PARAMS } };
 
       await act(async () => {
@@ -3250,16 +3256,16 @@ describe('GuessScreen', () => {
       });
 
       expect(navigation.popToTop).toHaveBeenCalledTimes(1);
-      expect(navigation.popTo).not.toHaveBeenCalled();
+      expect(navigation.reset).not.toHaveBeenCalled();
     });
 
-    it('private scope: exhausted-panel onLeave calls navigation.popTo("PrivateHomeScreen") and does NOT call popToTop', async () => {
+    it('private scope: exhausted-panel onLeave resets stack to [HomeScreen, PrivateHomeScreen(scope)] and does NOT call popToTop', async () => {
       resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
       const navigation = {
         replace: jest.fn(),
         setParams: jest.fn(),
         popToTop: jest.fn(),
-        popTo: jest.fn(),
+        reset: jest.fn(),
         navigate: jest.fn(),
         goBack: jest.fn(),
         addListener: jest.fn(() => () => {}),
@@ -3284,7 +3290,13 @@ describe('GuessScreen', () => {
         panelProps.onLeave();
       });
 
-      expect(navigation.popTo).toHaveBeenCalledWith('PrivateHomeScreen');
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: { kind: 'private', groupId: 'g-1' } } },
+        ],
+      });
       expect(navigation.popToTop).not.toHaveBeenCalled();
     });
   });

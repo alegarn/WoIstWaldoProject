@@ -65,7 +65,7 @@ type GuessNavigation = {
   navigate(name: 'GuessPathScreen', params?: Record<string, unknown>): void;
   replace(name: 'ResultScreen', params: Record<string, unknown>): void;
   popToTop(): void;
-  popTo(name: 'PrivateHomeScreen'): void;
+  reset(state: { index: number; routes: Array<{ name: string; params?: Record<string, unknown> }> }): void;
   addListener(event: 'beforeRemove', listener: () => void): () => void;
 };
 
@@ -397,7 +397,18 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
   function handleExitToHome() {
     if (isPrivate) {
-      navigation.popTo('PrivateHomeScreen');
+      // v6-compatible equivalent of v7's popTo('PrivateHomeScreen').
+      // Mirrors the reset-to-private-home pattern used by ResultChoices.js and
+      // guessNavigation.js. Carries `scope` so PrivateHomeScreen shows the
+      // correct group, and pops GuessFeedScreen/GuessPathScreen/GuessScreen —
+      // their beforeRemove listeners (useFlushOnLeave) flush unsent batches.
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope } },
+        ],
+      });
       return;
     }
     navigation.popToTop();
