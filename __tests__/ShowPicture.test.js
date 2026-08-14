@@ -3,6 +3,9 @@ const mockIconButton = jest.fn(() => null);
 const mockSpeedRing = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 
+let mockCapturedPanRecord;
+let mockCapturedPan;
+
 jest.mock('react-native', () => {
   const React = require('react');
 
@@ -63,6 +66,25 @@ jest.mock('react-native', () => {
 
 jest.mock('react-native-gesture-handler', () => {
   const React = jest.requireActual('react');
+
+  function makeChainable() {
+    const record = { __type: 'pan', calls: [] };
+    const handler = {
+      get(_t, prop) {
+        if (prop === '__type' || prop === 'calls') return record[prop];
+        if (prop === 'then') return undefined;
+        return (...args) => {
+          record.calls.push({ method: prop, args });
+          return proxy;
+        };
+      },
+    };
+    const proxy = new Proxy(record, handler);
+    mockCapturedPanRecord = record;
+    mockCapturedPan = proxy;
+    return proxy;
+  }
+
   return {
     Gesture: {
       Pan: () => makeChainable(),
@@ -75,17 +97,6 @@ jest.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: ({ children, ...props }) =>
       React.createElement('GestureHandlerRootView', props, children),
   };
-
-  function makeChainable() {
-    const obj = function ChainableGesture() {};
-    const proxy = new Proxy(obj, {
-      get(_t, prop) {
-        if (prop === 'then') return undefined;
-        return (..._args) => proxy;
-      },
-    });
-    return proxy;
-  }
 });
 
 jest.mock('../components/Picture/Descriptions/EnigmaOverlay', () => {
@@ -164,21 +175,17 @@ describe('ShowPicture', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCapturedPanRecord = undefined;
+    mockCapturedPan = undefined;
   });
 
-  it('wraps the picture surface in a GestureDetector carrying the Race(edgeSwipe, handleSwipe) surface gesture', () => {
+  it('wraps the picture surface in a GestureDetector carrying a single Pan surface-swipe gesture', () => {
     const renderer = renderShowPicture();
     const detectors = findAllByType(renderer, 'GestureDetector');
     expect(detectors.length).toBeGreaterThanOrEqual(2);
-
-    // The OUTER detector wraps the surface (pressable); its gesture is a Race.
-    const surfaceDetector = detectors.find((d) => {
-      const g = d.props.gesture;
-      return g && g.__type === 'race';
-    });
+    const surfaceDetector = detectors.find((d) => d.props.gesture === mockCapturedPan);
     expect(surfaceDetector).toBeTruthy();
-    const race = surfaceDetector.props.gesture;
-    expect(race.gestures.length).toBe(2);
+    expect(mockCapturedPanRecord.__type).toBe('pan');
   });
 
   it('wraps the target circle in an INNER GestureDetector carrying the target drag gesture from props', () => {
@@ -254,5 +261,67 @@ describe('ShowPicture', () => {
     expect(() => findByTestID(renderer, 'game.picture.guess-image')).not.toThrow();
     expect(() => findByTestID(renderer, 'game.picture.guess-target-wrap')).not.toThrow();
     expect(() => findByTestID(renderer, 'game.picture.guess-modal')).not.toThrow();
+  });
+
+  describe('surface swipe dispatch', () => {
+    function getOnEnd() {
+      return mockCapturedPanRecord.calls.find((c) => c.method === 'onEnd').args[0];
+    }
+
+    function latestEnigmaProps() {
+      return mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    }
+
+    it('up-swipe opens the enigma and does NOT trigger onEdgeSwipe', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 4, translationY: -60 }, true);
+      });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('right-swipe triggers onEdgeSwipe and keeps the enigma closed', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 70, translationY: 2 }, true);
+      });
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+      expect(latestEnigmaProps().isOpen).toBe(false);
+    });
+
+    it('unsuccessful gesture is ignored', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 70, translationY: -60 }, false);
+      });
+
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+      expect(latestEnigmaProps().isOpen).toBe(false);
+    });
+
+    it('up takes priority on a diagonal up+right swipe (regression for the reported bug)', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 80, translationY: -70 }, true);
+      });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
   });
 });

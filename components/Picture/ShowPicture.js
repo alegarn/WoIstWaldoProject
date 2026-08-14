@@ -17,11 +17,11 @@ const PULSE_OPACITY_MIN = 0.55;
 const PULSE_OPACITY_MAX = 1;
 const PULSE_NATIVE_DRIVER = { useNativeDriver: true };
 
-// Surface swipe thresholds for the nested RNGH detectors. The legacy responder
-// versions of these detectors lived in separate higher-zIndex subtrees that
-// physically intercepted touches in the left 36px / bottom 28px — starving the
-// target's drag. Moving detection INTO the picture subtree (the same subtree
-// the target circle lives in) eliminates that cross-subtree barrier.
+// Surface swipe thresholds for the single RNGH surface detector. The legacy
+// responder version lived in separate higher-zIndex subtrees that physically
+// intercepted touches in the left 36px / bottom 28px — starving the target's
+// drag. Moving detection INTO the picture subtree (the same subtree the target
+// circle lives in) eliminates that cross-subtree barrier.
 const EDGE_SWIPE_ACTIVE_X = 40;
 const EDGE_SWIPE_FAIL_X = -10;
 const EDGE_SWIPE_FAIL_Y = 40;
@@ -92,40 +92,32 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
     ? { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }
     : null;
 
-  // Edge right-swipe → open exit menu. failOffsetX/Y ensure taps, vertical
-  // swipes, and leftward swipes do NOT trigger the menu.
-  const edgeSwipe = useMemo(
+  // Surface swipe classifier. A SINGLE Pan recognizer replaces the old
+  // Race(edgeSwipe, handleSwipe): on Android that race mis-resolved a
+  // bottom-up swipe — edgeSwipe (rightward) never failed on upward movement
+  // (its failOffsetY was positive = down-only), so it lingered in BEGAN and
+  // could win the race, opening the exit menu instead of the description.
+  // One recognizer + a direction branch in onEnd removes the ambiguity: up
+  // opens the enigma, right opens the exit menu. Up takes priority so a
+  // bottom-up gesture always reaches the description even with drift.
+  const surfaceSwipe = useMemo(
     () =>
       Gesture.Pan()
         .activeOffsetX(EDGE_SWIPE_ACTIVE_X)
+        .activeOffsetY(HANDLE_SWIPE_ACTIVE_Y)
         .failOffsetX(EDGE_SWIPE_FAIL_X)
-        .failOffsetY(EDGE_SWIPE_FAIL_Y)
-        .onEnd((_event, success) => {
-          if (success) {
+        .failOffsetY(HANDLE_SWIPE_FAIL_Y)
+        .onEnd((event, success) => {
+          if (!success) {
+            return;
+          }
+          if (event.translationY <= HANDLE_SWIPE_ACTIVE_Y) {
+            setEnigmaOpen(true);
+          } else if (event.translationX >= EDGE_SWIPE_ACTIVE_X) {
             onEdgeSwipe?.();
           }
         }),
     [onEdgeSwipe],
-  );
-
-  // Bottom up-swipe → open enigma. failOffsetY ensures taps and downward /
-  // horizontal swipes do NOT trigger.
-  const handleSwipe = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY(HANDLE_SWIPE_ACTIVE_Y)
-        .failOffsetY(HANDLE_SWIPE_FAIL_Y)
-        .onEnd((_event, success) => {
-          if (success) {
-            setEnigmaOpen(true);
-          }
-        }),
-    [],
-  );
-
-  const surfaceGesture = useMemo(
-    () => Gesture.Race(edgeSwipe, handleSwipe),
-    [edgeSwipe, handleSwipe],
   );
 
   const handleEnigmaClose = () => {
@@ -152,7 +144,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
 
   return (
     <View style={styles.container} >
-      <GestureDetector gesture={surfaceGesture}>
+      <GestureDetector gesture={surfaceSwipe}>
         <View style={[styles.pressable, imageDimensionStyle]}>
           <Pressable
             accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'}
