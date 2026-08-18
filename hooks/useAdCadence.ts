@@ -1,5 +1,4 @@
 import { useCallback, useRef, useState } from 'react';
-import { Platform } from 'react-native';
 
 import { consumeAdSlot as resolveAdSlot } from '../utils/adCadence';
 import type { AdScope, ConsumeAdSlotResult } from '../utils/adCadence';
@@ -7,8 +6,6 @@ import { shouldSuppressAds, type ActiveGroupAdContext } from '../services/billin
 import type { AuthContextLike } from '../services/billing/entitlements';
 import { isE2EMode } from '../utils/e2eMode';
 import type { AdSource } from '../services/ads/AdSource';
-
-const IS_ANDROID = Platform.OS === 'android';
 
 type UseAdCadenceArgs = {
   scope?: AdScope;
@@ -42,12 +39,18 @@ export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseA
   const isE2E = isE2EMode();
 
   const consumeCurrentAdSlot = useCallback((): ConsumeAdSlotResult => {
+    // isSourceReady is platform-agnostic: the composite adSource.isReady() is
+    // true on every platform (InternalProAdSource.isReady() is always true →
+    // fallback panel always eligible), and on Android a loaded AdMob
+    // interstitial takes precedence via the bridge snapshot. Gating on the
+    // platform here previously made iOS permanently isSourceReady=false and
+    // suppressed every ad; paid tier and e2e are still skipped by consumeAdSlot.
     const result = resolveAdSlot({
       successesSinceLastAd: successesSinceLastAdRef.current,
       scope,
       isAdFree,
       isE2E,
-      isSourceReady: IS_ANDROID && adSource.isReady(),
+      isSourceReady: adSource.isReady(),
     });
     successesSinceLastAdRef.current = result.nextCount;
     setSuccessesSinceLastAd(result.nextCount);

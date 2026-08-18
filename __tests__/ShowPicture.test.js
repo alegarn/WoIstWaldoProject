@@ -1,200 +1,327 @@
-jest.mock('../components/UI/IconButton', () => {
-  return function MockIconButton(props) {
-    return null;
+const mockEnigmaOverlay = jest.fn(() => null);
+const mockIconButton = jest.fn(() => null);
+const mockSpeedRing = jest.fn(() => null);
+const mockCenteredModal = jest.fn(() => null);
+
+let mockCapturedPanRecord;
+let mockCapturedPan;
+
+jest.mock('react-native', () => {
+  const React = require('react');
+
+  class MockAnimatedValue {
+    constructor(value) {
+      this._value = value;
+    }
+    setValue = (nextValue) => {
+      this._value = nextValue;
+    };
+  }
+
+  function buildAnimation(value, config) {
+    return {
+      start: (callback) => {
+        if (typeof config?.toValue !== 'undefined' && value?.setValue) {
+          value.setValue(config.toValue);
+        }
+        callback?.();
+      },
+    };
+  }
+
+  return {
+    Animated: {
+      Value: MockAnimatedValue,
+      timing: jest.fn((value, config) => buildAnimation(value, config)),
+      loop: jest.fn((anim) => ({
+        start: () => {},
+        stop: () => {},
+        reset: () => {},
+      })),
+      parallel: jest.fn((animations) => ({
+        start: (cb) => {
+          animations.forEach((a) => a?.start?.());
+          cb?.();
+        },
+      })),
+      sequence: jest.fn((animations) => ({
+        start: (cb) => {
+          animations.forEach((a) => a?.start?.());
+          cb?.();
+        },
+      })),
+      View: ({ children, ...props }) => React.createElement('AnimatedView', props, children),
+    },
+    ImageBackground: ({ children, ...props }) =>
+      React.createElement('ImageBackground', props, children),
+    Pressable: ({ children, ...props }) => React.createElement('Pressable', props, children),
+    StyleSheet: {
+      absoluteFill: {},
+      absoluteFillObject: {},
+      create: (styles) => styles,
+    },
+    View: ({ children, ...props }) => React.createElement('View', props, children),
   };
 });
 
-jest.mock('../components/UI/CenteredModal', () => {
-  return function MockCenteredModal(props) {
-    return null;
+jest.mock('react-native-gesture-handler', () => {
+  const React = jest.requireActual('react');
+
+  function makeChainable() {
+    const record = { __type: 'pan', calls: [] };
+    const handler = {
+      get(_t, prop) {
+        if (prop === '__type' || prop === 'calls') return record[prop];
+        if (prop === 'then') return undefined;
+        return (...args) => {
+          record.calls.push({ method: prop, args });
+          return proxy;
+        };
+      },
+    };
+    const proxy = new Proxy(record, handler);
+    mockCapturedPanRecord = record;
+    mockCapturedPan = proxy;
+    return proxy;
+  }
+
+  return {
+    Gesture: {
+      Pan: () => makeChainable(),
+      Race: (...gs) => ({ __type: 'race', gestures: gs }),
+      Exclusive: (...gs) => ({ __type: 'exclusive', gestures: gs }),
+      Simultaneous: (...gs) => ({ __type: 'sim', gestures: gs }),
+    },
+    GestureDetector: ({ children, ...props }) =>
+      React.createElement('GestureDetector', props, children),
+    GestureHandlerRootView: ({ children, ...props }) =>
+      React.createElement('GestureHandlerRootView', props, children),
   };
 });
 
 jest.mock('../components/Picture/Descriptions/EnigmaOverlay', () => {
   return function MockEnigmaOverlay(props) {
+    mockEnigmaOverlay(props);
     return null;
   };
 });
 
-jest.mock('react-native', () => {
-  const actualRN = jest.requireActual('react-native');
-  const noopAnimation = { start: () => {}, stop: () => {}, reset: () => {} };
-  actualRN.Animated.loop = () => noopAnimation;
-  actualRN.Animated.parallel = () => noopAnimation;
-  actualRN.Animated.sequence = () => noopAnimation;
-  actualRN.Animated.timing = () => noopAnimation;
-  actualRN.Animated.delay = () => noopAnimation;
-  return actualRN;
+jest.mock('../components/UI/IconButton', () => {
+  return function MockIconButton(props) {
+    mockIconButton(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/CenteredModal', () => {
+  const React = require('react');
+  return function MockCenteredModal(props) {
+    mockCenteredModal(props);
+    return React.createElement('View', { testID: props.testIDPrefix });
+  };
+});
+
+jest.mock('../components/Guess/SpeedRing', () => {
+  return function MockSpeedRing(props) {
+    mockSpeedRing(props);
+    return null;
+  };
 });
 
 import React from 'react';
-import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import ShowPicture from '../components/Picture/ShowPicture';
 
+function findByTestID(renderer, testID) {
+  return renderer.root.findByProps({ testID });
+}
+
+function findAllByType(renderer, type) {
+  return renderer.root.findAllByType(type);
+}
+
 describe('ShowPicture', () => {
   const baseProps = {
-    uri: 'file:///fixture.jpg',
-    guess: false,
-    description: 'Look near the tree.',
-    touchLocation: null,
+    uri: 'file:///pic.jpg',
+    guess: true,
+    description: 'Find it',
+    touchLocation: { x: '0.5', y: '0.5' },
     handlePress: jest.fn(),
     handleLongPress: jest.fn(),
-    target: null,
+    target: {
+      targetSize: 16,
+      dragSize: 32,
+      dragStyle: { position: 'absolute', left: 100, top: 50, width: 32, height: 32 },
+    },
     handleIconPress: jest.fn(),
     showModal: false,
     handleConfirm: jest.fn(),
     onCancel: jest.fn(),
-    imageDimensionStyle: { width: 240, height: 160 },
+    imageDimensionStyle: { width: 200, height: 400 },
+    targetGesture: { __id: 'target-pan-gesture' },
+    defaultOpen: false,
+    onDescriptionClosed: jest.fn(),
+    onEdgeSwipe: jest.fn(),
   };
 
+  function renderShowPicture(overrides = {}) {
+    let renderer;
+    act(() => {
+      renderer = create(<ShowPicture {...baseProps} {...overrides} />);
+    });
+    return renderer;
+  }
+
   beforeEach(() => {
-    jest.useFakeTimers();
     jest.clearAllMocks();
+    mockCapturedPanRecord = undefined;
+    mockCapturedPan = undefined;
   });
 
-  afterEach(() => {
-    jest.clearAllTimers();
-    jest.useRealTimers();
+  it('wraps the picture surface in a GestureDetector carrying a single Pan surface-swipe gesture', () => {
+    const renderer = renderShowPicture();
+    const detectors = findAllByType(renderer, 'GestureDetector');
+    expect(detectors.length).toBeGreaterThanOrEqual(2);
+    const surfaceDetector = detectors.find((d) => d.props.gesture === mockCapturedPan);
+    expect(surfaceDetector).toBeTruthy();
+    expect(mockCapturedPanRecord.__type).toBe('pan');
   });
 
-  it('keeps the clear icon hidden until a point has been selected', async () => {
+  it('wraps the target circle in an INNER GestureDetector carrying the target drag gesture from props', () => {
+    const renderer = renderShowPicture();
+    const detectors = findAllByType(renderer, 'GestureDetector');
+    const targetDetector = detectors.find((d) => d.props.gesture === baseProps.targetGesture);
+    expect(targetDetector).toBeTruthy();
+    expect(() => findByTestID(renderer, 'game.picture.guess-target-wrap')).not.toThrow();
+  });
+
+  it('preserves the e2e Pressable on the surface (onPress/onLongPress)', () => {
+    const renderer = renderShowPicture();
+    const surface = findByTestID(renderer, 'game.picture.guess-surface');
+    expect(surface.props.onPress).toBe(baseProps.handlePress);
+    expect(surface.props.onLongPress).toBe(baseProps.handleLongPress);
+  });
+
+  it('passes isOpen={enigmaOpen} and onClose to EnigmaOverlay (controlled) and starts closed by default', () => {
+    const renderer = renderShowPicture();
+    const calls = mockEnigmaOverlay.mock.calls;
+    const last = calls[calls.length - 1][0];
+    expect(last.isOpen).toBe(false);
+    expect(last.description).toBe('Find it');
+    expect(last.screenHeight).toBe(400);
+    expect(typeof last.onClose).toBe('function');
+  });
+
+  it('initial enigmaOpen mirrors defaultOpen=true', () => {
+    const renderer = renderShowPicture({ defaultOpen: true });
+    const last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    expect(last.isOpen).toBe(true);
+  });
+
+  it('flips enigmaOpen=true when defaultOpen flips from false to true (existing-instance sync)', () => {
     let renderer;
+    act(() => {
+      renderer = create(<ShowPicture {...baseProps} defaultOpen={false} />);
+    });
+    let last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    expect(last.isOpen).toBe(false);
 
-    await act(async () => {
-      renderer = create(<ShowPicture {...baseProps} />);
+    act(() => {
+      renderer.update(<ShowPicture {...baseProps} defaultOpen={true} />);
     });
 
-    expect(renderer.root.findAllByProps({ testID: 'game.picture.clear-hide' })).toHaveLength(0);
+    last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    expect(last.isOpen).toBe(true);
   });
 
-  it('uses an image-sized press surface and forwards press handlers', async () => {
-    const handlePress = jest.fn();
-    const handleLongPress = jest.fn();
+  it('EnigmaOverlay onClose calls onDescriptionClosed AND closes (isOpen flips false)', () => {
+    const onDescriptionClosed = jest.fn();
     let renderer;
-
-    await act(async () => {
+    act(() => {
       renderer = create(
-        <ShowPicture
-          {...baseProps}
-          guess={true}
-          handlePress={handlePress}
-          handleLongPress={handleLongPress}
-          imageDimensionStyle={{ width: 320, height: 180 }}
-        />
+        <ShowPicture {...baseProps} defaultOpen={true} onDescriptionClosed={onDescriptionClosed} />,
       );
     });
+    let last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    expect(last.isOpen).toBe(true);
 
-    const surface = renderer.root.findByProps({ testID: 'game.picture.guess-surface' });
-    const flattenedStyle = StyleSheet.flatten(surface.props.style);
-
-    expect(flattenedStyle.position).toBe('absolute');
-
-    await act(async () => {
-      surface.props.onPress();
-      surface.props.onLongPress();
+    act(() => {
+      last.onClose();
     });
 
-    expect(handlePress).toHaveBeenCalledTimes(1);
-    expect(handleLongPress).toHaveBeenCalledTimes(1);
+    expect(onDescriptionClosed).toHaveBeenCalledTimes(1);
+    last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    expect(last.isOpen).toBe(false);
   });
 
-  it('attaches the target pan handlers to the wrapping view when a target is set', async () => {
-    const onResponderGrant = jest.fn();
-    const targetPanHandlers = { onResponderGrant };
-    const target = {
-      targetSize: 16,
-      targetStyle: { position: 'absolute', width: 16, height: 16, left: 40, top: 20 },
-      dragSize: 32,
-      dragStyle: {
-        position: 'absolute',
-        width: 32,
-        height: 32,
-        left: 32,
-        top: 12,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-    };
-    let renderer;
-
-    await act(async () => {
-      renderer = create(
-        <ShowPicture
-          {...baseProps}
-          guess={true}
-          touchLocation={{ x: '0.50', y: '0.50' }}
-          target={target}
-          targetPanHandlers={targetPanHandlers}
-        />
-      );
-    });
-
-    const wrapper = renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' });
-    expect(wrapper.props.onResponderGrant).toBe(onResponderGrant);
-    const flattenedStyle = StyleSheet.flatten(wrapper.props.style);
-    expect(flattenedStyle.width).toBe(32);
-    expect(flattenedStyle.borderRadius).toBe(16);
-    expect(flattenedStyle.borderColor).toBe('#6528F7');
-
-    const icon = renderer.root.findByProps({ testID: 'game.picture.clear-guess' });
-    expect(icon).toBeTruthy();
+  it('still renders the target wrap, modal, and image when guessing (testIDs preserved)', () => {
+    const renderer = renderShowPicture({ showModal: true });
+    expect(() => findByTestID(renderer, 'game.picture.guess-surface')).not.toThrow();
+    expect(() => findByTestID(renderer, 'game.picture.guess-image')).not.toThrow();
+    expect(() => findByTestID(renderer, 'game.picture.guess-target-wrap')).not.toThrow();
+    expect(() => findByTestID(renderer, 'game.picture.guess-modal')).not.toThrow();
   });
 
-  it('animates the drag ring as a pulsar when pulseTarget is true and stops when false', async () => {
-    const target = {
-      targetSize: 16,
-      targetStyle: { position: 'absolute', width: 16, height: 16, left: 40, top: 20 },
-      dragSize: 32,
-      dragStyle: {
-        position: 'absolute',
-        width: 32,
-        height: 32,
-        left: 32,
-        top: 12,
-        borderRadius: 16,
-        alignItems: 'center',
-        justifyContent: 'center',
-      },
-    };
-    let renderer;
+  describe('surface swipe dispatch', () => {
+    function getOnEnd() {
+      return mockCapturedPanRecord.calls.find((c) => c.method === 'onEnd').args[0];
+    }
 
-    await act(async () => {
-      renderer = create(
-        <ShowPicture
-          {...baseProps}
-          guess={true}
-          touchLocation={{ x: '0.50', y: '0.50' }}
-          target={target}
-          targetPanHandlers={{}}
-          pulseTarget={true}
-        />
-      );
+    function latestEnigmaProps() {
+      return mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    }
+
+    it('up-swipe opens the enigma and does NOT trigger onEdgeSwipe', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 4, translationY: -60 }, true);
+      });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
     });
 
-    const wrapper = renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' });
-    const activeFlattenedStyle = StyleSheet.flatten(wrapper.props.style);
-    expect(activeFlattenedStyle.borderColor).toBe('#6528F7');
-    expect(activeFlattenedStyle.transform).toBeDefined();
+    it('right-swipe triggers onEdgeSwipe and keeps the enigma closed', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
 
-    await act(async () => {
-      renderer.update(
-        <ShowPicture
-          {...baseProps}
-          guess={true}
-          touchLocation={{ x: '0.50', y: '0.50' }}
-          target={target}
-          targetPanHandlers={{}}
-          pulseTarget={false}
-        />
-      );
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 70, translationY: 2 }, true);
+      });
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+      expect(latestEnigmaProps().isOpen).toBe(false);
     });
 
-    const inactiveFlattenedStyle = StyleSheet.flatten(
-      renderer.root.findByProps({ testID: 'game.picture.guess-target-wrap' }).props.style
-    );
-    expect(inactiveFlattenedStyle.transform).toBeUndefined();
+    it('unsuccessful gesture is ignored', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 70, translationY: -60 }, false);
+      });
+
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+      expect(latestEnigmaProps().isOpen).toBe(false);
+    });
+
+    it('up takes priority on a diagonal up+right swipe (regression for the reported bug)', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ defaultOpen: false, onEdgeSwipe });
+
+      const onEnd = getOnEnd();
+      act(() => {
+        onEnd({ translationX: 80, translationY: -70 }, true);
+      });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
   });
 });

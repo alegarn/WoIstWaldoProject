@@ -117,12 +117,9 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
     // head; the next non-empty batch overwrites the stale key with a real uuid.
     const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
 
-    return getImages(effectivePictureId, authContext, {
-      category_id: resolveCategoryId(categoryId),
-      category_key: categoryKey || 'all',
-      language: resolveServerLanguage(language),
-      scope,
-    });
+    return getImages(effectivePictureId, authContext, buildFeedFilters({
+      categoryKey, categoryId, language, scope,
+    }));
   })();
 
   fetchInFlight.set(key, p);
@@ -133,6 +130,30 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
   });
 
   return p;
+}
+
+/**
+ * Build the `getImages` filters object for the current scope. PRIVATE scopes
+ * keep using `category_id` (server UUID); PUBLIC scopes switched to
+ * `category_key` (bundled string key) and stopped sending `category_id`. The
+ * 'all' pseudo-category sends neither key nor id (backend returns all).
+ *
+ * @param {object} args - { categoryKey, categoryId, language, scope }
+ * @returns {object} filters object forwarded to getImages
+ */
+function buildFeedFilters({ categoryKey, categoryId, language, scope }) {
+  const filters = {
+    language: resolveServerLanguage(language),
+    scope,
+  };
+  if (isPrivateScope(scope)) {
+    filters.category_id = resolveCategoryId(categoryId);
+    return filters;
+  }
+  if (categoryKey && categoryKey !== 'all') {
+    filters.category_key = categoryKey;
+  }
+  return filters;
 }
 
 /**

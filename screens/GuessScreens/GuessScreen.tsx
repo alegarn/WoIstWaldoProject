@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { FC } from 'react';
 import { AppState, useWindowDimensions, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AdInterstitial from '../../components/Ads/AdInterstitial';
 import GuessExitSwipeMenu from '../../components/Guess/GuessExitSwipeMenu';
@@ -64,6 +65,7 @@ type GuessNavigation = {
   navigate(name: 'GuessPathScreen', params?: Record<string, unknown>): void;
   replace(name: 'ResultScreen', params: Record<string, unknown>): void;
   popToTop(): void;
+  reset(state: { index: number; routes: Array<{ name: string; params?: Record<string, unknown> }> }): void;
   addListener(event: 'beforeRemove', listener: () => void): () => void;
 };
 
@@ -105,6 +107,7 @@ type GuessPictureComponent = FC<{
   pulseTarget?: boolean;
   onInteract?: () => void;
   disabled?: boolean;
+  onEdgeSwipe?: () => void;
 }>;
 
 type TutorialOverlayComponent = FC<{
@@ -126,6 +129,12 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
+  // Exit-menu open state is owned here (controlled GuessExitSwipeMenu). The
+  // legacy menu detected the left-edge swipe itself in a separate higher-zIndex
+  // subtree that intercepted touches in the left 36px and starved the target's
+  // drag. Detection now lives in the picture subtree (ShowPicture's nested RNGH
+  // surface detector); the surface fires `onEdgeSwipe` → flip this state.
+  const [exitMenuOpen, setExitMenuOpen] = useState(false);
   // F4: synchronous mirror of `showSuccess` so useResolveLifecycle's no-ad
   // commit gate can read overlay visibility WITHOUT waiting for a passive
   // effect flush. Written synchronously by `applyShowSuccess` at every
@@ -313,9 +322,12 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // streak/score. Only the speed multiplier + overlay state commit here;
     // fire-and-forget deck prefetch is preserved (PB7 Phase 3 covers image
     // preload placement separately).
+    // B2: PUBLIC scope threads categoryKey only (bundled string keys, no
+    // server UUID); PRIVATE scope keeps categoryId (UUID). Mirrors the
+    // cardDeck.buildFeedFilters split.
     prefetchIfLow({
       categoryKey: category?.key || 'all',
-      categoryId: category?.id,
+      ...(isPrivate ? { categoryId: category?.id } : {}),
       language,
       scope,
       authContext,
@@ -387,6 +399,21 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }
 
   function handleExitToHome() {
+    if (isPrivate) {
+      // v6-compatible equivalent of v7's popTo('PrivateHomeScreen').
+      // Mirrors the reset-to-private-home pattern used by ResultChoices.js and
+      // guessNavigation.js. Carries `scope` so PrivateHomeScreen shows the
+      // correct group, and pops GuessFeedScreen/GuessPathScreen/GuessScreen —
+      // their beforeRemove listeners (useFlushOnLeave) flush unsent batches.
+      navigation.reset({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope } },
+        ],
+      });
+      return;
+    }
     navigation.popToTop();
   }
 
@@ -402,8 +429,19 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
   return(
     <PrivateGroupThemeProvider group={group}>
+    {/* RNGH root scoped to the guess screen subtree so it hosts the nested
+        GestureDetectors in ShowPicture (target drag + surface edge/handle
+        swipes) WITHOUT wrapping the app/navigators — an app-wide wrap broke
+        HomeScreen header touches. */}
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <>
-    <GuessExitSwipeMenu onHome={handleExitToHome} showHints={hintsActive} onInteract={dismissHints} />
+    <GuessExitSwipeMenu
+      isOpen={exitMenuOpen}
+      onClose={() => setExitMenuOpen(false)}
+      onHome={handleExitToHome}
+      showHints={hintsActive}
+      onInteract={dismissHints}
+    />
     <GuessPicture
       // PB-key-collision: keying on listId alone collides when Tier 2
       // foreground-fetches a new card whose normalizeListIds-assigned listId
@@ -432,6 +470,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       // PB2: input gating — disable tap/drag confirmation while the advance
       // state machine is mid-cycle so toAdScreen cannot double-fire.
       disabled={advance.state !== 'idle'}
+      onEdgeSwipe={() => setExitMenuOpen(true)}
     />
     {/*
       P3 (D1): off-screen hidden <Image> mounts that force RN to decode the
@@ -465,7 +504,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
          isPortrait={isPortrait}
         />
       }
-    </>  
+    </>
+    </GestureHandlerRootView>
     </PrivateGroupThemeProvider>
   );
 };

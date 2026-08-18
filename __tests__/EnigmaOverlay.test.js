@@ -1,5 +1,3 @@
-let mockCapturedPanResponders;
-
 jest.mock('react-native', () => {
   const React = require('react');
 
@@ -7,7 +5,6 @@ jest.mock('react-native', () => {
     constructor(value) {
       this._value = value;
     }
-
     setValue = (nextValue) => {
       this._value = nextValue;
     };
@@ -29,12 +26,6 @@ jest.mock('react-native', () => {
       Value: MockAnimatedValue,
       timing: jest.fn((value, config) => buildAnimation(value, config)),
       View: ({ children, ...props }) => React.createElement('AnimatedView', props, children),
-    },
-    PanResponder: {
-      create: jest.fn((config) => {
-        mockCapturedPanResponders.push(config);
-        return { panHandlers: {} };
-      }),
     },
     Pressable: ({ children, ...props }) => React.createElement('Pressable', props, children),
     StyleSheet: {
@@ -62,23 +53,10 @@ import EnigmaOverlay from '../components/Picture/Descriptions/EnigmaOverlay';
 const DESCRIPTION = 'Solve the riddle to find the spot';
 const SCREEN_HEIGHT = 640;
 
-function handlePanResponder() {
-  return mockCapturedPanResponders[0];
-}
-
-function dismissPanResponder() {
-  return mockCapturedPanResponders[1];
-}
-
-describe('EnigmaOverlay', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    mockCapturedPanResponders = [];
-  });
-
-  async function renderOverlay(props = {}) {
+describe('EnigmaOverlay (controlled)', () => {
+  function renderOverlay(props = {}) {
     let renderer;
-    await act(async () => {
+    act(() => {
       renderer = create(
         <EnigmaOverlay
           description={DESCRIPTION}
@@ -90,144 +68,68 @@ describe('EnigmaOverlay', () => {
     return renderer;
   }
 
-  it('renders the enigma text in the open panel', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders the panel + scrim + description text when isOpen=true', () => {
+    const renderer = renderOverlay({ isOpen: true });
 
     expect(renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe(DESCRIPTION);
-  });
-
-  it('shows "No description" when the description is empty', async () => {
-    const renderer = await renderOverlay({ description: '', defaultOpen: true });
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe('No description');
-  });
-
-  it('starts closed when defaultOpen is falsy (panel absent, handle present)', async () => {
-    const renderer = await renderOverlay();
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.handle' })).toBeTruthy();
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-  });
-
-  it('starts open when defaultOpen is true and shows the description', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe(DESCRIPTION);
-  });
-
-  it('opens when defaultOpen flips from false to true on an existing instance', async () => {
-    const renderer = await renderOverlay({ defaultOpen: false });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-
-    await act(async () => {
-      renderer.update(
-        <EnigmaOverlay
-          description={DESCRIPTION}
-          screenHeight={SCREEN_HEIGHT}
-          defaultOpen={true}
-        />
-      );
-    });
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toBeTruthy();
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children).toBe(DESCRIPTION);
-  });
-
-  it('opens when the handle sees an up-swipe', async () => {
-    const renderer = await renderOverlay();
-
-    await act(async () => {
-      handlePanResponder().onPanResponderRelease(null, { dx: 0, dy: -60 });
-    });
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toBeTruthy();
-  });
-
-  it('does NOT open on a horizontal swipe', async () => {
-    const renderer = await renderOverlay();
-
-    await act(async () => {
-      handlePanResponder().onPanResponderRelease(null, { dx: 80, dy: -10 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-  });
-
-  it('does NOT open on a tap', async () => {
-    const renderer = await renderOverlay();
-
-    await act(async () => {
-      handlePanResponder().onPanResponderRelease(null, { dx: 2, dy: -2 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-  });
-
-  it('closes when the close button is pressed', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
-
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'guess.enigma.close' }).props.onPress();
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-  });
-
-  it('closes when the panel/scrim sees a down-swipe', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
-
-    await act(async () => {
-      dismissPanResponder().onPanResponderRelease(null, { dx: 0, dy: 60 });
-    });
-
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
-  });
-
-  it('renders open by default when defaultOpen=true and exposes the scrim', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
-
     expect(renderer.root.findByProps({ testID: 'guess.enigma.scrim' })).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children
+    ).toBe(DESCRIPTION);
   });
 
-  it('calls onClose when the panel is dismissed via the scrim', async () => {
-    const onClose = jest.fn();
-    const renderer = await renderOverlay({ defaultOpen: true, onClose });
+  it('shows "No description" when description is empty', () => {
+    const renderer = renderOverlay({ description: '', isOpen: true });
 
-    await act(async () => {
+    expect(
+      renderer.root.findByProps({ testID: 'guess.enigma.text' }).props.children
+    ).toBe('No description');
+  });
+
+  it('renders nothing (no panel, no scrim) when isOpen=false', () => {
+    const renderer = renderOverlay({ isOpen: false });
+
+    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.panel' })).toThrow();
+    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.scrim' })).toThrow();
+  });
+
+  it('does NOT render the legacy handle strip', () => {
+    const renderer = renderOverlay({ isOpen: false });
+    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.handle' })).toThrow();
+  });
+
+  it('calls onClose when the scrim is tapped', () => {
+    const onClose = jest.fn();
+    const renderer = renderOverlay({ isOpen: true, onClose });
+
+    act(() => {
       renderer.root.findByProps({ testID: 'guess.enigma.scrim' }).props.onPress();
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('calls onClose when the close chevron is pressed', async () => {
+  it('calls onClose when the close chevron is pressed', () => {
     const onClose = jest.fn();
-    const renderer = await renderOverlay({ defaultOpen: true, onClose });
+    const renderer = renderOverlay({ isOpen: true, onClose });
 
-    await act(async () => {
+    act(() => {
       renderer.root.findByProps({ testID: 'guess.enigma.close' }).props.onPress();
     });
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('does not call onClose when onClose is not provided (no throw)', async () => {
-    const renderer = await renderOverlay({ defaultOpen: true });
-
-    await expect(
-      act(async () => {
+  it('does not throw when onClose is not provided', () => {
+    const renderer = renderOverlay({ isOpen: true });
+    expect(() => {
+      act(() => {
         renderer.root.findByProps({ testID: 'guess.enigma.scrim' }).props.onPress();
-      })
-    ).resolves.toBeUndefined();
-  });
-
-  it('renders closed (handle only) when defaultOpen=false', async () => {
-    const renderer = await renderOverlay({ defaultOpen: false });
-
-    expect(renderer.root.findByProps({ testID: 'guess.enigma.handle' })).toBeTruthy();
-    expect(() => renderer.root.findByProps({ testID: 'guess.enigma.scrim' })).toThrow();
+      });
+    }).not.toThrow();
   });
 });

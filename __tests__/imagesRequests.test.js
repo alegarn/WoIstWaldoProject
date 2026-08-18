@@ -374,6 +374,89 @@ describe('imagesRequests utilities', () => {
     expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', 'nature', 'fr');
   });
 
+  it('B2: threads category_key into the public image batch query params (no category_id)', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' }, { category_key: 'nature', language: 'fr' });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_image_batch',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { category_key: 'nature', language: 'fr' },
+        timeout: 15000,
+      }
+    );
+    // B2: public path must NOT leak category_id when only category_key is supplied.
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('category_id');
+  });
+
+  it('B2: threads category_key into the next image batch body (public pagination)', async () => {
+    axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages('first-img', { token: 'Bearer token' }, { category_key: 'nature', language: 'fr' });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/next_image_batch',
+      { image: { name: 'first-img', category_key: 'nature', language: 'fr' } },
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
+    );
+    expect(axios.post.mock.calls[0][1].image).not.toHaveProperty('category_id');
+  });
+
+  it('B2: sends neither category_key nor category_id when filters omit them (legacy full feed)', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' }, { language: 'fr' });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_image_batch',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { language: 'fr' },
+        timeout: 15000,
+      }
+    );
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('category_key');
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('category_id');
+  });
+
+  it('private scope: namespaces the cursor with the private category id so it round-trips with getLastImageUuid', async () => {
+    // Regression: private filters carry no category_key (server contract stays
+    // category_id), so the private delegation must derive the LOCAL cursor
+    // namespace from category_id. Writing under 'all' (the storageDatum
+    // fallback for undefined) never matched the read side
+    // (getLastImageUuid(<privateId>)) and polluted the public 'all' cursor.
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'img-1' }], next_cursor: 'cursor-9' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+
+    const response = await getImages(null, { token: 'Bearer token' }, {
+      category_id: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(axios.get).toHaveBeenNthCalledWith(
+      1,
+      'https://backend.example/api/v1/private_groups/g-3/images/',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { category_id: 'cat-private-uuid', language: 'fr' },
+      }
+    );
+    expect(response.isError).toBe(false);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr');
+  });
+
   it('leaves the request unchanged when no filters are provided (legacy full feed)', async () => {
     axios.get.mockResolvedValueOnce({ data: { data: [] } });
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanResponder } from 'react-native';
+import { Gesture } from 'react-native-gesture-handler';
 
 import { buildSelectionFromPixels } from '../utils/targetLocation';
 
@@ -41,7 +41,7 @@ export type UseTargetDragArgs = {
 export type UseTargetDragResult = {
   touchLocation: { x: string; y: string } | null;
   target: UseTargetDragSelection['target'];
-  panHandlers: unknown;
+  gesture: unknown;
   setSelection: (selection: UseTargetDragSelection) => void;
 };
 
@@ -103,16 +103,21 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
     setTarget(selection.target);
   }, []);
 
-  const panHandlers = useMemo(() => {
+  // RNGH Gesture.Pan replaces the legacy PanResponder. The legacy responder
+  // only negotiated touches along the target view's ancestor chain — a separate
+  // higher-zIndex subtree (the exit-menu edge strip / enigma handle strip)
+  // physically intercepted touches in those zones and the target's chain was
+  // never consulted. RNGH uses a single responder system rooted at
+  // GestureHandlerRootView, so a gesture on the target circle wins regardless
+  // of sibling overlays. Pan only activates past activeOffset, so taps still
+  // fall through to the Pressable below for e2e target placement.
+  const gesture = useMemo(() => {
     if (!enabled) {
       return undefined;
     }
-    return PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponderCapture: () => false,
-      onPanResponderGrant: () => {
+    return Gesture.Pan()
+      .enabled(true)
+      .onBegin(() => {
         onInteractRef.current?.();
         userInteractedRef.current = true;
         const { target: currentTarget } = stateRef.current;
@@ -121,15 +126,15 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
           x: (currentTarget?.targetStyle?.left ?? 0) + half,
           y: (currentTarget?.targetStyle?.top ?? 0) + half,
         };
-      },
-      onPanResponderMove: (_event, gestureState) => {
+      })
+      .onUpdate((event) => {
         const {
           screenWidth: sw,
           screenHeight: sh,
           imageDimensionStyle: dims,
         } = stateRef.current;
-        const nextX = clamp(dragStartRef.current.x + gestureState.dx, 0, dims.width);
-        const nextY = clamp(dragStartRef.current.y + gestureState.dy, 0, dims.height);
+        const nextX = clamp(dragStartRef.current.x + event.translationX, 0, dims.width);
+        const nextY = clamp(dragStartRef.current.y + event.translationY, 0, dims.height);
         const selection = buildSelectionFromPixels({
           locationX: nextX,
           locationY: nextY,
@@ -139,16 +144,14 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
         }) as UseTargetDragSelection;
         setTouchLocation(selection.location);
         setTarget(selection.target);
-      },
-      onPanResponderRelease: (_event, gestureState) => {
-        const moved = Math.hypot(gestureState.dx, gestureState.dy);
+      })
+      .onFinalize((event) => {
+        const moved = Math.hypot(event.translationX ?? 0, event.translationY ?? 0);
         if (moved < TAP_THRESHOLD) {
           onTapRef.current?.();
         }
-      },
-      onPanResponderTerminationRequest: () => false,
-    }).panHandlers;
+      });
   }, [enabled]);
 
-  return { touchLocation, target, panHandlers, setSelection };
+  return { touchLocation, target, gesture, setSelection };
 }

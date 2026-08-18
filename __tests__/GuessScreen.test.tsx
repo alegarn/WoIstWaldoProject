@@ -3,6 +3,7 @@ type MockPictureProps = {
   pulseTarget: boolean;
   onInteract: () => void;
   disabled?: boolean;
+  onEdgeSwipe?: () => void;
   [key: string]: unknown;
 };
 type MockOverlayProps = {
@@ -14,9 +15,11 @@ type MockOverlayProps = {
   [key: string]: unknown;
 };
 type MockMenuProps = {
+  isOpen: boolean;
   showHints: boolean;
   onInteract: () => void;
   onHome: () => void;
+  onClose: () => void;
   [key: string]: unknown;
 };
 
@@ -74,6 +77,18 @@ let mockOverlayDismissDelayMs: number | null = null;
 function setMockOverlayDismissDelayMs(ms: number | null): void {
   mockOverlayDismissDelayMs = ms;
 }
+
+// GuessScreen renders a localized <GestureHandlerRootView> as the host for the
+// nested GestureDetectors in ShowPicture. RNGH's real root calls a native
+// `install()` unavailable under jest; stub the root to render children so the
+// rest of the screen renders under test.
+jest.mock('react-native-gesture-handler', () => {
+  const React = jest.requireActual('react');
+  return {
+    GestureHandlerRootView: ({ children }: { children: React.ReactNode }) =>
+      React.createElement('GestureHandlerRootView', null, children),
+  };
+});
 
 jest.mock('../components/Picture/GuessPicture', () => {
   const React = jest.requireActual('react');
@@ -296,6 +311,9 @@ import { applySuccessSideEffects as applySuccessSideEffectsImpl, resolveNextGues
 import { navigateToNextGuess as navigateToNextGuessImpl } from '../utils/guessNavigation';
 import { prefetchIfLow as prefetchIfLowImpl } from '../services/cardPrefetcher';
 import { warmAllDeckIfNeeded as warmAllDeckIfNeededImpl } from '../services/cardPrefetcher';
+import { createFallbackAdSource as createFallbackAdSourceImpl } from '../services/ads/FallbackAdSource';
+import { createAdMobInterstitialSource as createAdMobInterstitialSourceImpl } from '../services/ads/AdMobInterstitialSource';
+import { createInternalProAdSource as createInternalProAdSourceImpl } from '../services/ads/InternalProAdSource';
 import { consumeAdSlot as consumeAdSlotImpl } from '../utils/adCadence';
 import { shouldSuppressAds as shouldSuppressAdsImpl } from '../services/billing/adPolicy';
 import { resolveNextCardWithServerFallback as resolveNextCardWithServerFallbackImpl } from '../utils/nextCardAdvancer';
@@ -309,6 +327,9 @@ const resolveNextGuessParams = resolveNextGuessParamsImpl as jest.MockedFunction
 const navigateToNextGuess = navigateToNextGuessImpl as jest.MockedFunction<typeof navigateToNextGuessImpl>;
 const prefetchIfLow = prefetchIfLowImpl as jest.MockedFunction<typeof prefetchIfLowImpl>;
 const warmAllDeckIfNeeded = warmAllDeckIfNeededImpl as jest.MockedFunction<typeof warmAllDeckIfNeededImpl>;
+const createFallbackAdSource = createFallbackAdSourceImpl as jest.MockedFunction<typeof createFallbackAdSourceImpl>;
+const createAdMobInterstitialSource = createAdMobInterstitialSourceImpl as jest.MockedFunction<typeof createAdMobInterstitialSourceImpl>;
+const createInternalProAdSource = createInternalProAdSourceImpl as jest.MockedFunction<typeof createInternalProAdSourceImpl>;
 const consumeAdSlot = consumeAdSlotImpl as jest.MockedFunction<typeof consumeAdSlotImpl>;
 const shouldSuppressAds = shouldSuppressAdsImpl as jest.MockedFunction<typeof shouldSuppressAdsImpl>;
 const resolveNextCardWithServerFallback = resolveNextCardWithServerFallbackImpl as jest.MockedFunction<typeof resolveNextCardWithServerFallbackImpl>;
@@ -360,6 +381,22 @@ describe('GuessScreen', () => {
     isE2EMode.mockReturnValue(false);
     consumeAdSlot.mockReturnValue({ showAd: false, nextCount: 1 });
     shouldSuppressAds.mockReturnValue(false);
+    createAdMobInterstitialSource.mockReturnValue({
+      isReady: () => false,
+      show: async () => undefined,
+      renderSurface: () => null,
+    });
+    createInternalProAdSource.mockReturnValue({
+      isReady: () => true,
+      show: async () => undefined,
+      renderSurface: () => null,
+      _continue: () => undefined,
+    });
+    createFallbackAdSource.mockReturnValue({
+      isReady: () => true,
+      show: async () => undefined,
+      renderSurface: () => null,
+    });
     // Reset the outer resolver mock to its default (actual implementation)
     // so per-test mockResolvedValue overrides don't leak across tests.
     resolveNextCardWithServerFallback.mockImplementation(advanceModuleActual.resolveNextCardWithServerFallback);
@@ -585,9 +622,9 @@ describe('GuessScreen', () => {
     expect(navigateToNextGuess).not.toHaveBeenCalled();
     // Regression (T4): prefetch fired during success path but did not block overlay/setParams.
     expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+    // B2: PUBLIC scope threads categoryKey only; categoryId is NOT forwarded.
     expect(prefetchIfLow).toHaveBeenCalledWith({
       categoryKey: 'nature',
-      categoryId: 'cat-1',
       language: 'fr',
       scope: undefined,
       authContext: expect.objectContaining({ userId: '' }),
@@ -789,6 +826,46 @@ describe('GuessScreen', () => {
 
     expect(lastPictureProps().pulseTarget).toBe(false);
     expect(lastMenuProps().showHints).toBe(false);
+  });
+
+  it('controlled exit menu: starts closed (isOpen=false), edge-swipe via GuessPicture.onEdgeSwipe flips it open, onClose closes', async () => {
+    const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn() };
+    const route = {
+      params: {
+        imageFile: 'file:///waldo.jpg',
+        pictureId: 'image-1',
+        description: 'Find Waldo',
+        imageHeight: 1200,
+        imageWidth: 800,
+        isPortrait: true,
+        hiddenLocation: { x: 0.5, y: 0.5 },
+        listId: 3,
+        isTutorial: false,
+        category: { id: 'cat-1', key: 'nature' },
+        language: 'fr',
+      },
+    };
+
+    await act(async () => {
+      create(<GuessScreen navigation={navigation} route={route} />);
+    });
+
+    expect(lastMenuProps().isOpen).toBe(false);
+
+    const pictureProps = lastPictureProps();
+    expect(typeof pictureProps.onEdgeSwipe).toBe('function');
+
+    await act(async () => {
+      pictureProps.onEdgeSwipe?.();
+    });
+
+    expect(lastMenuProps().isOpen).toBe(true);
+
+    await act(async () => {
+      lastMenuProps().onClose();
+    });
+
+    expect(lastMenuProps().isOpen).toBe(false);
   });
 
   it('on success: calls streak.onWin and passes streakTier (tier >= 0) to SuccessOverlay', async () => {
@@ -1159,9 +1236,9 @@ describe('GuessScreen', () => {
       // kicks the resolve off at tap, so it may already have fired by here.
       // The observable invariant is prefetchIfLow's call shape on tap.
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope threads categoryKey only; categoryId is NOT forwarded.
       expect(prefetchIfLow).toHaveBeenCalledWith({
         categoryKey: 'nature',
-        categoryId: 'cat-1',
         language: 'fr',
         scope: undefined,
         authContext: expect.objectContaining({ userId: '' }),
@@ -1280,10 +1357,12 @@ describe('GuessScreen', () => {
       });
 
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope + null category → categoryKey 'all', no categoryId.
       expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
         categoryKey: 'all',
-        categoryId: undefined,
       }));
+      const nullCatCall = prefetchIfLow.mock.calls[prefetchIfLow.mock.calls.length - 1][0] as { categoryId?: unknown };
+      expect(nullCatCall.categoryId).toBeUndefined();
     });
 
     it('T7: prefetch rejection does not break the success flow (overlay still shows, setParams still fires onDone)', async () => {
@@ -1836,10 +1915,12 @@ describe('GuessScreen', () => {
       });
 
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope + category.key === 'all' threads categoryKey only.
       expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
         categoryKey: 'all',
-        categoryId: 'cat-all',
       }));
+      const allCall = prefetchIfLow.mock.calls[prefetchIfLow.mock.calls.length - 1][0] as { categoryId?: unknown };
+      expect(allCall.categoryId).toBeUndefined();
     });
   });
 
@@ -3135,6 +3216,92 @@ describe('GuessScreen', () => {
       expect(mockNextCardImageWarmer).toHaveBeenCalled();
       const warmerCall = mockNextCardImageWarmer.mock.calls[mockNextCardImageWarmer.mock.calls.length - 1][0];
       expect(warmerCall.uris).toEqual([]);
+    });
+  });
+
+  describe('private exit routing', () => {
+    it('private scope: exit-menu Home resets stack to [HomeScreen, PrivateHomeScreen(scope)] and does NOT call popToTop', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), reset: jest.fn() };
+      const route = {
+        params: {
+          ...PUBLIC_ROUTE_PARAMS,
+          scope: { kind: 'private', groupId: 'g-1' },
+        },
+      };
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={route} />);
+      });
+
+      await act(async () => {
+        lastMenuProps().onHome();
+      });
+
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: { kind: 'private', groupId: 'g-1' } } },
+        ],
+      });
+      expect(navigation.popToTop).not.toHaveBeenCalled();
+    });
+
+    it('public scope (no scope): exit-menu Home calls navigation.popToTop and does NOT call reset', async () => {
+      const navigation = { replace: jest.fn(), setParams: jest.fn(), popToTop: jest.fn(), reset: jest.fn() };
+      const route = { params: { ...PUBLIC_ROUTE_PARAMS } };
+
+      await act(async () => {
+        create(<GuessScreen navigation={navigation} route={route} />);
+      });
+
+      await act(async () => {
+        lastMenuProps().onHome();
+      });
+
+      expect(navigation.popToTop).toHaveBeenCalledTimes(1);
+      expect(navigation.reset).not.toHaveBeenCalled();
+    });
+
+    it('private scope: exhausted-panel onLeave resets stack to [HomeScreen, PrivateHomeScreen(scope)] and does NOT call popToTop', async () => {
+      resolveNextCardWithServerFallback.mockResolvedValue({ next: null, reason: 'empty' });
+      const navigation = {
+        replace: jest.fn(),
+        setParams: jest.fn(),
+        popToTop: jest.fn(),
+        reset: jest.fn(),
+        navigate: jest.fn(),
+        goBack: jest.fn(),
+        addListener: jest.fn(() => () => {}),
+      };
+      const route = {
+        params: {
+          ...PUBLIC_ROUTE_PARAMS,
+          scope: { kind: 'private', groupId: 'g-1' },
+        },
+      };
+      isOnTarget.mockReturnValue(true);
+      applySuccessSideEffects.mockResolvedValue(undefined);
+
+      await act(async () => { create(<GuessScreen navigation={navigation} route={route} />); });
+      await act(async () => { lastPictureProps().toAdScreen({ location: { x: 0.5, y: 0.5 } }); });
+      await act(async () => { lastOverlayProps().onDone(); });
+
+      expect(mockGuessExhaustedPanel).toHaveBeenCalled();
+      const panelProps = mockGuessExhaustedPanel.mock.calls[mockGuessExhaustedPanel.mock.calls.length - 1][0];
+
+      await act(async () => {
+        panelProps.onLeave();
+      });
+
+      expect(navigation.reset).toHaveBeenCalledWith({
+        index: 1,
+        routes: [
+          { name: 'HomeScreen' },
+          { name: 'PrivateHomeScreen', params: { scope: { kind: 'private', groupId: 'g-1' } } },
+        ],
+      });
+      expect(navigation.popToTop).not.toHaveBeenCalled();
     });
   });
 });

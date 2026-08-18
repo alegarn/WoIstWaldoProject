@@ -396,9 +396,75 @@ describe('fetchCardBatch', () => {
     expect(getImages).toHaveBeenCalledWith(
       null,
       { token: 't' },
-      expect.objectContaining({ language: undefined, category_key: 'nature', category_id: 'cat-nature' }),
+      expect.objectContaining({ language: undefined, category_key: 'nature' }),
     );
+    // B2: PUBLIC scope must NOT send category_id (bundled keys replace UUIDs).
+    expect(getImages.mock.calls[0][2]).not.toHaveProperty('category_id');
     expect(getImages.mock.calls[0][2].language).not.toBe('any');
+  });
+
+  it('B2: PUBLIC scope sends category_key only; PRIVATE scope keeps category_id', async () => {
+    // PUBLIC: categoryKey threads through as category_key; categoryId is
+    // dropped (bundled public categories carry no server UUID anymore).
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+    const publicFilters = getImages.mock.calls[0][2];
+    expect(publicFilters).toMatchObject({ category_key: 'nature' });
+    expect(publicFilters).not.toHaveProperty('category_id');
+
+    jest.clearAllMocks();
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    // PRIVATE: categoryId threads through as category_id (UUID unchanged); no
+    // category_key leaks on the private path (byte-equivalent to pre-B2).
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-1' },
+      authContext: { token: 't' },
+    });
+    const privateFilters = getImages.mock.calls[0][2];
+    expect(privateFilters).toMatchObject({ category_id: 'cat-private-uuid' });
+    expect(privateFilters).not.toHaveProperty('category_key');
+  });
+
+  it('private cursor round-trip: reads the persisted cursor under the private category id namespace', async () => {
+    // Regression: buildFeedFilters omits category_key for private scopes, so
+    // the write path (getImages → fetchPrivateFeedPageForGame) must derive the
+    // cursor namespace from category_id. The READ side here must query the
+    // SAME namespace (the private category id, not 'all') or the private
+    // cursor never round-trips and pagination stalls at page 1.
+    await fetchCardBatch({
+      categoryKey: 'cat-private-uuid',
+      categoryId: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-1' },
+      authContext: { token: 't' },
+    });
+
+    expect(getLastImageUuid).toHaveBeenCalledWith('cat-private-uuid', 'fr');
+    expect(getImages.mock.calls[0][2]).toMatchObject({ category_id: 'cat-private-uuid' });
+  });
+
+  it('B2: PUBLIC "all" pseudo-category sends neither category_key nor category_id', async () => {
+    await fetchCardBatch({
+      categoryKey: 'all',
+      categoryId: undefined,
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+
+    const filters = getImages.mock.calls[0][2];
+    expect(filters).not.toHaveProperty('category_key');
+    expect(filters).not.toHaveProperty('category_id');
   });
 
   it('forwards a real language code untouched', async () => {

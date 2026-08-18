@@ -66,6 +66,12 @@ type GuessPictureProps = {
   // tap/drag confirmation so toAdScreen cannot double-fire during a resolve.
   // Forwards to useTargetDrag via `enabled: !disabled && !isE2EMode()`.
   disabled?: boolean;
+  // Edge-swipe (left 36px) opened the exit menu in a separate higher-zIndex
+  // subtree that intercepted touches in that zone, starving the target's drag.
+  // Detection now lives in the picture subtree (ShowPicture's nested RNGH
+  // surface detector); this callback fires when the surface recognizes the
+  // rightward swipe so the parent (GuessScreen) can open the exit menu.
+  onEdgeSwipe?: () => void;
 };
 
 const GuessPicture: FC<GuessPictureProps> = ({
@@ -81,6 +87,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
   pulseTarget = false,
   onInteract,
   disabled = false,
+  onEdgeSwipe,
 }) => {
   const [dismissed, setDismissed] = useState(false);
   const showFilter = !skipInstructions && !dismissed;
@@ -111,7 +118,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
   const {
     touchLocation,
     target,
-    panHandlers: targetPanHandlers,
+    gesture: targetGesture,
     setSelection,
   } = useTargetDrag({
     // PB2: gate input while the advance state machine is mid-cycle so a
@@ -197,12 +204,13 @@ const GuessPicture: FC<GuessPictureProps> = ({
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
-        targetPanHandlers={targetPanHandlers}
+        targetGesture={targetGesture}
         defaultOpen={skipInstructions === true}
         pulseTarget={pulseTarget}
         speedRingActive={!showFilter && !showModal && graceDone && !isE2EMode()}
         speedDurationMs={SPEED_WINDOW_MS}
         onDescriptionClosed={markClosed}
+        onEdgeSwipe={onEdgeSwipe}
       />
     );
   };

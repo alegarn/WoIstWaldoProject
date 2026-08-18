@@ -1,16 +1,50 @@
 const mockGameInstructions = jest.fn(() => null);
 const mockShowPicture = jest.fn(() => null);
 
-let capturedPanResponder;
-
 jest.mock('react-native', () => ({
-  PanResponder: {
-    create: jest.fn((config) => {
-      capturedPanResponder = config;
-      return { panHandlers: { testID: 'mock-target-pan-handlers' } };
-    }),
+  AppState: {
+    addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  },
+  Dimensions: {
+    get: jest.fn(() => ({ width: 320, height: 640, scale: 1, fontScale: 1 })),
   },
 }));
+
+let mockCapturedGestureCallbacks;
+let mockCapturedGesture;
+
+jest.mock('react-native-gesture-handler', () => {
+  const React = jest.requireActual('react');
+
+  function makeChainable() {
+    const record = { __type: 'pan', calls: [] };
+    const handler = {
+      get(_t, prop) {
+        if (prop in record) return record[prop];
+        return (...args) => {
+          record.calls.push({ method: prop, args });
+          return proxy;
+        };
+      },
+    };
+    const proxy = new Proxy(record, handler);
+    mockCapturedGesture = proxy;
+    mockCapturedGestureCallbacks = record;
+    return proxy;
+  }
+  return {
+    Gesture: {
+      Pan: () => makeChainable(),
+      Race: (...gs) => ({ __type: 'race', gestures: gs }),
+      Exclusive: (...gs) => ({ __type: 'exclusive', gestures: gs }),
+      Simultaneous: (...gs) => ({ __type: 'sim', gestures: gs }),
+    },
+    GestureDetector: ({ children, ...props }) =>
+      React.createElement('GestureDetector', props, children),
+    GestureHandlerRootView: ({ children, ...props }) =>
+      React.createElement('GestureHandlerRootView', props, children),
+  };
+});
 
 jest.mock('../components/Instructions/GameInstructions', () => {
   return function MockGameInstructions(props) {
@@ -108,7 +142,8 @@ describe('GuessPicture', () => {
     });
     buildCenteredTarget.mockReturnValue(centeredSelection);
     buildSelectionFromPixels.mockReturnValue(draggedSelection);
-    capturedPanResponder = undefined;
+    mockCapturedGestureCallbacks = undefined;
+    mockCapturedGesture = undefined;
   });
 
   const activeRenderers = [];
@@ -158,25 +193,22 @@ describe('GuessPicture', () => {
     const pictureProps = getLatestShowPictureProps();
     expect(pictureProps.touchLocation).toEqual({ x: '0.50', y: '0.50' });
     expect(pictureProps.target).toEqual(centeredSelection.target);
-    expect(pictureProps.targetPanHandlers).toEqual({ testID: 'mock-target-pan-handlers' });
+    expect(pictureProps.targetGesture).toBeTruthy();
+    expect(mockCapturedGestureCallbacks.__type).toBe('pan');
   });
 
-  it('in non-e2e mode, the target PanResponder claims the touch on the capture phase so the wrapped Pressable child cannot steal it', async () => {
+  it('in non-e2e mode, moves the target when the drag gesture onUpdate fires with translationX=10', async () => {
     isE2EMode.mockReturnValue(false);
 
     await renderToPicture();
 
-    expect(capturedPanResponder.onStartShouldSetPanResponderCapture()).toBe(true);
-  });
-
-  it('in non-e2e mode, moves the target when the drag handler updates the location', async () => {
-    isE2EMode.mockReturnValue(false);
-
-    await renderToPicture();
+    const record = mockCapturedGestureCallbacks;
+    const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+    const onUpdate = record.calls.find((c) => c.method === 'onUpdate').args[0];
 
     await act(async () => {
-      capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-      capturedPanResponder.onPanResponderMove(null, { dx: 10, dy: 0 });
+      onBegin();
+      onUpdate({ translationX: 10, translationY: 0 });
     });
 
     expect(buildSelectionFromPixels).toHaveBeenCalledWith({
@@ -198,9 +230,13 @@ describe('GuessPicture', () => {
 
     await renderToPicture({ toAdScreen });
 
+    const record = mockCapturedGestureCallbacks;
+    const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+    const onUpdate = record.calls.find((c) => c.method === 'onUpdate').args[0];
+
     await act(async () => {
-      capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-      capturedPanResponder.onPanResponderMove(null, { dx: 10, dy: 0 });
+      onBegin();
+      onUpdate({ translationX: 10, translationY: 0 });
     });
 
     await act(async () => {
@@ -224,9 +260,13 @@ describe('GuessPicture', () => {
 
     expect(getLatestShowPictureProps().showModal).toBe(false);
 
+    const record = mockCapturedGestureCallbacks;
+    const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+    const onFinalize = record.calls.find((c) => c.method === 'onFinalize').args[0];
+
     await act(async () => {
-      capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-      capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
+      onBegin();
+      onFinalize({ translationX: 2, translationY: 2 });
     });
 
     expect(getLatestShowPictureProps().showModal).toBe(true);
@@ -237,10 +277,15 @@ describe('GuessPicture', () => {
 
     await renderToPicture();
 
+    const record = mockCapturedGestureCallbacks;
+    const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+    const onUpdate = record.calls.find((c) => c.method === 'onUpdate').args[0];
+    const onFinalize = record.calls.find((c) => c.method === 'onFinalize').args[0];
+
     await act(async () => {
-      capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-      capturedPanResponder.onPanResponderMove(null, { dx: 30, dy: 0 });
-      capturedPanResponder.onPanResponderRelease(null, { dx: 30, dy: 0 });
+      onBegin();
+      onUpdate({ translationX: 30, translationY: 0 });
+      onFinalize({ translationX: 30, translationY: 0 });
     });
 
     expect(getLatestShowPictureProps().showModal).toBe(false);
@@ -265,7 +310,7 @@ describe('GuessPicture', () => {
     expect(after.touchLocation).toEqual({ x: '0.50', y: '0.50' });
   });
 
-  it('in e2e mode, initializes target as null, attaches no panHandlers, and leaves the surface tap to reach handlePress', async () => {
+  it('in e2e mode, initializes target as null, attaches no target gesture, and leaves the surface tap to reach handlePress', async () => {
     await renderToPicture();
 
     expect(buildCenteredTarget).not.toHaveBeenCalled();
@@ -273,7 +318,7 @@ describe('GuessPicture', () => {
     const pictureProps = getLatestShowPictureProps();
     expect(pictureProps.touchLocation).toBeNull();
     expect(pictureProps.target).toBeNull();
-    expect(pictureProps.targetPanHandlers).toBeUndefined();
+    expect(pictureProps.targetGesture).toBeUndefined();
 
     await act(async () => {
       getLatestShowPictureProps().handlePress();
@@ -326,25 +371,25 @@ describe('GuessPicture', () => {
     // was silently dropped (omitted from GuessPictureProps), so the screen's
     // `disabled={advance.state !== 'idle'}` had no effect.
 
-    it('disabled=true → useTargetDrag enabled=false → ShowPicture receives no targetPanHandlers', async () => {
+    it('disabled=true → useTargetDrag enabled=false → ShowPicture receives no targetGesture', async () => {
       isE2EMode.mockReturnValue(false);
       await renderToPicture({ disabled: true });
 
-      expect(getLatestShowPictureProps().targetPanHandlers).toBeUndefined();
+      expect(getLatestShowPictureProps().targetGesture).toBeUndefined();
     });
 
-    it('disabled=false (default) → useTargetDrag enabled=true → ShowPicture receives targetPanHandlers', async () => {
+    it('disabled=false (default) → useTargetDrag enabled=true → ShowPicture receives targetGesture', async () => {
       isE2EMode.mockReturnValue(false);
       await renderToPicture();
 
-      expect(getLatestShowPictureProps().targetPanHandlers).toEqual({ testID: 'mock-target-pan-handlers' });
+      expect(getLatestShowPictureProps().targetGesture).toBeTruthy();
     });
 
-    it('disabled=true + e2e mode → still no panHandlers (e2e path keeps its own surface-tap wiring)', async () => {
+    it('disabled=true + e2e mode → still no targetGesture (e2e path keeps its own surface-tap wiring)', async () => {
       isE2EMode.mockReturnValue(true);
       await renderToPicture({ disabled: true });
 
-      expect(getLatestShowPictureProps().targetPanHandlers).toBeUndefined();
+      expect(getLatestShowPictureProps().targetGesture).toBeUndefined();
     });
   });
 
@@ -423,8 +468,11 @@ describe('GuessPicture', () => {
           jest.advanceTimersByTime(600);
         });
         act(() => {
-          capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-          capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
+          const record = mockCapturedGestureCallbacks;
+          const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+          const onFinalize = record.calls.find((c) => c.method === 'onFinalize').args[0];
+          onBegin();
+          onFinalize({ translationX: 2, translationY: 2 });
         });
         act(() => {
           getLatestShowPictureProps().handleConfirm();
@@ -548,8 +596,11 @@ describe('GuessPicture', () => {
       expect(getLatestShowPictureProps().speedRingActive).toBe(true);
 
       act(() => {
-        capturedPanResponder.onPanResponderGrant(null, { dx: 0, dy: 0 });
-        capturedPanResponder.onPanResponderRelease(null, { dx: 2, dy: 2 });
+        const record = mockCapturedGestureCallbacks;
+        const onBegin = record.calls.find((c) => c.method === 'onBegin').args[0];
+        const onFinalize = record.calls.find((c) => c.method === 'onFinalize').args[0];
+        onBegin();
+        onFinalize({ translationX: 2, translationY: 2 });
       });
       act(() => {
         getLatestShowPictureProps().handleConfirm();

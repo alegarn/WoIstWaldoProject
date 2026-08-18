@@ -21,6 +21,9 @@
 - Shared style tokens live in `constants/theme.js`.
 - Native folders `android/` and `ios/` are part of this repo, but avoid touching generated build output under them unless task requires it.
 - `postinstall` runs `patch-package`; current checked-in patch covers `react-native-google-mobile-ads`.
+- Public guess category catalog is bundled in `constants/defaultCategories.js` (`getDefaultCategories()`, keyed by `key`, no server UUID); `utils/categoryRequests.js` `getCategories()` never hits the network (E2E mode returns its own stub). Thumbnails resolve from `utils/categoryAssets.js`.
+- Private group categories are offline-cached stale-while-revalidate: `services/groups/groupCategoryCache.js` (AsyncStorage `groupCategories:<groupId>`) + `services/groups/groupCategoriesStore.js` (`loadGroupCategoriesOptimistic` renders cache then revalidates, replacing only on `categoryListSignature` diff; `refreshGroupCategories` writes through after owner CRUD). They keep using their UUID `category_id`; `key` is faked as `id` for display.
+- Server image calls split by scope: public feed/upload/prefetch filter/assign by `category_key` (bundled string), private by `category_id` (UUID).
 
 ## Work Guidance
 

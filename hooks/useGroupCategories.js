@@ -1,18 +1,21 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { Alert } from 'react-native';
 
 import { AuthContext } from '../store/auth-context';
 import {
-  listGroupCategories,
   createGroupCategory,
   updateGroupCategory,
   deleteGroupCategory,
 } from '../services/groups/groupCategoriesApi';
 import {
+  loadGroupCategoriesOptimistic,
+  refreshGroupCategories,
+} from '../services/groups/groupCategoriesStore';
+import {
   deleteCategoryThumbnailFile,
   resolveCategoryThumbnail,
 } from '../services/groups/groupCategoryThumbnails';
 import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
-import { Alert } from 'react-native';
 
 /**
  * Owns category CRUD + thumbnail management for a private group.
@@ -21,6 +24,11 @@ import { Alert } from 'react-native';
  * delete / swap-thumbnail). The view (GroupCategoriesSection) consumes this and
  * renders. Dependencies (auth context, group id, refresh callback) are injected,
  * so the hook is unit-testable in isolation.
+ *
+ * Load strategy: render from the offline cache first (optimistic), then
+ * background-revalidate from the server and replace state only when the fresh
+ * payload differs. Mutations write-through to the cache via the store. The store
+ * already swallows network errors, so this hook never throws on load.
  *
  * @param {string} groupId - active private group id
  * @param {() => void} onRefresh - refresh the group hub after mutations that
@@ -37,17 +45,14 @@ export function useGroupCategories({ groupId, onRefresh }) {
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isSwappingThumbnail, setIsSwappingThumbnail] = useState(false);
 
-  const loadCategories = useCallback(async () => {
-    if (!groupId) return;
-    setLoading(true);
-    setError(null);
-    const response = await listGroupCategories(authContext, groupId);
-    setLoading(false);
-    if (response?.status === 200) {
-      const nextCategories = response.data ?? [];
-      setCategories(nextCategories);
+  const hasInitialLoad = useRef(true);
+
+  const applyCategories = useCallback(
+    (nextCategories) => {
+      const list = Array.isArray(nextCategories) ? nextCategories : [];
+      setCategories(list);
       setDrafts(
-        nextCategories.reduce((accumulator, category) => {
+        list.reduce((accumulator, category) => {
           accumulator[category.id] = category.name ?? '';
           return accumulator;
         }, {}),
@@ -55,27 +60,63 @@ export function useGroupCategories({ groupId, onRefresh }) {
       // Resolve display URIs the same way GuessPathScreen does: local cache hit
       // when available, otherwise fetch + cache (handles backend-storage auth and
       // S3 presigned URLs uniformly). Falls back to null -> initial swatch.
-      const resolved = await Promise.all(
-        nextCategories.map((category) => (
+      // Runs on both the optimistic and the fresh payload so the locally-cached
+      // file uri can enrich/override the base thumbnailUrl set by the store's
+      // normalizePrivateCategory. Fire-and-forget.
+      Promise.all(
+        list.map((category) => (
           category?.thumbnail_image_id
             ? resolveCategoryThumbnail(authContext, { groupId, category })
             : Promise.resolve(null)
         )),
-      );
-      setThumbnailUris(
-        nextCategories.reduce((accumulator, category, index) => {
-          accumulator[category.id] = resolved[index];
-          return accumulator;
-        }, {}),
-      );
-    } else {
-      setError(response?.data ?? 'Could not load categories.');
+      ).then((resolved) => {
+        setThumbnailUris(
+          list.reduce((accumulator, category, index) => {
+            accumulator[category.id] = resolved[index];
+            return accumulator;
+          }, {}),
+        );
+      });
+    },
+    [authContext, groupId],
+  );
+
+  const loadCategories = useCallback(async () => {
+    if (!groupId) return;
+    if (hasInitialLoad.current) {
+      setLoading(true);
     }
-  }, [authContext, groupId]);
+    setError(null);
+    try {
+      await loadGroupCategoriesOptimistic({
+        context: authContext,
+        groupId,
+        onCategories: (nextCategories) => {
+          applyCategories(nextCategories);
+          hasInitialLoad.current = false;
+        },
+      });
+    } catch {
+      // store already swallows network errors; never propagate to caller
+    } finally {
+      setLoading(false);
+    }
+  }, [authContext, groupId, applyCategories]);
 
   useEffect(() => {
     loadCategories();
   }, [loadCategories]);
+
+  // Write-through after a successful mutation: pull fresh server state, persist
+  // to cache, then update local state from { data }. Returns the store result so
+  // callers can detect { isError } if needed.
+  const writeThrough = useCallback(async () => {
+    const result = await refreshGroupCategories({ context: authContext, groupId });
+    if (result?.data) {
+      applyCategories(result.data);
+    }
+    return result;
+  }, [authContext, groupId, applyCategories]);
 
   const setDraft = useCallback((categoryId, value) => {
     setDrafts((current) => ({ ...current, [categoryId]: value }));
@@ -87,11 +128,11 @@ export function useGroupCategories({ groupId, onRefresh }) {
     const response = await createGroupCategory(authContext, groupId, { name: trimmed });
     if (response?.status === 200 || response?.status === 201) {
       setNewCategoryName('');
-      await loadCategories();
+      await writeThrough();
     } else {
       Alert.alert(`Error ${response?.status ?? ''}`, 'Could not add category.');
     }
-  }, [authContext, groupId, newCategoryName, loadCategories]);
+  }, [authContext, groupId, newCategoryName, writeThrough]);
 
   const saveCategory = useCallback(
     async (category) => {
@@ -101,12 +142,12 @@ export function useGroupCategories({ groupId, onRefresh }) {
         name: nextName,
       });
       if (response?.status === 200 || response?.status === 204) {
-        await loadCategories();
+        await writeThrough();
       } else {
         Alert.alert(`Error ${response?.status ?? ''}`, 'Could not update category.');
       }
     },
-    [authContext, groupId, drafts, loadCategories],
+    [authContext, groupId, drafts, writeThrough],
   );
 
   const removeCategory = useCallback(
@@ -122,7 +163,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
             onPress: async () => {
               const response = await deleteGroupCategory(authContext, groupId, category.id);
               if (response?.status === 200 || response?.status === 204) {
-                await loadCategories();
+                await writeThrough();
               } else {
                 Alert.alert(`Error ${response?.status ?? ''}`, 'Could not delete category.');
               }
@@ -131,7 +172,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
         ],
       );
     },
-    [authContext, groupId, loadCategories],
+    [authContext, groupId, writeThrough],
   );
 
   // Category thumbnail swap via the shared helper (same flow used by
@@ -151,7 +192,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
           thumbnailImageId: uploaded.imageId,
         });
         if (updateResponse?.status === 200 || updateResponse?.status === 204) {
-          await loadCategories();
+          await writeThrough();
           Alert.alert('Uploaded', 'Category thumbnail updated.');
           onRefresh?.();
         } else {
@@ -163,7 +204,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
         setIsSwappingThumbnail(false);
       }
     },
-    [authContext, groupId, loadCategories, onRefresh],
+    [authContext, groupId, writeThrough, onRefresh],
   );
 
   return {

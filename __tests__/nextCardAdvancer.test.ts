@@ -131,11 +131,14 @@ describe('resolveNextCardWithServerFallback', () => {
     expect(result.next).toEqual(A_CARD_RESULT);
     expect(result.reason).toBe('ok');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    // B2: PUBLIC scope threads categoryKey only; categoryId must NOT be
+    // forwarded (public categories carry no server UUID post-bundling).
     expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({
       categoryKey: 'city',
-      categoryId: 7,
       language: 'fr',
     }));
+    const fetchArgs = fetchMock.mock.calls[0][0] as { categoryId?: unknown };
+    expect(fetchArgs.categoryId).toBeUndefined();
     expect(appendMock).toHaveBeenCalledTimes(1);
     expect(resolveMock).toHaveBeenCalledTimes(3);
     // No cross-fallback to 'all' — the current category still had server cards.
