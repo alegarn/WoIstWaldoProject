@@ -12,7 +12,7 @@ export default function Button({ children, style, onPress, mode, thin, cancel, t
       style ?? style,
       thin && { paddingVertical: 0, paddingHorizontal: 2, padding: 0 },
       mode === "flat" && { backgroundColor: "transparent" },
-      cancel && mode !== "flat" && { backgroundColor: "red" }]}
+      cancel && mode !== "flat" && { backgroundColor: GlobalStyle.color.danger }]}
     >
       <Pressable
         accessibilityLabel={accessibilityLabel}
@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     color: "white",
   },
   flatCancelText: {
-    color: "red"
+    color: GlobalStyle.color.danger
   },
   flat: {
     backgroundColor: "transparent",
