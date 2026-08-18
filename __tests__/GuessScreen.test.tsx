@@ -622,9 +622,9 @@ describe('GuessScreen', () => {
     expect(navigateToNextGuess).not.toHaveBeenCalled();
     // Regression (T4): prefetch fired during success path but did not block overlay/setParams.
     expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+    // B2: PUBLIC scope threads categoryKey only; categoryId is NOT forwarded.
     expect(prefetchIfLow).toHaveBeenCalledWith({
       categoryKey: 'nature',
-      categoryId: 'cat-1',
       language: 'fr',
       scope: undefined,
       authContext: expect.objectContaining({ userId: '' }),
@@ -1236,9 +1236,9 @@ describe('GuessScreen', () => {
       // kicks the resolve off at tap, so it may already have fired by here.
       // The observable invariant is prefetchIfLow's call shape on tap.
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope threads categoryKey only; categoryId is NOT forwarded.
       expect(prefetchIfLow).toHaveBeenCalledWith({
         categoryKey: 'nature',
-        categoryId: 'cat-1',
         language: 'fr',
         scope: undefined,
         authContext: expect.objectContaining({ userId: '' }),
@@ -1357,10 +1357,12 @@ describe('GuessScreen', () => {
       });
 
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope + null category → categoryKey 'all', no categoryId.
       expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
         categoryKey: 'all',
-        categoryId: undefined,
       }));
+      const nullCatCall = prefetchIfLow.mock.calls[prefetchIfLow.mock.calls.length - 1][0] as { categoryId?: unknown };
+      expect(nullCatCall.categoryId).toBeUndefined();
     });
 
     it('T7: prefetch rejection does not break the success flow (overlay still shows, setParams still fires onDone)', async () => {
@@ -1913,10 +1915,12 @@ describe('GuessScreen', () => {
       });
 
       expect(prefetchIfLow).toHaveBeenCalledTimes(1);
+      // B2: PUBLIC scope + category.key === 'all' threads categoryKey only.
       expect(prefetchIfLow).toHaveBeenCalledWith(expect.objectContaining({
         categoryKey: 'all',
-        categoryId: 'cat-all',
       }));
+      const allCall = prefetchIfLow.mock.calls[prefetchIfLow.mock.calls.length - 1][0] as { categoryId?: unknown };
+      expect(allCall.categoryId).toBeUndefined();
     });
   });
 

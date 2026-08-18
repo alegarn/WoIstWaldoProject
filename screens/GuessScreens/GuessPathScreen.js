@@ -19,6 +19,7 @@ import IconButton from '../../components/UI/IconButton';
 import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
 import { LANGUAGES } from '../../constants/languages';
+import { getDefaultCategories } from '../../constants/defaultCategories';
 import { getCategories } from '../../utils/categoryRequests';
 import {
   getPreferredLanguage,
@@ -33,9 +34,9 @@ import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../sto
 import {
   createGroupCategory,
   deleteGroupCategory,
-  listGroupCategories,
   updateGroupCategory,
 } from '../../services/groups/groupCategoriesApi';
+import { loadGroupCategoriesOptimistic } from '../../services/groups/groupCategoriesStore';
 import {
   resolveCategoryThumbnail,
   deleteCategoryThumbnailFile,
@@ -103,45 +104,46 @@ export default function GuessPathScreen({ navigation, route }) {
   const isOwner = activeGroup?.isOwnedByViewer === true;
   const { group, theme } = useScopedPrivateGroupTheme(routeScope);
 
-  function normalizePrivateCategory(category, resolvedThumbnailUrl = null) {
-    return {
+  const enrichAndSetPrivateCategories = useCallback(async (nextCategories) => {
+    const list = Array.isArray(nextCategories) ? nextCategories : [];
+    const resolvedThumbnailUrls = await Promise.all(
+      list.map((category) => (
+        category?.thumbnail_image_id
+          ? resolveCategoryThumbnail(context, {
+            groupId: scope.groupId,
+            category,
+          })
+          : Promise.resolve(null)
+      ))
+    );
+
+    setCategories(list.map((category, index) => ({
       ...category,
-      key: category?.key ?? category?.id,
-      thumbnailUrl: resolvedThumbnailUrl
+      thumbnailUrl: resolvedThumbnailUrls[index]
         ?? category?.thumbnailUrl
         ?? category?.thumbnail_url
         ?? null,
-    };
-  }
+    })));
+  }, [context, scope?.groupId]);
 
   const reloadCategories = useCallback(async () => {
-    const response = isPrivateScope
-      ? await listGroupCategories(context, scope.groupId)
-      : await getCategories({ context });
-
-    if (response?.data) {
-      if (isPrivateScope) {
-        const privateCategories = response.data ?? [];
-        const resolvedThumbnailUrls = await Promise.all(
-          privateCategories.map((category) => (
-            category?.thumbnail_image_id
-              ? resolveCategoryThumbnail(context, {
-                groupId: scope.groupId,
-                category,
-              })
-              : Promise.resolve(null)
-          ))
-        );
-
-        setCategories(privateCategories.map((category, index) => (
-          normalizePrivateCategory(category, resolvedThumbnailUrls[index])
-        )));
-        return;
-      }
-
-      setCategories(response.data ?? []);
+    if (isPrivateScope) {
+      await loadGroupCategoriesOptimistic({
+        context,
+        groupId: scope.groupId,
+        onCategories: enrichAndSetPrivateCategories,
+      });
+      return;
     }
-  }, [context, isPrivateScope, scope?.groupId]);
+
+    if (isE2EMode()) {
+      const response = await getCategories({ context });
+      setCategories(response?.data ?? []);
+      return;
+    }
+
+    setCategories(getDefaultCategories().data);
+  }, [context, isPrivateScope, scope?.groupId, enrichAndSetPrivateCategories]);
 
   useFocusEffect(
     useCallback(() => {
@@ -389,8 +391,9 @@ export default function GuessPathScreen({ navigation, route }) {
         )}
         <FlatList
           data={gridData}
+          extraData={navigationLanguage}
           numColumns={2}
-          keyExtractor={(item) => item.id}
+          keyExtractor={(item) => item.key ?? item.id}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.gridContent}
           testID="guess-path.category.grid"

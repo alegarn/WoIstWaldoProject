@@ -117,7 +117,8 @@ export async function prepareImageUpload(context, { contentType, contentLength }
  * @param {Object}  params
  * @param {Object}  params.config  Axios config (headers) to merge with timeout.
  * @param {string|number} params.userId Target user id.
- * @param {Object}  [params.filters] Optional `category_id` / `language` filters.
+ * @param {Object}  [params.filters] Optional `category_id` (private UUID),
+ *   `category_key` (public bundled key), and `language` filters.
  * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
  */
 async function getImagesInfos({ config, userId, filters }) {
@@ -126,6 +127,7 @@ async function getImagesInfos({ config, userId, filters }) {
   const requestConfig = { ...config, timeout: 15000 };
   const params = {};
   if (filters?.category_id != null) params.category_id = filters.category_id;
+  if (filters?.category_key != null) params.category_key = filters.category_key;
   if (filters?.language != null) params.language = filters.language;
   if (Object.keys(params).length > 0) {
     requestConfig.params = { ...requestConfig.params, ...params };
@@ -155,7 +157,8 @@ async function getImagesInfos({ config, userId, filters }) {
  * @param {string|number} params.userId Target user id.
  * @param {string}  params.pictureId Keyset cursor: the `name` of the last
  *   image of the previous batch.
- * @param {Object}  [params.filters] Optional `category_id` / `language` filters.
+ * @param {Object}  [params.filters] Optional `category_id` (private UUID),
+ *   `category_key` (public bundled key), and `language` filters.
  * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
  */
 async function getNextImagesInfos({ config, userId, pictureId, filters }){
@@ -165,6 +168,7 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
     name: pictureId
   };
   if (filters?.category_id != null) imageBody.category_id = filters.category_id;
+  if (filters?.category_key != null) imageBody.category_key = filters.category_key;
   if (filters?.language != null) imageBody.language = filters.language;
   const imageData = {
     image: imageBody
@@ -379,11 +383,16 @@ export async function getImages(pictureId, context, filters = {}) {
   console.log("getImages pictureId", pictureId);
 
   if (isPrivateScope(filters?.scope)) {
+    // Private cursor namespace: PRIVATE filters carry no category_key (server
+    // contract stays category_id), so derive the LOCAL cursor/exhausted
+    // namespace from the category id (or 'all'). cardDeck.fetchCardBatch reads
+    // the cursor with the same categoryKey value, so the private cursor
+    // round-trips instead of falling back to the shared public 'all' key.
     return fetchPrivateFeedPageForGame(pictureId, context, {
       groupId: filters.scope.groupId,
       categoryId: filters?.category_id,
       language: filters?.language,
-      categoryKey: filters?.category_key,
+      categoryKey: filters?.category_key ?? filters?.category_id ?? 'all',
     });
   }
 

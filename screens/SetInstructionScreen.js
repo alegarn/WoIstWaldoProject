@@ -16,15 +16,15 @@ import { handleOrientation } from '../utils/orientation';
 import { handleImageType, isTypeValid } from '../utils/imageInfos';
 import { getPreferredLanguage, saveE2EHiddenGuessCard } from '../utils/storageDatum';
 import { getCategories } from '../utils/categoryRequests';
+import { getDefaultCategories } from '../constants/defaultCategories';
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
-import { listGroupCategories } from '../services/groups/groupCategoriesApi';
+import { loadGroupCategoriesOptimistic } from '../services/groups/groupCategoriesStore';
 
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { checkSecureStoreItem } from '../utils/auth';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
 
 const NON_UPLOAD_CATEGORY_KEYS = new Set(['all']);
-const DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE = 'Unable to load categories. Please try again.';
 
 function isUploadableCategoryKey(categoryKey) {
   return typeof categoryKey === 'string' && !NON_UPLOAD_CATEGORY_KEYS.has(categoryKey);
@@ -70,32 +70,32 @@ export default function SetInstructionsScreen({ navigation, route }) {
   const { group, theme } = useScopedPrivateGroupTheme(scope);
   const selectableCategories = categories.filter((category) => isUploadableCategoryKey(category?.key));
 
-  function normalizePrivateCategory(category) {
-    return {
-      ...category,
-      key: category?.key ?? category?.id,
-      thumbnailUrl: category?.thumbnailUrl ?? category?.thumbnail_url ?? null,
-    };
-  }
-
   const loadCategories = async () => {
-    const categoriesResponse = isPrivateScope
-      ? await listGroupCategories(context, scope.groupId)
-      : await getCategories({ context });
-
-    if (!isMountedRef.current) {
+    if (isPrivateScope) {
+      await loadGroupCategoriesOptimistic({
+        context,
+        groupId: scope.groupId,
+        onCategories: (nextCategories) => {
+          setCategories(nextCategories);
+          setCategoriesError(null);
+        },
+      });
       return;
     }
 
-    if (categoriesResponse?.isError || (categoriesResponse?.status && categoriesResponse.status !== 200)) {
-      setCategories([]);
-      setCategoriesError(categoriesResponse?.message || categoriesResponse?.data?.message || DEFAULT_CATEGORY_LOAD_ERROR_MESSAGE);
+    if (isE2EMode()) {
+      const categoriesResponse = await getCategories({ context });
+
+      if (!isMountedRef.current) {
+        return;
+      }
+
+      setCategories(categoriesResponse?.data ?? []);
+      setCategoriesError(null);
       return;
     }
 
-    setCategories((categoriesResponse?.data ?? []).map((category) => (
-      isPrivateScope ? normalizePrivateCategory(category) : category
-    )));
+    setCategories(getDefaultCategories().data);
     setCategoriesError(null);
   };
 
@@ -172,6 +172,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const handleImage = async ({userId, fileExtension}) => {
     const selectedCategoryObject = selectableCategories.find((category) => category.key === selectedCategory);
+    const scopeCategoryInfos = isPrivateScope
+      ? { categoryId: selectedCategoryObject?.id ?? null }
+      : { categoryKey: selectedCategoryObject?.key ?? null };
     const imageInfos = {
       uri: uri,
       userId: userId,
@@ -185,7 +188,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       xLocation: touchLocation.x,
       yLocation: touchLocation.y,
       language: language,
-      categoryId: selectedCategoryObject?.id ?? null,
+      ...scopeCategoryInfos,
     };
 
     setIsLoading(true);

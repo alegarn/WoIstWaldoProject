@@ -26,6 +26,12 @@ export type ResolveNextCardResult =
 
 type FailureReason = 'empty' | 'network' | 'server';
 
+function isPrivateScope(scope: unknown): boolean {
+  return !!scope && typeof scope === 'object' && scope !== null &&
+    (scope as { kind?: string }).kind === 'private' &&
+    !!(scope as { groupId?: unknown }).groupId;
+}
+
 export type AdvancerArgs = {
   category?: { id?: string | number | null; key?: string } | null;
   language?: string | null;
@@ -131,14 +137,19 @@ async function foregroundTopUp(
   }
 
   try {
-    const r = await fetchCardBatch({
+    // B2: PUBLIC scope threads categoryKey only (bundled string keys, no
+    // server UUID). PRIVATE scope keeps categoryId (UUID). Mirrors the
+    // cardDeck.buildFeedFilters split so the advancer never leaks a public
+    // id into the private-only category_id server param.
+    const fetchArgs: Parameters<typeof fetchCardBatch>[0] = {
       categoryKey,
-      categoryId: args.category?.id,
       language: args.language,
       scope: args.scope,
       authContext: args.authContext,
+      ...(isPrivateScope(args.scope) ? { categoryId: args.category?.id } : {}),
       ...(pictureIdOverride !== undefined ? { pictureIdOverride } : {}),
-    });
+    };
+    const r = await fetchCardBatch(fetchArgs);
     if (!r || r.isError === true) return { ok: false, reason: 'server' };
     if (!r.images || r.images.length === 0) {
       // F3a: cache the empty result so subsequent advances short-circuit at
@@ -159,7 +170,7 @@ async function foregroundTopUp(
     await appendCardBatch({
       cards: r.images,
       categoryKey,
-      categoryId: args.category?.id,
+      ...(isPrivateScope(args.scope) ? { categoryId: args.category?.id } : {}),
       language: args.language,
       scope: args.scope,
     });

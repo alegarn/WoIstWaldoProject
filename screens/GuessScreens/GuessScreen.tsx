@@ -322,9 +322,12 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // streak/score. Only the speed multiplier + overlay state commit here;
     // fire-and-forget deck prefetch is preserved (PB7 Phase 3 covers image
     // preload placement separately).
+    // B2: PUBLIC scope threads categoryKey only (bundled string keys, no
+    // server UUID); PRIVATE scope keeps categoryId (UUID). Mirrors the
+    // cardDeck.buildFeedFilters split.
     prefetchIfLow({
       categoryKey: category?.key || 'all',
-      categoryId: category?.id,
+      ...(isPrivate ? { categoryId: category?.id } : {}),
       language,
       scope,
       authContext,

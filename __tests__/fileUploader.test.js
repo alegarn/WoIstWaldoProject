@@ -154,6 +154,32 @@ describe('imageUploader', () => {
     expect(result).toEqual({ status: 200 });
   });
 
+  it('B2: public upload threads category_key from imageInfos.categoryKey (no category_id)', async () => {
+    // B2: public uploads switched from category_id (server UUID) to category_key
+    // (bundled string key). The imageInfos payload carries categoryKey now.
+    prepareImageUpload.mockResolvedValue({
+      status: 200,
+      data: {
+        provider: 'local_disk',
+        method: 'PUT',
+        url: 'https://example.com/upload',
+        headers: {},
+        image_key: 'waldo-image',
+      },
+    });
+    performImageUpload.mockResolvedValue({ status: 200 });
+    saveImageInfos.mockResolvedValue({ status: 200 });
+
+    await imageUploader({
+      imageInfos: { ...imageInfos, categoryKey: 'nature' },
+      context,
+    });
+
+    const saveCall = saveImageInfos.mock.calls[0][0].imagesInfos;
+    expect(saveCall.category_key).toBe('nature');
+    expect(saveCall).not.toHaveProperty('category_id');
+  });
+
   it('returns the metadata persistence failure and keeps the local file intact', async () => {
     prepareImageUpload.mockResolvedValue({
       status: 200,

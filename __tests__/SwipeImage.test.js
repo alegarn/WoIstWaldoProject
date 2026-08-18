@@ -219,7 +219,7 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, category_key: 'all', language: undefined });
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { language: undefined, scope: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 5 }),
       expect.objectContaining({ pictureId: 'img-2', listId: 6 }),
@@ -239,7 +239,7 @@ describe('SwipeImage', () => {
 
     await renderSwipeImage();
 
-    expect(getImages).toHaveBeenCalledWith(null, contextValue, { category_id: undefined, category_key: 'all', language: undefined });
+    expect(getImages).toHaveBeenCalledWith(null, contextValue, { language: undefined, scope: undefined });
     expect(storeImageList).toHaveBeenCalledWith([
       expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
     ], 'all', 'any');
@@ -278,7 +278,7 @@ describe('SwipeImage', () => {
     expect(getImages).toHaveBeenCalledWith(
       null,
       contextValue,
-      { category_id: undefined, category_key: 'all', language: undefined }
+      { language: undefined, scope: undefined }
     );
   });
 
@@ -1022,7 +1022,7 @@ describe('SwipeImage — deck-empty fallback to "all"', () => {
     expect(getImages).toHaveBeenCalledWith(
       null,
       expect.anything(),
-      expect.objectContaining({ category_key: 'nature', category_id: 'cat-nature' }),
+      { language: undefined, scope: undefined, category_key: 'nature' },
     );
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).not.toContain('all-1');
   });

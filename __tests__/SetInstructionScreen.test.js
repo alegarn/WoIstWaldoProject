@@ -8,6 +8,7 @@ const mockDeleteLocalImage = jest.fn();
 const mockRequestPermission = jest.fn();
 const mockUsePermissions = jest.fn();
 const mockOpenSettings = jest.fn();
+const mockUseGroupsHub = jest.fn();
 
 jest.mock('expo-file-system', () => {
   const File = jest.fn().mockImplementation(function MockFile(uri) {
@@ -129,6 +130,14 @@ jest.mock('../utils/categoryRequests', () => ({
   getCategories: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupCategoriesStore', () => ({
+  loadGroupCategoriesOptimistic: jest.fn(),
+}));
+
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: (...args) => mockUseGroupsHub(...args),
+}));
+
 jest.mock('../utils/languageDefaults', () => ({
   resolveDefaultLanguage: jest.fn(),
 }));
@@ -141,6 +150,7 @@ import SetInstructionsScreen from '../screens/SetInstructionScreen';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
 import { getCategories } from '../utils/categoryRequests';
+import { getDefaultCategories } from '../constants/defaultCategories';
 import { buildE2EHiddenGuessPayload, isE2EMode } from '../utils/e2eMode';
 import { imageUploader } from '../utils/fileUploader';
 import { handleContentLength, handleImageType, isTypeValid } from '../utils/imageInfos';
@@ -148,6 +158,7 @@ import { performImageUpload, prepareImageUpload, saveImageInfos } from '../utils
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
 import { handleOrientation } from '../utils/orientation';
 import { getPreferredLanguage, saveE2EHiddenGuessCard } from '../utils/storageDatum';
+import { loadGroupCategoriesOptimistic } from '../services/groups/groupCategoriesStore';
 
 describe('SetInstructionScreen', () => {
   const navigation = {
@@ -180,6 +191,19 @@ describe('SetInstructionScreen', () => {
     { id: 'cat-2', key: 'nature', name: 'Nature' },
     { id: 'cat-3', key: 'city', name: 'City' },
   ];
+  const privateScope = { kind: 'private', groupId: 'group-7' };
+  const privateCategoriesFixture = [
+    { id: 'grp-cat-1', key: 'nature', name: 'Nature', thumbnailUrl: 'https://example.com/nature.webp' },
+    { id: 'grp-cat-2', key: 'city', name: 'City', thumbnailUrl: 'https://example.com/city.webp' },
+  ];
+
+  function emitCategoriesViaStore(list) {
+    loadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }) => {
+      if (typeof onCategories === 'function') {
+        onCategories(list);
+      }
+    });
+  }
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -193,6 +217,7 @@ describe('SetInstructionScreen', () => {
       },
       mockRequestPermission,
     ]);
+    mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     checkSecureStoreItem.mockResolvedValue('user-42');
     handleContentLength.mockResolvedValue(4096);
     handleImageType.mockReturnValue('png');
@@ -213,6 +238,7 @@ describe('SetInstructionScreen', () => {
     getPreferredLanguage.mockResolvedValue('en');
     getCategories.mockResolvedValue({ data: categoriesFixture });
     resolveDefaultLanguage.mockReturnValue('en');
+    loadGroupCategoriesOptimistic.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -399,7 +425,7 @@ describe('SetInstructionScreen', () => {
         xLocation: 0.3,
         yLocation: 0.7,
         language: 'en',
-        categoryId: null,
+        categoryKey: null,
       },
       context: expect.objectContaining(tutorialContext),
     });
@@ -573,52 +599,56 @@ describe('SetInstructionScreen', () => {
     expect(getHideDescriptionProps().language).toBe('de');
   });
 
-  it('renders every category returned by getCategories through CategoryChips', async () => {
+  it('renders the bundled default categories without any category network fetch', async () => {
     await renderScreen();
 
-    expect(getCategories).toHaveBeenCalledWith({ context: expect.any(Object) });
-    expect(getHideDescriptionProps().categories).toEqual([
-      { id: 'cat-2', key: 'nature', name: 'Nature' },
-      { id: 'cat-3', key: 'city', name: 'City' },
+    expect(getCategories).not.toHaveBeenCalled();
+    expect(loadGroupCategoriesOptimistic).not.toHaveBeenCalled();
+    expect(getHideDescriptionProps().categories).toEqual(getDefaultCategories().data);
+    expect(getHideDescriptionProps().categories.map((category) => category.key)).toEqual([
+      'other',
+      'nature',
+      'city',
+      'abstract',
+      'animals',
+      'food',
+      'vehicles',
+      'interiors',
+      'landmarks',
     ]);
+    expect(getHideDescriptionProps().categoriesError).toBeNull();
   });
 
-  it('passes the category load failure message to HideDescription when category hydration fails', async () => {
-    getCategories.mockResolvedValueOnce({
-      isError: true,
-      message: 'Categories unavailable right now',
+  it('loads private group categories optimistically through the store', async () => {
+    emitCategoriesViaStore(privateCategoriesFixture);
+
+    await renderScreen({ params: { scope: privateScope } });
+
+    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledWith({
+      context: expect.any(Object),
+      groupId: 'group-7',
+      onCategories: expect.any(Function),
     });
-
-    await renderScreen();
-
-    expect(getHideDescriptionProps().categories).toEqual([]);
-    expect(getHideDescriptionProps().categoriesError).toBe('Categories unavailable right now');
-    expect(typeof getHideDescriptionProps().onRetryCategories).toBe('function');
+    expect(getCategories).not.toHaveBeenCalled();
+    expect(getHideDescriptionProps().categories).toEqual(privateCategoriesFixture);
+    expect(getHideDescriptionProps().categoriesError).toBeNull();
   });
 
-  it('retries category hydration and clears the inline error after a successful retry', async () => {
-    getCategories
-      .mockResolvedValueOnce({
-        isError: true,
-        message: 'Categories unavailable right now',
-      })
-      .mockResolvedValueOnce({ data: categoriesFixture });
+  it('refreshes private group categories through the retry handler', async () => {
+    emitCategoriesViaStore(privateCategoriesFixture);
 
-    await renderScreen();
+    await renderScreen({ params: { scope: privateScope } });
 
-    expect(getHideDescriptionProps().categoriesError).toBe('Categories unavailable right now');
+    emitCategoriesViaStore([privateCategoriesFixture[0]]);
 
     await act(async () => {
       await getHideDescriptionProps().onRetryCategories();
       await flushEffects();
     });
 
-    expect(getCategories).toHaveBeenCalledTimes(2);
+    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
+    expect(getHideDescriptionProps().categories).toEqual([privateCategoriesFixture[0]]);
     expect(getHideDescriptionProps().categoriesError).toBeNull();
-    expect(getHideDescriptionProps().categories).toEqual([
-      { id: 'cat-2', key: 'nature', name: 'Nature' },
-      { id: 'cat-3', key: 'city', name: 'City' },
-    ]);
   });
 
   it('updates the selected category when a chip is pressed', async () => {
@@ -692,7 +722,7 @@ describe('SetInstructionScreen', () => {
     expect(getHideDescriptionProps().language).toBe('fr');
   });
 
-  it('includes the resolved category_id in the upload payload when a chip is selected', async () => {
+  it('sends the selected category key in the public upload payload when a chip is selected', async () => {
     await renderScreen();
 
     await act(async () => {
@@ -715,13 +745,52 @@ describe('SetInstructionScreen', () => {
     expect(imageUploader).toHaveBeenCalledWith({
       imageInfos: expect.objectContaining({
         language: 'fr',
-        categoryId: 'cat-2',
+        categoryKey: 'nature',
       }),
       context: expect.any(Object),
     });
+
+    const [{ imageInfos }] = imageUploader.mock.calls[0];
+    expect(imageInfos).not.toHaveProperty('categoryId');
+    expect(imageInfos.scope).toBeUndefined();
   });
 
-  it('treats forced pseudo-category selections as unset and omits category_id from uploads', async () => {
+  it('sends the resolved category id in the private upload payload when a chip is selected', async () => {
+    emitCategoriesViaStore(privateCategoriesFixture);
+
+    await renderScreen({ params: { scope: privateScope } });
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onCategorySelect('nature');
+    });
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onLanguageChange('fr');
+    });
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledWith({
+      imageInfos: expect.objectContaining({
+        language: 'fr',
+        categoryId: 'grp-cat-1',
+      }),
+      context: expect.any(Object),
+      scope: privateScope,
+    });
+
+    const [{ imageInfos }] = imageUploader.mock.calls[0];
+    expect(imageInfos).not.toHaveProperty('categoryKey');
+  });
+
+  it('treats forced pseudo-category selections as unset and omits the category from uploads', async () => {
     await renderScreen();
 
     await act(async () => {
@@ -746,7 +815,7 @@ describe('SetInstructionScreen', () => {
     expect(imageUploader).toHaveBeenCalledWith({
       imageInfos: expect.objectContaining({
         language: 'fr',
-        categoryId: null,
+        categoryKey: null,
       }),
       context: expect.any(Object),
     });
@@ -781,9 +850,10 @@ describe('SetInstructionScreen', () => {
 
     expect(imagesInfos).toEqual(expect.objectContaining({
       language: 'fr',
-      category_id: 'cat-2',
+      category_key: 'nature',
     }));
     expect(imagesInfos).not.toHaveProperty('categoryId');
+    expect(imagesInfos).not.toHaveProperty('categoryKey');
   });
 
   it('lets e2e mode bypass the language requirement while still rendering the selectors', async () => {

@@ -50,7 +50,7 @@ const exportPictureData = async ({ imagesInfos, context }) => {
       x_location: imagesInfos.xLocation,
       y_location: imagesInfos.yLocation,
       language: imagesInfos.language,
-      category_id: imagesInfos.categoryId,
+      category_key: imagesInfos.categoryKey,
 
       /* file_type, file_size */
     },
@@ -160,7 +160,7 @@ export async function imageUploader({ imageInfos, context, scope }) {
       xLocation: imageInfos.xLocation,
       yLocation: imageInfos.yLocation,
       language: imageInfos.language,
-      categoryId: imageInfos.categoryId,
+      categoryKey: imageInfos.categoryKey,
     },
     context: context
   });
