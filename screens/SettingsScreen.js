@@ -1,7 +1,10 @@
-import { useContext, useEffect, useLayoutEffect, useState } from 'react';
-import { View, Text, TextInput, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { useContext, useLayoutEffect, useState } from 'react';
+import { View, Text, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
 import Button from '../components/UI/Button';
+import Input from '../components/Auth/Input';
 import LanguageSelector from '../components/UI/LanguageSelector';
+import SettingsSection from '../components/Groups/Settings/SettingsSection';
+import { settingsTokens } from '../components/Groups/Settings/settingsTokens';
 import { GlobalStyle } from '../constants/theme';
 import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
@@ -32,22 +35,22 @@ const SettingsScreen = ({ navigation }) => {
   const getEmail = async () => {
 
     // combine with the context
-    const email = await checkSecureStoreItem({ 
-      secureStoreValue: 'email', 
-      context 
+    const email = await checkSecureStoreItem({
+      secureStoreValue: 'email',
+      context
     })
     // returns object
-    console.log("email", email); 
-    console.log("email", typeof email);  
+    console.log("email", email);
+    console.log("email", typeof email);
     return email;
   };
 
   // Fetch username_______________________________________________________________
   const getUserName = async () => {
     // combine with the context
-    const username = await checkSecureStoreItem({ 
-      secureStoreValue: 'username', 
-      context 
+    const username = await checkSecureStoreItem({
+      secureStoreValue: 'username',
+      context
     })
     return username;
   };
@@ -67,15 +70,6 @@ const SettingsScreen = ({ navigation }) => {
     });
     return () => { mounted = false; };
   }, []);
-
-/*   const data = {
-    'username': username,
-    'email': email,
-    'password': password,
-    'password_confirmation': confirmPassword,
-    'confirm_success_url': "exp://192.168.1.18:8081", 
-  }; */
-
 
   // Setting functions____________________________________________________________
 
@@ -146,16 +140,16 @@ const SettingsScreen = ({ navigation }) => {
   const handleDeleteAccount = async () => {
     const response = await deleteAccount({ context });
     console.log("handleDeleteAccount setting response", response?.status);
-    
+
     if (response?.status === 200) {
       context.logout();
       Alert.alert(
-        'Account deleted successfully!', 
+        'Account deleted successfully!',
       `${response?.data?.message}\nWe are sorry to see you go!`
       );
     };
 
-    response?.status !== 200 
+    response?.status !== 200
       && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}`);
     return null;
   };
@@ -199,7 +193,7 @@ const SettingsScreen = ({ navigation }) => {
         break;
       case 'delete':
         handleDeleteAccount();
-        break;        
+        break;
       default:
         console.log('Invalid option selected');
         break;
@@ -227,111 +221,146 @@ const SettingsScreen = ({ navigation }) => {
     return (
       <SafeAreaView style={styles.container}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
-          <View style={styles.boxContainer} testID="settings.screen">
-            <Text style={styles.title}>Change Email:</Text>
-            <TextInput
-              accessibilityLabel="Settings email"
-              testID="settings.input.email"
-              value={email}
-              onChangeText={setEmail}
-              style={styles.textInput}
-            />
-            <Button accessibilityLabel="Save email" children="Save" onPress={() => handleButtonClick('email')} style={styles.button} testID="settings.button.save-email" />
-  
-            <Text style={styles.title}>Change Username:</Text>
-            <TextInput
-              accessibilityLabel="Settings username"
-              testID="settings.input.username"
-              value={username}
-              onChangeText={setUsername}
-              style={styles.textInput}
-            />
-            <Button accessibilityLabel="Save username" children="Save" onPress={() => handleButtonClick('username')} style={styles.button} testID="settings.button.save-username" />
-
-            <Text style={styles.title}>Preferred language (for new enigmas):</Text>
-            <View testID="settings.input.preferred-language">
-              <LanguageSelector
-                value={preferredLanguage}
-                onChange={handleSelectPreferredLanguage}
-                testIDPrefix="settings.input.preferred-language.selector"
+          <View style={styles.screenBody} testID="settings.screen">
+            <View style={styles.section}>
+              <SettingsSection title="Change Email">
+              <Input
+                accessibilityLabel="Settings email"
+                keyboardType="email-address"
+                label="New email"
+                onUpdateValue={setEmail}
+                testID="settings.input.email"
+                value={email}
               />
+              <Button
+                accessibilityLabel="Save email"
+                onPress={() => handleButtonClick('email')}
+                style={styles.button}
+                testID="settings.button.save-email"
+              >
+                Save Email
+              </Button>
+              </SettingsSection>
+            </View>
+
+            <View style={styles.section}>
+              <SettingsSection title="Change Username">
+              <Input
+                accessibilityLabel="Settings username"
+                label="New username"
+                onUpdateValue={setUsername}
+                testID="settings.input.username"
+                value={username}
+              />
+              <Button
+                accessibilityLabel="Save username"
+                onPress={() => handleButtonClick('username')}
+                style={styles.button}
+                testID="settings.button.save-username"
+              >
+                Save Username
+              </Button>
+              </SettingsSection>
+            </View>
+
+            <View style={styles.section}>
+              <SettingsSection title="Change Password">
+              <Input
+                accessibilityLabel="Current password"
+                label="Current password"
+                onUpdateValue={setOldPassword}
+                secure
+                testID="settings.input.current-password"
+                value={oldPassword}
+              />
+              <Input
+                accessibilityLabel="New password"
+                label="New password"
+                onUpdateValue={setPassword}
+                secure
+                testID="settings.input.new-password"
+                value={password}
+              />
+              <Input
+                accessibilityLabel="Confirm new password"
+                label="Confirm new password"
+                onUpdateValue={setConfirmPassword}
+                secure
+                testID="settings.input.confirm-password"
+                value={confirmPassword}
+              />
+              <Button
+                accessibilityLabel="Save password"
+                onPress={() => handleButtonClick('password')}
+                style={styles.button}
+                testID="settings.button.save-password"
+              >
+                Save Password
+              </Button>
+              </SettingsSection>
+            </View>
+
+            <View style={styles.section}>
+              <SettingsSection
+                title="Preferred Language"
+              >
+              <Text style={styles.languageCaption}>Preferred language (for new enigmas):</Text>
+              <View testID="settings.input.preferred-language">
+                <LanguageSelector
+                  value={preferredLanguage}
+                  onChange={handleSelectPreferredLanguage}
+                  testIDPrefix="settings.input.preferred-language.selector"
+                />
+              </View>
+              </SettingsSection>
+            </View>
+
+            <View style={styles.section}>
+              <SettingsSection
+                title="Subscription"
+              >
+              <Button
+                accessibilityLabel="Open subscription management"
+                onPress={() => navigation.navigate('SubscriptionManagementScreen')}
+                style={styles.button}
+                testID="settings.button.subscription"
+              >
+                Manage Subscription
+              </Button>
+              {(context?.paidTier ?? 0) < 3 && (
+                <Button
+                  accessibilityLabel="View plans"
+                  mode="flat"
+                  onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
+                  style={styles.button}
+                  testID="settings.button.view-plans"
+                >
+                  View plans
+                </Button>
+              )}
+              </SettingsSection>
+            </View>
+
+            <View style={styles.dangerZoneContainer}>
+              <Text style={styles.dangerZoneText}>Danger Zone</Text>
+              <Text style={styles.dangerZoneCaption}>
+                Deleting your account is permanent and cannot be undone.
+              </Text>
+              <Button
+                accessibilityLabel="Delete account"
+                cancel={true}
+                onPress={() => handleButtonClick('delete')}
+                style={styles.button}
+                testID="settings.button.delete-account"
+              >
+                Delete Account
+              </Button>
             </View>
           </View>
-  
-          <View style={styles.boxContainer}>
-            
-            <Text style={styles.title}>Change Password:</Text>
-            <TextInput
-              accessibilityLabel="Current password"
-              testID="settings.input.current-password"
-              value={oldPassword}
-              onChangeText={setOldPassword}
-              placeholder="Enter your current password"
-              secureTextEntry
-              style={styles.textInput}
-            />
-            <TextInput
-              accessibilityLabel="New password"
-              testID="settings.input.new-password"
-              value={password}
-              onChangeText={setPassword}
-              placeholder="Enter new password"
-              secureTextEntry
-              style={styles.textInput}
-            />
-            <TextInput
-              accessibilityLabel="Confirm new password"
-              testID="settings.input.confirm-password"
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-              placeholder="Confirm new password"
-              secureTextEntry
-              style={styles.textInput}
-            />
-            <Button 
-              accessibilityLabel="Save password"
-              children="Save" 
-              onPress={() => handleButtonClick('password')} 
-              style={styles.button} 
-              testID="settings.button.save-password"
-            />
-          </View>
-  
-          <View style={styles.boxContainer}>
-            <Text style={styles.title}>Subscription:</Text>
-            <Button
-              accessibilityLabel="Open subscription management"
-              children="Subscription"
-              onPress={() => navigation.navigate('SubscriptionManagementScreen')}
-              style={styles.button}
-              testID="settings.button.subscription"
-            />
-            {(context?.paidTier ?? 0) < 3 && (
-              <Button
-                accessibilityLabel="View plans"
-                children="View plans"
-                mode="flat"
-                onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
-                style={styles.button}
-                testID="settings.button.view-plans"
-              />
-            )}
-          </View>
-
-          <View style={styles.dangerZoneContainer}>
-            <Text style={[styles.title,styles.dangerZoneText]}>Danger Zone:</Text>
-            <Button 
-              accessibilityLabel="Delete account"
-              children="Delete Account" 
-              onPress={() => handleButtonClick('delete')} 
-              cancel={true} 
-              style={styles.button}
-              testID="settings.button.delete-account" /* add flat */ />
-          </View>
-          <CenteredModal 
-            isModalVisible={isModalVisible} 
-            onPress={handleConfirm} 
-            onCancel={handleCancel} 
+          <CenteredModal
+            isModalVisible={isModalVisible}
+            onPress={handleConfirm}
+            onCancel={handleCancel}
             testIDPrefix="settings.confirm-modal"
             children={confirmMessage}
           />
@@ -339,7 +368,7 @@ const SettingsScreen = ({ navigation }) => {
       </SafeAreaView>
     );
   };
-  
+
 };
 
 export default SettingsScreen;
@@ -347,41 +376,43 @@ export default SettingsScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    alignItems: 'center',
-    backgroundColor: "white"
+    backgroundColor: GlobalStyle.color.primaryColor900,
   },
   scrollContainer: {
     flexGrow: 1,
-    alignItems: 'center',
+    padding: 16,
   },
-  boxContainer: {
-    flexDirection: 'column',
-    padding: 30,
+  screenBody: {
+    paddingBottom: 16,
   },
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: GlobalStyle.color.tertiaryColor700,
+  section: {
+    marginBottom: 16,
   },
-  textInput: {
-    fontSize: 20,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-
+  languageCaption: {
+    fontSize: 13,
+    color: settingsTokens.muted,
+    marginBottom: 8,
   },
   button: {
-    marginTop: 10,
-    backgroundColor: GlobalStyle.color.tertiaryColor900,
+    alignSelf: 'stretch',
+    marginTop: 8,
   },
   dangerZoneContainer: {
-    flexDirection: 'center',
-    alignItems: 'center',
-    padding: 30,
-    marginVertical: 30,
-    borderTopColor: 'red',
-    borderTopWidth: 1,
+    padding: 12,
+    borderRadius: settingsTokens.radiusPanel,
+    borderWidth: 1,
+    borderColor: settingsTokens.danger,
+    backgroundColor: settingsTokens.dangerSoft,
   },
   dangerZoneText: {
-    color: 'red',
-  }
-})
+    fontSize: 18,
+    fontWeight: '700',
+    color: settingsTokens.danger,
+  },
+  dangerZoneCaption: {
+    fontSize: 13,
+    color: settingsTokens.muted,
+    marginTop: 2,
+    marginBottom: 8,
+  },
+});
