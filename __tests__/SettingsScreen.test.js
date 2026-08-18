@@ -140,7 +140,7 @@ describe('SettingsScreen', () => {
     const { renderer } = await renderScreen();
 
     await act(async () => {
-      renderer.root.findByProps({ testID: 'settings.input.email' }).props.onChangeText('new@example.com');
+      renderer.root.findByProps({ testID: 'settings.input.email' }).props.onUpdateValue('new@example.com');
     });
 
     await act(async () => {
