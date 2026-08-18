@@ -179,20 +179,20 @@ const SettingsScreen = ({ navigation }) => {
     setIsModalVisible(true);
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     setIsLoading(true);
     switch (selectedOption) {
       case 'email':
-        handleChangeEmail();
+        await handleChangeEmail();
         break;
       case 'username':
-        handleChangeUsername();
+        await handleChangeUsername();
         break;
       case 'password':
-        handleChangePassword();
+        await handleChangePassword();
         break;
       case 'delete':
-        handleDeleteAccount();
+        await handleDeleteAccount();
         break;
       default:
         console.log('Invalid option selected');
