@@ -500,7 +500,10 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
       throw new Error('Selected image file is no longer available.');
     }
 
+    console.log("upload file bytes", plan?.image_key, uploadFile.size);
+
     const base64 = await uploadFile.base64();
+    console.log("upload base64 length", plan?.image_key, base64.length);
     const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
       .then((response) => {
         if (response.status === 200) {

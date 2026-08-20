@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { useWindowDimensions, View, StyleSheet } from 'react-native';
+import { useWindowDimensions, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import type { FC } from 'react';
 
 import HidePictureDefault from '../../components/Picture/HidePicture';
@@ -84,7 +85,10 @@ export default function HideScreen({ navigation, route }: HideScreenProps) {
 
   return (
     <PrivateGroupThemeProvider group={group}>
-      <View style={[styles.container, { backgroundColor }]}>
+      {/* RNGH root scoped to this screen subtree (same convention as
+          GuessScreen): hosts ShowPicture's nested GestureDetectors without
+          wrapping the app/navigators, which broke HomeScreen header touches. */}
+      <GestureHandlerRootView style={[styles.container, { backgroundColor }]}>
         <HidePicture
           navigation={navigation}
           uri={uri}
@@ -95,7 +99,7 @@ export default function HideScreen({ navigation, route }: HideScreenProps) {
           isTutorial={isTutorial}
           scope={scope}
         />
-      </View>
+      </GestureHandlerRootView>
     </PrivateGroupThemeProvider>
   );
 }
