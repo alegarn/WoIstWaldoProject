@@ -75,6 +75,22 @@ function classifyImagesErrorReason(error) {
   return 'network';
 };
 
+/**
+ * Classify a download failure by transport class. `true` means no HTTP
+ * response at all (timeout, ERR_NETWORK, connection refused): the batch is
+ * unproven. ANY HTTP status — 4xx included (e.g. the anticipated 404 "key
+ * does not exist") — means the server answered, so the failure is
+ * server-class. Deliberately NOT part of `classifyImagesErrorReason`: that
+ * helper maps every 4xx to 'network' for the metadata path, semantics
+ * consumed by `useResolveLifecycle.ts` and kept intact here.
+ *
+ * @param {*} error Axios-style error (or anything) from a download request.
+ * @returns {boolean} Whether the failure is network-class.
+ */
+function isNetworkClassFailure(error) {
+  return error?.response == null && !(typeof error?.request?.status === 'number' && error.request.status > 0);
+};
+
 
 export async function getUploadUrl(context) {
   return prepareImageUpload(context);
@@ -190,30 +206,33 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
 /**
  * Download one image's bytes from its storage URL (backend or external).
  * GET with `timeout: 15000`; auth headers are attached only when the URL is
- * backend-hosted (`usesBackendStorage`). On failure it `console.warn`s the URL
- * + reason and resolves `undefined` (a falsy sentinel) — it does NOT throw, so
- * a `Promise.all` batch keeps the successful downloads and the caller drops
- * failures.
+ * backend-hosted (`usesBackendStorage`). Never throws. On failure it
+ * `console.warn`s the URL + reason and resolves
+ * `{ data: undefined, networkFailure }` where `networkFailure` is `true` only
+ * when no HTTP response was received at all (`isNetworkClassFailure`); any
+ * HTTP status — 4xx included — resolves `networkFailure: false` (the server
+ * answered, so the failure is server-class).
  *
  * @param {Object} params
  * @param {string} params.storageUrl Absolute URL to fetch.
  * @param {string} [params.token]    Auth token, attached only for backend URLs.
- * @returns {Promise<string|undefined>} Resolves to the response body on
- *   success, or `undefined` on failure.
+ * @returns {Promise<{data: *, networkFailure: boolean}>} `{ data, networkFailure: false }`
+ *   on success; `{ data: undefined, networkFailure }` on failure.
  */
 async function getImageFromStorage({ storageUrl, token }) {
   console.log("getImageFromStorage");
   const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token), timeout: 15000 } : { timeout: 15000 };
-  const imageData = await axios.get(storageUrl, config)
+  const imageResult = await axios.get(storageUrl, config)
   .then((response) => {
     //console.log("imageData response, getImageFromStorage");
-    return response.data;
+    return { data: response.data, networkFailure: false };
   }).catch((error) => {
     const reason = error?.response?.status ?? error?.code ?? error?.message ?? 'unknown';
     console.warn("getImageFromStorage failed", storageUrl, reason);
+    // if "The specified key does not exist" -> send server image is not in aws -> error
+    return { data: undefined, networkFailure: isNetworkClassFailure(error) };
   });
-  // if "The specified key does not exist" -> send server image is not in aws -> error
-  return imageData;
+  return imageResult;
 };
 
 function verifyItsBase64(imageData) {
@@ -273,19 +292,24 @@ async function extractBase64(imageData, filename) {
 
 /**
  * Fetch one image's bytes and decode to a cached `file://` path. Composes
- * `getImageFromStorage` → `extractBase64`. Returns the file uri, or `false`
- * (from `extractBase64`) when the payload is not base64. Does not throw.
+ * `getImageFromStorage` → `extractBase64`. Does not throw. Resolves
+ * `{ filePath, networkFailure }`: `filePath` is the cached file uri on
+ * success, or `false` when the image did not decode — either the fetch
+ * failed, or HTTP 200 returned a non-base64 payload (`extractBase64` false),
+ * which stays server-class because the fetch itself succeeded (success path
+ * carries `networkFailure: false`). `networkFailure` is meaningful only when
+ * `filePath` is falsy.
  *
  * @param {Object} image Metadata row with at least `storage_url` and `name`.
  * @param {string} token Auth token forwarded to `getImageFromStorage`.
- * @returns {Promise<string|false>} Cached file uri or `false`.
+ * @returns {Promise<{filePath: string|false, networkFailure: boolean}>}
  */
 async function handleImagesDownload(image, token) {
   console.log("handleImagesDownload");
   console.log("image location", image.storage_url);
-  const imageData = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
-  const filePath = await extractBase64(imageData, image.name);
-  return filePath;
+  const { data, networkFailure } = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
+  const filePath = await extractBase64(data, image.name);
+  return { filePath, networkFailure };
 };
 
 export function buildImageObject(image, filePath) {
@@ -326,19 +350,29 @@ export function buildImageObject(image, filePath) {
 /**
  * Download + decode every image in a metadata batch concurrently. Uses
  * `Promise.all`, so it resolves when the slowest image finishes (failures do
- * not short-circuit). Per-image failures resolve falsy and are dropped by
- * `.filter(Boolean)`, so the result holds only the partial successes.
+ * not short-circuit). Per-image failures resolve with a falsy `filePath` and
+ * are dropped from `images`; `sawNetworkFailure` aggregates whether ANY
+ * per-image failure was network-class (no HTTP response at all, per
+ * `isNetworkClassFailure`), so the caller can distinguish a server-broken
+ * batch from a dead transport.
  *
  * @param {Array<Object>} imagesInfosData Batch of metadata rows.
  * @param {string}        token           Auth token for `getImageFromStorage`.
- * @returns {Promise<Array<Object>>} Built `Image` objects (failures excluded).
+ * @returns {Promise<{images: Array<Object>, sawNetworkFailure: boolean}>}
+ *   `images` holds only the successfully built `Image` objects;
+ *   `sawNetworkFailure` is `true` when at least one failed download received
+ *   no HTTP response.
  */
 async function downloadImageBatch(imagesInfosData, token) {
+  let sawNetworkFailure = false;
   const downloadedImages = await Promise.all(
     imagesInfosData.map(async (image) => {
-      const filePath = await handleImagesDownload(image, token);
+      const { filePath, networkFailure } = await handleImagesDownload(image, token);
 
       if (!filePath) {
+        if (networkFailure) {
+          sawNetworkFailure = true;
+        }
         return null;
       }
 
@@ -346,7 +380,7 @@ async function downloadImageBatch(imagesInfosData, token) {
     })
   );
 
-  return downloadedImages.filter(Boolean);
+  return { images: downloadedImages.filter(Boolean), sawNetworkFailure };
 }
 
 
@@ -354,10 +388,7 @@ async function downloadImageBatch(imagesInfosData, token) {
  * Main feed entry. Resolves one playable batch of images for the public feed
  * (private scopes are delegated to `fetchPrivateFeedPageForGame`).
  *
- * Bounded retry loop: at most `MAX_EMPTY_DOWNLOAD_BATCHES` (3) consecutive
- * "broken" batches — a batch whose metadata fetched OK but yielded zero
- * downloaded images — are skipped before giving up with a `reason: 'server'`
- * error. Each iteration:
+ * Bounded retry loop over metadata batches. Each iteration:
  *   1. fetch metadata (`getImagesInfos` for the head / `getNextImagesInfos`
  *      for an "after cursor" batch keyed by the previous tail `name`);
  *   2. early returns: `data === null` → `{ isError: true, reason }`;
@@ -365,12 +396,20 @@ async function downloadImageBatch(imagesInfosData, token) {
  *      unauthorized handler owns logout/nav out-of-band);
  *      empty `imagesInfosData.length === 0` → `{ isError: false, reason:'empty',
  *      images: [] }` BEFORE any cursor write;
- *   3. CURSOR ADVANCE: `saveLastImageUuid(lastBatchPictureId, ...)` is fired
- *      for every valid non-empty batch — strictly BEFORE `downloadImageBatch`.
- *      So the cursor never freezes on a broken batch: if every download in a
- *      batch fails, the cursor has already advanced past it and the loop
- *      re-queries beyond it next pass instead of re-querying the same batch
- *      forever. Accepted trade-off over the old freeze behaviour.
+ *   3. download the batch (`downloadImageBatch`), then a three-way contract:
+ *      - ≥1 image downloaded → CURSOR ADVANCE (`saveLastImageUuid`) AFTER the
+ *        download, then return `{ isError: false, images }`;
+ *      - 0 downloaded AND ≥1 failure network-class (no HTTP response at all:
+ *        timeout, ERR_NETWORK, conn refused) → NO cursor write, NO retry —
+ *        the batch is unproven so the cursor stays put for the next attempt,
+ *        and retrying through the same dead transport would hammer it;
+ *        return `{ isError: true, reason: 'network' }`;
+ *      - 0 downloaded, all failures server-class (HTTP 4xx/5xx received, or
+ *        HTTP 200 non-base64 payload) → "broken batch": CURSOR ADVANCE so the
+ *        cursor never freezes on permanently missing files,
+ *        `skippedBrokenBatches += 1`, loop continues (bounded: at most
+ *        `MAX_EMPTY_DOWNLOAD_BATCHES` = 3 skips, then terminal
+ *        `{ isError: true, reason: 'server' }`).
  *
  * @param {string|null} pictureId Cursor: `name` of the last image of the
  *   previous page, or `null` for the first page.
@@ -431,13 +470,23 @@ export async function getImages(pictureId, context, filters = {}) {
     };
 
     const lastBatchPictureId = imagesInfosData[imagesInfosData.length - 1].name;
-    await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
-    const images = await downloadImageBatch(imagesInfosData, token);
+    const { images, sawNetworkFailure } = await downloadImageBatch(imagesInfosData, token);
 
     if (images.length > 0) {
+      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
       return { isError: false, images: images };
     }
 
+    if (sawNetworkFailure) {
+      return {
+        isError: true,
+        reason: 'network',
+        title: "There is an error downloading user's images.",
+        message: "Please retry later..."
+      };
+    }
+
+    await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
     skippedBrokenBatches += 1;
     nextPictureId = lastBatchPictureId;
   }

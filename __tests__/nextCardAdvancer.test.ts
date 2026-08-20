@@ -601,6 +601,58 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(markExhaustedMock).not.toHaveBeenCalled();
     });
 
+    // ─── H1 — getImages reason forwarding + exhaustion-cache safety ─────────
+    //
+    // getImages now returns { isError: true, reason: 'network' } on total
+    // download-side network failure. fetchCardBatch passes the result through
+    // unmodified, so the advancer must forward the reason instead of lumping
+    // every isError into 'server'. Both Tier 2 (category fetch) and Tier 4
+    // ('all' head replay) fetch — every fetch fails in these tests.
+
+    it('H1: network-class failure on every fetch → reason "network", exhausted cache never written', async () => {
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock.mockResolvedValue({ isError: true, reason: 'network' } as never);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.next).toBeNull();
+      expect(result.reason).toBe('network');
+      // Tier 2 (city) + Tier 4 (all head replay) both fetched and failed.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(appendMock).not.toHaveBeenCalled();
+      // Network failure must NOT poison the exhaustion cache (isError results
+      // return before the genuine-empty write branch).
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
+    it('H1: server-class failure (no reason) on every fetch → reason "server", exhausted cache never written', async () => {
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock.mockResolvedValue({ isError: true } as never);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.next).toBeNull();
+      expect(result.reason).toBe('server');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
+    it('H1: network on Tier 2 + genuine empty on Tier 4 → reason "empty" (priority empty > network)', async () => {
+      resolveMock.mockResolvedValue(null as never);
+      // Tier 2 (city, cursor): network-class failure. Tier 4 ('all', head):
+      // genuine empty — categoryKey 'all' also skips the cache write.
+      fetchMock
+        .mockResolvedValueOnce({ isError: true, reason: 'network' } as never)
+        .mockResolvedValueOnce({ isError: false, images: [] } as never);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.next).toBeNull();
+      expect(result.reason).toBe('empty');
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+    });
+
     describe('private scope isolation + purge (real AsyncStorage)', () => {
       const realStorage = jest.requireActual('../utils/storageDatum');
       const realGroupFeedCache = jest.requireActual('../services/groups/groupFeedCache');
