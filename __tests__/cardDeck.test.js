@@ -6,6 +6,8 @@ jest.mock('../utils/storageDatum', () => {
     getLastImageUuid: jest.fn(),
     storeImageList: jest.fn(),
     updateImageList: jest.fn(),
+    clearExhaustedCategory: jest.fn((categoryKey, language, scope) =>
+      actual.clearExhaustedCategory(categoryKey, language, scope)),
   };
 });
 
@@ -16,13 +18,14 @@ jest.mock('../utils/imagesRequests', () => ({
 jest.mock('../services/groups/groupFeedCache', () => ({
   readGroupFeedCache: jest.fn(),
   writeGroupFeedCache: jest.fn(),
+  clearGroupCategoryExhausted: jest.fn(),
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getLastImageUuid, updateImageList } from '../utils/storageDatum';
+import { clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
-import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
-import { appendCardBatch, fetchCardBatch } from '../services/cardDeck';
+import { clearGroupCategoryExhausted, readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
+import { appendCardBatch, fetchCardBatch, persistCardBatch } from '../services/cardDeck';
 
 const realUpdateImageList = jest.requireActual('../utils/storageDatum').updateImageList;
 
@@ -108,15 +111,24 @@ describe('appendCardBatch', () => {
     );
   });
 
-  it('returns null to match persistCardBatch', async () => {
-    await expect(
-      appendCardBatch({ cards: [], categoryKey: 'all', language: 'fr', scope: { kind: 'public' } }),
-    ).resolves.toBe(null);
+  it('(e) returns the merged deck for both scopes — callers use it as the numbering source of truth (Fix 3)', async () => {
+    updateImageList.mockResolvedValueOnce([{ listId: 1 }, { listId: 2 }]);
 
-    readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
     await expect(
-      appendCardBatch({ cards: [], categoryKey: 'all', language: 'fr', scope: { kind: 'private', groupId: 'g-3' } }),
-    ).resolves.toBe(null);
+      appendCardBatch({ cards: [{ listId: 2 }], categoryKey: 'all', language: 'fr', scope: { kind: 'public' } }),
+    ).resolves.toEqual([{ listId: 1 }, { listId: 2 }]);
+
+    readGroupFeedCache.mockResolvedValueOnce({ images: [{ listId: 1 }], nextCursor: null });
+
+    await expect(
+      appendCardBatch({
+        cards: [{ pictureId: 'x' }],
+        categoryKey: 'all',
+        categoryId: 'all',
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      }),
+    ).resolves.toEqual([{ listId: 1 }, { pictureId: 'x', listId: 2 }]);
   });
 
   it('normalizes an undefined language to "any" before forwarding to delegates', async () => {
@@ -350,6 +362,9 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
     // the REAL updateImageList against AsyncStorage mocks to verify the
     // post-append deck has no pictureId duplicate.
     updateImageList.mockImplementation(realUpdateImageList);
+    // Fix 2b: appendCardBatch now reads the played-set (filterPlayedCards)
+    // BEFORE updateImageList reads the deck — feed the played read first.
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
     AsyncStorage.getItem.mockResolvedValueOnce(
       JSON.stringify([{ listId: 1, pictureId: 'card-A' }]),
     );
@@ -369,6 +384,212 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
     const pictureIds = writtenImages.map((c) => c.pictureId);
     expect(pictureIds).toEqual(['card-A', 'card-B']);
     expect(new Set(pictureIds).size).toBe(pictureIds.length);
+  });
+});
+
+describe('exhausted-marker invalidation (Fix 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+    clearGroupCategoryExhausted.mockResolvedValue(undefined);
+  });
+
+  it('appendCardBatch with non-empty non-"all" batch clears exhausted marker (public)', async () => {
+    await appendCardBatch({
+      cards: [{ listId: 1 }],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+  });
+
+  it('persistCardBatch non-empty non-"all" clears marker', async () => {
+    await persistCardBatch({
+      cards: [{ listId: 1 }],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+  });
+
+  it('categoryKey "all" never clears', async () => {
+    await appendCardBatch({
+      cards: [{ listId: 1 }],
+      categoryKey: 'all',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+    await persistCardBatch({
+      cards: [{ listId: 1 }],
+      categoryKey: 'all',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(clearExhaustedCategory).not.toHaveBeenCalled();
+  });
+
+  it('empty batch does not clear', async () => {
+    await appendCardBatch({
+      cards: [],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+    await persistCardBatch({
+      cards: [],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(clearExhaustedCategory).not.toHaveBeenCalled();
+  });
+
+  it('private scope routes to group clear (clearGroupCategoryExhausted via mocked storageDatum)', async () => {
+    await appendCardBatch({
+      cards: [{ listId: 1 }],
+      categoryKey: 'city',
+      categoryId: 7,
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'private', groupId: 'g-3' });
+    expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-3', 'city', 'fr');
+  });
+
+  it('clear failure does not reject the append (Fix 3: resolves the updateImageList deck)', async () => {
+    clearExhaustedCategory.mockRejectedValueOnce(new Error('storage clear failed'));
+
+    await expect(
+      appendCardBatch({
+        cards: [{ listId: 1 }],
+        categoryKey: 'city',
+        language: 'fr',
+        scope: { kind: 'public' },
+      }),
+    ).resolves.toEqual([]);
+
+    expect(updateImageList).toHaveBeenCalledWith([{ listId: 1 }], 'city', 'fr');
+  });
+});
+
+describe('appendCardBatch played-set filter (Fix 2b)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+    AsyncStorage.setItem.mockResolvedValue(undefined);
+  });
+
+  it('(j) drops incoming cards whose pictureId is in the played-set (public + private branches)', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['played-1']));
+
+    await appendCardBatch({
+      cards: [{ pictureId: 'played-1' }, { pictureId: 'fresh-1' }],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
+    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr');
+
+    jest.clearAllMocks();
+    updateImageList.mockResolvedValue([]);
+    readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['played-1']));
+
+    await appendCardBatch({
+      cards: [{ pictureId: 'played-1' }, { pictureId: 'fresh-2' }],
+      categoryKey: 'city',
+      categoryId: 7,
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:group:g-3:fr');
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: 7, language: 'fr' },
+      { images: [{ pictureId: 'fresh-2', listId: 1 }], nextCursor: null },
+    );
+  });
+
+  it('(k) incoming cards without a pictureId pass the played-set filter', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['played-1']));
+
+    await appendCardBatch({
+      cards: [{ listId: 9 }, { pictureId: 'fresh-1' }],
+      categoryKey: 'city',
+      language: 'fr',
+      scope: { kind: 'public' },
+    });
+
+    expect(updateImageList).toHaveBeenCalledWith([{ listId: 9 }, { pictureId: 'fresh-1' }], 'city', 'fr');
+  });
+
+  it('played-set read failure does not reject the append (cards pass through)', async () => {
+    AsyncStorage.getItem.mockRejectedValueOnce(new Error('played read failed'));
+
+    await expect(
+      appendCardBatch({
+        cards: [{ pictureId: 'fresh-1' }],
+        categoryKey: 'city',
+        language: 'fr',
+        scope: { kind: 'public' },
+      }),
+    ).resolves.toEqual([]);
+
+    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr');
+  });
+});
+
+describe('batch return contracts (Fix 3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+  });
+
+  it('(f) persistCardBatch writes and returns normalized cards (ids 1..n on a fresh deck, both scopes)', async () => {
+    await expect(persistCardBatch({
+      cards: [{ pictureId: 'a' }, { pictureId: 'b' }, { pictureId: 'c' }],
+      categoryKey: 'all',
+      language: 'fr',
+      scope: { kind: 'public' },
+    })).resolves.toEqual([
+      { pictureId: 'a', listId: 1 },
+      { pictureId: 'b', listId: 2 },
+      { pictureId: 'c', listId: 3 },
+    ]);
+    expect(storeImageList).toHaveBeenCalledWith([
+      { pictureId: 'a', listId: 1 },
+      { pictureId: 'b', listId: 2 },
+      { pictureId: 'c', listId: 3 },
+    ], 'all', 'fr');
+
+    await expect(persistCardBatch({
+      cards: [{ pictureId: 'p' }],
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    })).resolves.toEqual([{ pictureId: 'p', listId: 1 }]);
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr' },
+      { images: [{ pictureId: 'p', listId: 1 }], nextCursor: null },
+    );
   });
 });
 
@@ -521,6 +742,134 @@ describe('fetchCardBatch', () => {
 
     expect(getImages).toHaveBeenCalledWith(
       null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+    );
+  });
+});
+
+describe('fetchCardBatch head-replay detection (Fix 2a)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+  });
+
+  it('(a) real stored cursor + null override → getImages opts { persistCursor: false } (head replay must not rewind)', async () => {
+    getLastImageUuid.mockResolvedValue('real-cursor-uuid');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: null,
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+      { persistCursor: false },
+    );
+  });
+
+  it('(b) PUBLIC_FEED_END_CURSOR sentinel + null override → same head-replay opt-out', async () => {
+    getLastImageUuid.mockResolvedValue('__public_feed_end__');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: null,
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+      { persistCursor: false },
+    );
+  });
+
+  it('(c) PRIVATE_FEED_END_CURSOR sentinel + null override → same head-replay opt-out', async () => {
+    getLastImageUuid.mockResolvedValue('__private_feed_end__');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: null,
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+      { persistCursor: false },
+    );
+  });
+
+  it('(d) no stored cursor + null override → 3-arg call (initial fill persists the head tail as cursor)', async () => {
+    getLastImageUuid.mockResolvedValue(null);
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: null,
+    });
+
+    expect(getImages.mock.calls[0]).toHaveLength(3);
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+    );
+  });
+
+  it('(e) sentinel + omitted override → 3-arg call (sentinel un-stick keeps persisting)', async () => {
+    getLastImageUuid.mockResolvedValue('__public_feed_end__');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      // pictureIdOverride intentionally omitted (cursor-mode sentinel coercion)
+    });
+
+    expect(getImages.mock.calls[0]).toHaveLength(3);
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+    );
+  });
+
+  it('(f) explicit uuid override → 3-arg call even with a stored cursor (explicit-uuid fetch unchanged)', async () => {
+    getLastImageUuid.mockResolvedValue('real-cursor-uuid');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: 'explicit-uuid',
+    });
+
+    expect(getImages.mock.calls[0]).toHaveLength(3);
+    expect(getImages).toHaveBeenCalledWith(
+      'explicit-uuid',
       { token: 't' },
       expect.objectContaining({ category_key: 'nature' }),
     );

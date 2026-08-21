@@ -1,5 +1,5 @@
 import { getImages } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, filterPlayedCards, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
 import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 
@@ -107,6 +107,13 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
   const p = (async () => {
     const lang = normalizeLanguage(language);
     const lastImageUuid = await getLastImageUuid(categoryKey, lang);
+    // Fix 2a: a head fetch (pictureIdOverride === null) over ANY stored cursor
+    // value (real uuid or either feed-end sentinel) is a head REPLAY —
+    // persisting the head batch's tail would rewind the cursor and re-download
+    // the whole feed on the next top-up. Pass persistCursor:false so getImages
+    // leaves the stored cursor untouched. The conditional spread keeps
+    // non-replay calls 3-arg (existing call-shape pins stay green).
+    const isHeadReplay = pictureIdOverride === null && !!lastImageUuid;
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
 
     // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
@@ -117,9 +124,14 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
     // head; the next non-empty batch overwrites the stale key with a real uuid.
     const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
 
-    return getImages(effectivePictureId, authContext, buildFeedFilters({
-      categoryKey, categoryId, language, scope,
-    }));
+    return getImages(
+      effectivePictureId,
+      authContext,
+      buildFeedFilters({
+        categoryKey, categoryId, language, scope,
+      }),
+      ...(isHeadReplay ? [{ persistCursor: false }] : []),
+    );
   })();
 
   fetchInFlight.set(key, p);
@@ -157,27 +169,48 @@ function buildFeedFilters({ categoryKey, categoryId, language, scope }) {
 }
 
 /**
+ * Clear the exhausted-category marker whenever a NON-EMPTY batch for a real
+ * category lands at a deck-write boundary. Paired writers of the marker —
+ * services/cardPrefetcher.ts:190 (empty background prefetch) and
+ * utils/nextCardAdvancer.ts:169 (empty Tier-2 foreground fetch) — must not
+ * outlive proof that the server still serves the category: a stale marker
+ * blocks every subsequent top-up, so new uploads never surface (Fix 1).
+ * appendCardBatch clears on the RAW incoming batch length (pre-dedup — the
+ * server proved the category non-empty regardless of local duplicates).
+ * Fire-and-forget: the clear is advisory and must never reject the write path.
+ */
+function clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope) {
+  if (!(Array.isArray(cards) && cards.length > 0 && categoryKey && categoryKey !== 'all')) {
+    return;
+  }
+  clearExhaustedCategory(categoryKey, lang, scope).catch(() => {});
+}
+
+/**
  * Overwrite (not append) the persisted deck for the scope with the given cards.
  * Public scope → storeImageList; private scope → writeGroupFeedCache.
- * Always returns null (callers ignore the deck contents here).
+ * Returns the merged deck's normalized cards; callers (SwipeImage.handleData)
+ * use the RETURN as the numbering source of truth (Fix 3 single-writer).
  *
  * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<null>}
+ * @returns {Promise<Array<object>>} The normalized persisted cards.
  */
 export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
+  const normalized = normalizeListIds(Array.isArray(cards) ? cards : []);
+  clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
 
   if (isPrivateScope(scope)) {
     await writeGroupFeedCache(
       scope.groupId,
       { categoryId: resolveCategoryId(categoryId), language: lang },
-      { images: cards, nextCursor: null },
+      { images: normalized, nextCursor: null },
     );
-    return null;
+    return normalized;
   }
 
-  await storeImageList(cards, categoryKey, lang);
-  return null;
+  await storeImageList(normalized, categoryKey, lang);
+  return normalized;
 }
 
 /**
@@ -186,7 +219,7 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
  * (cardPrefetcher) to grow the deck without losing existing cards.
  * - Public scope: reuses updateImageList (already appends to AsyncStorage).
  * - Private scope: reads the group feed cache, concatenates, writes back.
- * Returns null (matches persistCardBatch return contract).
+ * Returns the merged deck; callers use it as the numbering source of truth.
  *
  * The RMW window (read → concat → write) is serialized per scope via
  * withScopeLock. Key derivation mirrors getDeckCountForScope / groupFeedListKey:
@@ -212,29 +245,33 @@ function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
  * is deliberately separate from the fetch dedup key (fetchBatchDedupKey), so
  * the append lock never blocks the fetch path — no deadlock.
  *
+ * Returns the merged deck; callers use it as the numbering source of truth
+ * (Fix 3: the storage boundary is the SINGLE listId writer).
+ *
  * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<null>} always null (matches persistCardBatch contract)
+ * @returns {Promise<Array<object>>} The new persisted deck (post-dedup/normalize).
  */
 export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 
   return withScopeLock(appendCardBatchLockKey({ categoryKey, categoryId, language, scope }), async () => {
+    clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
+    const incoming = await filterPlayedCards(cards, lang, scope);
     if (isPrivateScope(scope)) {
       const cid = resolveCategoryId(categoryId);
       const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
       const prior = existing?.images ?? [];
-      const deduped = dedupByPictureId(prior, cards);
+      const deduped = dedupByPictureId(prior, incoming);
       const merged = normalizeListIds([...prior, ...deduped]);
       await writeGroupFeedCache(
         scope.groupId,
         { categoryId: cid, language: lang },
         { images: merged, nextCursor: existing?.nextCursor ?? null },
       );
-      return null;
+      return merged;
     }
 
-    await updateImageList(cards, categoryKey, lang);
-    return null;
+    return await updateImageList(incoming, categoryKey, lang);
   });
 }
 

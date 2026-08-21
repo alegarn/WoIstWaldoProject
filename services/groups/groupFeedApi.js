@@ -5,7 +5,7 @@ import Image from '../../models/image';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
 
-const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
+export const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
 
 function imagesUrl(groupId) {
   return `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/${groupId}/images`;
@@ -183,7 +183,7 @@ export async function downloadPrivateImage(context, { groupId, imageId }) {
   return extracted || null;
 }
 
-export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey } = {}) {
+export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey, persistCursor = true } = {}) {
   if (pictureId === PRIVATE_FEED_END_CURSOR) {
     return { isError: false, images: [] };
   }
@@ -203,11 +203,15 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
   const nextCursor = response.data?.nextCursor ?? null;
 
   if (rows.length === 0) {
-    await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language);
+    if (persistCursor) {
+      await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language);
+    }
     return { isError: false, images: [] };
   }
 
-  await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language);
+  if (persistCursor) {
+    await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language);
+  }
 
   const downloaded = await Promise.all(
     rows.map(async (row) => {

@@ -456,6 +456,57 @@ describe('imagesRequests utilities', () => {
     expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'playable-img', undefined, undefined);
   });
 
+  it('Fix 2a (g): persistCursor:false skips saveLastImageUuid on a successful batch', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1']))
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+
+    const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.pictureId)).toEqual(['img-1']);
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('Fix 2a (h): persistCursor:false skips the broken-batch cursor advance (loop semantics unchanged)', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['not-base64-img']))
+      .mockResolvedValueOnce({ data: 'not-base64' })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,next123' });
+    axios.post.mockResolvedValueOnce(batchResponse(['playable-img']));
+
+    const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.pictureId)).toEqual(['playable-img']);
+    // Broken batch still skipped (POST fired, loop continued) — but no cursor
+    // write at EITHER site (broken-batch advance and success).
+    expect(axios.post).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('Fix 2a: private scope forwards persistCursor:false so the private path also skips the cursor save', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'img-1' }], next_cursor: 'cursor-9' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+
+    const response = await getImages(null, { token: 'Bearer token' }, {
+      category_id: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-3' },
+    }, { persistCursor: false });
+
+    expect(response.isError).toBe(false);
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
   it('threads category and language filters into the initial image batch query params', async () => {
     axios.get.mockResolvedValueOnce({ data: { data: [] } });
 

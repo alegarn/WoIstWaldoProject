@@ -32,6 +32,7 @@ jest.mock('../components/Results/ScoreCelebration', () => {
 });
 
 jest.mock('../utils/storageDatum', () => ({
+  addPlayedPictureId: jest.fn(() => Promise.resolve()),
   deleteImageFromStorage: jest.fn(),
   removeImageFromList: jest.fn(),
 }));

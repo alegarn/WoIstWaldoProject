@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
+import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/storageDatum';
 
 const PREFIX = 'groupFeed';
 const EXHAUSTED_PREFIX = 'groupFeedExhausted';
@@ -97,6 +98,8 @@ export async function clearGroupFeedCache(groupId) {
   if (target.length > 0) {
     await AsyncStorage.multiRemove(target);
   }
+
+  await clearPlayedPictureIdsForGroup(groupId);
 }
 
 export async function clearAllGroupFeedCaches() {
@@ -150,6 +153,7 @@ function isPrivateCacheUri(uri) {
 export async function purgeAllPrivateCaches() {
   await clearAllGroupFeedCaches();
   await clearAllGroupFeedExhaustedMarkers();
+  await clearAllPrivatePlayedPictureIds();
 
   try {
     Paths.cache.create({ idempotent: true, intermediates: true });

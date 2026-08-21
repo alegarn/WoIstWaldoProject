@@ -1,5 +1,5 @@
 import { bufferScore, mintGuessId } from './sessionScoreStore';
-import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
+import { addPlayedPictureId, removeImageFromList, deleteImageFromStorage } from './storageDatum';
 import { resolveNextCard } from './nextCardResolver';
 import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
 
@@ -29,6 +29,7 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
   });
 
   try {
+    addPlayedPictureId(pictureId, language, scope).catch(() => {});
     await removeImageFromList(listId, categoryKey, language);
     await deleteImageFromStorage(imageFile);
   } catch (e) {

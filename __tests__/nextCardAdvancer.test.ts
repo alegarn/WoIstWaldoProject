@@ -32,6 +32,8 @@ jest.mock('../utils/storageDatum', () => {
     normalizeListIds: jest.fn((cards) => cards),
     isCategoryExhausted: jest.fn(),
     markCategoryExhausted: jest.fn(),
+    clearExhaustedCategory: jest.fn((categoryKey: string, language: string | null | undefined, scope: unknown) =>
+      actual.clearExhaustedCategory(categoryKey, language, scope)),
   };
 });
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
@@ -48,7 +50,7 @@ jest.mock('../services/cardPrefetcher', () => {
 
 import { resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
+import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted, clearExhaustedCategory } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { warmAllDeckIfNeeded, prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
@@ -64,6 +66,7 @@ const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
 const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
 const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
 const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
+const clearExhaustedMock = clearExhaustedCategory as jest.MockedFunction<typeof clearExhaustedCategory>;
 
 // jest.setup.js globally mocks AsyncStorage; cast to a typed mock view so
 // .mockResolvedValue / .mockImplementation are visible to TypeScript.
@@ -492,6 +495,31 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(result.next).not.toBeNull();
       expect((result.next as { params: { pictureId?: string } }).params.pictureId).toBe('new-card');
     });
+  });
+
+  // ─── Fix 1 — exhausted-marker invalidation pin ───────────────────────────
+  //
+  // The marker write sites (cardPrefetcher markCategoryExhausted on empty
+  // prefetch, foregroundTopUp on empty Tier-2 fetch) are paired with a CLEAR
+  // in appendCardBatch/persistCardBatch whenever a non-empty batch lands.
+  // Wire the REAL appendCardBatch behind the mocked cardDeck export so the
+  // Tier-2 → append chain exercises the clear end-to-end.
+
+  it('Fix 1 pin: Tier-2 successful fetch (non-empty) clears the exhausted marker', async () => {
+    appendMock.mockImplementation(jest.requireActual('../services/cardDeck').appendCardBatch as never);
+    mockAsyncStorage.setItem.mockResolvedValue(undefined);
+    mockAsyncStorage.getItem.mockResolvedValue(null);
+    resolveMock
+      .mockResolvedValueOnce(null as never)            // Tier 1 local empty
+      .mockResolvedValueOnce(null as never)            // Tier 2 recheck (prefetch no-op)
+      .mockResolvedValueOnce(A_CARD_RESULT as never);  // after Tier 2 fetch + append
+    fetchMock.mockResolvedValue({ isError: false, images: [{ listId: 9, pictureId: 'fresh-1' }] } as never);
+
+    const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+    expect(result.reason).toBe('ok');
+    expect(appendMock).toHaveBeenCalledTimes(1);
+    expect(clearExhaustedMock).toHaveBeenCalledWith('city', 'fr', BASE_ARGS.scope);
   });
 
   // ─── F3a — exhausted-category cache (Tier 2 short-circuit) ──────────────

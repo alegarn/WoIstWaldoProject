@@ -7,11 +7,12 @@ import SwipeableCard from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
 import useBadgeDetail from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, getLastImageId, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
+import { addPlayedPictureId, filterPlayedCards, getE2EHiddenGuessCard, getLocalImages, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
 import { readGroupFeedCache, writeGroupFeedCache } from '../../services/groups/groupFeedCache';
+import { PRIVATE_FEED_END_CURSOR } from '../../services/groups/groupFeedApi';
 import { fetchCardBatch, persistCardBatch, appendCardBatch } from '../../services/cardDeck';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
@@ -58,49 +59,42 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     const aKey = activeCategoryKeyRef.current;
     const aCat = activeCategoryRef.current;
     const currentImageList = imageListRef.current;
-    const lastId = currentImageList?.length
-      ? currentImageList.reduce((maxId, image) => Math.max(maxId, image?.listId ?? 0), 0)
-      : await getLastImageId(aKey, lang);
-    // This is done to add a unique identifier to each object in 'data', which will be used to keep track of the order in which images are displayed.
-    const updatedImageList = data?.map((image, index) => ({
-     ...image,
-     listId: lastId + 1 + index,
-    }));
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
-      await persistCardBatch({
-        cards: updatedImageList,
+      const normalized = await persistCardBatch({
+        cards: data,
         categoryKey: aKey,
         categoryId: aCat?.id,
         language: lang,
         scope,
       });
-      setImageList(updatedImageList);
+      setImageList(normalized);
 
-      if (updatedImageList?.length > 0) {
-        return true
-      };
-
-      if (updatedImageList?.length === 0) {
-        return false
-      };
+      return normalized?.length > 0;
     };
 
     if (currentImageList !== null) {
       console.log("updatedImageList handleData imageList !== null");
 
-      if (updatedImageList?.length > 0) {
-        await appendCardBatch({
-          cards: updatedImageList,
+      if (data?.length > 0) {
+        const merged = await appendCardBatch({
+          cards: data,
           categoryKey: aKey,
           categoryId: aCat?.id,
           language: lang,
           scope,
         });
-        const newImageList = [...currentImageList, ...updatedImageList];
-        setImageList(newImageList);
-        return true;
+        // Resurrection-race reconciliation (Fix 3 §2.3.4): removeCard runs
+        // OUTSIDE appendCardBatch's scope lock, so an in-flight append RMW that
+        // read the deck BEFORE a removal can return a merged deck still
+        // containing the just-swiped card. Removals win: keep only cards whose
+        // pictureId is still in memory or in the incoming batch — pictureId-less
+        // legacy cards are unidentifiable and pass through.
+        const allowed = new Set([...(currentImageList ?? []), ...(data ?? [])].map((c) => c?.pictureId).filter(Boolean));
+        const reconciled = merged.filter((c) => !c?.pictureId || allowed.has(c.pictureId));
+        setImageList(reconciled);
+        return reconciled?.length > 0;
       }
 
       return false;
@@ -180,10 +174,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    *   bypassing any stale cursor so newly-uploaded images can surface).
    * - full (length ≥ 4) → use the local deck directly (no fetch).
    * - partial (1–3) → cursor-based `handleImagesLoading()` (no override → reads
-   *   the persisted cursor); if it returns `false` (cursor exhausted), write the
-   *   `PUBLIC_FEED_END_CURSOR` sentinel and do ONE fresh
-   *   `handleImagesLoading(null)` so newly-available server images can be
-   *   reached. The cached deck is NOT wiped — only the cursor is replaced.
+   *   the persisted cursor); if it returns `false` (cursor exhausted), do ONE
+   *   fresh `handleImagesLoading(null)` head probe — Fix 2a keeps the stored
+   *   real cursor untouched (no rewind, no sentinel pre-write). Only if that
+   *   head probe ALSO returns `false` do we write the SCOPE-CORRECT exhausted
+   *   sentinel (public: `PUBLIC_FEED_END_CURSOR`, private:
+   *   `PRIVATE_FEED_END_CURSOR`) so the exhausted signal survives. The cached
+   *   deck is NOT wiped — only the cursor is replaced.
    *
    * @returns {Promise<void>}
    */
@@ -211,7 +208,16 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
-      setImageList(normalizeListIds(localImageList));
+      // Review MINOR #1: if every stored card is already in the played-set the
+      // filtered deck is EMPTY — serving it would render a blank stack with no
+      // fetch and no noMoreCard signal. Fall through to a cursor-mode load
+      // instead; the refill/fallback machinery owns the rest from there.
+      const filtered = await filterPlayedCards(normalizeListIds(localImageList), lang, scope);
+      if (filtered.length > 0) {
+        setImageList(filtered);
+      } else {
+        await handleImagesLoading();
+      }
     } else if (localImageList === null || localImageList?.length === 0) {
       // Empty category deck on mount — cold-start the ACTIVE category with a
       // fresh server query (pictureId=null). Do NOT consult the stored cursor:
@@ -220,11 +226,20 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       // once the user is actually swiping and the deck empties.
       await handleImagesLoading(null);
     } else {
-      setImageList(normalizeListIds(localImageList));
+      setImageList(await filterPlayedCards(normalizeListIds(localImageList), lang, scope));
       const cursorResult = await handleImagesLoading();
       if (cursorResult === false) {
-        await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, categoryKey, lang);
-        await handleImagesLoading(null);
+        // Fix 2a: no sentinel pre-write before the head probe — the probe runs
+        // with the stored REAL cursor intact (head-replay guard keeps it), so
+        // fresh uploads surface without rewinding pagination.
+        const headResult = await handleImagesLoading(null);
+        if (headResult === false) {
+          await saveLastImageUuid(
+            isPrivateScope ? PRIVATE_FEED_END_CURSOR : PUBLIC_FEED_END_CURSOR,
+            categoryKey,
+            lang,
+          );
+        }
       }
     };
   }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
@@ -250,11 +265,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     const aKey = activeCategoryKeyRef.current;
     const aCat = activeCategoryRef.current;
 
-    const readDeck = async (deckKey, deckCategory) => normalizeListIds(
+    const readDeck = async (deckKey, deckCategory) => filterPlayedCards(normalizeListIds(
       isPrivateScope
         ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang }))?.images ?? []
         : await getLocalImages(deckKey, lang) ?? [],
-    );
+    ), lang, scope);
 
     // 1. Re-read the active deck — the background prefetcher may have appended
     //    cards to AsyncStorage that local state hasn't picked up yet.
@@ -314,6 +329,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const updatedImageList = currentList.filter((item) => item.listId !== id);
       const image = currentList.find((item) => item.listId === id);
       const aCat = activeCategoryRef.current;
+
+      if (image?.pictureId) {
+        addPlayedPictureId(image.pictureId, lang, scope).catch(() => {});
+      }
 
       if (image?.imageFile) {
         await deleteImage(id, image.imageFile);

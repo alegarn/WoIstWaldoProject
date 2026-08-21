@@ -42,5 +42,8 @@ export interface PersistCardBatchArgs {
 }
 
 export function fetchCardBatch(args?: FetchCardBatchArgs): Promise<FetchCardBatchResult>;
-export function appendCardBatch(args?: AppendCardBatchArgs): Promise<null>;
-export function persistCardBatch(args?: PersistCardBatchArgs): Promise<null>;
+// Fix 3: both write boundaries return their persisted result — the merged/
+// normalized deck that callers (SwipeImage.handleData) use as the numbering
+// source of truth.
+export function appendCardBatch(args?: AppendCardBatchArgs): Promise<CardImage[]>;
+export function persistCardBatch(args?: PersistCardBatchArgs): Promise<CardImage[]>;

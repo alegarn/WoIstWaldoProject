@@ -2,6 +2,8 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
+  getAllKeys: jest.fn(),
+  multiRemove: jest.fn(),
 }));
 
 jest.mock('../services/groups/groupFeedCache', () => ({
@@ -38,11 +40,13 @@ import { File } from 'expo-file-system';
 import { readGroupFeedCache, markGroupCategoryExhausted, isGroupCategoryExhausted, clearGroupCategoryExhausted } from '../services/groups/groupFeedCache';
 
 import {
+  addPlayedPictureId,
   clearE2EHiddenGuessCard,
   clearExhaustedCategory,
   deleteImageFromStorage,
   emptyImageList,
   exhaustedCategoryKey,
+  filterPlayedCards,
   getDeckCountForScope,
   getE2EHiddenGuessCard,
   getLastImageId,
@@ -52,12 +56,15 @@ import {
   getNextImageForScope,
   getNextImagesForScope,
   getOnboardingCompleted,
+  getPlayedPictureIds,
   getPreferredLanguage,
   getRemainingDeckCount,
   getSessionLanguageFilter,
   getUserTags,
   isCategoryExhausted,
   markCategoryExhausted,
+  normalizeListIds,
+  playedPictureIdsKey,
   removeImageFromList,
   saveE2EHiddenGuessCard,
   saveLastImageUuid,
@@ -76,6 +83,8 @@ describe('storageDatum utilities', () => {
     mockFileExists = true;
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
+    AsyncStorage.getAllKeys.mockResolvedValue([]);
+    AsyncStorage.multiRemove.mockResolvedValue(undefined);
     readGroupFeedCache.mockReset();
     markGroupCategoryExhausted.mockReset();
     isGroupCategoryExhausted.mockReset();
@@ -825,6 +834,184 @@ describe('storageDatum utilities', () => {
       await emptyImageList('city', 'fr');
 
       expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    });
+  });
+
+  describe('normalizeListIds collision repair (Fix 3)', () => {
+    it('(a) reassigns LATER duplicate finite ids beyond the deck max, order preserved', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 1 },
+        { pictureId: 'b', listId: 2 },
+        { pictureId: 'c', listId: 1 },
+        { pictureId: 'd', listId: 2 },
+      ]);
+
+      expect(result.map((c) => [c.pictureId, c.listId])).toEqual([
+        ['a', 1],
+        ['b', 2],
+        ['c', 3],
+        ['d', 4],
+      ]);
+    });
+
+    it('(b) healthy deck returns the SAME reference (identity no-op)', () => {
+      const cards = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
+      expect(normalizeListIds(cards)).toBe(cards);
+    });
+
+    it('(c) repairs a missing + duplicate mix in one pass', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 3 },
+        { pictureId: 'b' },
+        { pictureId: 'c', listId: 3 },
+        { pictureId: 'd', listId: null },
+      ]);
+
+      expect(result.map((c) => c.listId)).toEqual([3, 4, 5, 6]);
+    });
+
+    it('(d) all-finite all-duplicate deck is repaired (no missing-id early return)', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 1 },
+        { pictureId: 'b', listId: 1 },
+      ]);
+
+      expect(result.map((c) => c.listId)).toEqual([1, 2]);
+    });
+  });
+
+  describe('played-picture set (Fix 2b)', () => {
+    it('(a) add/get roundtrip under scope-segmented keys with group isolation', async () => {
+      expect(playedPictureIdsKey('fr', { kind: 'public' })).toBe('playedPictureIds:public:fr');
+      expect(playedPictureIdsKey(undefined, null)).toBe('playedPictureIds:public:any');
+      expect(playedPictureIdsKey('fr', { kind: 'private', groupId: 'gA' })).toBe('playedPictureIds:group:gA:fr');
+
+      await addPlayedPictureId('pic-1', 'fr', { kind: 'public' });
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('playedPictureIds:public:fr', JSON.stringify(['pic-1']));
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['pic-1']));
+      expect(await getPlayedPictureIds('fr', { kind: 'public' })).toEqual(['pic-1']);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      expect(await getPlayedPictureIds('fr', { kind: 'private', groupId: 'gB' })).toEqual([]);
+      expect(AsyncStorage.getItem).toHaveBeenLastCalledWith('playedPictureIds:group:gB:fr');
+    });
+
+    it('(b) caps the set at 200 and evicts the oldest id on overflow', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(
+        Array.from({ length: 200 }, (_, i) => `p-${i}`),
+      ));
+
+      await addPlayedPictureId('new-one', 'fr', null);
+
+      const written = JSON.parse(AsyncStorage.setItem.mock.calls[0][1]);
+      expect(written).toHaveLength(200);
+      expect(written[0]).toBe('p-1');
+      expect(written[written.length - 1]).toBe('new-one');
+    });
+
+    it('(b2) idempotent add does not rewrite the set (no cap churn)', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['pic-1']));
+
+      await addPlayedPictureId('pic-1', 'fr', null);
+
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+    });
+
+    it('(c) getNextImage skips a played card and serves the next one', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, pictureId: 'a', imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, pictureId: 'b', imageFile: 'file:///cache/2.jpg' },
+      ]));
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['a']));
+
+      expect(await getNextImage('all', 'any')).toEqual({ listId: 2, pictureId: 'b', imageFile: 'file:///cache/2.jpg' });
+    });
+
+    it('(d) getNextImageForScope skips a played card on the private branch', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [
+          { listId: 1, pictureId: 'a', imageFile: 'file:///cache/p1.jpg' },
+          { listId: 2, pictureId: 'b', imageFile: 'file:///cache/p2.jpg' },
+        ],
+        nextCursor: null,
+      });
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['a']));
+
+      const card = await getNextImageForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(card).toEqual({ listId: 2, pictureId: 'b', imageFile: 'file:///cache/p2.jpg' });
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:group:g-3:fr');
+    });
+
+    it('(e) falsy pictureId is a no-op (no write)', async () => {
+      await addPlayedPictureId(undefined, 'fr', null);
+      await addPlayedPictureId(null, 'fr', null);
+      await addPlayedPictureId('', 'fr', null);
+
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+    });
+
+    it('(f) emptyImageList clears the public played key for the language and NO group key', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+      await emptyImageList('city', 'fr');
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
+      const removedKeys = AsyncStorage.removeItem.mock.calls.map(([key]) => key);
+      expect(removedKeys.some((key) => key.startsWith('playedPictureIds:group:'))).toBe(false);
+    });
+
+    it('(g) clearGroupFeedCache clears only that group\'s played-set (public + other groups untouched)', async () => {
+      const { clearGroupFeedCache } = jest.requireActual('../services/groups/groupFeedCache');
+      AsyncStorage.getAllKeys.mockResolvedValue([
+        'playedPictureIds:group:gA:fr',
+        'playedPictureIds:group:gB:fr',
+        'playedPictureIds:public:fr',
+        'groupFeed:gA:all:any',
+        'groupFeed:gB:all:any',
+      ]);
+
+      await clearGroupFeedCache('gA');
+
+      const removed = AsyncStorage.multiRemove.mock.calls.map(([keys]) => keys).flat();
+      expect(removed).toContain('playedPictureIds:group:gA:fr');
+      expect(removed).toContain('groupFeed:gA:all:any');
+      expect(removed).not.toContain('playedPictureIds:group:gB:fr');
+      expect(removed).not.toContain('playedPictureIds:public:fr');
+      expect(removed).not.toContain('groupFeed:gB:all:any');
+    });
+
+    it('(h) purgeAllPrivateCaches clears all group played-sets, public untouched', async () => {
+      const { purgeAllPrivateCaches } = jest.requireActual('../services/groups/groupFeedCache');
+      AsyncStorage.getAllKeys.mockResolvedValue([
+        'playedPictureIds:group:gA:fr',
+        'playedPictureIds:group:gB:en',
+        'playedPictureIds:public:any',
+      ]);
+
+      await purgeAllPrivateCaches();
+
+      const removed = AsyncStorage.multiRemove.mock.calls.map(([keys]) => keys).flat();
+      expect(removed).toContain('playedPictureIds:group:gA:fr');
+      expect(removed).toContain('playedPictureIds:group:gB:en');
+      expect(removed).not.toContain('playedPictureIds:public:any');
+    });
+
+    it('(i) filterPlayedCards passes pictureId-less cards through', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['a']));
+
+      const filtered = await filterPlayedCards([
+        { pictureId: 'a' },
+        { listId: 5 },
+        { pictureId: 'b' },
+      ], 'fr', null);
+
+      expect(filtered).toEqual([{ listId: 5 }, { pictureId: 'b' }]);
     });
   });
 });

@@ -14,6 +14,8 @@ const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
 export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
+const PLAYED_PICTURE_IDS_CAP = 200;
+const PLAYED_PICTURE_IDS_PREFIX = 'playedPictureIds';
 
 function imageListKey(categoryKey, language) {
   return `imageList:${categoryKey || 'all'}:${language || 'any'}`;
@@ -69,6 +71,68 @@ export async function clearExhaustedCategory(categoryKey, language, scope) {
     return;
   }
   await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
+};
+
+export function playedPictureIdsKey(language, scope) {
+  return `${PLAYED_PICTURE_IDS_PREFIX}:${isPrivateScope(scope) ? `group:${scope.groupId}` : 'public'}:${language || 'any'}`;
+};
+
+export async function getPlayedPictureIds(language, scope) {
+  const stored = await AsyncStorage.getItem(playedPictureIdsKey(language, scope));
+  if (!stored) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+};
+
+export async function addPlayedPictureId(pictureId, language, scope) {
+  if (!pictureId) {
+    return;
+  }
+  const played = await getPlayedPictureIds(language, scope);
+  if (played.includes(pictureId)) {
+    return;
+  }
+  const next = [...played, pictureId].slice(-PLAYED_PICTURE_IDS_CAP);
+  await AsyncStorage.setItem(playedPictureIdsKey(language, scope), JSON.stringify(next));
+};
+
+export async function filterPlayedCards(cards, language, scope) {
+  if (!Array.isArray(cards)) {
+    return [];
+  }
+  let playedIds;
+  try {
+    playedIds = await getPlayedPictureIds(language, scope);
+  } catch {
+    return cards;
+  }
+  if (playedIds.length === 0) {
+    return cards;
+  }
+  const played = new Set(playedIds);
+  return cards.filter((card) => !card?.pictureId || !played.has(card.pictureId));
+};
+
+async function removeKeysByPrefix(prefix) {
+  const keys = await AsyncStorage.getAllKeys();
+  const target = keys.filter((key) => typeof key === 'string' && key.startsWith(prefix));
+  if (target.length > 0) {
+    await AsyncStorage.multiRemove(target);
+  }
+};
+
+export async function clearPlayedPictureIdsForGroup(groupId) {
+  await removeKeysByPrefix(`${PLAYED_PICTURE_IDS_PREFIX}:group:${groupId}:`);
+};
+
+export async function clearAllPrivatePlayedPictureIds() {
+  await removeKeysByPrefix(`${PLAYED_PICTURE_IDS_PREFIX}:group:`);
 };
 
 /**
@@ -131,9 +195,10 @@ export async function getNextImage(categoryKey, language, currentListId, exclude
     return null;
   }
 
+  const unplayed = await filterPlayedCards(raw, language);
   const images = excludePictureId
-    ? raw.filter((image) => image?.pictureId !== excludePictureId)
-    : raw;
+    ? unplayed.filter((image) => image?.pictureId !== excludePictureId)
+    : unplayed;
   if (images.length === 0) {
     return null;
   }
@@ -172,9 +237,10 @@ export async function getNextImageForScope({ category, language, currentListId, 
     return null;
   }
 
+  const unplayed = await filterPlayedCards(raw, language, scope);
   const images = excludePictureId
-    ? raw.filter((image) => image?.pictureId !== excludePictureId)
-    : raw;
+    ? unplayed.filter((image) => image?.pictureId !== excludePictureId)
+    : unplayed;
   if (images.length === 0) {
     return null;
   }
@@ -483,6 +549,7 @@ export async function emptyImageList(categoryKey, language) {
   await AsyncStorage.removeItem(listKey);
   await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language));
   await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
+  await AsyncStorage.removeItem(playedPictureIdsKey(language, null));
 };
 
 export async function storeImageList(imageList, categoryKey, language) {
@@ -505,19 +572,32 @@ function removeObjectById(imageListObject, listId) {
  * foreground-fetched cards are persisted without one (the server has no synthetic
  * listId), and getNextImage filters by `listId > currentListId` — so cards lacking
  * a finite listId would be invisible to the guess resolver. Assign sequential ids
- * continuing from the deck's current max: a stable no-op for already-healthy decks
- * and a one-time self-heal for null/missing/non-finite listId cards.
+ * continuing from the deck's current max.
+ *
+ * ALSO repairs duplicate FINITE listIds (two concurrent writers both numbering
+ * from the same base — Fix 3): a single order-preserving pass reassigns every
+ * LATER duplicate (and every missing/non-finite id) past the deck's pre-pass max.
+ * Healthy decks return the input array by identity (same reference, no copies).
  *
  * Centralized here (the storage-write boundary) so EVERY writer (feed handleData,
- * prefetcher, advance-path foregroundTopUp) produces resolvable cards. SwipeImage
- * re-imports this and still calls it read-time as a defensive backstop.
+ * prefetcher, advance-path foregroundTopUp) produces resolvable, collision-free
+ * cards. SwipeImage re-imports this and still calls it read-time as a defensive
+ * backstop.
  */
 export function normalizeListIds(cards) {
   if (!Array.isArray(cards) || cards.length === 0) return cards;
-  const hasMissing = cards.some((c) => c?.listId == null || !Number.isFinite(c.listId));
-  if (!hasMissing) return cards;
+  const seen = new Set();
   let next = cards.reduce((max, c) => (Number.isFinite(c?.listId) && c.listId > max ? c.listId : max), 0);
-  return cards.map((c) => (Number.isFinite(c?.listId) ? c : { ...c, listId: (next += 1) }));
+  let changed = false;
+  const result = cards.map((c) => {
+    if (!Number.isFinite(c?.listId) || seen.has(c.listId)) {
+      changed = true;
+      return { ...c, listId: (next += 1) };
+    }
+    seen.add(c.listId);
+    return c;
+  });
+  return changed ? result : cards;
 }
 
 /**

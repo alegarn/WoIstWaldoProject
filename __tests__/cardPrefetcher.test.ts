@@ -7,11 +7,16 @@ jest.mock('../utils/storageDatum', () => ({
   normalizeListIds: jest.fn((cards) => cards),
   isCategoryExhausted: jest.fn().mockResolvedValue(false),
   markCategoryExhausted: jest.fn().mockResolvedValue(undefined),
+  updateImageList: jest.fn().mockResolvedValue([]),
+  clearExhaustedCategory: jest.fn().mockResolvedValue(undefined),
+  // Fix 2b: the real appendCardBatch (Fix 1 pin) filters played cards through
+  // this helper before dedup — passthrough keeps the pin's semantics.
+  filterPlayedCards: jest.fn((cards) => Promise.resolve(cards)),
 }));
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
 
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
+import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted, clearExhaustedCategory } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import {
   LOW_CARD_THRESHOLD,
@@ -29,6 +34,7 @@ const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
 const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
 const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
 const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
+const clearExhaustedMock = clearExhaustedCategory as jest.MockedFunction<typeof clearExhaustedCategory>;
 
 const IMAGES = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
 
@@ -470,6 +476,19 @@ describe('cardPrefetcher', () => {
     await Promise.resolve();
 
     expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+  });
+
+  it('Fix 1 pin: prefetch that lands ≥1 card calls clearExhaustedCategory (via appendCardBatch)', async () => {
+    // Wire the REAL appendCardBatch behind the mocked cardDeck export so the
+    // prefetch → append chain exercises the marker clear end-to-end.
+    appendMock.mockImplementation(jest.requireActual('../services/cardDeck').appendCardBatch as never);
+    remainingMock.mockResolvedValue(2);
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+
+    expect(appendMock).toHaveBeenCalledTimes(1);
+    expect(clearExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
   });
 
   it('B1(e-CC4): isError (5xx) → markCategoryExhausted NOT called (transient blip must not poison cache)', async () => {
