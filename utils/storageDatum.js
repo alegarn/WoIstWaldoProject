@@ -443,6 +443,21 @@ export async function getLastImageUuid(categoryKey, language, scope) {
   return lastImageUuid;
 };
 
+/**
+ * Remove the persisted feed cursor for (categoryKey, language, scope). Key
+ * shapes mirror saveLastImageUuid/getLastImageUuid (public `lastImageUuid:*`,
+ * private group-scoped `groupFeed:<gid>:game:*:*:cursor`). Removing a REAL
+ * cursor is a destructive rewind — callers must only use this to un-stick a
+ * feed-end sentinel or an otherwise unusable cursor value.
+ * @param {string} categoryKey - Category key ('all' for the global deck).
+ * @param {string} language - Language code ('any' when unset).
+ * @param {{ kind?: string, groupId?: string }|null|undefined} [scope] - Private scope object.
+ * @returns {Promise<void>}
+ */
+export async function clearLastImageUuid(categoryKey, language, scope) {
+  await AsyncStorage.removeItem(lastImageUuidKeyForScope(categoryKey, language, scope));
+};
+
 export async function getSessionLanguageFilter() {
   const stored = await AsyncStorage.getItem(SESSION_LANGUAGE_FILTER_KEY);
 

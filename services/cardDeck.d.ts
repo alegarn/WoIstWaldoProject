@@ -48,6 +48,21 @@ export interface RemoveCardFromGroupDeckArgs {
   listId: number;
 }
 
+export interface ProbeAllPoolForUnplayedArgs {
+  language?: string | null;
+  scope?: unknown;
+  authContext?: unknown;
+  excludePictureId?: string;
+}
+
+export type ProbeAllPoolForUnplayedResult =
+  | { status: 'unplayed' }
+  | { status: 'exhausted' }
+  | { status: 'indeterminate'; reason?: 'network' | 'server' | 'probe-cap' };
+
+export const PROBE_MAX_BATCHES: number;
+export function probeAllPoolForUnplayed(args?: ProbeAllPoolForUnplayedArgs): Promise<ProbeAllPoolForUnplayedResult>;
+
 export function fetchCardBatch(args?: FetchCardBatchArgs): Promise<FetchCardBatchResult>;
 // Fix 3: both write boundaries return their persisted result — the merged/
 // normalized deck that callers (SwipeImage.handleData) use as the numbering

@@ -52,6 +52,7 @@ import { readGroupFeedCache, markGroupCategoryExhausted, isGroupCategoryExhauste
 import {
   clearE2EHiddenGuessCard,
   clearExhaustedCategory,
+  clearLastImageUuid,
   deleteImageFromStorage,
   emptyImageList,
   deckWriteLockKey,
@@ -145,6 +146,15 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce('uuid-1');
     expect(await getLastImageUuid()).toBe('uuid-1');
+  });
+
+  it('clearLastImageUuid removes the scoped cursor key (public + private)', async () => {
+    await clearLastImageUuid('all', 'fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr');
+
+    await clearLastImageUuid('all', 'fr', { kind: 'private', groupId: 'g-9' });
+    expect(AsyncStorage.removeItem).toHaveBeenLastCalledWith('groupFeed:g-9:game:all:fr:cursor');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 
   it('private game-path cursor round-trip persists under the groupFeed-scoped key, not lastImageUuid', async () => {

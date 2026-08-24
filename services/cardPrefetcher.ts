@@ -265,7 +265,6 @@ export async function warmAllDeckIfNeeded({
         language,
         scope,
         authContext,
-        pictureIdOverride: null,
       });
       if (r && !r.isError && r.images?.length) {
         // T2.6 defense-in-depth: normalize before append (aligns with T1.9).

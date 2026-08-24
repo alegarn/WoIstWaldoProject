@@ -1,9 +1,14 @@
 jest.mock('../utils/handleGuessOutcome', () => ({
   resolveNextGuessParams: jest.fn(),
 }));
+// Step 3 (Bug 1): probeAllPoolForUnplayed is mocked per-test (default
+// 'exhausted' in beforeEach); requireActual-spread keeps the real module's
+// constants and helpers available to transitively loaded code.
 jest.mock('../services/cardDeck', () => ({
+  ...jest.requireActual('../services/cardDeck'),
   fetchCardBatch: jest.fn(),
   appendCardBatch: jest.fn(),
+  probeAllPoolForUnplayed: jest.fn(),
 }));
 
 let mockFileExists = true;
@@ -58,7 +63,7 @@ jest.mock('../services/cardPrefetcher', () => {
 });
 
 import { resolveNextGuessParams } from '../utils/handleGuessOutcome';
-import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
+import { fetchCardBatch, appendCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
 import { getDeckCountForScope, getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted, clearExhaustedCategory } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { warmAllDeckIfNeeded, prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
@@ -69,6 +74,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const resolveMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
 const fetchMock = fetchCardBatch as jest.MockedFunction<typeof fetchCardBatch>;
 const appendMock = appendCardBatch as jest.MockedFunction<typeof appendCardBatch>;
+const probeMock = probeAllPoolForUnplayed as jest.MockedFunction<typeof probeAllPoolForUnplayed>;
 const warmMock = warmAllDeckIfNeeded as jest.MockedFunction<typeof warmAllDeckIfNeeded>;
 const countMock = getDeckCountForScope as jest.MockedFunction<typeof getDeckCountForScope>;
 const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
@@ -115,6 +121,10 @@ describe('resolveNextCardWithServerFallback', () => {
     // F3a defaults: cache miss (don't short-circuit) + write resolves silently.
     isExhaustedMock.mockResolvedValue(false);
     markExhaustedMock.mockResolvedValue(undefined);
+    // Step 3 default: the probe drains the pool — the transition path stays
+    // the default for the pre-existing Tier-4 pins. Per-test overrides pin
+    // 'unplayed' / 'indeterminate'.
+    probeMock.mockResolvedValue({ status: 'exhausted' } as never);
   });
 
   it('returns the locally-resolved card without any server fetch when the deck has a next card', async () => {
@@ -745,14 +755,17 @@ describe('resolveNextCardWithServerFallback', () => {
 
   // ─── B1 (card-serving-cycle Task B) — Tier-4 epoch-gated cycle transition ─
   //
-  // tier4.ok && post-Tier-4 resolve null is the ALL_EXHAUSTED proof
-  // (≡ isCycleExhausted(tier4.appended, 0)): the server served ≥1 card but
-  // everything servable sits in the played-set. The advancer then
+  // Step 3 (Bug 1): tier4.ok && post-Tier-4 resolve null is NO LONGER the
+  // exhaustion proof — it only proves ONE played-filtered HEAD batch. The
+  // advancer probes the 'all' pool (probeAllPoolForUnplayed) first:
+  // 'exhausted' (probe drained the 'all' cursor chain to server-empty) gates
   // startNewServingCycle(language, scope) — epoch bump + played-set/cursor/
-  // marker clear ONCE — re-resolves at the deck head (currentListId:
-  // undefined), and bounds itself to at most ONE extra head fetch per
-  // exhaustion. tier4.ok === false NEVER transitions (TRANSIENT_EMPTY /
-  // genuine empty unchanged).
+  // marker clear ONCE — then re-resolves at the deck head (currentListId:
+  // undefined), bounded to at most ONE extra head fetch per exhaustion.
+  // 'unplayed' → free local re-resolve, NO transition (Bug 1 kill: rows 6+
+  // serve at the handoff). 'indeterminate' → NO transition, typed null (I7).
+  // tier4.ok === false NEVER probes (TRANSIENT_EMPTY / genuine empty
+  // unchanged).
   describe('resolveNextCardWithServerFallback — B1: Tier-4 epoch-gated cycle transition', () => {
     it('(a) Tier-4 cycle exhaustion calls startNewServingCycle exactly once with (language, scope)', async () => {
       // category 'all': T1 local null, T2 recheck null, T2 cursor fetch empty,
@@ -956,6 +969,84 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(result.next).toEqual(A_CARD_RESULT);
       expect(result.reason).toBe('ok');
       expect(startCycleMock).toHaveBeenCalledTimes(1);
+    });
+
+    // ─── Step 3 (Bug 1) — probe-gated transition ───────────────────────────
+
+    it('(j) Tier-4 ok but probe "unplayed" → NO startNewServingCycle; the free local re-resolve serves the appended card (BUG 1 pin: rows 6+ serve at the handoff)', async () => {
+      // The Tier-4 HEAD batch (oldest 5 rows, all played) resolves to null —
+      // the OLD code treated that as pool exhaustion and wiped the played-set
+      // (validated category images re-served). The probe pages the cursor
+      // forward, lands an unplayed row 6+, and appends it: the free local
+      // re-resolve serves it with ZERO cycle mutation.
+      resolveMock
+        .mockResolvedValueOnce(null as never)            // Tier 1
+        .mockResolvedValueOnce(null as never)            // Tier 2 recheck
+        .mockResolvedValueOnce(null as never)            // after Tier 4 head fetch+append (head batch all played)
+        .mockResolvedValueOnce(A_CARD_RESULT as never);  // free local re-resolve after the probe appended row 6+
+      fetchMock
+        .mockResolvedValueOnce({ isError: false, images: [] } as never)                // Tier 2 (cursor)
+        .mockResolvedValueOnce({ isError: false, images: [{ listId: 1 }] } as never);  // Tier 4 (head)
+      probeMock.mockResolvedValue({ status: 'unplayed' } as never);
+
+      const result = await resolveNextCardWithServerFallback({
+        ...BASE_ARGS,
+        category: { key: 'all' },
+        currentPictureId: 'img-5',
+      });
+
+      expect(result.next).toEqual(A_CARD_RESULT);
+      expect(result.reason).toBe('ok');
+      expect(probeMock).toHaveBeenCalledTimes(1);
+      expect(startCycleMock).not.toHaveBeenCalled();
+      // Tier-2 cursor fetch + Tier-4 head fetch only — no transition, no
+      // bounded head retry (the probe's append made it unnecessary).
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('(k) probe "indeterminate" → NO transition, typed null result (I7)', async () => {
+      // Transient failure or probe cap must NEVER mutate cycle state — the
+      // advancer surfaces a typed null and the reason accumulator keeps the
+      // informative tier failures.
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock
+        .mockResolvedValueOnce({ isError: false, images: [] } as never)                // Tier 2
+        .mockResolvedValueOnce({ isError: false, images: [{ listId: 1 }] } as never);  // Tier 4 head
+      probeMock.mockResolvedValue({ status: 'indeterminate', reason: 'probe-cap' } as never);
+
+      const result = await resolveNextCardWithServerFallback({ ...BASE_ARGS, category: { key: 'all' } });
+
+      expect(result.next).toBeNull();
+      expect(result.reason).toBe('empty');
+      expect(startCycleMock).not.toHaveBeenCalled();
+      // No bounded head retry — the indeterminate verdict stops Tier 4.
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('(l) probe receives (language, scope, excludePictureId=currentPictureId)', async () => {
+      // The just-won card is not yet in the played-set at advance time, so the
+      // advancer must forward currentPictureId as the probe's exclusion.
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock
+        .mockResolvedValueOnce({ isError: false, images: [] } as never)                // Tier 2
+        .mockResolvedValueOnce({ isError: false, images: [{ listId: 1 }] } as never);  // Tier 4 head
+      probeMock.mockResolvedValue({ status: 'exhausted' } as never);
+
+      const privateScope = { kind: 'private', groupId: 'g-1' };
+      await resolveNextCardWithServerFallback({
+        ...BASE_ARGS,
+        category: { key: 'all' },
+        scope: privateScope,
+        currentPictureId: 'just-won',
+      });
+
+      expect(probeMock).toHaveBeenCalledTimes(1);
+      expect(probeMock).toHaveBeenCalledWith({
+        language: 'fr',
+        scope: privateScope,
+        authContext: BASE_ARGS.authContext,
+        excludePictureId: 'just-won',
+      });
     });
   });
 });

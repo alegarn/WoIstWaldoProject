@@ -15,7 +15,7 @@ import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../
 import { GlobalStyle } from '../../constants/theme';
 import { readGroupFeedCache } from '../../services/groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from '../../services/groups/groupFeedApi';
-import { fetchCardBatch, persistCardBatch, appendCardBatch, removeCardFromGroupDeck } from '../../services/cardDeck';
+import { fetchCardBatch, persistCardBatch, appendCardBatch, probeAllPoolForUnplayed, removeCardFromGroupDeck } from '../../services/cardDeck';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
@@ -187,14 +187,24 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    *   Probe also `false` → write the SCOPE-CORRECT exhausted sentinel
    *   (public: `PUBLIC_FEED_END_CURSOR`, private: `PRIVATE_FEED_END_CURSOR`).
    * - Probe `'error'` → same non-null empty restore, recovery gated off (I7).
-   * - Cycle recovery (I4), gated on a probe that did NOT error: exhaustion
-   *   proof = the deck head is non-empty but every card is already played
-   *   this cycle (`isCycleExhausted`) → at most ONE `startNewServingCycle`
-   *   transition per mount clears the played-set and re-serves the deck head
-   *   oldest-first. The three deck branches are mutually exclusive and each
-   *   invokes this helper at most once per mount, so no extra transition
-   *   guard is needed. A genuinely empty deck (server empty) is NOT
-   *   exhaustion — the exhausted flow stands, no transition.
+   * - Cycle recovery (I4), gated on a probe that did NOT error: the
+   *   CATEGORY-side proof is the deck head non-empty but every card already
+   *   played this cycle (`isCycleExhausted`) — that alone is NOT exhaustion
+   *   (Bug 2: re-entering a finished category used to wipe the SHARED
+   *   played-set on every mount). The sound 'all'-pool proof comes from
+   *   `probeAllPoolForUnplayed`:
+   *   - `'unplayed'` → the 'all' pool still serves unplayed cards: serve the
+   *     'all' deck and switch the active category to 'all' (same mechanism as
+   *     refillOrFallback step 3). NO transition.
+   *   - `'exhausted'` → 'all' pool server-drained — BOTH pools proven
+   *     exhausted → at most ONE `startNewServingCycle` transition per mount
+   *     clears the played-set and re-serves the deck head oldest-first.
+   *   - `'indeterminate'` → transient failure: NO transition, the exhausted
+   *     flow stands (I7).
+   *   The three deck branches are mutually exclusive and each invokes this
+   *   helper at most once per mount, so no extra transition guard is needed.
+   *   A genuinely empty deck (server empty) is NOT exhaustion — the exhausted
+   *   flow stands, no transition.
    *
    * @param {boolean|'error'|void} cursorResult - The branch's cursor-round result.
    * @param {{resetServeStateForHead: boolean}} opts - Whether the head probe
@@ -247,10 +257,33 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     );
     const servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
     if (isCycleExhausted(headDeck.length, servableCount)) {
-      await startNewServingCycle(lang, scope).catch(() => {});
-      setImageList(await filterPlayedCards(headDeck, lang, scope));
+      const probe = await probeAllPoolForUnplayed({
+        language: lang,
+        scope,
+        authContext: context,
+        excludePictureId: imageListRef.current?.[0]?.pictureId,
+      });
+      if (probe?.status === 'unplayed') {
+        // Serve the 'all' deck (the probe appended ≥1 unplayed card to it)
+        // and switch the active category the same way refillOrFallback
+        // step 3 does, so win-removal namespaces stay consistent.
+        const allDeck = await filterPlayedCards(normalizeListIds(
+          isPrivateScope
+            ? (await readGroupFeedCache(privateGroupId, { categoryId: undefined, language: lang }))?.images ?? []
+            : await getLocalImages('all', lang) ?? [],
+        ), lang, scope);
+        if (allDeck.length > 0) {
+          setActiveCategoryKey('all');
+          setActiveCategory(RECENT_ALL_CATEGORY);
+          setImageList(allDeck);
+        }
+      } else if (probe?.status === 'exhausted') {
+        await startNewServingCycle(lang, scope).catch(() => {});
+        setImageList(await filterPlayedCards(headDeck, lang, scope));
+      }
+      // 'indeterminate' → NO transition (I7); the exhausted flow stands.
     }
-  }, [category?.id, categoryKey, handleImagesLoading, isPrivateScope, lang, privateGroupId, scope]);
+  }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, privateGroupId, scope]);
 
   /**
    * Mount loader. Reads the local deck for the active (category, language) and

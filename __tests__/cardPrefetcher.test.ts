@@ -218,7 +218,7 @@ describe('cardPrefetcher', () => {
     expect(appendMock).toHaveBeenCalledTimes(1);
   });
 
-  it('cold-starts the all-deck warm from the head when the persisted all deck is empty', async () => {
+  it('cold-starts the all-deck warm in cursor mode (no head override) when the persisted all deck is empty', async () => {
     remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation(() => okResponse());
 
@@ -229,8 +229,19 @@ describe('cardPrefetcher', () => {
       language: 'fr',
       scope: { kind: 'public' },
       authContext: {},
-      pictureIdOverride: null,
     });
+  });
+
+  it("warm with an existing 'all' cursor fetches cursor-mode (pages forward, no head override)", async () => {
+    remainingMock.mockResolvedValueOnce(2);
+    fetchMock.mockImplementation(() => okResponse([{ listId: 100 }]));
+
+    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(allCalls).toHaveLength(1);
+    expect(allCalls[0]![0]).not.toHaveProperty('pictureIdOverride');
+    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
   });
 
   it('does not warm when categoryKey === "all"', async () => {
@@ -602,7 +613,7 @@ describe('cardPrefetcher', () => {
       const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
       expect(categoryCalls).toHaveLength(1);
       expect(allCalls).toHaveLength(1);
-      expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr', pictureIdOverride: null });
+      expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
 
       const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
       expect(allAppend).toBeDefined();

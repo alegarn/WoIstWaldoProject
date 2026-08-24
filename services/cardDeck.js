@@ -1,8 +1,9 @@
 import { getImages } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
 import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
+import { PRIVATE_FEED_END_CURSOR } from './groups/groupFeedApi';
 
 function normalizeLanguage(language) {
   return language || 'any';
@@ -317,4 +318,74 @@ function dedupByPictureId(prior, incoming) {
     Array.isArray(prior) ? prior.map((c) => c?.pictureId).filter(Boolean) : [],
   );
   return incoming.filter((c) => !c?.pictureId || !priorIds.has(c.pictureId));
+}
+
+/**
+ * Upper bound on how many all-played batches probeAllPoolForUnplayed pages
+ * through before giving up. A cap hit yields 'indeterminate' (fail OPEN: no
+ * cycle transition follows — worst case an exhausted panel, never a repeat),
+ * never a false 'exhausted'.
+ */
+export const PROBE_MAX_BATCHES = 20;
+
+/**
+ * Sound exhaustion proof for the 'all' pool: page the cursor forward
+ * (cursor-mode fetches only — pictureIdOverride stays undefined, NEVER null)
+ * until either an UNPLAYED card lands (pool not exhausted) or the server
+ * returns an empty batch (pool drained — the only valid exhaustion signal).
+ *
+ * Replaces the unsound one-head-batch proof (`tier4.ok && !next`,
+ * `isCycleExhausted(headDeck.length, filtered)`) that treated ONE
+ * played-filtered head batch as whole-pool exhaustion and triggered
+ * premature cycle transitions (validated images re-served, category-only
+ * wipe loop).
+ *
+ * Writes ONLY the feed cursor: the transport's own batch-tail persist plus
+ * one sentinel clear. No cycle-state writes, no servingCycle import
+ * (cycle policy stays storage-only in utils/servingCycle.ts). Transient
+ * fetch failures return 'indeterminate' and mutate nothing (I7).
+ *
+ * Sentinel pre-clear: a stored feed-end cursor (PUBLIC or PRIVATE sentinel)
+ * makes every cursor-mode fetch a no-advance replay (public) or an
+ * exhausted short-circuit (private) — the probe could never move. The mount
+ * path writes that sentinel unsoundly, and clearing a feed-end marker never
+ * rewinds a real cursor (I5 intact).
+ *
+ * @param {object} args - { language, scope, authContext, excludePictureId }
+ * @param {string} [args.excludePictureId] - Just-played card, not yet in the
+ *   played-set at advance time — excluded from the unplayed CHECK only (the
+ *   full batch is still appended through appendCardBatch on success).
+ * @returns {Promise<{status:'unplayed'}|{status:'exhausted'}|{status:'indeterminate', reason:string}>}
+ */
+export async function probeAllPoolForUnplayed({ language, scope, authContext, excludePictureId } = {}) {
+  const lang = normalizeLanguage(language);
+
+  const cursor = await getLastImageUuid('all', lang, scope);
+  if (cursor === PUBLIC_FEED_END_CURSOR || cursor === PRIVATE_FEED_END_CURSOR) {
+    await clearLastImageUuid('all', lang, scope);
+  }
+
+  for (let fetched = 0; fetched < PROBE_MAX_BATCHES; fetched++) {
+    const result = await fetchCardBatch({ categoryKey: 'all', language: lang, scope, authContext });
+
+    if (!result || result.isError === true) {
+      return { status: 'indeterminate', reason: result?.reason ?? 'server' };
+    }
+
+    const batch = Array.isArray(result.images) ? result.images : [];
+    if (batch.length === 0) {
+      return { status: 'exhausted' };
+    }
+
+    const unplayed = await filterPlayedCards(batch, lang, scope);
+    const candidates = excludePictureId
+      ? unplayed.filter((card) => card?.pictureId !== excludePictureId)
+      : unplayed;
+    if (candidates.length > 0) {
+      await appendCardBatch({ cards: batch, categoryKey: 'all', language: lang, scope });
+      return { status: 'unplayed' };
+    }
+  }
+
+  return { status: 'indeterminate', reason: 'probe-cap' };
 }

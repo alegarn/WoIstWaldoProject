@@ -103,6 +103,7 @@ jest.mock('../services/cardDeck', () => {
   return {
     ...actual,
     removeCardFromGroupDeck: jest.fn(() => Promise.resolve()),
+    probeAllPoolForUnplayed: jest.fn(),
   };
 });
 
@@ -150,7 +151,7 @@ import {
 } from '../utils/storageDatum';
 import { addPlayedPictureId, filterPlayedCards } from '../utils/playedPictureIds';
 import { startNewServingCycle } from '../utils/servingCycle';
-import { removeCardFromGroupDeck } from '../services/cardDeck';
+import { probeAllPoolForUnplayed, removeCardFromGroupDeck } from '../services/cardDeck';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../services/cardPrefetcher';
 import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from '../services/groups/groupFeedApi';
@@ -2404,6 +2405,9 @@ describe('SwipeImage — empty-deck mount resume + cycle recovery (C2)', () => {
       cycleRestarted = true;
       return 1;
     });
+    // Step 4: the 'all'-pool probe is the sound transition proof — a drained
+    // 'all' pool ('exhausted') is what licenses the transition here.
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'exhausted' });
     filterPlayedCards.mockImplementation(async (cards) =>
       Promise.resolve(cycleRestarted
         ? cards
@@ -2507,6 +2511,7 @@ describe('SwipeImage — empty-deck mount resume + cycle recovery (C2)', () => {
       cycleRestarted = true;
       return 1;
     });
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'exhausted' });
     filterPlayedCards.mockImplementation(async (cards) =>
       Promise.resolve(cycleRestarted
         ? cards
@@ -2662,6 +2667,7 @@ describe('SwipeImage — mount recovery across all deck branches (M1/M2)', () =>
       cycleRestarted = true;
       return 1;
     });
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'exhausted' });
     filterPlayedCards.mockImplementation(async (cards) =>
       Promise.resolve(cycleRestarted
         ? cards
@@ -2697,6 +2703,7 @@ describe('SwipeImage — mount recovery across all deck branches (M1/M2)', () =>
       cycleRestarted = true;
       return 1;
     });
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'exhausted' });
     filterPlayedCards.mockImplementation(async (cards) =>
       Promise.resolve(cycleRestarted
         ? cards
@@ -2746,6 +2753,144 @@ describe('SwipeImage — mount recovery across all deck branches (M1/M2)', () =>
     }
   });
 
+  it('category mount, category deck all played, probe "unplayed" → serves the "all" deck, active category switches to "all", NO startNewServingCycle (BUG 2 pin)', async () => {
+    // Bug 2: the category-side all-played gate alone is NOT cycle exhaustion —
+    // a finished category used to wipe the SHARED played-set on every mount
+    // and re-serve the same old category images. The 'all'-pool probe finds
+    // unplayed cards → serve the 'all' deck + switch namespaces; no transition.
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'all') {
+        return Promise.resolve([
+          { listId: 1, pictureId: 'all-fresh-1', imageFile: 'file:///a1.jpg' },
+          { listId: 2, pictureId: 'all-fresh-2', imageFile: 'file:///a2.jpg' },
+        ]);
+      }
+      if (key !== 'nature') return Promise.resolve(null);
+      return Promise.resolve([
+        { listId: 1, pictureId: 'bug2-played-1', imageFile: 'file:///b1.jpg' },
+        { listId: 2, pictureId: 'bug2-played-2', imageFile: 'file:///b2.jpg' },
+        { listId: 3, pictureId: 'bug2-played-3', imageFile: 'file:///b3.jpg' },
+        { listId: 4, pictureId: 'bug2-played-4', imageFile: 'file:///b4.jpg' },
+      ]);
+    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('bug2-played-'))));
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'unplayed' });
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(probeAllPoolForUnplayed).toHaveBeenCalledTimes(1);
+      expect(probeAllPoolForUnplayed).toHaveBeenCalledWith({
+        language: 'any',
+        scope: undefined,
+        authContext: contextValue,
+        excludePictureId: undefined,
+      });
+      expect(startNewServingCycle).not.toHaveBeenCalled();
+      // The serve comes from the 'all' deck, not the played category deck.
+      expect(getLocalImages).toHaveBeenCalledWith('all', 'any');
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('all-fresh-1');
+      expect(renderedPictureIds).toContain('all-fresh-2');
+      expect(renderedPictureIds).not.toContain('bug2-played-1');
+      // Namespace switch pin: a win on the served card removes it from the
+      // 'all' deck (activeCategoryKey followed the switch).
+      const servedCall = mockSwipeableCard.mock.calls.find(([props]) => props.item.pictureId === 'all-fresh-2');
+      await act(async () => {
+        await servedCall[0].removeCard(servedCall[0].item.listId);
+      });
+      expect(removeImageFromList).toHaveBeenCalledWith(2, 'all', 'any');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('probe "indeterminate" → exhausted panel, no transition (I7)', async () => {
+    // Transient probe failure must NEVER mutate cycle state — the exhausted
+    // flow stands (fail open: worst case a panel, never a premature wipe).
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      return Promise.resolve([
+        { listId: 1, pictureId: 'indet-played-1', imageFile: 'file:///i1.jpg' },
+        { listId: 2, pictureId: 'indet-played-2', imageFile: 'file:///i2.jpg' },
+        { listId: 3, pictureId: 'indet-played-3', imageFile: 'file:///i3.jpg' },
+        { listId: 4, pictureId: 'indet-played-4', imageFile: 'file:///i4.jpg' },
+      ]);
+    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('indet-played-'))));
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'indeterminate', reason: 'network' });
+
+    try {
+      const { renderer } = await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(probeAllPoolForUnplayed).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).not.toHaveBeenCalled();
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('private mount recovery probes/serves the group "all" namespace only (no public bleed)', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    readGroupFeedCache.mockImplementation((groupId, { categoryId } = {}) => {
+      if (groupId !== 'group-7') return Promise.resolve(null);
+      if (categoryId === undefined) {
+        return Promise.resolve({
+          images: [
+            { listId: 1, pictureId: 'priv-all-fresh-1', imageFile: 'file:///pa1.jpg' },
+            { listId: 2, pictureId: 'priv-all-fresh-2', imageFile: 'file:///pa2.jpg' },
+          ],
+          nextCursor: null,
+        });
+      }
+      if (categoryId !== 'cat-nature') return Promise.resolve(null);
+      return Promise.resolve({
+        images: [
+          { listId: 1, pictureId: 'priv-cat-played-1', imageFile: 'file:///pc1.jpg' },
+          { listId: 2, pictureId: 'priv-cat-played-2', imageFile: 'file:///pc2.jpg' },
+          { listId: 3, pictureId: 'priv-cat-played-3', imageFile: 'file:///pc3.jpg' },
+          { listId: 4, pictureId: 'priv-cat-played-4', imageFile: 'file:///pc4.jpg' },
+        ],
+        nextCursor: null,
+      });
+    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('priv-cat-played-'))));
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'unplayed' });
+
+    try {
+      await renderSwipeImage(jest.fn(), {
+        category: { id: 'cat-nature', key: 'nature' },
+        language: 'fr',
+        scope,
+      });
+
+      expect(probeAllPoolForUnplayed).toHaveBeenCalledTimes(1);
+      expect(probeAllPoolForUnplayed).toHaveBeenCalledWith({
+        language: 'fr',
+        scope,
+        authContext: contextValue,
+        excludePictureId: undefined,
+      });
+      // The 'all' serve reads ONLY the group 'all' cache namespace.
+      expect(readGroupFeedCache).toHaveBeenCalledWith('group-7', { categoryId: undefined, language: 'fr' });
+      expect(getLocalImages).not.toHaveBeenCalled();
+      expect(startNewServingCycle).not.toHaveBeenCalled();
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('priv-all-fresh-1');
+      expect(renderedPictureIds).toContain('priv-all-fresh-2');
+      expect(renderedPictureIds).not.toContain('priv-cat-played-1');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
   it('new cycle serves despite stale cursor/END sentinel/exhausted marker (mount path)', async () => {
     // §5 composite: cursor parked at the old feed end AS the END sentinel +
     // an exhausted marker + a fully-played deck. The mount recovery must
@@ -2785,6 +2930,7 @@ describe('SwipeImage — mount recovery across all deck branches (M1/M2)', () =>
       cycleRestarted = true;
       return 1;
     });
+    probeAllPoolForUnplayed.mockResolvedValue({ status: 'exhausted' });
     filterPlayedCards.mockImplementation(async (cards) =>
       Promise.resolve(cycleRestarted
         ? cards
