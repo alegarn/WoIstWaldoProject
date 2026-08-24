@@ -190,9 +190,7 @@ export async function prefetchIfLow({
           await markCategoryExhausted(categoryKey, language, scope).catch(() => {});
         }
       } catch (e) {
-        if (__DEV__) {
-          console.warn('[cardPrefetcher] prefetch failed', dk, e);
-        }
+        console.warn('[cardPrefetcher] prefetch failed', dk, e);
       }
     }
 
@@ -280,9 +278,7 @@ export async function warmAllDeckIfNeeded({
         });
       }
     } catch (e) {
-      if (__DEV__) {
-        console.warn('[cardPrefetcher] warm-all failed', wk, e);
-      }
+      console.warn('[cardPrefetcher] warm-all failed', wk, e);
     } finally {
       allWarming.delete(wk);
     }

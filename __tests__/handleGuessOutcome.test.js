@@ -1,15 +1,18 @@
 import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
 import { bufferScore, mintGuessId } from '../utils/sessionScoreStore';
-import { addPlayedPictureId, removeImageFromList, deleteImageFromStorage } from '../utils/storageDatum';
+import { removeImageFromList, deleteImageFromStorage } from '../utils/storageDatum';
+import { addPlayedPictureId } from '../utils/playedPictureIds';
 
 jest.mock('../utils/sessionScoreStore', () => ({
   bufferScore: jest.fn(),
   mintGuessId: jest.fn(() => 'id-1'),
 }));
 jest.mock('../utils/storageDatum', () => ({
-  addPlayedPictureId: jest.fn(() => Promise.resolve()),
   removeImageFromList: jest.fn().mockResolvedValue(),
   deleteImageFromStorage: jest.fn().mockResolvedValue(),
+}));
+jest.mock('../utils/playedPictureIds', () => ({
+  addPlayedPictureId: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../utils/nextCardResolver', () => ({ resolveNextCard: jest.fn() }));
 

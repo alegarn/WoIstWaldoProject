@@ -1,5 +1,6 @@
 import { getImages } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, filterPlayedCards, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { filterPlayedCards } from '../utils/playedPictureIds';
 import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 
@@ -106,7 +107,11 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
 
   const p = (async () => {
     const lang = normalizeLanguage(language);
-    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
+    // Scope-aware cursor read (F1/F2): private scopes read the group-scoped
+    // game-cursor key (same key saveLastImageUuid writes on the private
+    // transport path); public/undefined scope keeps the shared
+    // `lastImageUuid:<cat>:<lang>` shape.
+    const lastImageUuid = await getLastImageUuid(categoryKey, lang, scope);
     // Fix 2a: a head fetch (pictureIdOverride === null) over ANY stored cursor
     // value (real uuid or either feed-end sentinel) is a head REPLAY —
     // persisting the head batch's tail would rewind the cursor and re-download
@@ -214,36 +219,51 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
 }
 
 /**
- * Append a card batch to the persisted deck (scope-aware). Mirrors persistCardBatch
- * scope branching but appends instead of overwriting. Used by background prefetch
- * (cardPrefetcher) to grow the deck without losing existing cards.
- * - Public scope: reuses updateImageList (already appends to AsyncStorage).
- * - Private scope: reads the group feed cache, concatenates, writes back.
- * Returns the merged deck; callers use it as the numbering source of truth.
+ * Remove one card from the persisted private-group deck under the shared deck
+ * write lock. Re-reads the PERSISTED deck inside the lock so a stale in-memory
+ * component list cannot erase concurrently prefetched cards.
  *
- * The RMW window (read → concat → write) is serialized per scope via
- * withScopeLock. Key derivation mirrors getDeckCountForScope / groupFeedListKey:
- * (categoryKey|categoryId, language, groupId) → one lock per scope. Closes R2:
- * without the lock, two concurrent appendCardBatch calls for the same scope
- * would both read the prior deck, each concat its own batch, and the later
- * write wins → the earlier batch is orphaned on disk and the deck stays empty.
+ * @param {object} args - { groupId, categoryId, language, listId }
+ * @returns {Promise<void>}
  */
-function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
-  const lang = normalizeLanguage(language);
-  if (isPrivateScope(scope)) {
-    const cid = resolveCategoryId(categoryId);
-    return `cardDeck:append:private:${scope.groupId}:${cid ?? 'all'}:${lang}`;
+export async function removeCardFromGroupDeck({ groupId, categoryId, language, listId } = {}) {
+  if (!groupId) {
+    return;
   }
-  return `cardDeck:append:public:${categoryKey || 'all'}:${lang}`;
+
+  const lang = normalizeLanguage(language);
+  const cid = resolveCategoryId(categoryId);
+
+  await withScopeLock(
+    deckWriteLockKey({ categoryId: cid, language: lang, scope: { kind: 'private', groupId } }),
+    async () => {
+      const existing = await readGroupFeedCache(groupId, { categoryId: cid, language: lang });
+      if (!existing) {
+        return;
+      }
+
+      const prior = Array.isArray(existing.images) ? existing.images : [];
+      const images = prior.filter((card) => card?.listId !== listId);
+      await writeGroupFeedCache(
+        groupId,
+        { categoryId: cid, language: lang },
+        { images, nextCursor: existing?.nextCursor ?? null },
+      );
+    },
+  );
 }
 
 /**
  * Append a batch to the persisted deck, scope-aware (mirrors persistCardBatch
  * but appends instead of overwriting). Dedups incoming cards against the
  * existing deck via dedupByPictureId, then serializes the read-modify-write
- * per scope under withScopeLock. The append lock key (appendCardBatchLockKey)
- * is deliberately separate from the fetch dedup key (fetchBatchDedupKey), so
- * the append lock never blocks the fetch path — no deadlock.
+ * per scope under withScopeLock(deckWriteLockKey(...)) — the SHARED deck-write
+ * lock (see utils/storageDatum.js#deckWriteLockKey). Without the lock, two
+ * concurrent appendCardBatch calls for the same scope would both read the
+ * prior deck, each concat its own batch, and the later write wins → the
+ * earlier batch is orphaned on disk and the deck stays empty. The append lock
+ * key is deliberately separate from the fetch dedup key (fetchBatchDedupKey),
+ * so the append lock never blocks the fetch path — no deadlock.
  *
  * Returns the merged deck; callers use it as the numbering source of truth
  * (Fix 3: the storage boundary is the SINGLE listId writer).
@@ -254,25 +274,28 @@ function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
 export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 
-  return withScopeLock(appendCardBatchLockKey({ categoryKey, categoryId, language, scope }), async () => {
-    clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
-    const incoming = await filterPlayedCards(cards, lang, scope);
-    if (isPrivateScope(scope)) {
-      const cid = resolveCategoryId(categoryId);
-      const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
-      const prior = existing?.images ?? [];
-      const deduped = dedupByPictureId(prior, incoming);
-      const merged = normalizeListIds([...prior, ...deduped]);
-      await writeGroupFeedCache(
-        scope.groupId,
-        { categoryId: cid, language: lang },
-        { images: merged, nextCursor: existing?.nextCursor ?? null },
-      );
-      return merged;
-    }
+  return withScopeLock(
+    deckWriteLockKey({ categoryKey, categoryId, language: lang, scope }),
+    async () => {
+      clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
+      const incoming = await filterPlayedCards(cards, lang, scope);
+      if (isPrivateScope(scope)) {
+        const cid = resolveCategoryId(categoryId);
+        const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
+        const prior = existing?.images ?? [];
+        const deduped = dedupByPictureId(prior, incoming);
+        const merged = normalizeListIds([...prior, ...deduped]);
+        await writeGroupFeedCache(
+          scope.groupId,
+          { categoryId: cid, language: lang },
+          { images: merged, nextCursor: existing?.nextCursor ?? null },
+        );
+        return merged;
+      }
 
-    return await updateImageList(incoming, categoryKey, lang);
-  });
+      return await updateImageList(incoming, categoryKey, lang);
+    },
+  );
 }
 
 /**

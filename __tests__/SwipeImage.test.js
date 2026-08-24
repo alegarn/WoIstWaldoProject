@@ -51,6 +51,7 @@ jest.mock('../utils/ratingRequests', () => ({
 jest.mock('../utils/storageDatum', () => {
   const actual = jest.requireActual('../utils/storageDatum');
   return {
+    ...actual,
     PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
     getE2EHiddenGuessCard: jest.fn(),
     getLocalImages: jest.fn(),
@@ -62,10 +63,10 @@ jest.mock('../utils/storageDatum', () => {
     // Task A (Fix 1): cardDeck persist/append call this on every non-empty
     // non-'all' batch — the component-level mock only needs it to resolve.
     clearExhaustedCategory: jest.fn(() => Promise.resolve()),
-    // Task C (Fix 2b): played-set writer + shared filter — resolving mocks;
-    // default passthrough keeps the filter a no-op until a test overrides it.
-    addPlayedPictureId: jest.fn(() => Promise.resolve()),
-    filterPlayedCards: jest.fn((cards) => Promise.resolve(cards)),
+    isCategoryExhausted: jest.fn(() => Promise.resolve(false)),
+    // Task C (Fix 2b): played-set writer + shared filter moved to
+    // utils/playedPictureIds (module extraction) — resolving mocks; default
+    // passthrough keeps the filter a no-op until a test overrides it.
     // Task D (Fix 3): delegate to the REAL implementation so the mock cannot
     // diverge from the storage-boundary numbering algorithm.
     normalizeListIds: actual.normalizeListIds,
@@ -74,6 +75,18 @@ jest.mock('../utils/storageDatum', () => {
     deleteImageFromStorage: jest.fn(),
   };
 });
+
+jest.mock('../utils/playedPictureIds', () => ({
+  addPlayedPictureId: jest.fn(() => Promise.resolve()),
+  filterPlayedCards: jest.fn((cards) => Promise.resolve(cards)),
+}));
+
+// C2: requireActual-spread keeps `isCycleExhausted` REAL (pure predicate)
+// while the storage-touching transition is pinned as a mock.
+jest.mock('../utils/servingCycle', () => ({
+  ...jest.requireActual('../utils/servingCycle'),
+  startNewServingCycle: jest.fn(() => Promise.resolve(1)),
+}));
 
 jest.mock('../services/groups/groupFeedApi', () => ({
   PRIVATE_FEED_END_CURSOR: '__private_feed_end__',
@@ -84,6 +97,14 @@ jest.mock('../services/groups/groupFeedCache', () => ({
   readGroupFeedCache: jest.fn(),
   writeGroupFeedCache: jest.fn(),
 }));
+
+jest.mock('../services/cardDeck', () => {
+  const actual = jest.requireActual('../services/cardDeck');
+  return {
+    ...actual,
+    removeCardFromGroupDeck: jest.fn(() => Promise.resolve()),
+  };
+});
 
 jest.mock('../store/auth-context', () => {
   const React = require('react');
@@ -115,21 +136,23 @@ import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../
 import { getImages } from '../utils/imagesRequests';
 import { getImageRating, getImageTags } from '../utils/ratingRequests';
 import {
-  addPlayedPictureId,
   deleteImageFromStorage,
-  filterPlayedCards,
   getE2EHiddenGuessCard,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  isCategoryExhausted,
   PUBLIC_FEED_END_CURSOR,
   removeImageFromList,
   saveLastImageUuid,
   storeImageList,
   updateImageList,
 } from '../utils/storageDatum';
+import { addPlayedPictureId, filterPlayedCards } from '../utils/playedPictureIds';
+import { startNewServingCycle } from '../utils/servingCycle';
+import { removeCardFromGroupDeck } from '../services/cardDeck';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../services/cardPrefetcher';
-import { readGroupFeedCache } from '../services/groups/groupFeedCache';
+import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from '../services/groups/groupFeedApi';
 
 describe('SwipeImage', () => {
@@ -241,28 +264,108 @@ describe('SwipeImage', () => {
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.listId)).toEqual([2, 1]);
   });
 
-  it('ignores a stale last image uuid when the local cache is missing and fetches a fresh batch', async () => {
+  it('mount serve with null deck persists the full batch but setImageList excludes played cards', async () => {
     getLocalImages.mockResolvedValue(null);
-    getLastImageUuid.mockResolvedValue('stale-image-uuid');
     getImages.mockResolvedValue({
       isError: false,
       images: [
-        { pictureId: 'img-1', imageFile: 'file:///one.jpg' },
+        { pictureId: 'null-mount-played', imageFile: 'file:///played.jpg' },
+        { pictureId: 'null-mount-fresh', imageFile: 'file:///fresh.jpg' },
       ],
     });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cards.filter((card) => !card?.pictureId || card.pictureId !== 'null-mount-played')));
 
-    await renderSwipeImage();
+    try {
+      await renderSwipeImage();
 
-    // Fix 2a pin update: a head fetch over a stored REAL cursor now carries the
-    // { persistCursor: false } opts arg — suppressing the cursor write IS the
-    // rewind fix. The head query still fires and fresh uploads still surface.
-    expect(getImages).toHaveBeenCalledWith(null, contextValue, { language: undefined, scope: undefined }, { persistCursor: false });
-    expect(storeImageList).toHaveBeenCalledWith([
-      expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
-    ], 'all', 'any');
+      // Resume truth (I5): the FULL normalized batch is persisted unfiltered.
+      expect(storeImageList).toHaveBeenCalledWith([
+        expect.objectContaining({ pictureId: 'null-mount-played', listId: 1 }),
+        expect.objectContaining({ pictureId: 'null-mount-fresh', listId: 2 }),
+      ], 'all', 'any');
+      // Once-per-cycle (I1): the serve itself runs through the played filter.
+      expect(filterPlayedCards).toHaveBeenCalledWith(expect.any(Array), 'any', undefined);
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).not.toContain('null-mount-played');
+      expect(renderedPictureIds).toContain('null-mount-fresh');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
   });
 
-  it('re-queries the server on cold mount when the exhausted sentinel is stored so new uploads surface', async () => {
+  it('mount serve where the whole batch is played returns false (no blank stack)', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'null-mount-all-played-1', imageFile: 'file:///p1.jpg' },
+        { pictureId: 'null-mount-all-played-2', imageFile: 'file:///p2.jpg' },
+      ],
+    });
+    // Played-set covers the whole batch → filtered serve is empty.
+    filterPlayedCards.mockImplementation(async () => Promise.resolve([]));
+
+    try {
+      const { renderer } = await renderSwipeImage();
+
+      // The full batch is still persisted (resume truth, I5)...
+      expect(storeImageList).toHaveBeenCalledWith([
+        expect.objectContaining({ pictureId: 'null-mount-all-played-1', listId: 1 }),
+        expect.objectContaining({ pictureId: 'null-mount-all-played-2', listId: 2 }),
+      ], 'all', 'any');
+      // ...but no played card is ever served.
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).not.toContain('null-mount-all-played-1');
+      expect(renderedPictureIds).not.toContain('null-mount-all-played-2');
+      // The false return flows into handleImagesLoading's exhausted machinery.
+      const renderedText = renderer.root
+        .findAll((node) => node.type === 'Text')
+        .map((node) => node.props.children)
+        .flat()
+        .join(' ');
+      expect(renderedText).toContain('No more images to guess right now!');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('empty-deck mount resumes cursor-mode first; a cursor at feed-end falls back to the head probe (persistCursor suppressed)', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('stale-image-uuid');
+    getImages
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      .mockResolvedValueOnce({
+        isError: false,
+        images: [
+          { pictureId: 'img-1', imageFile: 'file:///one.jpg' },
+        ],
+      });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+    await act(async () => {
+      for (let i = 0; i < 8; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await flushEffects();
+      }
+    });
+
+    // C2 pin update: the empty-deck mount now goes cursor-mode FIRST (I5
+    // resume) — the stored REAL cursor is consulted, not bypassed. Only an
+    // exhausted cursor round triggers the head probe, and that probe is a
+    // head REPLAY over the stored cursor: { persistCursor: false } keeps the
+    // rewind fix (suppressing the cursor write) while fresh uploads surface.
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(getImages.mock.calls[0][0]).toBe('stale-image-uuid');
+    expect(getImages.mock.calls[0]).toHaveLength(3);
+    expect(getImages.mock.calls[1][0]).toBe(null);
+    expect(getImages.mock.calls[1][3]).toEqual({ persistCursor: false });
+    expect(storeImageList).toHaveBeenCalledWith([
+      expect.objectContaining({ pictureId: 'img-1', listId: 1 }),
+    ], 'nature', 'any');
+  });
+
+  it('coerces a stored exhausted sentinel to a head query on empty-deck mount so new uploads surface', async () => {
     // Regression: a stored PUBLIC_FEED_END_CURSOR used to short-circuit the
     // cold-mount load, so once a category ever returned empty it never queried
     // the server again — newly uploaded cards stayed invisible until reinstall.
@@ -275,13 +378,20 @@ describe('SwipeImage', () => {
       ],
     });
 
-    await renderSwipeImage();
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+    await act(async () => {
+      for (let i = 0; i < 8; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await flushEffects();
+      }
+    });
 
-    // Fix 2a pin update: head-over-sentinel is a head REPLAY (sentinel =
-    // "already exhausted once") — it fetches with { persistCursor: false } so
-    // persisting cannot rewind AND erase the exhausted signal. The head query
-    // still fires, so fresh uploads still surface on re-probe.
-    expect(getImages).toHaveBeenCalledWith(null, contextValue, expect.objectContaining({}), { persistCursor: false });
+    // C2 pin update: the cursor round hits the transport-boundary legacy
+    // self-heal — PUBLIC_FEED_END_CURSOR is coerced to a fresh head query
+    // (3-arg call, nothing to rewind). One round suffices when cards land.
+    expect(getImages).toHaveBeenCalledTimes(1);
+    expect(getImages.mock.calls[0][0]).toBe(null);
+    expect(getImages.mock.calls[0]).toHaveLength(3);
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('fresh-after-exhaust');
   });
 
@@ -770,6 +880,41 @@ describe('SwipeImage — cardPrefetcher integration', () => {
     });
   });
 
+  it('delegates private removal to removeCardFromGroupDeck instead of writing the filtered memory deck', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    readGroupFeedCache.mockResolvedValue({
+      images: [
+        { listId: 1, imageFile: 'file:///1.jpg' },
+        { listId: 2, imageFile: 'file:///2.jpg' },
+        { listId: 3, imageFile: 'file:///3.jpg' },
+        { listId: 4, imageFile: 'file:///4.jpg' },
+      ],
+    });
+
+    await renderSwipeImage(jest.fn(), {
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    mockSwipeableCard.mockClear();
+
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(removeCardFromGroupDeck).toHaveBeenCalledWith({
+      groupId: 'group-7',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      listId: 1,
+    });
+    expect(removeImageFromList).not.toHaveBeenCalled();
+    expect(writeGroupFeedCache).not.toHaveBeenCalled();
+  });
+
   it('calls prefetchIfLow at most once per removeCard (component does not pre-dedupe)', async () => {
     getLocalImages.mockResolvedValue([
       { listId: 1, imageFile: 'file:///1.jpg' },
@@ -1095,6 +1240,191 @@ describe('SwipeImage — deck-empty fallback to "all"', () => {
       ([, , params]) => params?.category_key === 'nature',
     );
     expect(natureForegroundCalls.length).toBeGreaterThan(0);
+  });
+
+  it('shows the exhausted panel without a foreground load when the active category is already marked exhausted', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    isCategoryExhausted.mockResolvedValueOnce(true);
+
+    const { renderer } = await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).not.toHaveBeenCalled();
+    expect(isCategoryExhausted).toHaveBeenCalledWith('nature', undefined, undefined);
+
+    const renderedText = renderer.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => node.props.children)
+      .flat()
+      .join(' ');
+    expect(renderedText).toContain('No more images to guess right now!');
+  });
+
+  it('(c) F1 self-heal: marker cleared (false) + non-"all" category → step-4 foreground fetch fires', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    isCategoryExhausted.mockResolvedValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(isCategoryExhausted).toHaveBeenCalledWith('nature', undefined, undefined);
+    expect(getImages).toHaveBeenCalled();
+  });
+
+  it('(e) F1 private scope: refill step 4 routes the marker check to the group marker (isCategoryExhausted receives the scope)', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    readGroupFeedCache.mockImplementation((groupId, { categoryId } = {}) => {
+      if (groupId !== 'group-7') return Promise.resolve(null);
+      if (categoryId === 'cat-nature') {
+        natureCallCount += 1;
+        return Promise.resolve({ images: natureCallCount === 1 ? natureCards : [], nextCursor: null });
+      }
+      return Promise.resolve(null);
+    });
+    isCategoryExhausted.mockResolvedValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+
+    await renderSwipeImage(jest.fn(), {
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(isCategoryExhausted).toHaveBeenCalledWith('nature', 'fr', scope);
+    expect(getImages).toHaveBeenCalled();
+  });
+
+  it('fails open on exhausted-marker read errors and still foreground-loads', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    isCategoryExhausted.mockRejectedValueOnce(new Error('marker read failed'));
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    const cardPropsById = {};
+    for (const listId of [1, 2, 3, 4]) {
+      cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+    }
+
+    for (const listId of [1, 2, 3, 4]) {
+      // eslint-disable-next-line no-await-in-loop
+      await act(async () => {
+        await cardPropsById[listId].removeCard(listId);
+        await flushEffects();
+      });
+    }
+
+    expect(getImages).toHaveBeenCalled();
+  });
+
+  it('still foreground-loads for the "all" deck without consulting the exhausted marker', async () => {
+    let allCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'all') {
+        allCallCount += 1;
+        return Promise.resolve(allCallCount === 1
+          ? [{ listId: 1, pictureId: 'all-1', imageFile: 'file:///a1.jpg' }]
+          : []);
+      }
+      return Promise.resolve(null);
+    });
+    isCategoryExhausted.mockResolvedValueOnce(true);
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'all', key: 'all' } });
+
+    const removableCard = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === 1)[0];
+    await act(async () => {
+      await removableCard.removeCard(1);
+      await flushEffects();
+    });
+
+    expect(isCategoryExhausted).not.toHaveBeenCalled();
+    expect(getImages).toHaveBeenCalled();
   });
 
   it('does not fire a foreground load when removeCard drops the deck from 4→3 (low but not empty)', async () => {
@@ -1426,8 +1756,10 @@ describe('SwipeImage — partial-deck mount cursor exhaustion (Fix 2a)', () => {
       { listId: 3, pictureId: 'played-3', imageFile: 'file:///3.jpg' },
       { listId: 4, pictureId: 'played-4', imageFile: 'file:///4.jpg' },
     ]);
-    // Played-set contains every stored pictureId → filter empties the deck.
-    filterPlayedCards.mockImplementation(async () => Promise.resolve([]));
+    // Played-set contains every stored pictureId → the MOUNT filter empties
+    // the deck (first call only). Post-C1 the fetch that lands fresh cards
+    // ALSO filters (I1) — with a passthrough there, fresh-1 serves normally.
+    filterPlayedCards.mockImplementationOnce(async () => Promise.resolve([]));
     getImages.mockResolvedValue({
       isError: false,
       images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }],
@@ -1485,7 +1817,7 @@ describe('SwipeImage — partial-deck mount cursor exhaustion (Fix 2a)', () => {
 
     expect(getImages).toHaveBeenCalledTimes(2);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith(PRIVATE_FEED_END_CURSOR, 'nature', 'fr');
+    expect(saveLastImageUuid).toHaveBeenCalledWith(PRIVATE_FEED_END_CURSOR, 'nature', 'fr', scope);
   });
 });
 
@@ -1608,9 +1940,99 @@ describe('SwipeImage — handleData single-writer + resurrection race (Fix 3)', 
       });
     }
 
-    const finalRender = mockSwipeableCard.mock.calls.slice(-2).map(([props]) => [props.item.pictureId, props.item.listId]);
-    expect(finalRender).toEqual([['bg-numbered', 9], ['nat-4', 4]]);
-    expect(new Set(finalRender.map(([, listId]) => listId)).size).toBe(finalRender.length);
+    const latestByPictureId = new Map(
+      mockSwipeableCard.mock.calls.map(([props]) => [props.item.pictureId, props.item.listId]),
+    );
+    expect(latestByPictureId.get('bg-numbered')).toBe(9);
+    expect(latestByPictureId.get('nat-4')).toBe(4);
+    expect(new Set([latestByPictureId.get('bg-numbered'), latestByPictureId.get('nat-4')]).size).toBe(2);
+  });
+
+  it('logs the append-branch message only when handleData receives non-empty data', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    getImages.mockResolvedValue({ isError: false, images: [{ pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' }] });
+    updateImageList.mockResolvedValue([
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+      { listId: 9, pictureId: 'fresh-1', imageFile: 'file:///f1.jpg' },
+    ]);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      const cardPropsById = {};
+      for (const listId of [1, 2, 3, 4]) {
+        cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+      }
+      for (const listId of [1, 2, 3, 4]) {
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await cardPropsById[listId].removeCard(listId);
+          await flushEffects();
+        });
+      }
+
+      const appendLogs = logSpy.mock.calls.filter(([message]) => message === 'updatedImageList handleData imageList !== null');
+      expect(appendLogs).toHaveLength(1);
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it('does not log the append-branch message when handleData receives an empty batch', async () => {
+    const natureCards = [
+      { listId: 1, pictureId: 'nat-1', imageFile: 'file:///n1.jpg' },
+      { listId: 2, pictureId: 'nat-2', imageFile: 'file:///n2.jpg' },
+      { listId: 3, pictureId: 'nat-3', imageFile: 'file:///n3.jpg' },
+      { listId: 4, pictureId: 'nat-4', imageFile: 'file:///n4.jpg' },
+    ];
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        natureCallCount += 1;
+        return Promise.resolve(natureCallCount === 1 ? natureCards : []);
+      }
+      return Promise.resolve(null);
+    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      const cardPropsById = {};
+      for (const listId of [1, 2, 3, 4]) {
+        cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+      }
+      for (const listId of [1, 2, 3, 4]) {
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await cardPropsById[listId].removeCard(listId);
+          await flushEffects();
+        });
+      }
+
+      const appendLogs = logSpy.mock.calls.filter(([message]) => message === 'updatedImageList handleData imageList !== null');
+      expect(appendLogs).toHaveLength(0);
+    } finally {
+      logSpy.mockRestore();
+    }
   });
 
   it('(h) incoming batch whose pictureId is already in the deck does not duplicate imageList', async () => {
@@ -1662,6 +2084,80 @@ describe('SwipeImage — handleData single-writer + resurrection race (Fix 3)', 
     const finalRender = mockSwipeableCard.mock.calls.slice(-2).map(([props]) => [props.item.pictureId, props.item.listId]);
     expect(finalRender).toEqual([['fresh-1', 9], ['nat-4', 4]]);
     expect(finalRender.filter(([pid]) => pid === 'nat-4')).toHaveLength(1);
+  });
+
+  it('(j) PIN removeCard→imageListRef sync: reconciliation before any re-render excludes the just-removed pictureId', async () => {
+    const deck = [
+      { listId: 1, pictureId: 'pin-a', imageFile: 'file:///1.jpg' },
+      { listId: 2, pictureId: 'pin-b', imageFile: 'file:///2.jpg' },
+      { listId: 3, pictureId: 'fill-1', imageFile: 'file:///3.jpg' },
+      { listId: 4, pictureId: 'fill-2', imageFile: 'file:///4.jpg' },
+    ];
+    let deckCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key === 'nature') {
+        deckCallCount += 1;
+        return Promise.resolve(deckCallCount === 1 ? deck : []);
+      }
+      return Promise.resolve(null);
+    });
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [{ pictureId: 'pin-new', imageFile: 'file:///new.jpg' }],
+    });
+    const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      const cardPropsById = {};
+      for (const listId of [1, 2, 3, 4]) {
+        cardPropsById[listId] = mockSwipeableCard.mock.calls.find(([props]) => props.item.listId === listId)[0];
+      }
+      for (const listId of [2, 3, 4]) {
+        // eslint-disable-next-line no-await-in-loop
+        await act(async () => {
+          await cardPropsById[listId].removeCard(listId);
+          await flushEffects();
+        });
+      }
+
+      // Slow append: the storage RMW read the deck PRE-removal, so its merged
+      // result still contains pin-a (and pin-b).
+      const appendGate = createDeferred();
+      updateImageList.mockClear();
+      updateImageList.mockReturnValueOnce(appendGate.promise);
+      mockSwipeableCard.mockClear();
+
+      // Remove the last card OUTSIDE act: no re-render (and therefore no
+      // render-phase ref sync) may commit before the append resolves — only
+      // removeCard's synchronous imageListRef assignment can feed the
+      // reconciliation a fresh list.
+      const removalPromise = cardPropsById[1].removeCard(1);
+      for (let i = 0; i < 3; i += 1) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+      expect(updateImageList).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        appendGate.resolve([
+          { listId: 1, pictureId: 'pin-a', imageFile: 'file:///1.jpg' },
+          { listId: 2, pictureId: 'pin-b', imageFile: 'file:///2.jpg' },
+          { listId: 3, pictureId: 'pin-new', imageFile: 'file:///new.jpg' },
+        ]);
+        await flushMount();
+      });
+      await act(async () => {
+        await removalPromise;
+        await flushEffects();
+      });
+
+      const finalRender = mockSwipeableCard.mock.calls.slice(-1).map(([props]) => props.item.pictureId);
+      expect(finalRender).toEqual(['pin-new']);
+    } finally {
+      consoleErrorSpy.mockRestore();
+    }
   });
 
   it('(i) RESURRECTION RACE: a card swiped before a slow appendCardBatch RMW resolves stays removed; pictureId-less legacy card survives', async () => {
@@ -1740,5 +2236,670 @@ describe('SwipeImage — handleData single-writer + resurrection race (Fix 3)', 
     expect(finalPictureIds).not.toContain('race-a');
     expect(finalPictureIds).not.toContain('race-b');
     expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.imageFile)).toContain('file:///legacy.jpg');
+  });
+});
+
+describe('SwipeImage — empty-deck mount resume + cycle recovery (C2)', () => {
+  const contextValue = {
+    token: 'token',
+    uid: 'waldo@example.com',
+    expiry: '123',
+    access_token: 'access-token',
+    client: 'client-id',
+    userId: '42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    getLastImageId.mockResolvedValue(0);
+    getLastImageUuid.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  // The empty-deck branch chains up to two fetch rounds plus the recovery
+  // deck re-read — mirror the partial-deck describe's deeper flush.
+  async function flushMount() {
+    for (let i = 0; i < 8; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await flushEffects();
+    }
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language, scope } = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={contextValue}>
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+            scope={scope}
+          />
+        </AuthContext.Provider>,
+      );
+
+      await flushMount();
+    });
+
+    return { renderer, startGuessing };
+  }
+
+  it('empty-deck mount with a stored real cursor fetches cursor-mode FIRST (resume, I5)', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('stored-real-cursor');
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [{ pictureId: 'resume-1', imageFile: 'file:///r1.jpg' }],
+    });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    // ONE fetch, cursor-mode (3-arg, cursor as pictureId) — the persisted
+    // keyset cursor resumes the feed after the last served card. No head
+    // probe fires when the cursor round lands cards.
+    expect(getImages).toHaveBeenCalledTimes(1);
+    expect(getImages.mock.calls[0]).toHaveLength(3);
+    expect(getImages.mock.calls[0][0]).toBe('stored-real-cursor');
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('resume-1');
+    expect(startNewServingCycle).not.toHaveBeenCalled();
+  });
+
+  it('empty-deck mount with no cursor falls back to head fetch', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      // Call 1: empty deck on mount. Call 2: recovery re-read — the head
+      // probe's FULL batch is what persistCardBatch wrote to storage.
+      return Promise.resolve(natureCallCount === 1
+        ? []
+        : [{ listId: 1, pictureId: 'head-fresh', imageFile: 'file:///hf.jpg' }]);
+    });
+    getLastImageUuid.mockResolvedValue(null);
+    getImages
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      .mockResolvedValueOnce({
+        isError: false,
+        images: [{ pictureId: 'head-fresh', imageFile: 'file:///hf.jpg' }],
+      });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    // Cursor round (no stored cursor → head-shaped query), then the head
+    // probe. No stored cursor → no persistCursor suppression arg (3-arg).
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(getImages.mock.calls[0][0]).toBe(null);
+    expect(getImages.mock.calls[1][0]).toBe(null);
+    expect(getImages.mock.calls[1]).toHaveLength(3);
+    expect(mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId)).toContain('head-fresh');
+    // Landed card is unplayed → the recovery proof fails → no transition.
+    expect(startNewServingCycle).not.toHaveBeenCalled();
+  });
+
+  it('empty-deck mount with cursor AND head both empty writes the scope-correct sentinel', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('stored-cursor-9');
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith(PUBLIC_FEED_END_CURSOR, 'nature', 'any');
+    // Nothing landed → the deck head is empty → NOT cycle exhaustion.
+    expect(startNewServingCycle).not.toHaveBeenCalled();
+  });
+
+  it('mount head probe lands cards but all are played → startNewServingCycle once, then serves deck head (cycle restart on mount, I4)', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      return Promise.resolve(natureCallCount === 1
+        ? []
+        : [
+            { listId: 1, pictureId: 'cycle-played-1', imageFile: 'file:///c1.jpg' },
+            { listId: 2, pictureId: 'cycle-played-2', imageFile: 'file:///c2.jpg' },
+          ]);
+    });
+    getLastImageUuid.mockResolvedValue(null);
+    getImages
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      .mockResolvedValueOnce({
+        isError: false,
+        images: [
+          { pictureId: 'cycle-played-1', imageFile: 'file:///c1.jpg' },
+          { pictureId: 'cycle-played-2', imageFile: 'file:///c2.jpg' },
+        ],
+      });
+    // Pre-transition: the played-set covers the whole head batch.
+    // Post-transition (startNewServingCycle clears the played-set): the same
+    // filter serves the full deck head.
+    let cycleRestarted = false;
+    startNewServingCycle.mockImplementationOnce(async () => {
+      cycleRestarted = true;
+      return 1;
+    });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cycleRestarted
+        ? cards
+        : cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('cycle-played-'))));
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(startNewServingCycle).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).toHaveBeenCalledWith('any', undefined);
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('cycle-played-1');
+      expect(renderedPictureIds).toContain('cycle-played-2');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('head probe fails (error) with persisted fully-played deck → NO startNewServingCycle (I7)', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      // Call 1: empty deck on mount. Call 2: recovery re-read would see a
+      // persisted, fully-played deck — but the errored probe must gate the
+      // whole recovery block off (I7: fetch failures never mutate cycle).
+      return Promise.resolve(natureCallCount === 1
+        ? []
+        : [
+            { listId: 1, pictureId: 'err-played-1', imageFile: 'file:///e1.jpg' },
+            { listId: 2, pictureId: 'err-played-2', imageFile: 'file:///e2.jpg' },
+          ]);
+    });
+    getLastImageUuid.mockResolvedValue(null);
+    getImages
+      // Cursor round: empty batch (false) → head probe fires.
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      // Head probe: network/server failure ('error').
+      .mockResolvedValueOnce({ isError: true, title: 'Server error', message: 'Please retry later' });
+    // Played-set covers the whole persisted deck → the (gated) proof would
+    // otherwise pass: isCycleExhausted(2, 0) === true.
+    filterPlayedCards.mockImplementation(async () => Promise.resolve([]));
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(getImages).toHaveBeenCalledTimes(2);
+      expect(Alert.alert).toHaveBeenCalledWith('Server error', 'Please retry later');
+      expect(startNewServingCycle).not.toHaveBeenCalled();
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('mount head probe genuinely empty (no cards landed) → NO startNewServingCycle, exhausted flow', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    const { renderer } = await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(startNewServingCycle).not.toHaveBeenCalled();
+
+    const renderedText = renderer.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => node.props.children)
+      .flat()
+      .join(' ');
+    expect(renderedText).toContain('No more images to guess right now!');
+  });
+
+  it('private mount recovery writes/reads private namespaces only', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    let cacheCallCount = 0;
+    readGroupFeedCache.mockImplementation((groupId, { categoryId } = {}) => {
+      if (groupId !== 'group-7' || categoryId !== 'cat-nature') return Promise.resolve(null);
+      cacheCallCount += 1;
+      return Promise.resolve(cacheCallCount === 1
+        ? { images: [], nextCursor: null }
+        : {
+            images: [
+              { listId: 1, pictureId: 'priv-played-1', imageFile: 'file:///p1.jpg' },
+              { listId: 2, pictureId: 'priv-played-2', imageFile: 'file:///p2.jpg' },
+            ],
+            nextCursor: null,
+          });
+    });
+    getLastImageUuid.mockResolvedValue('priv-cursor');
+    getImages
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      .mockResolvedValueOnce({
+        isError: false,
+        images: [
+          { pictureId: 'priv-played-1', imageFile: 'file:///p1.jpg' },
+          { pictureId: 'priv-played-2', imageFile: 'file:///p2.jpg' },
+        ],
+      });
+    let cycleRestarted = false;
+    startNewServingCycle.mockImplementationOnce(async () => {
+      cycleRestarted = true;
+      return 1;
+    });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cycleRestarted
+        ? cards
+        : cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('priv-played-'))));
+
+    try {
+      await renderSwipeImage(jest.fn(), {
+        category: { id: 'cat-nature', key: 'nature' },
+        language: 'fr',
+        scope,
+      });
+
+      // Private sentinel + private transition scope; public deck storage
+      // never touched (private cache is the only deck read).
+      expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+      expect(saveLastImageUuid).toHaveBeenCalledWith(PRIVATE_FEED_END_CURSOR, 'nature', 'fr', scope);
+      expect(startNewServingCycle).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).toHaveBeenCalledWith('fr', scope);
+      expect(getLocalImages).not.toHaveBeenCalled();
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('priv-played-1');
+      expect(renderedPictureIds).toContain('priv-played-2');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+});
+
+describe('SwipeImage — mount recovery across all deck branches (M1/M2)', () => {
+  const contextValue = {
+    token: 'token',
+    uid: 'waldo@example.com',
+    expiry: '123',
+    access_token: 'access-token',
+    client: 'client-id',
+    userId: '42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    getLastImageId.mockResolvedValue(0);
+    getLastImageUuid.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  async function flushMount() {
+    for (let i = 0; i < 8; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await flushEffects();
+    }
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language, scope } = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={contextValue}>
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+            scope={scope}
+          />
+        </AuthContext.Provider>,
+      );
+
+      await flushMount();
+    });
+
+    return { renderer, startGuessing };
+  }
+
+  function renderedText(renderer) {
+    return renderer.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => node.props.children)
+      .flat()
+      .join(' ');
+  }
+
+  it('empty-deck mount, cursor round errors → error panel, no infinite loading (I7)', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getImages.mockResolvedValue({
+      isError: true,
+      title: 'Server error',
+      message: 'Please retry later',
+    });
+
+    const { renderer } = await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(Alert.alert).toHaveBeenCalledWith('Server error', 'Please retry later');
+    // The errored cursor round never ran handleData — the serve state must be
+    // coerced to [] (not left null) or the loading overlay pins forever.
+    expect(renderedText(renderer)).toContain('The list is not there');
+    // I7: no probe cascade, no cycle mutation after a failed fetch.
+    expect(getImages).toHaveBeenCalledTimes(1);
+    expect(startNewServingCycle).not.toHaveBeenCalled();
+  });
+
+  it('full-deck mount, all cards played, head probe lands played cards → startNewServingCycle once, then serves deck head (I4)', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      // Call 1: full all-played deck on mount. Call 2: recovery re-read — the
+      // head probe's FULL batch is what persistCardBatch wrote to storage.
+      return Promise.resolve(natureCallCount === 1
+        ? [
+            { listId: 1, pictureId: 'cyc-full-1', imageFile: 'file:///f1.jpg' },
+            { listId: 2, pictureId: 'cyc-full-2', imageFile: 'file:///f2.jpg' },
+            { listId: 3, pictureId: 'cyc-full-3', imageFile: 'file:///f3.jpg' },
+            { listId: 4, pictureId: 'cyc-full-4', imageFile: 'file:///f4.jpg' },
+          ]
+        : [
+            { listId: 1, pictureId: 'cyc-full-1', imageFile: 'file:///f1.jpg' },
+            { listId: 2, pictureId: 'cyc-full-2', imageFile: 'file:///f2.jpg' },
+          ]);
+    });
+    getImages
+      .mockResolvedValueOnce({ isError: false, images: [] })
+      .mockResolvedValueOnce({
+        isError: false,
+        images: [
+          { pictureId: 'cyc-full-1', imageFile: 'file:///f1.jpg' },
+          { pictureId: 'cyc-full-2', imageFile: 'file:///f2.jpg' },
+        ],
+      });
+    let cycleRestarted = false;
+    startNewServingCycle.mockImplementationOnce(async () => {
+      cycleRestarted = true;
+      return 1;
+    });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cycleRestarted
+        ? cards
+        : cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('cyc-full-'))));
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(startNewServingCycle).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).toHaveBeenCalledWith('any', undefined);
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('cyc-full-1');
+      expect(renderedPictureIds).toContain('cyc-full-2');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('partial-deck mount (1-3 left), all played after probe → recovery fires once', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      return Promise.resolve([
+        { listId: 1, pictureId: 'part-cyc-1', imageFile: 'file:///p1.jpg' },
+        { listId: 2, pictureId: 'part-cyc-2', imageFile: 'file:///p2.jpg' },
+      ]);
+    });
+    getLastImageUuid.mockResolvedValue('stored-cursor-9');
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    let cycleRestarted = false;
+    startNewServingCycle.mockImplementationOnce(async () => {
+      cycleRestarted = true;
+      return 1;
+    });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cycleRestarted
+        ? cards
+        : cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('part-cyc-'))));
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(getImages).toHaveBeenCalledTimes(2);
+      expect(saveLastImageUuid).toHaveBeenCalledWith(PUBLIC_FEED_END_CURSOR, 'nature', 'any');
+      expect(startNewServingCycle).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).toHaveBeenCalledWith('any', undefined);
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('part-cyc-1');
+      expect(renderedPictureIds).toContain('part-cyc-2');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('full-deck mount, genuinely empty server → NO transition, exhausted panel', async () => {
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      // Call 2: the head probe persisted an empty batch → deck empty.
+      return Promise.resolve(natureCallCount === 1
+        ? [
+            { listId: 1, pictureId: 'gen-played-1', imageFile: 'file:///1.jpg' },
+            { listId: 2, pictureId: 'gen-played-2', imageFile: 'file:///2.jpg' },
+            { listId: 3, pictureId: 'gen-played-3', imageFile: 'file:///3.jpg' },
+            { listId: 4, pictureId: 'gen-played-4', imageFile: 'file:///4.jpg' },
+          ]
+        : []);
+    });
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('gen-played-'))));
+
+    try {
+      const { renderer } = await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(startNewServingCycle).not.toHaveBeenCalled();
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+
+  it('new cycle serves despite stale cursor/END sentinel/exhausted marker (mount path)', async () => {
+    // §5 composite: cursor parked at the old feed end AS the END sentinel +
+    // an exhausted marker + a fully-played deck. The mount recovery must
+    // still prove exhaustion, transition ONCE, and re-serve a NON-empty
+    // deck head. Behavior-level note: the played-set clear is simulated by
+    // flipping the filterPlayedCards mock at the transition (this seam mocks
+    // playedPictureIds; no AsyncStorage played-store exists here), and the
+    // exhausted marker is pinned present via isCategoryExhausted (the mount
+    // path must ignore it either way).
+    let natureCallCount = 0;
+    getLocalImages.mockImplementation((key) => {
+      if (key !== 'nature') return Promise.resolve(null);
+      natureCallCount += 1;
+      return Promise.resolve(natureCallCount === 1
+        ? [
+            { listId: 1, pictureId: 'comp-1', imageFile: 'file:///c1.jpg' },
+            { listId: 2, pictureId: 'comp-2', imageFile: 'file:///c2.jpg' },
+            { listId: 3, pictureId: 'comp-3', imageFile: 'file:///c3.jpg' },
+            { listId: 4, pictureId: 'comp-4', imageFile: 'file:///c4.jpg' },
+          ]
+        : [
+            { listId: 1, pictureId: 'comp-1', imageFile: 'file:///c1.jpg' },
+            { listId: 2, pictureId: 'comp-2', imageFile: 'file:///c2.jpg' },
+          ]);
+    });
+    getLastImageUuid.mockResolvedValue(PUBLIC_FEED_END_CURSOR);
+    isCategoryExhausted.mockResolvedValue(true);
+    getImages.mockResolvedValue({
+      isError: false,
+      images: [
+        { pictureId: 'comp-1', imageFile: 'file:///c1.jpg' },
+        { pictureId: 'comp-2', imageFile: 'file:///c2.jpg' },
+      ],
+    });
+    let cycleRestarted = false;
+    startNewServingCycle.mockImplementationOnce(async () => {
+      cycleRestarted = true;
+      return 1;
+    });
+    filterPlayedCards.mockImplementation(async (cards) =>
+      Promise.resolve(cycleRestarted
+        ? cards
+        : cards.filter((card) => !card?.pictureId || !card.pictureId.startsWith('comp-'))));
+
+    try {
+      await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(startNewServingCycle).toHaveBeenCalledTimes(1);
+      expect(startNewServingCycle).toHaveBeenCalledWith('any', undefined);
+      // Post-transition serve uses the deck head and is NON-empty.
+      const renderedPictureIds = mockSwipeableCard.mock.calls.map(([props]) => props.item.pictureId);
+      expect(renderedPictureIds).toContain('comp-1');
+      expect(renderedPictureIds).toContain('comp-2');
+      expect(saveLastImageUuid).toHaveBeenCalledWith(PUBLIC_FEED_END_CURSOR, 'nature', 'any');
+    } finally {
+      filterPlayedCards.mockImplementation((cards) => Promise.resolve(cards));
+    }
+  });
+});
+
+describe('SwipeImage — scoped mount sentinel seam (F1/F2)', () => {
+  const contextValue = {
+    token: 'token',
+    uid: 'waldo@example.com',
+    expiry: '123',
+    access_token: 'access-token',
+    client: 'client-id',
+    userId: '42',
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    isE2EMode.mockReturnValue(false);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    getImageTags.mockResolvedValue({ data: [] });
+    getImageRating.mockResolvedValue({ data: undefined });
+    getE2EHiddenGuessCard.mockResolvedValue(null);
+    buildE2EGuessCardFromPayload.mockImplementation((payload) => (
+      payload ? { listId: 1, pictureId: payload.pictureId, imageFile: payload.uri } : null
+    ));
+    buildE2EGuessCards.mockReturnValue([{ listId: 1, pictureId: 'e2e-guess-card', imageFile: 'file:///e2e.jpg' }]);
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    getLastImageId.mockResolvedValue(0);
+    getLastImageUuid.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  async function flushMount() {
+    for (let i = 0; i < 8; i += 1) {
+      // eslint-disable-next-line no-await-in-loop
+      await flushEffects();
+    }
+  }
+
+  async function renderSwipeImage(startGuessing = jest.fn(), { category, language, scope } = {}) {
+    let renderer;
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={contextValue}>
+          <SwipeImage
+            screenWidth={320}
+            screenHeight={640}
+            startGuessing={startGuessing}
+            category={category}
+            language={language}
+            scope={scope}
+          />
+        </AuthContext.Provider>,
+      );
+
+      await flushMount();
+    });
+
+    return { renderer, startGuessing };
+  }
+
+  it('private mount sentinel write targets the group-scoped key (4-arg scope passed)', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    readGroupFeedCache.mockResolvedValue({ images: [], nextCursor: null });
+    getLastImageUuid.mockResolvedValue('priv-cursor-9');
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    await renderSwipeImage(jest.fn(), {
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      scope,
+    });
+
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith(PRIVATE_FEED_END_CURSOR, 'nature', 'fr', scope);
+  });
+
+  it('public mount sentinel write unchanged (no scope bleed)', async () => {
+    getLocalImages.mockResolvedValue(null);
+    getLastImageUuid.mockResolvedValue('pub-cursor-9');
+    getImages.mockResolvedValue({ isError: false, images: [] });
+
+    await renderSwipeImage(jest.fn(), { category: { id: 'cat-nature', key: 'nature' } });
+
+    expect(getImages).toHaveBeenCalledTimes(2);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith(PUBLIC_FEED_END_CURSOR, 'nature', 'any');
+    expect(saveLastImageUuid.mock.calls[0]).toHaveLength(3);
   });
 });

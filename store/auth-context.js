@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import * as SecureStore from 'expo-secure-store';
 
 import { setUnauthorizedHandler } from "../utils/apiClient";
-import { emptyImageList } from "../utils/storageDatum";
+import { wipePublicGuessStorage } from "../utils/storageDatum";
 import { flush } from "../utils/sessionScoreStore";
 
 export const AuthContext = createContext({
@@ -221,7 +221,7 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function authenticate({token, userId, email, username, isTutorialFinished, scoreId, isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId}) {
-    await emptyImageList();
+    await wipePublicGuessStorage();
 
     setAuthToken(token);
     await SecureStore.setItemAsync('token', token);
@@ -296,7 +296,7 @@ export default function AuthContextProvider({ children }) {
       await SecureStore.deleteItemAsync('activeGroupId');
       await SecureStore.deleteItemAsync('isPrivateMode');
 
-      await emptyImageList();
+      await wipePublicGuessStorage();
 
       await teardownCreatorBilling();
 

@@ -1,5 +1,6 @@
 import { bufferScore, mintGuessId } from './sessionScoreStore';
-import { addPlayedPictureId, removeImageFromList, deleteImageFromStorage } from './storageDatum';
+import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
+import { addPlayedPictureId } from './playedPictureIds';
 import { resolveNextCard } from './nextCardResolver';
 import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
 

@@ -204,7 +204,23 @@ describe('services/groups/groupFeedApi', () => {
     });
 
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
+  });
+
+  it('empty private page persists the PRIVATE_FEED_END_CURSOR under the group scope (public cursor never poisoned)', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [], next_cursor: null },
+    });
+
+    await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'fr',
+    });
+
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
   });
 
   it('Fix 2a: exported PRIVATE_FEED_END_CURSOR sentinel value is stable', () => {

@@ -41,9 +41,17 @@ export interface PersistCardBatchArgs {
   scope?: unknown;
 }
 
+export interface RemoveCardFromGroupDeckArgs {
+  groupId: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  listId: number;
+}
+
 export function fetchCardBatch(args?: FetchCardBatchArgs): Promise<FetchCardBatchResult>;
 // Fix 3: both write boundaries return their persisted result — the merged/
 // normalized deck that callers (SwipeImage.handleData) use as the numbering
 // source of truth.
 export function appendCardBatch(args?: AppendCardBatchArgs): Promise<CardImage[]>;
 export function persistCardBatch(args?: PersistCardBatchArgs): Promise<CardImage[]>;
+export function removeCardFromGroupDeck(args?: RemoveCardFromGroupDeckArgs): Promise<void>;

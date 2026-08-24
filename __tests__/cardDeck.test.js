@@ -25,7 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
 import { clearGroupCategoryExhausted, readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
-import { appendCardBatch, fetchCardBatch, persistCardBatch } from '../services/cardDeck';
+import { appendCardBatch, fetchCardBatch, persistCardBatch, removeCardFromGroupDeck } from '../services/cardDeck';
 
 const realUpdateImageList = jest.requireActual('../utils/storageDatum').updateImageList;
 
@@ -387,6 +387,108 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
   });
 });
 
+describe('removeCardFromGroupDeck (Fix 1 D1 private path)', () => {
+  const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    AsyncStorage.getItem.mockResolvedValue(null);
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+  });
+
+  it('removes only the target listId from the persisted private deck and preserves nextCursor', async () => {
+    readGroupFeedCache.mockResolvedValueOnce({
+      images: [{ listId: 1 }, { listId: 2 }, { listId: 3 }],
+      nextCursor: { page: 2 },
+    });
+
+    await removeCardFromGroupDeck({
+      groupId: 'g-3',
+      categoryId: 7,
+      language: 'fr',
+      listId: 2,
+    });
+
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr' });
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: 7, language: 'fr' },
+      { images: [{ listId: 1 }, { listId: 3 }], nextCursor: { page: 2 } },
+    );
+  });
+
+  it('serializes with appendCardBatch on the same private deck key', async () => {
+    let store = {
+      images: [{ listId: 1 }, { listId: 2 }],
+      nextCursor: 'cursor-1',
+    };
+    let releaseFirstWrite;
+    const firstWriteGate = new Promise((resolve) => {
+      releaseFirstWrite = resolve;
+    });
+    let firstWriteGated = false;
+
+    readGroupFeedCache.mockImplementation(async () => ({
+      images: [...store.images],
+      nextCursor: store.nextCursor,
+    }));
+
+    writeGroupFeedCache.mockImplementation(async (_groupId, _meta, payload) => {
+      if (!firstWriteGated) {
+        firstWriteGated = true;
+        await firstWriteGate;
+      }
+      store = { images: payload.images, nextCursor: payload.nextCursor };
+    });
+
+    const sharedArgs = {
+      categoryKey: 'all',
+      categoryId: 'all',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-lock' },
+    };
+
+    const append = appendCardBatch({ ...sharedArgs, cards: [{ listId: 3 }] });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    const removal = removeCardFromGroupDeck({
+      groupId: 'g-lock',
+      categoryId: 'all',
+      language: 'fr',
+      listId: 1,
+    });
+    await flushMicrotasks();
+    await flushMicrotasks();
+
+    expect(readGroupFeedCache).toHaveBeenCalledTimes(1);
+
+    releaseFirstWrite();
+    await append;
+    await removal;
+
+    expect(store).toEqual({
+      images: [{ listId: 2 }, { listId: 3 }],
+      nextCursor: 'cursor-1',
+    });
+  });
+
+  it('is a no-op when the private cache is missing', async () => {
+    readGroupFeedCache.mockResolvedValueOnce(null);
+
+    await expect(removeCardFromGroupDeck({
+      groupId: 'g-3',
+      categoryId: 7,
+      language: 'fr',
+      listId: 2,
+    })).resolves.toBeUndefined();
+
+    expect(writeGroupFeedCache).not.toHaveBeenCalled();
+  });
+});
+
 describe('exhausted-marker invalidation (Fix 1)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -656,12 +758,13 @@ describe('fetchCardBatch', () => {
     expect(privateFilters).not.toHaveProperty('category_key');
   });
 
-  it('private cursor round-trip: reads the persisted cursor under the private category id namespace', async () => {
-    // Regression: buildFeedFilters omits category_key for private scopes, so
-    // the write path (getImages → fetchPrivateFeedPageForGame) must derive the
-    // cursor namespace from category_id. The READ side here must query the
-    // SAME namespace (the private category id, not 'all') or the private
-    // cursor never round-trips and pagination stalls at page 1.
+  it('private cursor round-trip: reads the persisted cursor under the group-scoped namespace', async () => {
+    // Regression (F1/F2 review fix): buildFeedFilters omits category_key for
+    // private scopes, so the write path (getImages → fetchPrivateFeedPageForGame)
+    // derives the cursor category from category_id and persists under the
+    // group-scoped key. The READ side must query the SAME (categoryKey,
+    // language, scope) tuple or the private cursor never round-trips and
+    // pagination stalls at page 1.
     await fetchCardBatch({
       categoryKey: 'cat-private-uuid',
       categoryId: 'cat-private-uuid',
@@ -670,8 +773,28 @@ describe('fetchCardBatch', () => {
       authContext: { token: 't' },
     });
 
-    expect(getLastImageUuid).toHaveBeenCalledWith('cat-private-uuid', 'fr');
+    expect(getLastImageUuid).toHaveBeenCalledWith('cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-1' });
     expect(getImages.mock.calls[0][2]).toMatchObject({ category_id: 'cat-private-uuid' });
+  });
+
+  it('private sentinel passes through uncoerced (asymmetry: only the PUBLIC sentinel is coerced to a head fetch)', async () => {
+    // The PRIVATE_FEED_END_CURSOR is consumed by fetchPrivateFeedPageForGame's
+    // exhausted short-circuit — cardDeck must NOT coerce it to null the way it
+    // coerces the PUBLIC sentinel (legacy public self-heal). Reading it
+    // uncoerced keeps the sentinel semantics scope-correct.
+    getLastImageUuid.mockResolvedValue('__private_feed_end__');
+
+    await fetchCardBatch({
+      categoryKey: 'cat-private-uuid',
+      categoryId: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-1' },
+      authContext: { token: 't' },
+      // pictureIdOverride intentionally omitted (cursor-mode)
+    });
+
+    expect(getImages.mock.calls[0][0]).toBe('__private_feed_end__');
+    expect(getImages.mock.calls[0]).toHaveLength(3);
   });
 
   it('B2: PUBLIC "all" pseudo-category sends neither category_key nor category_id', async () => {

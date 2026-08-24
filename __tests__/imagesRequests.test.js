@@ -645,7 +645,7 @@ describe('imagesRequests utilities', () => {
     );
     expect(response.isError).toBe(false);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-3' });
   });
 
   it('leaves the request unchanged when no filters are provided (legacy full feed)', async () => {

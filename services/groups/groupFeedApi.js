@@ -188,6 +188,12 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
     return { isError: false, images: [] };
   }
 
+  // Group-scoped cursor namespace (F1/F2 review fix): the private transport
+  // cursor + END sentinel persist under `groupFeed:<gid>:game:<cat>:<lang>:cursor`
+  // via saveLastImageUuid's scope param — never the shared public
+  // `lastImageUuid:*` namespace. Legacy unscoped private keys are dead (one
+  // head-probe degradation after update, then the scoped cursor takes over).
+  const cursorScope = { kind: 'private', groupId };
   const response = await fetchPrivateFeedPage(context, {
     groupId,
     cursor: pictureId || null,
@@ -204,13 +210,13 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
 
   if (rows.length === 0) {
     if (persistCursor) {
-      await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language);
+      await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
     }
     return { isError: false, images: [] };
   }
 
   if (persistCursor) {
-    await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language);
+    await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
   }
 
   const downloaded = await Promise.all(

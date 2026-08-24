@@ -235,7 +235,7 @@ describe('GuessFeedScreen', () => {
     const renderer = await renderScreen(navigation, route);
 
     expect(mockSwipeImage).not.toHaveBeenCalled();
-    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('en');
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('any');
 
     await act(async () => {
       deferredLanguage.resolve('fr');
@@ -250,6 +250,51 @@ describe('GuessFeedScreen', () => {
     dismissSwipeInstructions(renderer);
 
     expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('fr');
+  });
+
+  it("no route language and no stored filter → SwipeImage receives language 'any' (matches GuessPathScreen navigation fallback, I6)", async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: undefined });
+
+    getSessionLanguageFilter.mockResolvedValue(null);
+
+    const renderer = await renderScreen(navigation, route);
+
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('any');
+
+    dismissSwipeInstructions(renderer);
+
+    expect(mockSwipeImage).toHaveBeenCalledTimes(1);
+    expect(mockSwipeImage.mock.calls[0][0].language).toBe('any');
+  });
+
+  it("startGuessing forwards 'any' — never 'en' — when unset", async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: undefined });
+
+    getSessionLanguageFilter.mockResolvedValue(null);
+
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
+
+    const { startGuessing } = mockSwipeImage.mock.calls[0][0];
+
+    await act(async () => {
+      startGuessing({
+        item: {
+          pictureId: 'img-1',
+          touchLocation: { x: 0.5, y: 0.5 },
+        },
+      });
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
+    expect(navigation.navigate).toHaveBeenCalledWith(
+      'GuessScreen',
+      expect.objectContaining({ language: 'any' })
+    );
+    expect(navigation.navigate.mock.calls[0][1].language).not.toBe('en');
   });
 
   it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {

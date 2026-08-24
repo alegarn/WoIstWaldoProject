@@ -17,6 +17,7 @@ import { resolveNextGuessParams } from './handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
 import { warmAllDeckIfNeeded, getInFlightPrefetch, getPrefetchScopeKey } from '../services/cardPrefetcher';
 import { isCategoryExhausted, markCategoryExhausted } from './storageDatum';
+import { startNewServingCycle, ServingScope } from './servingCycle';
 
 export type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
 
@@ -241,6 +242,35 @@ export async function resolveNextCardWithServerFallback({
   if (tier4.ok) {
     next = await resolveNextGuessParams(resolveArgs);
     if (next) return { next, reason: 'ok' };
+
+    // Cycle transition (B1, epoch-bookkept): tier4.ok && !next is the
+    // ALL_EXHAUSTED proof — the server served ≥1 card yet nothing resolves,
+    // i.e. isCycleExhausted(tier4.appended, 0): every servable card sits in
+    // the played-set. startNewServingCycle bumps the cycle epoch and clears
+    // the scope+language played-set + stale cursors/markers ONCE
+    // (cross-category is intended: Tier 4 only fires once the category AND
+    // 'all' are exhausted), so looping 'all' starts a NEW cycle at the deck
+    // head. tier4.ok === false NEVER transitions: TRANSIENT_EMPTY
+    // (network/server) and genuine empty keep the existing failureReasons
+    // flow — no epoch bump, no played-set clear.
+    // Head-cursor args (currentListId: undefined): the fresh deck renumbers
+    // listIds 1..N, and the just-played currentListId can be ≥ the fresh max
+    // (listId wrap at the cycle boundary) — a stale cursor would re-dead-end
+    // the resolve. resolveArgs.currentPictureId exclusion survives via the
+    // spread. The free local re-resolve runs BEFORE any retry: the 'all' deck
+    // retains cross-namespace played cards now servable in the new cycle, at
+    // zero extra roundtrips. Bound: at most ONE extra head fetch per cycle
+    // exhaustion (the single retry below) — never more.
+    await startNewServingCycle(language, scope as ServingScope).catch(() => {});
+    const headCursorArgs = { ...resolveArgs, currentListId: undefined };
+    next = await resolveNextGuessParams(headCursorArgs);
+    if (next) return { next, reason: 'ok' };
+
+    const tier4Retry = await foregroundTopUp(tier4Args, 'all', null);
+    if (tier4Retry.ok) {
+      next = await resolveNextGuessParams(headCursorArgs);
+      if (next) return { next, reason: 'ok' };
+    }
   } else {
     failureReasons.push(tier4.reason);
   }

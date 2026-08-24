@@ -16,7 +16,13 @@ import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { handleOrientation } from '../../utils/orientation';
 
-const DEFAULT_LANGUAGE = 'en';
+// Language namespace contract (I6): an unset filter means NO server filter.
+// GuessPathScreen navigates with NAVIGATION_ANY_LANGUAGE ('any') when no stored
+// pick exists, and resolveServerLanguage (cardDeck.js) strips 'any' at the
+// server boundary — mirroring getSessionLanguageFilter's "unset" sentinel
+// (storageDatum.js). A hard 'en' default here made every unset query hit
+// `WHERE language = 'en'` against fr/null rows → empty feed until manual reload.
+const DEFAULT_LANGUAGE = 'any';
 
 // SwipeImage treats `category` and `language` as optional (defaults to 'all' / 'any').
 // GuessFeedScreen is currently the only caller in the authenticated stack, but we

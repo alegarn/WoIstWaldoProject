@@ -1,11 +1,15 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { File, Paths } from "expo-file-system";
+import { withScopeLock } from "./scopeMutex";
 import {
   readGroupFeedCache,
   markGroupCategoryExhausted,
   isGroupCategoryExhausted,
   clearGroupCategoryExhausted,
+  groupGameCursorKey,
 } from "../services/groups/groupFeedCache";
+import { filterPlayedCards, playedPictureIdsKey, PLAYED_PICTURE_IDS_PREFIX } from "./playedPictureIds";
+import { SERVING_CYCLE_PREFIX } from "./servingCycle";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
@@ -14,23 +18,52 @@ const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
 export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
-const PLAYED_PICTURE_IDS_CAP = 200;
-const PLAYED_PICTURE_IDS_PREFIX = 'playedPictureIds';
+const IMAGE_LIST_KEY_PREFIX = 'imageList:';
+const LAST_IMAGE_UUID_KEY_PREFIX = 'lastImageUuid:';
+const EXHAUSTED_CATEGORY_KEY_PREFIX = 'exhaustedCategory:';
 
 function imageListKey(categoryKey, language) {
-  return `imageList:${categoryKey || 'all'}:${language || 'any'}`;
+  return `${IMAGE_LIST_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
 };
 
 function lastImageUuidKey(categoryKey, language) {
-  return `lastImageUuid:${categoryKey || 'all'}:${language || 'any'}`;
+  return `${LAST_IMAGE_UUID_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
 };
 
 export function exhaustedCategoryKey(categoryKey, language) {
-  return `exhaustedCategory:${categoryKey || 'all'}:${language || 'any'}`;
+  return `${EXHAUSTED_CATEGORY_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
 };
 
 function isPrivateScope(scope) {
   return scope?.kind === 'private' && scope?.groupId;
+}
+
+/**
+ * Build the deck-write lock key for (category, language, scope).
+ *
+ * Despite the legacy `cardDeck:append:` format (kept for compatibility so
+ * in-flight appends and every other deck writer share the SAME key), this
+ * key guards ALL persisted-deck writes:
+ * - append: `appendCardBatch` (services/cardDeck.js)
+ * - removal: `removeImageFromList` (this file) and
+ *   `removeCardFromGroupDeck` (services/cardDeck.js)
+ * - trim: the `getLocalImages` dead-file write-back (this file)
+ *
+ * `withScopeLock` is NON-REENTRANT: never acquire this key inside a section
+ * that already holds it (e.g. `updateImageList` / `readGroupFeedCache` are
+ * lock-free internals called INSIDE held sections).
+ *
+ * @param {{ categoryKey?: string|null, categoryId?: string|number|null, language?: string|null, scope?: { kind?: string, groupId?: string }|null }} args
+ * @returns {string} `cardDeck:append:public:<categoryKey|'all'>:<language|'any'>`
+ *   or `cardDeck:append:private:<groupId>:<categoryId|'all'>:<language|'any'>`.
+ */
+export function deckWriteLockKey({ categoryKey, categoryId, language, scope } = {}) {
+  const lang = language || 'any';
+  if (isPrivateScope(scope)) {
+    const cid = categoryId === 'all' ? undefined : categoryId;
+    return `cardDeck:append:private:${scope.groupId}:${cid ?? 'all'}:${lang}`;
+  }
+  return `cardDeck:append:public:${categoryKey || 'all'}:${lang}`;
 }
 
 /**
@@ -73,68 +106,6 @@ export async function clearExhaustedCategory(categoryKey, language, scope) {
   await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
 };
 
-export function playedPictureIdsKey(language, scope) {
-  return `${PLAYED_PICTURE_IDS_PREFIX}:${isPrivateScope(scope) ? `group:${scope.groupId}` : 'public'}:${language || 'any'}`;
-};
-
-export async function getPlayedPictureIds(language, scope) {
-  const stored = await AsyncStorage.getItem(playedPictureIdsKey(language, scope));
-  if (!stored) {
-    return [];
-  }
-  try {
-    const parsed = JSON.parse(stored);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
-  }
-};
-
-export async function addPlayedPictureId(pictureId, language, scope) {
-  if (!pictureId) {
-    return;
-  }
-  const played = await getPlayedPictureIds(language, scope);
-  if (played.includes(pictureId)) {
-    return;
-  }
-  const next = [...played, pictureId].slice(-PLAYED_PICTURE_IDS_CAP);
-  await AsyncStorage.setItem(playedPictureIdsKey(language, scope), JSON.stringify(next));
-};
-
-export async function filterPlayedCards(cards, language, scope) {
-  if (!Array.isArray(cards)) {
-    return [];
-  }
-  let playedIds;
-  try {
-    playedIds = await getPlayedPictureIds(language, scope);
-  } catch {
-    return cards;
-  }
-  if (playedIds.length === 0) {
-    return cards;
-  }
-  const played = new Set(playedIds);
-  return cards.filter((card) => !card?.pictureId || !played.has(card.pictureId));
-};
-
-async function removeKeysByPrefix(prefix) {
-  const keys = await AsyncStorage.getAllKeys();
-  const target = keys.filter((key) => typeof key === 'string' && key.startsWith(prefix));
-  if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
-  }
-};
-
-export async function clearPlayedPictureIdsForGroup(groupId) {
-  await removeKeysByPrefix(`${PLAYED_PICTURE_IDS_PREFIX}:group:${groupId}:`);
-};
-
-export async function clearAllPrivatePlayedPictureIds() {
-  await removeKeysByPrefix(`${PLAYED_PICTURE_IDS_PREFIX}:group:`);
-};
-
 /**
  * Read the persisted deck for (categoryKey, language) and drop entries whose
  * local image file no longer exists, persisting the trimmed list when needed.
@@ -143,7 +114,8 @@ export async function clearAllPrivatePlayedPictureIds() {
  * @returns {Promise<Array<object>|null>} Viable cards, or null when none stored/unparseable.
  */
 export async function getLocalImages(categoryKey, language) {
-  const stored = await AsyncStorage.getItem(imageListKey(categoryKey, language));
+  const listKey = imageListKey(categoryKey, language);
+  const stored = await AsyncStorage.getItem(listKey);
   if (!stored) {
     return null;
   }
@@ -165,7 +137,37 @@ export async function getLocalImages(categoryKey, language) {
   const viable = images.filter((image) => localImageFileExists(image?.imageFile));
 
   if (viable.length !== images.length) {
-    await AsyncStorage.setItem(imageListKey(categoryKey, language), JSON.stringify(viable));
+    // Review-approved deviation from the plan's wrap-write-only fix: re-read
+    // and re-trim under the lock. Persisting the pre-lock snapshot would
+    // clobber appends committed while we waited for the lock; re-reading the
+    // persisted deck inside the critical section keeps the trim lossless
+    // against concurrent deck writers.
+    return withScopeLock(
+      deckWriteLockKey({ categoryKey, language, scope: null }),
+      async () => {
+        const latestStored = await AsyncStorage.getItem(listKey);
+        if (!latestStored) {
+          return [];
+        }
+
+        let latestImages;
+        try {
+          latestImages = JSON.parse(latestStored);
+        } catch {
+          return [];
+        }
+
+        if (!Array.isArray(latestImages)) {
+          return [];
+        }
+
+        const latestViable = latestImages.filter((image) => localImageFileExists(image?.imageFile));
+        if (latestViable.length !== latestImages.length) {
+          await AsyncStorage.setItem(listKey, JSON.stringify(latestViable));
+        }
+        return latestViable;
+      },
+    );
   }
 
   return viable;
@@ -384,30 +386,60 @@ export async function getLastImageId(categoryKey, language) {
 };
 
 /**
- * Persist the feed cursor (last-served image uuid) for (categoryKey, language).
- * Stored at `lastImageUuid:<categoryKey|'all'>:<language|'any'>`. Callers may
- * write the `PUBLIC_FEED_END_CURSOR` sentinel to mark the public feed as
- * exhausted; readers treat that sentinel as null.
- * @param {string} imageUuid - Cursor value (or PUBLIC_FEED_END_CURSOR sentinel).
+ * Resolve the feed-cursor storage key for (categoryKey, language, scope).
+ * PUBLIC (and legacy no-scope callers) keep the shared
+ * `lastImageUuid:<categoryKey|'all'>:<language|'any'>` shape untouched.
+ * PRIVATE scopes persist under the group-scoped game-cursor key
+ * `groupFeed:<groupId>:game:<categoryKey|'all'>:<language|'any'>:cursor`
+ * (F1/F2 review fix) so the private transport cursor never shares — and never
+ * poisons — the public cursor namespace.
+ */
+function lastImageUuidKeyForScope(categoryKey, language, scope) {
+  if (isPrivateScope(scope)) {
+    return groupGameCursorKey(scope.groupId, categoryKey, language);
+  }
+  return lastImageUuidKey(categoryKey, language);
+}
+
+/**
+ * Persist the feed cursor (last-served image uuid) for (categoryKey, language,
+ * scope). PUBLIC scope stores at `lastImageUuid:<categoryKey|'all'>:<language|'any'>`
+ * (callers may write the `PUBLIC_FEED_END_CURSOR` sentinel there; readers treat
+ * that sentinel as null). PRIVATE scope stores at the group-scoped
+ * `groupFeed:<groupId>:game:<categoryKey|'all'>:<language|'any'>:cursor` key,
+ * where the `PRIVATE_FEED_END_CURSOR` sentinel lives scope-isolated.
+ *
+ * Migration note: pre-fix app versions persisted private cursors/sentinels to
+ * the unscoped `lastImageUuid:*` keys. Those legacy keys are deliberately dead
+ * (no read fallback) — the first scoped read misses, one head probe re-serves,
+ * and the scoped cursor is rewritten. Stale legacy keys age out with the next
+ * dev wipe.
+ *
+ * @param {string} imageUuid - Cursor value (or scope-correct feed-end sentinel).
  * @param {string} categoryKey - Category key ('all' for the global deck).
  * @param {string} language - Language code ('any' when unset).
+ * @param {{ kind?: string, groupId?: string }|null|undefined} [scope] - Private scope object.
  * @returns {Promise<null>}
  */
-export async function saveLastImageUuid(imageUuid, categoryKey, language) {
-  await AsyncStorage.setItem(lastImageUuidKey(categoryKey, language), imageUuid);
+export async function saveLastImageUuid(imageUuid, categoryKey, language, scope) {
+  await AsyncStorage.setItem(lastImageUuidKeyForScope(categoryKey, language, scope), imageUuid);
   return null;
 };
 
 /**
- * Read the persisted feed cursor for (categoryKey, language).
- * Key: `lastImageUuid:<categoryKey|'all'>:<language|'any'>`. May return the
- * `PUBLIC_FEED_END_CURSOR` sentinel; callers MUST treat that as null/exhausted.
+ * Read the persisted feed cursor for (categoryKey, language, scope). Key
+ * shapes mirror saveLastImageUuid (public `lastImageUuid:*`, private
+ * group-scoped `groupFeed:<gid>:game:*:*:cursor`). The public read may return
+ * the `PUBLIC_FEED_END_CURSOR` sentinel; callers MUST treat that sentinel as
+ * null/exhausted. The private read may return the `PRIVATE_FEED_END_CURSOR`
+ * sentinel; its consumer (fetchPrivateFeedPageForGame) treats it as exhausted.
  * @param {string} categoryKey - Category key ('all' for the global deck).
  * @param {string} language - Language code ('any' when unset).
+ * @param {{ kind?: string, groupId?: string }|null|undefined} [scope] - Private scope object.
  * @returns {Promise<string|null>} Stored cursor, sentinel, or null when unset.
  */
-export async function getLastImageUuid(categoryKey, language) {
-  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKey(categoryKey, language));
+export async function getLastImageUuid(categoryKey, language, scope) {
+  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKeyForScope(categoryKey, language, scope));
   return lastImageUuid;
 };
 
@@ -552,6 +584,62 @@ export async function emptyImageList(categoryKey, language) {
   await AsyncStorage.removeItem(playedPictureIdsKey(language, null));
 };
 
+/**
+ * Delete the local cache files referenced by persisted image-list decks.
+ * Silent on unset/empty/corrupt decks — a bad deck must not abort the wipe.
+ * @param {Array<string>} imageListKeys - AsyncStorage keys of persisted decks.
+ * @returns {Promise<void>}
+ */
+async function deleteDeckCacheFiles(imageListKeys) {
+  for (const listKey of imageListKeys) {
+    const localList = await AsyncStorage.getItem(listKey);
+    if (localList === null || localList === '[]') {
+      continue;
+    }
+
+    try {
+      const parsed = JSON.parse(localList);
+      if (!Array.isArray(parsed)) {
+        continue;
+      }
+
+      for (const image of parsed) {
+        await removeFromCache(image?.imageFile);
+      }
+    } catch {
+    }
+  }
+}
+
+/**
+ * Wipe ALL public guess-side storage: delete every persisted deck's local
+ * cache files, then remove every public deck/tracking/cursor key plus every
+ * serving-cycle epoch key (public and group — epochs are session state, not
+ * per-group content). Private group content (groupFeed:*, groupFeedExhausted:*,
+ * playedPictureIds:group:*) is deliberately untouched — it is scoped per group,
+ * not per session.
+ * @returns {Promise<void>}
+ */
+export async function wipePublicGuessStorage() {
+  const keys = await AsyncStorage.getAllKeys();
+  await deleteDeckCacheFiles(keys.filter((key) => typeof key === 'string' && key.startsWith(IMAGE_LIST_KEY_PREFIX)));
+
+  const removalPrefixes = [
+    IMAGE_LIST_KEY_PREFIX,
+    LAST_IMAGE_UUID_KEY_PREFIX,
+    EXHAUSTED_CATEGORY_KEY_PREFIX,
+    `${PLAYED_PICTURE_IDS_PREFIX}:public:`,
+    `${SERVING_CYCLE_PREFIX}:`,
+  ];
+  const target = keys.filter((key) =>
+    typeof key === 'string' && removalPrefixes.some((prefix) => key.startsWith(prefix))
+  );
+
+  if (target.length > 0) {
+    await AsyncStorage.multiRemove(target);
+  }
+}
+
 export async function storeImageList(imageList, categoryKey, language) {
   await AsyncStorage.setItem(imageListKey(categoryKey, language), JSON.stringify(imageList));
 };
@@ -652,15 +740,20 @@ export async function updateImageList(updatedImageList, categoryKey, language) {
  * @returns {Promise<null>}
  */
 export async function removeImageFromList(listId, categoryKey, language) {
-  const listKey = imageListKey(categoryKey, language);
-  const imageList = await AsyncStorage.getItem(listKey);
-  if (imageList === null || imageList === undefined) {
-    return null;
-  };
-  const jsonImageList = JSON.parse(imageList);
-  const updatedImageList = removeObjectById(jsonImageList, listId);
-  await AsyncStorage.setItem(listKey, JSON.stringify(updatedImageList));
-  return null;
+  return withScopeLock(
+    deckWriteLockKey({ categoryKey, language, scope: null }),
+    async () => {
+      const listKey = imageListKey(categoryKey, language);
+      const imageList = await AsyncStorage.getItem(listKey);
+      if (imageList === null || imageList === undefined) {
+        return null;
+      };
+      const jsonImageList = JSON.parse(imageList);
+      const updatedImageList = removeObjectById(jsonImageList, listId);
+      await AsyncStorage.setItem(listKey, JSON.stringify(updatedImageList));
+      return null;
+    },
+  );
 };
 
 export async function deleteImageFromStorage(imageFilePath) {

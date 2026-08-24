@@ -430,10 +430,13 @@ export async function getImages(pictureId, context, filters = {}, opts = {}) {
 
   if (isPrivateScope(filters?.scope)) {
     // Private cursor namespace: PRIVATE filters carry no category_key (server
-    // contract stays category_id), so derive the LOCAL cursor/exhausted
-    // namespace from the category id (or 'all'). cardDeck.fetchCardBatch reads
-    // the cursor with the same categoryKey value, so the private cursor
-    // round-trips instead of falling back to the shared public 'all' key.
+    // contract stays category_id), so derive the LOCAL cursor category segment
+    // from the category id (or 'all'). cardDeck.fetchCardBatch reads the
+    // cursor with the same categoryKey value, so the private cursor
+    // round-trips. Persistence itself is GROUP-SCOPED (F1/F2):
+    // fetchPrivateFeedPageForGame threads { kind: 'private', groupId } into
+    // saveLastImageUuid, landing at `groupFeed:<gid>:game:<cat>:<lang>:cursor`
+    // — never the shared public `lastImageUuid:*` namespace.
     return fetchPrivateFeedPageForGame(pictureId, context, {
       groupId: filters.scope.groupId,
       categoryId: filters?.category_id,
