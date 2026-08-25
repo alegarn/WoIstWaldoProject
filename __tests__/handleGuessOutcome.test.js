@@ -1,6 +1,7 @@
 import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
 import { bufferScore, mintGuessId } from '../utils/sessionScoreStore';
 import { removeImageFromList, deleteImageFromStorage } from '../utils/storageDatum';
+import { addPlayedPictureId } from '../utils/playedPictureIds';
 
 jest.mock('../utils/sessionScoreStore', () => ({
   bufferScore: jest.fn(),
@@ -9,6 +10,9 @@ jest.mock('../utils/sessionScoreStore', () => ({
 jest.mock('../utils/storageDatum', () => ({
   removeImageFromList: jest.fn().mockResolvedValue(),
   deleteImageFromStorage: jest.fn().mockResolvedValue(),
+}));
+jest.mock('../utils/playedPictureIds', () => ({
+  addPlayedPictureId: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../utils/nextCardResolver', () => ({ resolveNextCard: jest.fn() }));
 
@@ -82,5 +86,15 @@ describe('applySuccessSideEffects', () => {
     const arg = bufferScore.mock.calls[0][0];
     expect(arg).toEqual(expect.objectContaining({ streak: 5 }));
     expect('streakMultiplier' in arg).toBe(false);
+  });
+
+  it('(l) win records the played pictureId in the played-set (fire-and-forget, failure kept silent)', async () => {
+    addPlayedPictureId.mockRejectedValueOnce(new Error('played write failed'));
+
+    await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+
+    expect(addPlayedPictureId).toHaveBeenCalledWith('pic-1', 'en', { kind: 'public' });
+    expect(removeImageFromList).toHaveBeenCalledWith('list-1', 'animals', 'en');
+    expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///img.png');
   });
 });

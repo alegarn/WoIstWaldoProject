@@ -14,9 +14,10 @@
 // category, the 'all' cross-fallback is also empty).
 
 import { resolveNextGuessParams } from './handleGuessOutcome';
-import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
+import { fetchCardBatch, appendCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
 import { warmAllDeckIfNeeded, getInFlightPrefetch, getPrefetchScopeKey } from '../services/cardPrefetcher';
 import { isCategoryExhausted, markCategoryExhausted } from './storageDatum';
+import { startNewServingCycle, ServingScope } from './servingCycle';
 
 export type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
 
@@ -241,6 +242,62 @@ export async function resolveNextCardWithServerFallback({
   if (tier4.ok) {
     next = await resolveNextGuessParams(resolveArgs);
     if (next) return { next, reason: 'ok' };
+
+    // Probe (Step 3, Bug 1): tier4.ok && !next only proves that ONE
+    // played-filtered HEAD batch of 'all' resolved to nothing — NOT
+    // whole-pool exhaustion (the head batch is the oldest N rows; rows N+1+
+    // may still be unplayed). probeAllPoolForUnplayed pages the 'all' cursor
+    // chain forward to a sound verdict:
+    // - 'unplayed': the probe appended ≥1 unplayed card to the 'all' deck —
+    //   the free LOCAL re-resolve below serves it with NO cycle transition
+    //   (rows N+1+ now serve at the category→'all' handoff; kills the Bug 1
+    //   premature played-set wipe that re-served validated cards).
+    // - 'exhausted': pool-global proof — the probe drained the 'all' cursor
+    //   chain to a server-empty batch. Only then does the CYCLE_TRANSITION
+    //   fire (startNewServingCycle: epoch bump + played-set/cursor/marker
+    //   clear ONCE, cross-category by design), so looping 'all' starts a NEW
+    //   cycle at the deck head.
+    // - 'indeterminate': transient failure or probe cap — NEVER transitions
+    //   (I7); the typed null result carries the accumulated reason.
+    // excludePictureId: the just-won card is not yet in the played-set at
+    // advance time, so it is excluded from the probe's unplayed check only.
+    const probe = await probeAllPoolForUnplayed({
+      language,
+      scope,
+      authContext,
+      excludePictureId: currentPictureId,
+    });
+
+    if (probe?.status === 'unplayed') {
+      // NO transition — the probe just appended unplayed cards beyond the
+      // played head batch; the free local re-resolve serves them.
+      next = await resolveNextGuessParams(resolveArgs);
+      if (next) return { next, reason: 'ok' };
+    } else if (probe?.status === 'exhausted') {
+      // Cycle transition (B1, epoch-bookkept): the proof is now POOL-GLOBAL
+      // (the probe drained the 'all' cursor chain to server-empty), not
+      // head-batch-local. Head-cursor args (currentListId: undefined): the
+      // fresh deck renumbers listIds 1..N, and the just-played currentListId
+      // can be ≥ the fresh max (listId wrap at the cycle boundary) — a stale
+      // cursor would re-dead-end the resolve. resolveArgs.currentPictureId
+      // exclusion survives via the spread. The free local re-resolve runs
+      // BEFORE any retry: the 'all' deck retains cross-namespace played cards
+      // now servable in the new cycle, at zero extra roundtrips. Bound: at
+      // most ONE extra head fetch per cycle exhaustion (the single retry
+      // below) — never more.
+      await startNewServingCycle(language, scope as ServingScope).catch(() => {});
+      const headCursorArgs = { ...resolveArgs, currentListId: undefined };
+      next = await resolveNextGuessParams(headCursorArgs);
+      if (next) return { next, reason: 'ok' };
+
+      const tier4Retry = await foregroundTopUp(tier4Args, 'all', null);
+      if (tier4Retry.ok) {
+        next = await resolveNextGuessParams(headCursorArgs);
+        if (next) return { next, reason: 'ok' };
+      }
+    } else if (probe?.status === 'indeterminate') {
+      failureReasons.push((probe.reason ?? 'server') as FailureReason);
+    }
   } else {
     failureReasons.push(tier4.reason);
   }

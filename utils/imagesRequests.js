@@ -415,23 +415,34 @@ async function downloadImageBatch(imagesInfosData, token) {
  *   previous page, or `null` for the first page.
  * @param {Object}      context   Auth context (forwarded to `getBackendHeaders`).
  * @param {Object}      [filters] Optional `{ category_id, language, category_key, scope }`.
+ * @param {Object}      [opts]    Optional `{ persistCursor }` — transport flag;
+ *   `false` suppresses every `saveLastImageUuid` cursor write (head-replay
+ *   guard, Fix 2a). Defaults to `true` (cursor advances as before).
  * @returns {Promise<GetImagesResult>}
  */
-export async function getImages(pictureId, context, filters = {}) {
+// SRP tradeoff (Fix 2a, plan §2.5): `persistCursor` is a transport-persistence
+// concern riding this request function. Splitting cursor persistence out of
+// getImages was reviewed and deferred — the flag stays until that refactor.
+export async function getImages(pictureId, context, filters = {}, opts = {}) {
   console.log("getImages");
   console.log("getImages pictureId", pictureId);
+  const { persistCursor = true } = opts;
 
   if (isPrivateScope(filters?.scope)) {
     // Private cursor namespace: PRIVATE filters carry no category_key (server
-    // contract stays category_id), so derive the LOCAL cursor/exhausted
-    // namespace from the category id (or 'all'). cardDeck.fetchCardBatch reads
-    // the cursor with the same categoryKey value, so the private cursor
-    // round-trips instead of falling back to the shared public 'all' key.
+    // contract stays category_id), so derive the LOCAL cursor category segment
+    // from the category id (or 'all'). cardDeck.fetchCardBatch reads the
+    // cursor with the same categoryKey value, so the private cursor
+    // round-trips. Persistence itself is GROUP-SCOPED (F1/F2):
+    // fetchPrivateFeedPageForGame threads { kind: 'private', groupId } into
+    // saveLastImageUuid, landing at `groupFeed:<gid>:game:<cat>:<lang>:cursor`
+    // — never the shared public `lastImageUuid:*` namespace.
     return fetchPrivateFeedPageForGame(pictureId, context, {
       groupId: filters.scope.groupId,
       categoryId: filters?.category_id,
       language: filters?.language,
       categoryKey: filters?.category_key ?? filters?.category_id ?? 'all',
+      persistCursor,
     });
   }
 
@@ -473,7 +484,9 @@ export async function getImages(pictureId, context, filters = {}) {
     const { images, sawNetworkFailure } = await downloadImageBatch(imagesInfosData, token);
 
     if (images.length > 0) {
-      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+      if (persistCursor) {
+        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+      }
       return { isError: false, images: images };
     }
 
@@ -486,7 +499,9 @@ export async function getImages(pictureId, context, filters = {}) {
       };
     }
 
-    await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+    if (persistCursor) {
+      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+    }
     skippedBrokenBatches += 1;
     nextPictureId = lastBatchPictureId;
   }

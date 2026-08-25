@@ -190,9 +190,7 @@ export async function prefetchIfLow({
           await markCategoryExhausted(categoryKey, language, scope).catch(() => {});
         }
       } catch (e) {
-        if (__DEV__) {
-          console.warn('[cardPrefetcher] prefetch failed', dk, e);
-        }
+        console.warn('[cardPrefetcher] prefetch failed', dk, e);
       }
     }
 
@@ -267,7 +265,6 @@ export async function warmAllDeckIfNeeded({
         language,
         scope,
         authContext,
-        pictureIdOverride: null,
       });
       if (r && !r.isError && r.images?.length) {
         // T2.6 defense-in-depth: normalize before append (aligns with T1.9).
@@ -280,9 +277,7 @@ export async function warmAllDeckIfNeeded({
         });
       }
     } catch (e) {
-      if (__DEV__) {
-        console.warn('[cardPrefetcher] warm-all failed', wk, e);
-      }
+      console.warn('[cardPrefetcher] warm-all failed', wk, e);
     } finally {
       allWarming.delete(wk);
     }

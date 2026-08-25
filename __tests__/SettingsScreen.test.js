@@ -40,6 +40,11 @@ jest.mock('../utils/auth', () => ({
 jest.mock('../utils/storageDatum', () => ({
   getPreferredLanguage: jest.fn(),
   savePreferredLanguage: jest.fn(),
+  wipePublicGuessStorage: jest.fn(),
+}));
+
+jest.mock('../utils/servingCycle', () => ({
+  resetServingCycles: jest.fn(),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -57,7 +62,8 @@ import { act, create } from 'react-test-renderer';
 import SettingsScreen from '../screens/SettingsScreen';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem, deleteAccount, updateUser } from '../utils/auth';
-import { getPreferredLanguage, savePreferredLanguage } from '../utils/storageDatum';
+import { getPreferredLanguage, savePreferredLanguage, wipePublicGuessStorage } from '../utils/storageDatum';
+import { resetServingCycles } from '../utils/servingCycle';
 
 describe('SettingsScreen', () => {
   const contextValue = {
@@ -82,6 +88,8 @@ describe('SettingsScreen', () => {
     });
     getPreferredLanguage.mockResolvedValue('en');
     savePreferredLanguage.mockResolvedValue(undefined);
+    wipePublicGuessStorage.mockResolvedValue(undefined);
+    resetServingCycles.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -283,5 +291,34 @@ describe('SettingsScreen', () => {
 
     const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
     expect(testIDs).not.toContain('settings.button.view-plans');
+  });
+
+  it('dev reset action calls wipePublicGuessStorage and resetServingCycles and shows success alert', async () => {
+    await renderScreen();
+
+    await act(async () => {
+      getButtonProps('settings.button.reset-guess-serving').onPress();
+      await flushEffects();
+    });
+
+    expect(wipePublicGuessStorage).toHaveBeenCalledTimes(1);
+    expect(resetServingCycles).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Guess serving reset',
+      'Serving state cleared. Return to the category list and start fresh.'
+    );
+  });
+
+  it('action failure shows error alert, no crash', async () => {
+    wipePublicGuessStorage.mockRejectedValue(new Error('storage exploded'));
+
+    await renderScreen();
+
+    await act(async () => {
+      getButtonProps('settings.button.reset-guess-serving').onPress();
+      await flushEffects();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith('Reset failed', 'storage exploded');
   });
 });

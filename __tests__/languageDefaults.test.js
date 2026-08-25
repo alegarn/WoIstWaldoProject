@@ -51,3 +51,29 @@ describe('resolveDefaultLanguage', () => {
     expect(source).not.toMatch(/react-native-localize/);
   });
 });
+
+describe('guess screens language namespace', () => {
+  function readStringConstant(relativePath, name) {
+    const sourcePath = resolve(__dirname, '..', ...relativePath.split('/'));
+    const source = readFileSync(sourcePath, 'utf8');
+    const match = source.match(new RegExp(`const\\s+${name}\\s*=\\s*'([^']+)'`));
+
+    expect(match).toBeDefined();
+    return match[1];
+  }
+
+  it("feed-screen default language === path-screen navigation fallback ('any')", () => {
+    const feedDefault = readStringConstant(
+      'screens/GuessScreens/GuessFeedScreen.js',
+      'DEFAULT_LANGUAGE'
+    );
+    const pathFallback = readStringConstant(
+      'screens/GuessScreens/GuessPathScreen.js',
+      'NAVIGATION_ANY_LANGUAGE'
+    );
+
+    expect(feedDefault).toBe('any');
+    expect(pathFallback).toBe('any');
+    expect(feedDefault).toBe(pathFallback);
+  });
+});

@@ -12,6 +12,18 @@
 
 import type { CardImage } from '../services/cardDeck';
 
+export interface DeckWriteLockScope {
+  kind?: string;
+  groupId?: string;
+}
+
+export interface DeckWriteLockKeyArgs {
+  categoryKey?: string | null;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: DeckWriteLockScope | null;
+}
+
 export interface RemainingDeckCategory {
   key: string;
   id?: string | number;
@@ -32,7 +44,14 @@ export interface ScopeDeckCountArgs {
 
 export function getRemainingDeckCount(args?: RemainingDeckCountArgs): Promise<number>;
 export function getDeckCountForScope(args?: ScopeDeckCountArgs): Promise<number>;
+export function deckWriteLockKey(args?: DeckWriteLockKeyArgs): string;
+// Guarantee every card has a finite, UNIQUE listId: assigns ids for
+// missing/non-finite listIds AND reassigns later duplicates past the deck's
+// pre-pass max. Healthy decks (no missing, no duplicate finite ids) return
+// the input array by identity.
 export function normalizeListIds(cards: CardImage[]): CardImage[];
+export function removeImageFromList(listId: number, categoryKey?: string | null, language?: string | null): Promise<null>;
+export function wipePublicGuessStorage(): Promise<void>;
 
 export interface NextImagesForScopeArgs {
   category?: { key?: string; id?: string | number };
@@ -54,3 +73,4 @@ export function exhaustedCategoryKey(categoryKey: string | null | undefined, lan
 export function markCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;
 export function isCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<boolean>;
 export function clearExhaustedCategory(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;
+

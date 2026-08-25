@@ -109,6 +109,7 @@ jest.mock('../utils/storageDatum', () => ({
   saveSessionLanguageFilter: jest.fn(),
   emptyImageList: jest.fn().mockResolvedValue(undefined),
   getNextImagesForScope: jest.fn().mockResolvedValue([]),
+  wipePublicGuessStorage: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../utils/guessNavigation', () => ({

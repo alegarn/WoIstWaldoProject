@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
+import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
 
 const PREFIX = 'groupFeed';
 const EXHAUSTED_PREFIX = 'groupFeedExhausted';
@@ -12,11 +13,22 @@ function groupFeedCursorKey(groupId, categoryKey, language) {
   return `${groupFeedListKey(groupId, categoryKey, language)}:cursor`;
 }
 
+/**
+ * Game-path TRANSPORT cursor key (private serving cursor, F1/F2 review fix).
+ * Distinct from groupFeedCursorKey (deck-cache `{nextCursor}` JSON written by
+ * writeGroupFeedCache) via the `game:` category-segment marker, and shaped to
+ * match the servingCycle group-branch clear (`groupFeed:<gid>:*:<lang>:cursor`)
+ * so a cycle transition wipes it together with the other group cursors.
+ */
+function groupGameCursorKey(groupId, categoryKey, language) {
+  return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${language || 'any'}:cursor`;
+}
+
 function groupFeedExhaustedKey(groupId, categoryKey, language) {
   return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
 }
 
-export { groupFeedListKey, groupFeedCursorKey, groupFeedExhaustedKey };
+export { groupFeedListKey, groupFeedCursorKey, groupGameCursorKey, groupFeedExhaustedKey };
 
 function localFileExists(uri) {
   try {
@@ -97,6 +109,8 @@ export async function clearGroupFeedCache(groupId) {
   if (target.length > 0) {
     await AsyncStorage.multiRemove(target);
   }
+
+  await clearPlayedPictureIdsForGroup(groupId);
 }
 
 export async function clearAllGroupFeedCaches() {
@@ -150,6 +164,7 @@ function isPrivateCacheUri(uri) {
 export async function purgeAllPrivateCaches() {
   await clearAllGroupFeedCaches();
   await clearAllGroupFeedExhaustedMarkers();
+  await clearAllPrivatePlayedPictureIds();
 
   try {
     Paths.cache.create({ idempotent: true, intermediates: true });

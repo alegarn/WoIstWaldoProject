@@ -9,7 +9,8 @@ import { GlobalStyle } from '../constants/theme';
 import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
 import { checkSecureStoreItem } from '../utils/auth';
-import { getPreferredLanguage, savePreferredLanguage } from '../utils/storageDatum';
+import { getPreferredLanguage, savePreferredLanguage, wipePublicGuessStorage } from '../utils/storageDatum';
+import { resetServingCycles } from '../utils/servingCycle';
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
@@ -118,6 +119,19 @@ const SettingsScreen = ({ navigation }) => {
       'Preferred language saved!',
       `Your preferred language for new enigmas is now: ${code}`
     );
+  };
+
+  const devResetGuessServing = async () => {
+    try {
+      await wipePublicGuessStorage();
+      await resetServingCycles();
+      Alert.alert(
+        'Guess serving reset',
+        'Serving state cleared. Return to the category list and start fresh.'
+      );
+    } catch (error) {
+      Alert.alert('Reset failed', `${error?.message ?? 'Unknown error'}`);
+    }
   };
 
   const handleChangePassword = async () => {
@@ -340,6 +354,21 @@ const SettingsScreen = ({ navigation }) => {
               )}
               </SettingsSection>
             </View>
+
+            {__DEV__ && (
+              <View style={styles.section}>
+                <SettingsSection title="Developer">
+                  <Button
+                    accessibilityLabel="Reset guess serving (dev)"
+                    onPress={() => devResetGuessServing()}
+                    style={styles.button}
+                    testID="settings.button.reset-guess-serving"
+                  >
+                    Reset guess serving (dev)
+                  </Button>
+                </SettingsSection>
+              </View>
+            )}
 
             <View style={styles.dangerZoneContainer}>
               <Text style={styles.dangerZoneText}>Danger Zone</Text>

@@ -48,7 +48,9 @@ jest.mock('../../utils/auth', () => ({
 
 import axios from 'axios';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';
+import { saveLastImageUuid } from '../../utils/storageDatum';
 import {
+  PRIVATE_FEED_END_CURSOR,
   fetchPrivateFeedPage,
   fetchPrivateFeedPageForGame,
   downloadPrivateImage,
@@ -158,6 +160,71 @@ describe('services/groups/groupFeedApi', () => {
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
     expect(response.images[0].imageFile).toEqual(expect.stringContaining('img-1'));
+  });
+
+  it('Fix 2a (j): private success with persistCursor:false → no cursor save (head replay must not rewind)', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'Waldo' }], next_cursor: 'cursor-2' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vG5ZQ==' });
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'fr',
+      persistCursor: false,
+    });
+
+    expect(response.isError).toBe(false);
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('Fix 2a (k): default (persistCursor true) saves the nextCursor on private success', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'Waldo' }], next_cursor: 'cursor-2' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vG5ZQ==' });
+
+    await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'fr',
+    });
+
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
+  });
+
+  it('empty private page persists the PRIVATE_FEED_END_CURSOR under the group scope (public cursor never poisoned)', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [], next_cursor: null },
+    });
+
+    await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'fr',
+    });
+
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
+  });
+
+  it('Fix 2a: exported PRIVATE_FEED_END_CURSOR sentinel value is stable', () => {
+    expect(PRIVATE_FEED_END_CURSOR).toBe('__private_feed_end__');
   });
 
   it('downloadPrivateImage requests an S3 presigned URL as arraybuffer and returns a base64 data URL', async () => {

@@ -2,24 +2,36 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
+  getAllKeys: jest.fn(),
+  multiRemove: jest.fn(),
 }));
 
-jest.mock('../services/groups/groupFeedCache', () => ({
-  readGroupFeedCache: jest.fn(),
-  markGroupCategoryExhausted: jest.fn(),
-  isGroupCategoryExhausted: jest.fn(),
-  clearGroupCategoryExhausted: jest.fn(),
+jest.mock('../services/groups/groupFeedCache', () => {
+  const actual = jest.requireActual('../services/groups/groupFeedCache');
+  return {
+    ...actual,
+    readGroupFeedCache: jest.fn(),
+    writeGroupFeedCache: jest.fn(),
+    markGroupCategoryExhausted: jest.fn(),
+    isGroupCategoryExhausted: jest.fn(),
+    clearGroupCategoryExhausted: jest.fn(),
+  };
+});
+
+jest.mock('../utils/imagesRequests', () => ({
+  getImages: jest.fn(),
 }));
 
 const mockDelete = jest.fn();
 let mockFileExists = true;
+let mockFileExistsByUri = null;
 
 jest.mock('expo-file-system', () => {
   const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
     const baseUri = typeof firstArg === 'string' ? firstArg : firstArg?.uri;
 
     this.uri = secondArg ? `${baseUri}${secondArg}` : baseUri;
-    this.exists = mockFileExists;
+    this.exists = mockFileExistsByUri ? !!mockFileExistsByUri[this.uri] : mockFileExists;
     this.delete = mockDelete;
   });
 
@@ -40,8 +52,10 @@ import { readGroupFeedCache, markGroupCategoryExhausted, isGroupCategoryExhauste
 import {
   clearE2EHiddenGuessCard,
   clearExhaustedCategory,
+  clearLastImageUuid,
   deleteImageFromStorage,
   emptyImageList,
+  deckWriteLockKey,
   exhaustedCategoryKey,
   getDeckCountForScope,
   getE2EHiddenGuessCard,
@@ -58,6 +72,7 @@ import {
   getUserTags,
   isCategoryExhausted,
   markCategoryExhausted,
+  normalizeListIds,
   removeImageFromList,
   saveE2EHiddenGuessCard,
   saveLastImageUuid,
@@ -67,15 +82,20 @@ import {
   setOnboardingCompleted,
   storeImageList,
   updateImageList,
+  wipePublicGuessStorage,
 } from '../utils/storageDatum';
+import { appendCardBatch } from '../services/cardDeck';
 
 describe('storageDatum utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockDelete.mockReset();
     mockFileExists = true;
+    mockFileExistsByUri = null;
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
+    AsyncStorage.getAllKeys.mockResolvedValue([]);
+    AsyncStorage.multiRemove.mockResolvedValue(undefined);
     readGroupFeedCache.mockReset();
     markGroupCategoryExhausted.mockReset();
     isGroupCategoryExhausted.mockReset();
@@ -95,10 +115,11 @@ describe('storageDatum utilities', () => {
 
   it('prunes entries whose cached image file no longer exists and re-stores the trimmed list', async () => {
     mockFileExists = false;
-    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+    const stored = JSON.stringify([
       { listId: 1, imageFile: 'file:///cache/gone.jpg' },
       { listId: 2, imageFile: 'file:///cache/also-gone.jpg' },
-    ]));
+    ]);
+    AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:all:any' ? stored : null));
 
     const result = await getLocalImages('all', 'any');
 
@@ -125,6 +146,47 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce('uuid-1');
     expect(await getLastImageUuid()).toBe('uuid-1');
+  });
+
+  it('clearLastImageUuid removes the scoped cursor key (public + private)', async () => {
+    await clearLastImageUuid('all', 'fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr');
+
+    await clearLastImageUuid('all', 'fr', { kind: 'private', groupId: 'g-9' });
+    expect(AsyncStorage.removeItem).toHaveBeenLastCalledWith('groupFeed:g-9:game:all:fr:cursor');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+  });
+
+  it('private game-path cursor round-trip persists under the groupFeed-scoped key, not lastImageUuid', async () => {
+    const scope = { kind: 'private', groupId: 'g-9' };
+
+    await saveLastImageUuid('cursor-42', 'cat-uuid-7', 'fr', scope);
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:cursor', 'cursor-42');
+
+    await saveLastImageUuid('cursor-a', undefined, undefined, { kind: 'private', groupId: 'gA' });
+    expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('groupFeed:gA:game:all:any:cursor', 'cursor-a');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('cursor-42');
+    expect(await getLastImageUuid('cat-uuid-7', 'fr', scope)).toBe('cursor-42');
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:cursor');
+  });
+
+  it('private END sentinel lands in the group-scoped key; the public all cursor stays untouched (no poisoning)', async () => {
+    const scope = { kind: 'private', groupId: 'g-9' };
+
+    await saveLastImageUuid('__private_feed_end__', 'all', 'fr', scope);
+    expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:all:fr:cursor', '__private_feed_end__');
+
+    // Asymmetry preserved: the PUBLIC 'all' cursor read must not see the
+    // private sentinel (pre-fix the sentinel was written to
+    // lastImageUuid:all:<lang> and poisoned the public feed cursor).
+    AsyncStorage.getItem.mockImplementation(async (key) => (
+      key === 'groupFeed:g-9:game:all:fr:cursor' ? '__private_feed_end__' : null
+    ));
+    expect(await getLastImageUuid('all', 'fr')).toBeNull();
+    expect(await getLastImageUuid('all', 'fr', scope)).toBe('__private_feed_end__');
   });
 
   it('round-trips the session language filter and returns null when unset', async () => {
@@ -200,19 +262,104 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('e2eHiddenGuessCard');
   });
 
-  it('empties the stored image list, clears cache files, and removes tracking keys', async () => {
+  it('empties the stored image list for one tuple, clears cache files, and removes exact tracking keys', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
       { imageFile: 'file:///cache/a.jpg' },
       { imageFile: 'file:///cache/b.jpg' },
     ]));
 
-    await emptyImageList();
+    await emptyImageList('city', 'fr');
 
     expect(File).toHaveBeenCalledWith('file:///cache/a.jpg');
     expect(File).toHaveBeenCalledWith('file:///cache/b.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList:all:any');
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:any');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList:city:fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:city:fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
+  });
+
+  it('wipes public guess storage across namespaces and deletes cached deck files', async () => {
+    AsyncStorage.getAllKeys.mockResolvedValue([
+      'imageList:interior:en',
+      'imageList:city:fr',
+      'lastImageUuid:interior:en',
+      'lastImageUuid:private-category:en',
+      'exhaustedCategory:city:fr',
+      'playedPictureIds:public:en',
+      'playedPictureIds:public:any',
+      'groupFeed:g1:all:any',
+      'groupFeedExhausted:g1:city:fr',
+      'playedPictureIds:group:g1:en',
+    ]);
+    AsyncStorage.getItem.mockImplementation(async (key) => {
+      if (key === 'imageList:interior:en') {
+        return JSON.stringify([
+          { imageFile: 'file:///cache/interior-a.jpg' },
+          { imageFile: 'file:///cache/interior-b.jpg' },
+        ]);
+      }
+      if (key === 'imageList:city:fr') {
+        return JSON.stringify([{ imageFile: 'file:///cache/city-a.jpg' }]);
+      }
+      return null;
+    });
+
+    await wipePublicGuessStorage();
+
+    expect(File).toHaveBeenCalledWith('file:///cache/interior-a.jpg');
+    expect(File).toHaveBeenCalledWith('file:///cache/interior-b.jpg');
+    expect(File).toHaveBeenCalledWith('file:///cache/city-a.jpg');
+    expect(mockDelete).toHaveBeenCalledTimes(3);
+    expect(AsyncStorage.multiRemove).toHaveBeenCalledWith(expect.arrayContaining([
+      'imageList:interior:en',
+      'imageList:city:fr',
+      'lastImageUuid:interior:en',
+      'lastImageUuid:private-category:en',
+      'exhaustedCategory:city:fr',
+      'playedPictureIds:public:en',
+      'playedPictureIds:public:any',
+    ]));
+    const removedKeys = AsyncStorage.multiRemove.mock.calls[0][0];
+    expect(removedKeys).not.toContain('groupFeed:g1:all:any');
+    expect(removedKeys).not.toContain('groupFeedExhausted:g1:city:fr');
+    expect(removedKeys).not.toContain('playedPictureIds:group:g1:en');
+  });
+
+  it('wipePublicGuessStorage removes servingCycle: keys (public and group)', async () => {
+    AsyncStorage.getAllKeys.mockResolvedValue([
+      'servingCycle:public:fr',
+      'servingCycle:public:any',
+      'servingCycle:group:g1:fr',
+    ]);
+
+    await wipePublicGuessStorage();
+
+    expect(AsyncStorage.multiRemove).toHaveBeenCalledTimes(1);
+    const removedKeys = AsyncStorage.multiRemove.mock.calls[0][0];
+    expect(removedKeys).toEqual(
+      expect.arrayContaining([
+        'servingCycle:public:fr',
+        'servingCycle:public:any',
+        'servingCycle:group:g1:fr',
+      ]),
+    );
+  });
+
+  it('wipe leaves group deck/played keys untouched (existing pin stays)', async () => {
+    AsyncStorage.getAllKeys.mockResolvedValue([
+      'groupFeed:g1:all:any',
+      'groupFeedExhausted:g1:city:fr',
+      'playedPictureIds:group:g1:en',
+      'servingCycle:group:g1:fr',
+    ]);
+
+    await wipePublicGuessStorage();
+
+    const removedKeys = AsyncStorage.multiRemove.mock.calls[0][0];
+    expect(removedKeys).not.toContain('groupFeed:g1:all:any');
+    expect(removedKeys).not.toContain('groupFeedExhausted:g1:city:fr');
+    expect(removedKeys).not.toContain('playedPictureIds:group:g1:en');
   });
 
   it('appends new images and removes entries by list id', async () => {
@@ -825,6 +972,292 @@ describe('storageDatum utilities', () => {
       await emptyImageList('city', 'fr');
 
       expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    });
+  });
+
+  describe('normalizeListIds collision repair (Fix 3)', () => {
+    it('(a) reassigns LATER duplicate finite ids beyond the deck max, order preserved', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 1 },
+        { pictureId: 'b', listId: 2 },
+        { pictureId: 'c', listId: 1 },
+        { pictureId: 'd', listId: 2 },
+      ]);
+
+      expect(result.map((c) => [c.pictureId, c.listId])).toEqual([
+        ['a', 1],
+        ['b', 2],
+        ['c', 3],
+        ['d', 4],
+      ]);
+    });
+
+    it('(b) healthy deck returns the SAME reference (identity no-op)', () => {
+      const cards = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
+      expect(normalizeListIds(cards)).toBe(cards);
+    });
+
+    it('(c) repairs a missing + duplicate mix in one pass', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 3 },
+        { pictureId: 'b' },
+        { pictureId: 'c', listId: 3 },
+        { pictureId: 'd', listId: null },
+      ]);
+
+      expect(result.map((c) => c.listId)).toEqual([3, 4, 5, 6]);
+    });
+
+    it('(d) all-finite all-duplicate deck is repaired (no missing-id early return)', () => {
+      const result = normalizeListIds([
+        { pictureId: 'a', listId: 1 },
+        { pictureId: 'b', listId: 1 },
+      ]);
+
+      expect(result.map((c) => c.listId)).toEqual([1, 2]);
+    });
+  });
+
+  describe('played-picture set (Fix 2b)', () => {
+    it('(c) getNextImage skips a played card and serves the next one', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
+        { listId: 1, pictureId: 'a', imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, pictureId: 'b', imageFile: 'file:///cache/2.jpg' },
+      ]));
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['a']));
+
+      expect(await getNextImage('all', 'any')).toEqual({ listId: 2, pictureId: 'b', imageFile: 'file:///cache/2.jpg' });
+    });
+
+    it('(d) getNextImageForScope skips a played card on the private branch', async () => {
+      readGroupFeedCache.mockResolvedValueOnce({
+        images: [
+          { listId: 1, pictureId: 'a', imageFile: 'file:///cache/p1.jpg' },
+          { listId: 2, pictureId: 'b', imageFile: 'file:///cache/p2.jpg' },
+        ],
+        nextCursor: null,
+      });
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(['a']));
+
+      const card = await getNextImageForScope({
+        category: { key: 'all' },
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(card).toEqual({ listId: 2, pictureId: 'b', imageFile: 'file:///cache/p2.jpg' });
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:group:g-3:fr');
+    });
+
+    it('(f) emptyImageList clears the public played key for the language and NO group key', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+
+      await emptyImageList('city', 'fr');
+
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
+      const removedKeys = AsyncStorage.removeItem.mock.calls.map(([key]) => key);
+      expect(removedKeys.some((key) => key.startsWith('playedPictureIds:group:'))).toBe(false);
+    });
+
+    it('(g) clearGroupFeedCache clears only that group\'s played-set (public + other groups untouched)', async () => {
+      const { clearGroupFeedCache } = jest.requireActual('../services/groups/groupFeedCache');
+      AsyncStorage.getAllKeys.mockResolvedValue([
+        'playedPictureIds:group:gA:fr',
+        'playedPictureIds:group:gB:fr',
+        'playedPictureIds:public:fr',
+        'groupFeed:gA:all:any',
+        'groupFeed:gB:all:any',
+      ]);
+
+      await clearGroupFeedCache('gA');
+
+      const removed = AsyncStorage.multiRemove.mock.calls.map(([keys]) => keys).flat();
+      expect(removed).toContain('playedPictureIds:group:gA:fr');
+      expect(removed).toContain('groupFeed:gA:all:any');
+      expect(removed).not.toContain('playedPictureIds:group:gB:fr');
+      expect(removed).not.toContain('playedPictureIds:public:fr');
+      expect(removed).not.toContain('groupFeed:gB:all:any');
+    });
+
+    it('(h) purgeAllPrivateCaches clears all group played-sets, public untouched', async () => {
+      const { purgeAllPrivateCaches } = jest.requireActual('../services/groups/groupFeedCache');
+      AsyncStorage.getAllKeys.mockResolvedValue([
+        'playedPictureIds:group:gA:fr',
+        'playedPictureIds:group:gB:en',
+        'playedPictureIds:public:any',
+      ]);
+
+      await purgeAllPrivateCaches();
+
+      const removed = AsyncStorage.multiRemove.mock.calls.map(([keys]) => keys).flat();
+      expect(removed).toContain('playedPictureIds:group:gA:fr');
+      expect(removed).toContain('playedPictureIds:group:gB:en');
+      expect(removed).not.toContain('playedPictureIds:public:any');
+    });
+  });
+
+  describe('deck write lock — removal serialization (Fix 1 D1)', () => {
+    const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+
+    it('(a) RACE: removal write held open + concurrent appendCardBatch on the same key → final deck keeps BOTH batches minus the removed card', async () => {
+      let store = JSON.stringify([{ listId: 1 }, { listId: 2 }]);
+      let releaseRemovalWrite;
+      const removalWriteGate = new Promise((resolve) => { releaseRemovalWrite = resolve; });
+      let removalWriteGated = false;
+
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:city:fr' ? store : null));
+      AsyncStorage.setItem.mockImplementation(async (key, value) => {
+        if (key !== 'imageList:city:fr') return;
+        if (!removalWriteGated) {
+          removalWriteGated = true;
+          await removalWriteGate;
+        }
+        store = value;
+      });
+
+      const removal = removeImageFromList(1, 'city', 'fr');
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      const append = appendCardBatch({
+        cards: [{ listId: 3 }],
+        categoryKey: 'city',
+        language: 'fr',
+        scope: { kind: 'public' },
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+      // The append RMW must queue behind the in-flight removal (same lock
+      // key): without the lock it would already have read the stale deck.
+      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:city:fr')).toHaveLength(1);
+
+      releaseRemovalWrite();
+      await removal;
+      await append;
+
+      expect(JSON.parse(store)).toEqual([{ listId: 2 }, { listId: 3 }]);
+    });
+
+    it('(b) two concurrent removals both land (serialized read-modify-write)', async () => {
+      let store = JSON.stringify([{ listId: 1 }, { listId: 2 }, { listId: 3 }]);
+      let releaseFirstWrite;
+      const firstWriteGate = new Promise((resolve) => { releaseFirstWrite = resolve; });
+      let firstWriteGated = false;
+
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:nature:fr' ? store : null));
+      AsyncStorage.setItem.mockImplementation(async (key, value) => {
+        if (key !== 'imageList:nature:fr') return;
+        if (!firstWriteGated) {
+          firstWriteGated = true;
+          await firstWriteGate;
+        }
+        store = value;
+      });
+
+      const first = removeImageFromList(1, 'nature', 'fr');
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      const second = removeImageFromList(2, 'nature', 'fr');
+      await flushMicrotasks();
+      await flushMicrotasks();
+      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:nature:fr')).toHaveLength(1);
+
+      releaseFirstWrite();
+      await first;
+      await second;
+
+      expect(JSON.parse(store)).toEqual([{ listId: 3 }]);
+    });
+  });
+
+  describe('deck write lock — trim serialization (Fix 2 D2)', () => {
+    const flushMicrotasks = () => new Promise((resolve) => setImmediate(resolve));
+
+    it('(b) all-viable deck read performs NO write-back (steady-state reads stay lock-free)', async () => {
+      const stored = [
+        { listId: 1, imageFile: 'file:///cache/1.jpg' },
+        { listId: 2, imageFile: 'file:///cache/2.jpg' },
+      ];
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(stored));
+
+      const result = await getLocalImages('all', 'any');
+
+      expect(result).toEqual(stored);
+      expect(AsyncStorage.setItem).not.toHaveBeenCalled();
+      expect(AsyncStorage.multiRemove).not.toHaveBeenCalled();
+    });
+
+    it('re-reads and trims the latest persisted deck under the lock so concurrent appends survive', async () => {
+      mockFileExistsByUri = {
+        'file:///cache/gone.jpg': false,
+        'file:///cache/live.jpg': true,
+        'file:///cache/new.jpg': true,
+      };
+
+      let store = JSON.stringify([
+        { listId: 1, imageFile: 'file:///cache/gone.jpg' },
+        { listId: 2, imageFile: 'file:///cache/live.jpg' },
+      ]);
+      let releaseAppendWrite;
+      const appendWriteGate = new Promise((resolve) => {
+        releaseAppendWrite = resolve;
+      });
+      let appendWriteGated = false;
+
+      AsyncStorage.getItem.mockImplementation(async (key) => {
+        if (key === 'imageList:city:fr') {
+          return store;
+        }
+        if (key === 'playedPictureIds:public:fr') {
+          return null;
+        }
+        return null;
+      });
+      AsyncStorage.setItem.mockImplementation(async (key, value) => {
+        if (key !== 'imageList:city:fr') {
+          return;
+        }
+        if (!appendWriteGated) {
+          appendWriteGated = true;
+          await appendWriteGate;
+        }
+        store = value;
+      });
+
+      const append = appendCardBatch({
+        cards: [{ listId: 3, imageFile: 'file:///cache/new.jpg' }],
+        categoryKey: 'city',
+        language: 'fr',
+        scope: { kind: 'public' },
+      });
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      const read = getLocalImages('city', 'fr');
+      await flushMicrotasks();
+      await flushMicrotasks();
+
+      releaseAppendWrite();
+      const result = await read;
+      await append;
+
+      expect(result).toEqual([
+        { listId: 2, imageFile: 'file:///cache/live.jpg' },
+        { listId: 3, imageFile: 'file:///cache/new.jpg' },
+      ]);
+      expect(JSON.parse(store)).toEqual([
+        { listId: 2, imageFile: 'file:///cache/live.jpg' },
+        { listId: 3, imageFile: 'file:///cache/new.jpg' },
+      ]);
+    });
+  });
+
+  describe('deckWriteLockKey', () => {
+    it('matches the shared public and private key format used by every deck writer', () => {
+      expect(deckWriteLockKey({ categoryKey: 'city', language: 'fr', scope: null })).toBe('cardDeck:append:public:city:fr');
+      expect(deckWriteLockKey({ categoryId: 7, language: 'fr', scope: { kind: 'private', groupId: 'g-1' } })).toBe('cardDeck:append:private:g-1:7:fr');
+      expect(deckWriteLockKey({ categoryId: 'all', language: undefined, scope: { kind: 'private', groupId: 'g-1' } })).toBe('cardDeck:append:private:g-1:all:any');
     });
   });
 });

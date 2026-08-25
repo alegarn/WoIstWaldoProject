@@ -5,7 +5,7 @@ import Image from '../../models/image';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
 
-const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
+export const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
 
 function imagesUrl(groupId) {
   return `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/${groupId}/images`;
@@ -183,11 +183,17 @@ export async function downloadPrivateImage(context, { groupId, imageId }) {
   return extracted || null;
 }
 
-export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey } = {}) {
+export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey, persistCursor = true } = {}) {
   if (pictureId === PRIVATE_FEED_END_CURSOR) {
     return { isError: false, images: [] };
   }
 
+  // Group-scoped cursor namespace (F1/F2 review fix): the private transport
+  // cursor + END sentinel persist under `groupFeed:<gid>:game:<cat>:<lang>:cursor`
+  // via saveLastImageUuid's scope param — never the shared public
+  // `lastImageUuid:*` namespace. Legacy unscoped private keys are dead (one
+  // head-probe degradation after update, then the scoped cursor takes over).
+  const cursorScope = { kind: 'private', groupId };
   const response = await fetchPrivateFeedPage(context, {
     groupId,
     cursor: pictureId || null,
@@ -203,11 +209,15 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
   const nextCursor = response.data?.nextCursor ?? null;
 
   if (rows.length === 0) {
-    await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language);
+    if (persistCursor) {
+      await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+    }
     return { isError: false, images: [] };
   }
 
-  await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language);
+  if (persistCursor) {
+    await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+  }
 
   const downloaded = await Promise.all(
     rows.map(async (row) => {

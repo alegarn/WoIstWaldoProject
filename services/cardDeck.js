@@ -1,7 +1,9 @@
 import { getImages } from '../utils/imagesRequests';
-import { PUBLIC_FEED_END_CURSOR, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import { filterPlayedCards } from '../utils/playedPictureIds';
 import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
+import { PRIVATE_FEED_END_CURSOR } from './groups/groupFeedApi';
 
 function normalizeLanguage(language) {
   return language || 'any';
@@ -106,7 +108,18 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
 
   const p = (async () => {
     const lang = normalizeLanguage(language);
-    const lastImageUuid = await getLastImageUuid(categoryKey, lang);
+    // Scope-aware cursor read (F1/F2): private scopes read the group-scoped
+    // game-cursor key (same key saveLastImageUuid writes on the private
+    // transport path); public/undefined scope keeps the shared
+    // `lastImageUuid:<cat>:<lang>` shape.
+    const lastImageUuid = await getLastImageUuid(categoryKey, lang, scope);
+    // Fix 2a: a head fetch (pictureIdOverride === null) over ANY stored cursor
+    // value (real uuid or either feed-end sentinel) is a head REPLAY —
+    // persisting the head batch's tail would rewind the cursor and re-download
+    // the whole feed on the next top-up. Pass persistCursor:false so getImages
+    // leaves the stored cursor untouched. The conditional spread keeps
+    // non-replay calls 3-arg (existing call-shape pins stay green).
+    const isHeadReplay = pictureIdOverride === null && !!lastImageUuid;
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
 
     // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
@@ -117,9 +130,14 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
     // head; the next non-empty batch overwrites the stale key with a real uuid.
     const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
 
-    return getImages(effectivePictureId, authContext, buildFeedFilters({
-      categoryKey, categoryId, language, scope,
-    }));
+    return getImages(
+      effectivePictureId,
+      authContext,
+      buildFeedFilters({
+        categoryKey, categoryId, language, scope,
+      }),
+      ...(isHeadReplay ? [{ persistCursor: false }] : []),
+    );
   })();
 
   fetchInFlight.set(key, p);
@@ -157,85 +175,128 @@ function buildFeedFilters({ categoryKey, categoryId, language, scope }) {
 }
 
 /**
+ * Clear the exhausted-category marker whenever a NON-EMPTY batch for a real
+ * category lands at a deck-write boundary. Paired writers of the marker —
+ * services/cardPrefetcher.ts:190 (empty background prefetch) and
+ * utils/nextCardAdvancer.ts:169 (empty Tier-2 foreground fetch) — must not
+ * outlive proof that the server still serves the category: a stale marker
+ * blocks every subsequent top-up, so new uploads never surface (Fix 1).
+ * appendCardBatch clears on the RAW incoming batch length (pre-dedup — the
+ * server proved the category non-empty regardless of local duplicates).
+ * Fire-and-forget: the clear is advisory and must never reject the write path.
+ */
+function clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope) {
+  if (!(Array.isArray(cards) && cards.length > 0 && categoryKey && categoryKey !== 'all')) {
+    return;
+  }
+  clearExhaustedCategory(categoryKey, lang, scope).catch(() => {});
+}
+
+/**
  * Overwrite (not append) the persisted deck for the scope with the given cards.
  * Public scope → storeImageList; private scope → writeGroupFeedCache.
- * Always returns null (callers ignore the deck contents here).
+ * Returns the merged deck's normalized cards; callers (SwipeImage.handleData)
+ * use the RETURN as the numbering source of truth (Fix 3 single-writer).
  *
  * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<null>}
+ * @returns {Promise<Array<object>>} The normalized persisted cards.
  */
 export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
+  const normalized = normalizeListIds(Array.isArray(cards) ? cards : []);
+  clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
 
   if (isPrivateScope(scope)) {
     await writeGroupFeedCache(
       scope.groupId,
       { categoryId: resolveCategoryId(categoryId), language: lang },
-      { images: cards, nextCursor: null },
+      { images: normalized, nextCursor: null },
     );
-    return null;
+    return normalized;
   }
 
-  await storeImageList(cards, categoryKey, lang);
-  return null;
+  await storeImageList(normalized, categoryKey, lang);
+  return normalized;
 }
 
 /**
- * Append a card batch to the persisted deck (scope-aware). Mirrors persistCardBatch
- * scope branching but appends instead of overwriting. Used by background prefetch
- * (cardPrefetcher) to grow the deck without losing existing cards.
- * - Public scope: reuses updateImageList (already appends to AsyncStorage).
- * - Private scope: reads the group feed cache, concatenates, writes back.
- * Returns null (matches persistCardBatch return contract).
+ * Remove one card from the persisted private-group deck under the shared deck
+ * write lock. Re-reads the PERSISTED deck inside the lock so a stale in-memory
+ * component list cannot erase concurrently prefetched cards.
  *
- * The RMW window (read → concat → write) is serialized per scope via
- * withScopeLock. Key derivation mirrors getDeckCountForScope / groupFeedListKey:
- * (categoryKey|categoryId, language, groupId) → one lock per scope. Closes R2:
- * without the lock, two concurrent appendCardBatch calls for the same scope
- * would both read the prior deck, each concat its own batch, and the later
- * write wins → the earlier batch is orphaned on disk and the deck stays empty.
+ * @param {object} args - { groupId, categoryId, language, listId }
+ * @returns {Promise<void>}
  */
-function appendCardBatchLockKey({ categoryKey, categoryId, language, scope }) {
-  const lang = normalizeLanguage(language);
-  if (isPrivateScope(scope)) {
-    const cid = resolveCategoryId(categoryId);
-    return `cardDeck:append:private:${scope.groupId}:${cid ?? 'all'}:${lang}`;
+export async function removeCardFromGroupDeck({ groupId, categoryId, language, listId } = {}) {
+  if (!groupId) {
+    return;
   }
-  return `cardDeck:append:public:${categoryKey || 'all'}:${lang}`;
+
+  const lang = normalizeLanguage(language);
+  const cid = resolveCategoryId(categoryId);
+
+  await withScopeLock(
+    deckWriteLockKey({ categoryId: cid, language: lang, scope: { kind: 'private', groupId } }),
+    async () => {
+      const existing = await readGroupFeedCache(groupId, { categoryId: cid, language: lang });
+      if (!existing) {
+        return;
+      }
+
+      const prior = Array.isArray(existing.images) ? existing.images : [];
+      const images = prior.filter((card) => card?.listId !== listId);
+      await writeGroupFeedCache(
+        groupId,
+        { categoryId: cid, language: lang },
+        { images, nextCursor: existing?.nextCursor ?? null },
+      );
+    },
+  );
 }
 
 /**
  * Append a batch to the persisted deck, scope-aware (mirrors persistCardBatch
  * but appends instead of overwriting). Dedups incoming cards against the
  * existing deck via dedupByPictureId, then serializes the read-modify-write
- * per scope under withScopeLock. The append lock key (appendCardBatchLockKey)
- * is deliberately separate from the fetch dedup key (fetchBatchDedupKey), so
- * the append lock never blocks the fetch path — no deadlock.
+ * per scope under withScopeLock(deckWriteLockKey(...)) — the SHARED deck-write
+ * lock (see utils/storageDatum.js#deckWriteLockKey). Without the lock, two
+ * concurrent appendCardBatch calls for the same scope would both read the
+ * prior deck, each concat its own batch, and the later write wins → the
+ * earlier batch is orphaned on disk and the deck stays empty. The append lock
+ * key is deliberately separate from the fetch dedup key (fetchBatchDedupKey),
+ * so the append lock never blocks the fetch path — no deadlock.
+ *
+ * Returns the merged deck; callers use it as the numbering source of truth
+ * (Fix 3: the storage boundary is the SINGLE listId writer).
  *
  * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<null>} always null (matches persistCardBatch contract)
+ * @returns {Promise<Array<object>>} The new persisted deck (post-dedup/normalize).
  */
 export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
   const lang = normalizeLanguage(language);
 
-  return withScopeLock(appendCardBatchLockKey({ categoryKey, categoryId, language, scope }), async () => {
-    if (isPrivateScope(scope)) {
-      const cid = resolveCategoryId(categoryId);
-      const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
-      const prior = existing?.images ?? [];
-      const deduped = dedupByPictureId(prior, cards);
-      const merged = normalizeListIds([...prior, ...deduped]);
-      await writeGroupFeedCache(
-        scope.groupId,
-        { categoryId: cid, language: lang },
-        { images: merged, nextCursor: existing?.nextCursor ?? null },
-      );
-      return null;
-    }
+  return withScopeLock(
+    deckWriteLockKey({ categoryKey, categoryId, language: lang, scope }),
+    async () => {
+      clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
+      const incoming = await filterPlayedCards(cards, lang, scope);
+      if (isPrivateScope(scope)) {
+        const cid = resolveCategoryId(categoryId);
+        const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
+        const prior = existing?.images ?? [];
+        const deduped = dedupByPictureId(prior, incoming);
+        const merged = normalizeListIds([...prior, ...deduped]);
+        await writeGroupFeedCache(
+          scope.groupId,
+          { categoryId: cid, language: lang },
+          { images: merged, nextCursor: existing?.nextCursor ?? null },
+        );
+        return merged;
+      }
 
-    await updateImageList(cards, categoryKey, lang);
-    return null;
-  });
+      return await updateImageList(incoming, categoryKey, lang);
+    },
+  );
 }
 
 /**
@@ -257,4 +318,74 @@ function dedupByPictureId(prior, incoming) {
     Array.isArray(prior) ? prior.map((c) => c?.pictureId).filter(Boolean) : [],
   );
   return incoming.filter((c) => !c?.pictureId || !priorIds.has(c.pictureId));
+}
+
+/**
+ * Upper bound on how many all-played batches probeAllPoolForUnplayed pages
+ * through before giving up. A cap hit yields 'indeterminate' (fail OPEN: no
+ * cycle transition follows — worst case an exhausted panel, never a repeat),
+ * never a false 'exhausted'.
+ */
+export const PROBE_MAX_BATCHES = 20;
+
+/**
+ * Sound exhaustion proof for the 'all' pool: page the cursor forward
+ * (cursor-mode fetches only — pictureIdOverride stays undefined, NEVER null)
+ * until either an UNPLAYED card lands (pool not exhausted) or the server
+ * returns an empty batch (pool drained — the only valid exhaustion signal).
+ *
+ * Replaces the unsound one-head-batch proof (`tier4.ok && !next`,
+ * `isCycleExhausted(headDeck.length, filtered)`) that treated ONE
+ * played-filtered head batch as whole-pool exhaustion and triggered
+ * premature cycle transitions (validated images re-served, category-only
+ * wipe loop).
+ *
+ * Writes ONLY the feed cursor: the transport's own batch-tail persist plus
+ * one sentinel clear. No cycle-state writes, no servingCycle import
+ * (cycle policy stays storage-only in utils/servingCycle.ts). Transient
+ * fetch failures return 'indeterminate' and mutate nothing (I7).
+ *
+ * Sentinel pre-clear: a stored feed-end cursor (PUBLIC or PRIVATE sentinel)
+ * makes every cursor-mode fetch a no-advance replay (public) or an
+ * exhausted short-circuit (private) — the probe could never move. The mount
+ * path writes that sentinel unsoundly, and clearing a feed-end marker never
+ * rewinds a real cursor (I5 intact).
+ *
+ * @param {object} args - { language, scope, authContext, excludePictureId }
+ * @param {string} [args.excludePictureId] - Just-played card, not yet in the
+ *   played-set at advance time — excluded from the unplayed CHECK only (the
+ *   full batch is still appended through appendCardBatch on success).
+ * @returns {Promise<{status:'unplayed'}|{status:'exhausted'}|{status:'indeterminate', reason:string}>}
+ */
+export async function probeAllPoolForUnplayed({ language, scope, authContext, excludePictureId } = {}) {
+  const lang = normalizeLanguage(language);
+
+  const cursor = await getLastImageUuid('all', lang, scope);
+  if (cursor === PUBLIC_FEED_END_CURSOR || cursor === PRIVATE_FEED_END_CURSOR) {
+    await clearLastImageUuid('all', lang, scope);
+  }
+
+  for (let fetched = 0; fetched < PROBE_MAX_BATCHES; fetched++) {
+    const result = await fetchCardBatch({ categoryKey: 'all', language: lang, scope, authContext });
+
+    if (!result || result.isError === true) {
+      return { status: 'indeterminate', reason: result?.reason ?? 'server' };
+    }
+
+    const batch = Array.isArray(result.images) ? result.images : [];
+    if (batch.length === 0) {
+      return { status: 'exhausted' };
+    }
+
+    const unplayed = await filterPlayedCards(batch, lang, scope);
+    const candidates = excludePictureId
+      ? unplayed.filter((card) => card?.pictureId !== excludePictureId)
+      : unplayed;
+    if (candidates.length > 0) {
+      await appendCardBatch({ cards: batch, categoryKey: 'all', language: lang, scope });
+      return { status: 'unplayed' };
+    }
+  }
+
+  return { status: 'indeterminate', reason: 'probe-cap' };
 }

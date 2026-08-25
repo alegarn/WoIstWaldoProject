@@ -5,7 +5,8 @@ jest.mock('expo-secure-store', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
-  emptyImageList: jest.fn().mockResolvedValue(undefined),
+  ...jest.requireActual('../utils/storageDatum'),
+  wipePublicGuessStorage: jest.fn().mockResolvedValue(undefined),
 }));
 
 jest.mock('../services/billing/billingApi', () => ({
@@ -18,7 +19,7 @@ import { act, create } from 'react-test-renderer';
 import * as SecureStore from 'expo-secure-store';
 
 import AuthContextProvider, { AuthContext } from '../store/auth-context';
-import { emptyImageList } from '../utils/storageDatum';
+import { wipePublicGuessStorage } from '../utils/storageDatum';
 import { syncEntitlement } from '../services/billing/billingApi';
 
 const Purchases = require('react-native-purchases').default;
@@ -86,7 +87,7 @@ describe('AuthContextProvider', () => {
       });
     });
 
-    expect(emptyImageList).toHaveBeenCalledTimes(1);
+    expect(wipePublicGuessStorage).toHaveBeenCalledTimes(1);
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('token', 'Bearer token-123');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('userId', 'user-1');
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('email', 'waldo@example.com');
@@ -183,7 +184,7 @@ describe('AuthContextProvider', () => {
       });
     });
 
-    emptyImageList.mockClear();
+    wipePublicGuessStorage.mockClear();
 
     await act(async () => {
       await latestContext.logout();
@@ -199,7 +200,7 @@ describe('AuthContextProvider', () => {
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('username');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('isTutorialFinished');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('scoreId');
-    expect(emptyImageList).toHaveBeenCalledTimes(1);
+    expect(wipePublicGuessStorage).toHaveBeenCalledTimes(1);
   });
 
   it('registers a RevenueCat customer info listener on authenticate', async () => {

@@ -7,12 +7,23 @@ jest.mock('../utils/storageDatum', () => ({
   normalizeListIds: jest.fn((cards) => cards),
   isCategoryExhausted: jest.fn().mockResolvedValue(false),
   markCategoryExhausted: jest.fn().mockResolvedValue(undefined),
+  updateImageList: jest.fn().mockResolvedValue([]),
+  clearExhaustedCategory: jest.fn().mockResolvedValue(undefined),
+  // Fix 2b: the real appendCardBatch (Fix 1 pin) filters played cards through
+  // this helper before dedup — passthrough keeps the pin's semantics.
+  filterPlayedCards: jest.fn((cards) => Promise.resolve(cards)),
+  // Real key builder: the REAL appendCardBatch (Fix 1 pin) derives its
+  // withScopeLock key through this export — delegating keeps the exact
+  // `cardDeck:append:...` format instead of a divergent copy.
+  deckWriteLockKey: jest.requireActual('../utils/storageDatum').deckWriteLockKey,
 }));
 jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
 
 import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
+import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted, clearExhaustedCategory } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
+
+const actualCardDeck = jest.requireActual('../services/cardDeck');
 import {
   LOW_CARD_THRESHOLD,
   TARGET_BATCH_SIZE,
@@ -29,6 +40,8 @@ const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
 const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
 const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
 const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
+const clearExhaustedMock = clearExhaustedCategory as jest.MockedFunction<typeof clearExhaustedCategory>;
+let warnSpy: jest.SpyInstance;
 
 const IMAGES = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
 
@@ -40,12 +53,17 @@ describe('cardPrefetcher', () => {
   beforeEach(() => {
     __resetForTests();
     jest.clearAllMocks();
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     e2eMock.mockReturnValue(false);
     remainingMock.mockResolvedValue(0);
     fetchMock.mockResolvedValue({ isError: false, images: IMAGES } as never);
-    appendMock.mockResolvedValue(null as never);
+    appendMock.mockResolvedValue([] as never);
     isExhaustedMock.mockResolvedValue(false);
     markExhaustedMock.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
   });
 
   it('exports LOW_CARD_THRESHOLD equal to 4 (refill at ≤3 remaining)', () => {
@@ -122,6 +140,21 @@ describe('cardPrefetcher', () => {
     expect(appendMock).not.toHaveBeenCalled();
   });
 
+  it('warns on prefetch failure even when __DEV__ is false', async () => {
+    const priorDev = global.__DEV__;
+    global.__DEV__ = false;
+    remainingMock.mockResolvedValue(2);
+    fetchMock.mockRejectedValue(new Error('network down') as never);
+
+    try {
+      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+      expect(console.warn).toHaveBeenCalledWith('[cardPrefetcher] prefetch failed', expect.any(String), expect.any(Error));
+    } finally {
+      global.__DEV__ = priorDev;
+    }
+  });
+
   it('dedups concurrent calls for the same deck key (one fetchCardBatch total)', async () => {
     remainingMock.mockResolvedValue(2);
     fetchMock.mockImplementation(() => okResponse());
@@ -185,7 +218,7 @@ describe('cardPrefetcher', () => {
     expect(appendMock).toHaveBeenCalledTimes(1);
   });
 
-  it('cold-starts the all-deck warm from the head when the persisted all deck is empty', async () => {
+  it('cold-starts the all-deck warm in cursor mode (no head override) when the persisted all deck is empty', async () => {
     remainingMock.mockResolvedValueOnce(0);
     fetchMock.mockImplementation(() => okResponse());
 
@@ -196,8 +229,19 @@ describe('cardPrefetcher', () => {
       language: 'fr',
       scope: { kind: 'public' },
       authContext: {},
-      pictureIdOverride: null,
     });
+  });
+
+  it("warm with an existing 'all' cursor fetches cursor-mode (pages forward, no head override)", async () => {
+    remainingMock.mockResolvedValueOnce(2);
+    fetchMock.mockImplementation(() => okResponse([{ listId: 100 }]));
+
+    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+    expect(allCalls).toHaveLength(1);
+    expect(allCalls[0]![0]).not.toHaveProperty('pictureIdOverride');
+    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
   });
 
   it('does not warm when categoryKey === "all"', async () => {
@@ -280,6 +324,20 @@ describe('cardPrefetcher', () => {
     const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
     expect(allCalls).toHaveLength(2);
     expect(appendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('warns on warm-all failure even when __DEV__ is false', async () => {
+    const priorDev = global.__DEV__;
+    global.__DEV__ = false;
+    fetchMock.mockImplementation(() => Promise.reject(new Error('net down') as never));
+
+    try {
+      await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
+
+      expect(console.warn).toHaveBeenCalledWith('[cardPrefetcher] warm-all failed', expect.any(String), expect.any(Error));
+    } finally {
+      global.__DEV__ = priorDev;
+    }
   });
 
   it('warm-all is awaitable and shares in-flight promise across concurrent callers', async () => {
@@ -472,6 +530,27 @@ describe('cardPrefetcher', () => {
     expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
   });
 
+  it('Fix 1 pin: prefetch that lands ≥1 card calls clearExhaustedCategory (via real appendCardBatch)', async () => {
+    // Bridge through the REAL appendCardBatch (storageDatum stays mocked at
+    // the AsyncStorage boundary: updateImageList/filterPlayedCards/
+    // clearExhaustedCategory), so the pin proves the prefetch success path
+    // triggers the marker clear through the production append contract.
+    appendMock.mockImplementation((args?: { cards?: unknown[]; categoryKey?: string; categoryId?: unknown; language?: string | null; scope?: unknown }) =>
+      actualCardDeck.appendCardBatch(args));
+    remainingMock.mockResolvedValue(2);
+
+    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+    await Promise.resolve();
+
+    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({
+      categoryKey: 'city',
+      categoryId: 7,
+      language: 'fr',
+      scope: { kind: 'public' },
+    }));
+    expect(clearExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+  });
+
   it('B1(e-CC4): isError (5xx) → markCategoryExhausted NOT called (transient blip must not poison cache)', async () => {
     remainingMock.mockResolvedValue(0);
     fetchMock.mockImplementation((params) =>
@@ -516,5 +595,51 @@ describe('cardPrefetcher', () => {
 
     const allCallsBranch2 = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
     expect(allCallsBranch2).toHaveLength(0);
+  });
+
+  // characterization: pins I3, existing behavior cardPrefetcher.ts:202-205
+  describe('proactive handoff (I3)', () => {
+    it("prefetchIfLow with category remaining 3 (below LOW_CARD_THRESHOLD=4) warms the 'all' deck in the same cycle (proactive handoff I3)", async () => {
+      remainingMock.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+      fetchMock.mockImplementation((params) =>
+        okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : [{ listId: 1 }]),
+      );
+
+      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
+      const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+      expect(categoryCalls).toHaveLength(1);
+      expect(allCalls).toHaveLength(1);
+      expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
+
+      const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
+      expect(allAppend).toBeDefined();
+      expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }], categoryKey: 'all' });
+    });
+
+    it("exhausted-marker skip path still tops the deck up from 'all' (no empty handoff)", async () => {
+      isExhaustedMock.mockResolvedValue(true);
+      remainingMock.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+      fetchMock.mockImplementation((params) =>
+        okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }, { listId: 101 }] : []),
+      );
+
+      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+      await Promise.resolve();
+      await Promise.resolve();
+
+      expect(isExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+      const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
+      const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
+      expect(categoryCalls).toHaveLength(0);
+      expect(allCalls).toHaveLength(1);
+
+      const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
+      expect(allAppend).toBeDefined();
+      expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }, { listId: 101 }], categoryKey: 'all' });
+    });
   });
 });
