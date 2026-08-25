@@ -1,3 +1,12 @@
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  return {
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
+
 jest.mock('../../components/UI/IconButton', () => {
   function MockIconButton(props) {
     return null;
@@ -44,7 +53,7 @@ describe('HomeHeaderRight', () => {
 
   function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() } } = {}) {
     useActiveGroup.mockReturnValue(activeGroup);
-    useGroupsHub.mockReturnValue({ data: groupsHubData });
+    useGroupsHub.mockReturnValue({ data: groupsHubData, refresh: jest.fn() });
     let renderer;
     act(() => {
       renderer = create(<HomeHeaderRight navigation={navigation} tintColor="#fff" />);

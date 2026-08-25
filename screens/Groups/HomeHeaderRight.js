@@ -1,21 +1,30 @@
-import { useState } from 'react';
+import { useCallback, useContext, useState } from 'react';
 import { View, Modal, Pressable, Text, StyleSheet, Alert } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
 
 import IconButton from '../../components/UI/IconButton';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
+import { AuthContext } from '../../store/auth-context';
 import { GlobalStyle } from '../../constants/theme';
 
 export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const authContext = useContext(AuthContext);
   const { scope, activeGroupId, setActive, clear } = useActiveGroup();
-  const { data } = useGroupsHub();
+  const { data, refresh } = useGroupsHub();
   const owned = data?.owned ?? [];
   const joined = data?.joined ?? [];
   const isPrivate = scope.kind === 'private';
   const hasAnyMembership = owned.length > 0 || joined.length > 0;
-  const canToggleScope = hasAnyMembership;
+  const canToggleScope = hasAnyMembership || !!authContext?.isGroupOwner;
+
+  useFocusEffect(
+    useCallback(() => {
+      refresh();
+    }, [refresh])
+  );
 
   const toggleScope = () => {
     if (isPrivate) {

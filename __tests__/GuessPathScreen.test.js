@@ -393,8 +393,33 @@ describe('GuessPathScreen', () => {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
       language: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
-      activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+      activeGroup: { isOwnedByViewer: true, memberCount: 6, locked: false },
     });
+  });
+
+  it('does not navigate to GuessFeedScreen and shows the lock alert when the private group is locked', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-1', role: 'owner', locked: true }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1');
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Group is locked',
+      'New private games are paused until the owner renews the subscription or transfers ownership.'
+    );
   });
 
   it('fetches groups on press when private hub data is still missing and then threads the active-group snapshot', async () => {
@@ -421,8 +446,35 @@ describe('GuessPathScreen', () => {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
       language: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
-      activeGroup: { isOwnedByViewer: true, memberCount: 7 },
+      activeGroup: { isOwnedByViewer: true, memberCount: 7, locked: false },
     });
+  });
+
+  it('blocks navigation and shows the lock alert when the on-demand fetch resolves a locked group', async () => {
+    mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
+    emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
+    fetchGroups.mockResolvedValue({
+      status: 200,
+      data: {
+        owned: [{ id: 'g-1', role: 'owner', member_count: 7, locked: true }],
+        joined: [],
+      },
+    });
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1');
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    expect(fetchGroups).toHaveBeenCalledWith(contextValue);
+    expect(navigation.navigate).not.toHaveBeenCalled();
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Group is locked',
+      'New private games are paused until the owner renews the subscription or transfers ownership.'
+    );
   });
 
   it('renders private categories optimistically via the store onCategories callback', async () => {

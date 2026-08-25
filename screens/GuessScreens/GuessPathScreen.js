@@ -64,6 +64,7 @@ function buildActiveGroupSnapshot(groupsHubData, groupId) {
   return {
     isOwnedByViewer: activeGroup.role === 'owner',
     memberCount: Number(activeGroup.memberCount ?? activeGroup.member_count ?? 0),
+    locked: activeGroup?.locked === true,
   };
 }
 
@@ -103,6 +104,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const activeGroup = isPrivateScope ? buildActiveGroupSnapshot(groupsHubData, scope.groupId) : null;
   const isOwner = activeGroup?.isOwnedByViewer === true;
   const { group, theme } = useScopedPrivateGroupTheme(routeScope);
+  const isGroupLocked = isPrivateScope && group?.locked === true;
 
   const enrichAndSetPrivateCategories = useCallback(async (nextCategories) => {
     const list = Array.isArray(nextCategories) ? nextCategories : [];
@@ -186,6 +188,14 @@ export default function GuessPathScreen({ navigation, route }) {
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
 
   const handleCategoryPress = async (category) => {
+    if (isPrivateScope && isGroupLocked) {
+      Alert.alert(
+        'Group is locked',
+        'New private games are paused until the owner renews the subscription or transfers ownership.'
+      );
+      return;
+    }
+
     const params = {
       category,
       language: navigationLanguage,
@@ -197,6 +207,13 @@ export default function GuessPathScreen({ navigation, route }) {
         context,
         scope,
       });
+      if (resolvedActiveGroup?.locked) {
+        Alert.alert(
+          'Group is locked',
+          'New private games are paused until the owner renews the subscription or transfers ownership.'
+        );
+        return;
+      }
       params.scope = scope;
       params.activeGroup = resolvedActiveGroup;
     }

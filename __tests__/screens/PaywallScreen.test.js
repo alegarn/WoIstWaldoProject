@@ -199,6 +199,47 @@ describe('PaywallScreen', () => {
     });
   });
 
+  it('applies isGroupOwner and activeGroupId from the syncEntitlement response after purchase', async () => {
+    syncEntitlement.mockResolvedValue({
+      status: 200,
+      data: {
+        is_paid: true,
+        paid_tier: 2,
+        paid_expires_at: null,
+        is_group_owner: true,
+        active_group_id: 'group-7',
+      },
+    });
+
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({
+      authContext,
+      navigation,
+      route: { params: { intent: 'store' } },
+    });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(authContext.setEntitlement).toHaveBeenCalledTimes(1);
+    expect(authContext.setEntitlement).toHaveBeenCalledWith({
+      isPaid: true,
+      paidTier: 2,
+      paidExpiresAt: null,
+      isGroupOwner: true,
+      activeGroupId: 'group-7',
+    });
+  });
+
   it('surfaces Alert.alert and still navigates when syncEntitlement returns a non-200 status', async () => {
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     syncEntitlement.mockResolvedValue({ status: 502, data: { error: 'revenuecat_unavailable' } });

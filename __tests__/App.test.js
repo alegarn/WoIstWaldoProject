@@ -29,6 +29,7 @@ jest.mock('@react-navigation/native', () => ({
     },
   },
   NavigationContainer: ({ children }) => children,
+  useFocusEffect: jest.fn(),
   useNavigationContainerRef: jest.fn(() => ({
     isReady: jest.fn(() => false),
     getCurrentRoute: jest.fn(() => ({ name: 'Login' })),
