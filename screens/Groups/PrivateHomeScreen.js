@@ -55,7 +55,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
   });
 
   const [isColorEditorVisible, setIsColorEditorVisible] = useState(false);
-  const [isLockedOwnerModalVisible, setIsLockedOwnerModalVisible] = useState(isLocked && isOwner);
+  const [dismissedGroupId, setDismissedGroupId] = useState(null);
   const [bgUris, setBgUris] = useState({});
   const [savingSlot, setSavingSlot] = useState({});
   const savingSlotRef = useRef({});
@@ -64,10 +64,6 @@ export default function PrivateHomeScreen({ navigation, route }) {
     savingSlotRef.current = { ...savingSlotRef.current, [slot]: value };
     setSavingSlot((prev) => ({ ...prev, [slot]: value }));
   }, []);
-
-  useEffect(() => {
-    setIsLockedOwnerModalVisible(isLocked && isOwner);
-  }, [isLocked, isOwner, groupId]);
 
   useEffect(() => {
     let mounted = true;
@@ -247,6 +243,14 @@ export default function PrivateHomeScreen({ navigation, route }) {
     }, [setPrivateMode])
   );
 
+  const isLockedOwnerModalVisible = isLocked && isOwner && dismissedGroupId !== groupId;
+
+  useFocusEffect(
+    useCallback(() => {
+      setDismissedGroupId(null);
+    }, [])
+  );
+
   const goScoped = (target) =>
     navigation.navigate(target, {
       scope: { kind: 'private', groupId },
@@ -261,8 +265,8 @@ export default function PrivateHomeScreen({ navigation, route }) {
   }, [navigation]);
 
   const dismissLockedOwnerModal = useCallback(() => {
-    setIsLockedOwnerModalVisible(false);
-  }, []);
+    setDismissedGroupId(groupId);
+  }, [groupId]);
 
   return (
     <View
@@ -286,10 +290,12 @@ export default function PrivateHomeScreen({ navigation, route }) {
       )}
       <HomeCard
         text="Hide Waldo"
-        onPress={() => goScoped('HidingPathScreen')}
+        onPress={isLocked ? undefined : () => goScoped('HidingPathScreen')}
         backgroundImage={bgUris.hide ? { uri: bgUris.hide } : HideImage}
         heightPercent={40}
         testID="private-home.button.hide"
+        accessibilityState={isLocked ? { disabled: true } : undefined}
+        pointerEvents={isLocked ? 'none' : 'auto'}
       />
       <HomeCard
         text="Find Waldo"

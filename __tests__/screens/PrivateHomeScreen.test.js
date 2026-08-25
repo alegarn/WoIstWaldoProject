@@ -6,13 +6,25 @@ const mockLockedGroupOwnerModal = jest.fn(() => null);
 const mockLockedGroupMemberBanner = jest.fn(() => null);
 const mockUseActiveGroup = jest.fn();
 const mockUseGroupsHub = jest.fn();
+const mockFocusEffects = new Set();
 
-jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (callback) => {
-    const React = require('react');
-    React.useEffect(() => callback(), [callback]);
-  },
-}));
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+
+  return {
+    useFocusEffect: (callback) => {
+      React.useEffect(() => {
+        mockFocusEffects.add(callback);
+        const cleanup = callback();
+
+        return () => {
+          mockFocusEffects.delete(callback);
+          cleanup?.();
+        };
+      }, [callback]);
+    },
+  };
+});
 
 jest.mock('../../utils/orientation', () => ({
   handleOrientation: jest.fn(),
@@ -102,6 +114,7 @@ import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 describe('PrivateHomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockFocusEffects.clear();
     jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
     jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     resolveHomeBackground.mockResolvedValue(null);
@@ -135,6 +148,13 @@ describe('PrivateHomeScreen', () => {
   function lastSetOptions(navigation) {
     const calls = navigation.setOptions.mock.calls;
     return calls[calls.length - 1][0];
+  }
+
+  async function triggerFocusEffects() {
+    await act(async () => {
+      [...mockFocusEffects].forEach((callback) => callback());
+      await Promise.resolve();
+    });
   }
 
   async function renderHeader(navigation) {
@@ -412,6 +432,26 @@ describe('PrivateHomeScreen', () => {
       expect(navigation.navigate).not.toHaveBeenCalled();
     });
 
+    it('re-arms the owner modal on the next focus after dismissal', async () => {
+      await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true }],
+          joined: [],
+        },
+      });
+
+      const lastModal = () => mockLockedGroupOwnerModal.mock.calls.map(([props]) => props).pop();
+
+      await act(async () => {
+        lastModal().onDismiss();
+      });
+      expect(lastModal().visible).toBe(false);
+
+      await triggerFocusEffects();
+
+      expect(lastModal().visible).toBe(true);
+    });
+
     it('shows the member banner (and no owner modal) when a non-owner views a locked group', async () => {
       await renderScreen({
         groupsData: {
@@ -444,6 +484,94 @@ describe('PrivateHomeScreen', () => {
       expect(visibleOwnerModals).toHaveLength(0);
 
       expect(mockLockedGroupMemberBanner.mock.calls).toHaveLength(0);
+    });
+  });
+
+  describe('locked play gating', () => {
+    function lastHomeCardProps(testID) {
+      const calls = mockHomeCard.mock.calls.filter(
+        ([props]) => props && props.testID === testID
+      );
+      return calls[calls.length - 1][0];
+    }
+
+    it('disables the Hide card when the group is locked (owner)', async () => {
+      const { navigation } = await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: true }],
+          joined: [],
+        },
+      });
+
+      const hideCard = lastHomeCardProps('private-home.button.hide');
+      expect(hideCard.onPress).toBeUndefined();
+      expect(hideCard.accessibilityState).toEqual({ disabled: true });
+      expect(hideCard.pointerEvents).toBe('none');
+
+      const findCard = lastHomeCardProps('private-home.button.find');
+      expect(findCard.onPress).toBeUndefined();
+      expect(findCard.accessibilityState).toEqual({ disabled: true });
+      expect(findCard.pointerEvents).toBe('none');
+
+      const rankingCard = lastHomeCardProps('private-home.button.ranking');
+      expect(rankingCard.onPress).toBeInstanceOf(Function);
+      expect(rankingCard.pointerEvents).toBeUndefined();
+
+      expect(navigation.navigate).not.toHaveBeenCalled();
+    });
+
+    it('disables the Hide card when the group is locked (member)', async () => {
+      await renderScreen({
+        groupsData: {
+          owned: [],
+          joined: [{ id: 'g-7', name: 'Waldos', role: 'member', locked: true }],
+        },
+      });
+
+      const hideCard = lastHomeCardProps('private-home.button.hide');
+      expect(hideCard.onPress).toBeUndefined();
+      expect(hideCard.accessibilityState).toEqual({ disabled: true });
+      expect(hideCard.pointerEvents).toBe('none');
+
+      const findCard = lastHomeCardProps('private-home.button.find');
+      expect(findCard.onPress).toBeUndefined();
+      expect(findCard.accessibilityState).toEqual({ disabled: true });
+      expect(findCard.pointerEvents).toBe('none');
+    });
+
+    it('keeps the Hide card enabled and navigating when the group is unlocked', async () => {
+      const { navigation } = await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', locked: false }],
+          joined: [],
+        },
+      });
+
+      const hideCard = lastHomeCardProps('private-home.button.hide');
+      expect(hideCard.onPress).toBeInstanceOf(Function);
+      expect(hideCard.accessibilityState).toBeUndefined();
+      expect(hideCard.pointerEvents).toBe('auto');
+
+      const findCard = lastHomeCardProps('private-home.button.find');
+      expect(findCard.onPress).toBeInstanceOf(Function);
+      expect(findCard.accessibilityState).toBeUndefined();
+      expect(findCard.pointerEvents).toBe('auto');
+
+      await act(async () => {
+        hideCard.onPress();
+      });
+
+      expect(navigation.navigate).toHaveBeenCalledWith('HidingPathScreen', {
+        scope: { kind: 'private', groupId: 'g-7' },
+      });
+
+      await act(async () => {
+        findCard.onPress();
+      });
+
+      expect(navigation.navigate).toHaveBeenCalledWith('GuessPathScreen', {
+        scope: { kind: 'private', groupId: 'g-7' },
+      });
     });
   });
 
