@@ -11,6 +11,7 @@ import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   getPurchasesModule,
   applyEntitlementToContext,
+  entitlementToContextPayload,
   restoreAndSync,
 } from '../../utils/purchases';
 
@@ -53,11 +54,7 @@ export default function PaywallScreen({ navigation, route }) {
     const ok = response?.status === 200;
     const entitlement = response?.data;
     if (ok && entitlement) {
-      authContext.setEntitlement({
-        isPaid: entitlement.is_paid,
-        paidTier: entitlement.paid_tier,
-        paidExpiresAt: entitlement.paid_expires_at,
-      });
+      authContext.setEntitlement(entitlementToContextPayload(entitlement));
     }
     if (!ok) {
       Alert.alert(
