@@ -304,4 +304,115 @@ describe('services/groups/groupCategoryThumbnails', () => {
       process.env.EXPO_PUBLIC_APP_BACKEND_URL = originalBackendUrl;
     }
   });
+
+  it('shares a single network fetch between concurrent calls for the same group and image', async () => {
+    File.__state.existsOverride = false;
+    const bytes = new Uint8Array([10, 11, 12]);
+    let deferredResolve;
+    axios.get.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          deferredResolve = resolve;
+        })
+    );
+
+    const args = {
+      groupId: 'g-dedup',
+      category: {
+        thumbnail_image_id: 't-dedup',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-dedup.png',
+      },
+    };
+
+    const first = resolveCategoryThumbnail(CONTEXT, args);
+    const second = resolveCategoryThumbnail(CONTEXT, args);
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+
+    deferredResolve({
+      data: bytes,
+      headers: { 'content-type': 'image/png' },
+    });
+
+    const [uriA, uriB] = await Promise.all([first, second]);
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(uriA).toEqual(expect.stringContaining('private-thumb-g-dedup-t-dedup.png'));
+    expect(uriB).toEqual(uriA);
+    expect(File.__state.writtenUris).toHaveLength(1);
+  });
+
+  it('serves the local file on the next sequential call after a successful download', async () => {
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: new Uint8Array([13]),
+      headers: { 'content-type': 'image/png' },
+    });
+
+    const args = {
+      groupId: 'g-seq',
+      category: {
+        thumbnail_image_id: 't-seq',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-seq.png',
+      },
+    };
+
+    const firstUri = await resolveCategoryThumbnail(CONTEXT, args);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(firstUri).toEqual(expect.stringContaining('private-thumb-g-seq-t-seq.png'));
+
+    File.__state.existsOverride = true;
+    axios.get.mockClear();
+
+    const secondUri = await resolveCategoryThumbnail(CONTEXT, args);
+
+    expect(axios.get).not.toHaveBeenCalled();
+    expect(secondUri).toEqual(firstUri);
+  });
+
+  it('resolves both concurrent callers to the presigned fallback when the fetch rejects, then retries on the next call', async () => {
+    File.__state.existsOverride = false;
+    axios.get.mockRejectedValue(new Error('network down'));
+
+    const args = {
+      groupId: 'g-retry',
+      category: {
+        thumbnail_image_id: 't-retry',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-retry.png',
+      },
+    };
+
+    const first = resolveCategoryThumbnail(CONTEXT, args);
+    const second = resolveCategoryThumbnail(CONTEXT, args);
+
+    await expect(first).resolves.toBe('https://presigned.example.com/thumbs/t-retry.png');
+    await expect(second).resolves.toBe('https://presigned.example.com/thumbs/t-retry.png');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+
+    await resolveCategoryThumbnail(CONTEXT, args);
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+  });
+
+  it('fetches separately for the same image id under different group ids', async () => {
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: new Uint8Array([14, 15]),
+      headers: { 'content-type': 'image/png' },
+    });
+
+    const category = {
+      thumbnail_image_id: 't-shared',
+      thumbnail_url: 'https://presigned.example.com/thumbs/t-shared.png',
+    };
+
+    const [uriA, uriB] = await Promise.all([
+      resolveCategoryThumbnail(CONTEXT, { groupId: 'g-a', category }),
+      resolveCategoryThumbnail(CONTEXT, { groupId: 'g-b', category }),
+    ]);
+
+    expect(axios.get).toHaveBeenCalledTimes(2);
+    expect(uriA).toEqual(expect.stringContaining('private-thumb-g-a-t-shared.png'));
+    expect(uriB).toEqual(expect.stringContaining('private-thumb-g-b-t-shared.png'));
+  });
 });

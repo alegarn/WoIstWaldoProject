@@ -44,6 +44,24 @@ import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { getImages, performImageUpload, prepareImageUpload, saveImageInfos, buildImageObject } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 
+const batchRow = (name) => ({
+  name,
+  storage_url: `https://backend.example/api/v1/local_image_storage/${name}`,
+});
+const batchResponse = (names) => ({ data: { data: names.map(batchRow) } });
+const NETWORK_ERROR_RESULT = {
+  isError: true,
+  reason: 'network',
+  title: "There is an error downloading user's images.",
+  message: 'Please retry later...',
+};
+const SERVER_ERROR_RESULT = {
+  isError: true,
+  reason: 'server',
+  title: "There is an error downloading user's images.",
+  message: 'Please retry later...',
+};
+
 describe('imagesRequests utilities', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -314,6 +332,128 @@ describe('imagesRequests utilities', () => {
       ],
     });
     expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img', undefined, undefined);
+  });
+
+  it('H1: aborts after one metadata request with no cursor write when every download fails network-class (no HTTP response)', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
+      .mockRejectedValue({ message: 'Network Error' });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual(NETWORK_ERROR_RESULT);
+    // Exactly ONE metadata request total: the head GET. The loop aborted, so
+    // no next_image_batch POST was ever fired.
+    expect(axios.get).toHaveBeenCalledTimes(6); // 1 metadata + 5 downloads
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('H1: classifies request status 0 as network-class and aborts without retry', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2']))
+      .mockRejectedValue({ request: { status: 0 } });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual(NETWORK_ERROR_RESULT);
+    expect(axios.post).not.toHaveBeenCalled();
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('H1: retries a fully server-class 5xx batch to budget exhaustion and fails terminal server (cursor saved each iteration)', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1']))
+      .mockRejectedValue({ response: { status: 503 }, request: { status: 503 } });
+    axios.post
+      .mockResolvedValueOnce(batchResponse(['img-2']))
+      .mockResolvedValueOnce(batchResponse(['img-3']))
+      .mockResolvedValueOnce(batchResponse(['img-4']));
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual(SERVER_ERROR_RESULT);
+    // 4 metadata requests worst case: head GET + 3 next POSTs.
+    expect(axios.get).toHaveBeenCalledTimes(5); // 1 metadata + 4 downloads
+    expect(axios.post).toHaveBeenCalledTimes(3);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(4);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-2', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(3, 'img-3', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined);
+  });
+
+  it('H1: retries a fully server-class 404 batch (response received) to budget exhaustion and fails terminal server', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1']))
+      .mockRejectedValue({ request: { status: 404 }, response: { status: 404, data: 'missing' } });
+    axios.post
+      .mockResolvedValueOnce(batchResponse(['img-2']))
+      .mockResolvedValueOnce(batchResponse(['img-3']))
+      .mockResolvedValueOnce(batchResponse(['img-4']));
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual(SERVER_ERROR_RESULT);
+    expect(axios.post).toHaveBeenCalledTimes(3);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(4);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined);
+  });
+
+  it('H1: returns partial successes without retrying when some downloads succeed and others fail network-class', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,def456' })
+      .mockRejectedValueOnce({ message: 'Network Error' })
+      .mockRejectedValueOnce({ request: { status: 0 } })
+      .mockRejectedValueOnce({ message: 'Network Error' });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.pictureId)).toEqual(['img-1', 'img-2']);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-5', undefined, undefined);
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('H1: aborts with reason network when a zero-success batch mixes network and server failures', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
+      .mockRejectedValueOnce({ message: 'Network Error' })
+      .mockRejectedValueOnce({ request: { status: 0 } })
+      .mockRejectedValueOnce({ response: { status: 503 }, request: { status: 503 } })
+      .mockRejectedValueOnce({ request: { status: 404 } })
+      .mockRejectedValueOnce({ response: { status: 500 }, request: { status: 500 } });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response).toEqual(NETWORK_ERROR_RESULT);
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+    expect(axios.post).not.toHaveBeenCalled();
+  });
+
+  it('H1: treats HTTP 200 non-base64 payloads as server-class and skips the batch (cursor advances, loop continues)', async () => {
+    axios.get
+      .mockResolvedValueOnce(batchResponse(['not-base64-img']))
+      .mockResolvedValueOnce({ data: 'not-base64' })
+      .mockResolvedValueOnce({ data: 'data:image/png;base64,next123' });
+    axios.post.mockResolvedValueOnce(batchResponse(['playable-img']));
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(response.isError).toBe(false);
+    expect(response.images).toEqual([
+      expect.objectContaining({
+        pictureId: 'playable-img',
+        imageFile: 'file:///cache/playable-img.png',
+      }),
+    ]);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(2);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'not-base64-img', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'playable-img', undefined, undefined);
   });
 
   it('threads category and language filters into the initial image batch query params', async () => {

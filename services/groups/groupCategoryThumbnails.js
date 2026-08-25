@@ -56,7 +56,9 @@ function extractBase64FromDataUrl(value) {
   return match ? match[1] : null;
 }
 
-export async function resolveCategoryThumbnail(context, { groupId, category } = {}) {
+const inFlight = new Map();
+
+async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
   const imageId = category?.thumbnail_image_id;
   if (!imageId) return null;
 
@@ -108,6 +110,24 @@ export async function resolveCategoryThumbnail(context, { groupId, category } = 
   } catch {
     return presignedUrl;
   }
+}
+
+export function resolveCategoryThumbnail(context, { groupId, category } = {}) {
+  const imageId = category?.thumbnail_image_id;
+  if (!imageId) return Promise.resolve(null);
+
+  const presignedUrl = category?.thumbnail_url;
+  if (!presignedUrl || typeof presignedUrl !== 'string') return Promise.resolve(null);
+
+  const key = `${groupId}:${imageId}`;
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+
+  const promise = doResolveCategoryThumbnail(context, { groupId, category }).finally(() => {
+    if (inFlight.get(key) === promise) inFlight.delete(key);
+  });
+  inFlight.set(key, promise);
+  return promise;
 }
 
 export function deleteCategoryThumbnailFile(groupId, id) {

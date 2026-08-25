@@ -150,7 +150,10 @@ async function foregroundTopUp(
       ...(pictureIdOverride !== undefined ? { pictureIdOverride } : {}),
     };
     const r = await fetchCardBatch(fetchArgs);
-    if (!r || r.isError === true) return { ok: false, reason: 'server' };
+    // H1: getImages now distinguishes network-class download failure
+    // (reason: 'network') from server-class. Forward it so callers get the
+    // retry affordance; anything else stays 'server'.
+    if (!r || r.isError === true) return { ok: false, reason: r?.reason === 'network' ? 'network' : 'server' };
     if (!r.images || r.images.length === 0) {
       // F3a: cache the empty result so subsequent advances short-circuit at
       // Tier 2 with zero server round-trips. ONLY the genuine-empty branch

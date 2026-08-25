@@ -171,6 +171,10 @@ describe('reused screens — private scope wiring', () => {
     expect(hidePictureProps.scope).toEqual(PRIVATE_SCOPE);
 
     expect(hidePictureProps.navigation).toBe(navigation);
+
+    // Regression: the hide path must host ShowPicture's GestureDetectors in a
+    // localized RNGH root (mirror of GuessScreen) or RNGH throws at mount.
+    expect(renderer.root.findByType('GestureHandlerRootView')).toBeTruthy();
   });
 
   it('RankingScreen calls getRankingData with the private group scope (not the public "initial" string)', async () => {

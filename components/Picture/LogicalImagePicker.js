@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 
 import ShowImagePicker from './ShowImagePicker';
 import { buildE2EHideRouteParams, isE2EMode } from '../../utils/e2eMode';
+import { processPickedImage } from '../../utils/imageProcessing';
 
 export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
   // Request camera permissions
@@ -88,10 +89,17 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     const image = await launchCameraAsync({
       allowsEditing: false,
       mediaTypes: ['images'],
-      quality: 0.5,
+      quality: 1,
     });
 
     if (image?.canceled || !image?.assets?.length) {
+      return null;
+    }
+
+    const processed = await processPickedImage(image.assets[0]);
+
+    if (processed.tooSmall) {
+      Alert.alert("Image too small", "Please retake the picture with at least 1200px on the longest side.");
       return null;
     }
 
@@ -101,9 +109,9 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     //
 
     navigateToHideScreen({
-      uri: image.assets[0].uri,
-      width: image.assets[0].width,
-      height: image.assets[0].height,
+      uri: processed.uri,
+      width: processed.width,
+      height: processed.height,
     });
 
     return null
@@ -119,10 +127,17 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     let pickedImage = await ImagePicker.launchImageLibraryAsync({
       allowsEditing: false,
       mediaTypes: ['images'],
-      quality: 0.5,
+      quality: 1,
     });
 
     if (pickedImage?.canceled || !pickedImage?.assets?.length) {
+      return null;
+    }
+
+    const processed = await processPickedImage(pickedImage.assets[0]);
+
+    if (processed.tooSmall) {
+      Alert.alert("Image too small", "Please pick an image with at least 1200px on the longest side.");
       return null;
     }
 
@@ -131,9 +146,9 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
 
 
     navigateToHideScreen({
-      uri: pickedImage.assets[0].uri,
-      width: pickedImage.assets[0].width,
-      height: pickedImage.assets[0].height,
+      uri: processed.uri,
+      width: processed.width,
+      height: processed.height,
     });
 
     return null;
