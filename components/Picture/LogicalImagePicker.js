@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 
 import { Alert, Dimensions } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { launchCameraAsync, useCameraPermissions, PermissionStatus } from 'expo-image-picker';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -9,6 +10,7 @@ import { buildE2EHideRouteParams, isE2EMode } from '../../utils/e2eMode';
 import { processPickedImage } from '../../utils/imageProcessing';
 
 export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
+  const { t } = useTranslation();
   // Request camera permissions
   const [hasPermission, requestPermission] = useCameraPermissions();
   // State for the image url
@@ -53,16 +55,16 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     if (hasPermission.status === PermissionStatus.DENIED) {
       return new Promise((resolve, reject) => {
         Alert.alert(
-          "Insufficient Permissions",
-          "Access to camera is denied",
+          t('hide.insufficientPermissions'),
+          t('hide.cameraDenied'),
           [
             {
-              text: "Cancel",
+              text: t('common.cancel'),
               onPress: () => resolve(false),
               style: "cancel"
             },
             {
-              text: "Grant Permission",
+              text: t('hide.grantPermission'),
               onPress: () => {
                 grantPermission(requestPermission);
                 resolve(true);
@@ -99,7 +101,7 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     const processed = await processPickedImage(image.assets[0]);
 
     if (processed.tooSmall) {
-      Alert.alert("Image too small", "Please retake the picture with at least 1200px on the longest side.");
+      Alert.alert(t('hide.imageTooSmall'), t('hide.retakeTooSmall'));
       return null;
     }
 
@@ -137,7 +139,7 @@ export default function LogicalImagePicker({ navigation, isTutorial, scope }) {
     const processed = await processPickedImage(pickedImage.assets[0]);
 
     if (processed.tooSmall) {
-      Alert.alert("Image too small", "Please pick an image with at least 1200px on the longest side.");
+      Alert.alert(t('hide.imageTooSmall'), t('hide.pickTooSmall'));
       return null;
     }
 

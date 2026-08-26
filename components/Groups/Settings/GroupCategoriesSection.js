@@ -1,5 +1,6 @@
 import { View, Text, TextInput, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 
 import SettingsSection from './SettingsSection';
 import { getSettingsTokens, settingsTokens } from './settingsTokens';
@@ -18,7 +19,8 @@ export default function GroupCategoriesSection({
   primaryColor,
   secondaryColor,
 }) {
-  const t = getSettingsTokens({ appearance, primaryColor, secondaryColor });
+  const { t } = useTranslation();
+  const tokens = getSettingsTokens({ appearance, primaryColor, secondaryColor });
   const {
     categories,
     drafts,
@@ -42,68 +44,68 @@ export default function GroupCategoriesSection({
       primaryColor={primaryColor}
       secondaryColor={secondaryColor}
       testID="group-settings.category.editor"
-      title="Categories"
-      caption="Players use these to sort hides and guesses."
+      title={t('groups.settings.categoriesTitle')}
+      caption={t('groups.settings.categoriesCaption')}
       count={categories.length}
     >
       <View
-        style={[styles.addComposer, { backgroundColor: t.inset, borderColor: t.hairlineInput }]}
+        style={[styles.addComposer, { backgroundColor: tokens.inset, borderColor: tokens.hairlineInput }]}
         testID="group-settings.category.add-composer"
       >
-        <View style={[styles.addGlyph, { backgroundColor: t.accent }]}> 
-          <Ionicons name="add" size={18} color={t.text} />
+        <View style={[styles.addGlyph, { backgroundColor: tokens.accent }]}>
+          <Ionicons name="add" size={18} color={tokens.text} />
         </View>
         <TextInput
-          accessibilityLabel="New category name"
+          accessibilityLabel={t('groups.settings.newCategoryLabel')}
           value={newCategoryName}
           onChangeText={setNewCategoryName}
-          placeholder="New category name"
-          placeholderTextColor={t.mutedSoft}
-          style={[styles.addInput, { color: t.text }]}
+          placeholder={t('groups.settings.newCategoryLabel')}
+          placeholderTextColor={tokens.mutedSoft}
+          style={[styles.addInput, { color: tokens.text }]}
           testID="group-settings.category.add-input"
         />
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Add category"
+          accessibilityLabel={t('groups.settings.addCategory')}
           onPress={add}
           testID="group-settings.category.add"
           style={({ pressed }) => [
             styles.addChip,
-            { backgroundColor: t.accent },
+            { backgroundColor: tokens.accent },
             pressed && styles.pressed,
           ]}
         >
-          <Ionicons name="add-circle-outline" size={16} color={t.text} />
-          <Text style={[styles.addChipText, { color: t.accentText }]}>Add</Text>
+          <Ionicons name="add-circle-outline" size={16} color={tokens.text} />
+          <Text style={[styles.addChipText, { color: tokens.accentText }]}>{t('groups.settings.add')}</Text>
         </Pressable>
       </View>
 
-      {loading && <Text style={[styles.muted, { color: t.muted }]}>Loading categories…</Text>}
+      {loading && <Text style={[styles.muted, { color: tokens.muted }]}>{t('groups.settings.loadingCategories')}</Text>}
 
       {error && (
         <View style={styles.errorRow}>
-          <Text style={[styles.errorText, { color: t.warn }]}>Couldn&apos;t load categories.</Text>
+          <Text style={[styles.errorText, { color: tokens.warn }]}>{t('groups.settings.categoriesLoadFailed')}</Text>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Try loading categories again"
+            accessibilityLabel={t('groups.settings.retryCategoriesLabel')}
             onPress={reload}
             testID="group-settings.category.retry"
             style={({ pressed }) => [
               styles.retryChip,
-              { borderColor: t.hairlineStrong },
+              { borderColor: tokens.hairlineStrong },
               pressed && styles.pressed,
             ]}
           >
-            <Text style={[styles.retryChipText, { color: t.accentSoft }]}>Try again</Text>
+            <Text style={[styles.retryChipText, { color: tokens.accentSoft }]}>{t('groups.settings.tryAgain')}</Text>
           </Pressable>
         </View>
       )}
 
       {!loading && !error && categories.length === 0 && (
         <View style={styles.emptyState}>
-          <Ionicons name="pricetags-outline" size={28} color={t.mutedSoft} />
-          <Text style={[styles.emptyTitle, { color: t.text }]}>No categories yet</Text>
-          <Text style={[styles.emptyHint, { color: t.muted }]}>Add your first category above.</Text>
+          <Ionicons name="pricetags-outline" size={28} color={tokens.mutedSoft} />
+          <Text style={[styles.emptyTitle, { color: tokens.text }]}>{t('groups.settings.noCategories')}</Text>
+          <Text style={[styles.emptyHint, { color: tokens.muted }]}>{t('groups.settings.noCategoriesHint')}</Text>
         </View>
       )}
 
@@ -117,97 +119,97 @@ export default function GroupCategoriesSection({
           return (
             <View
               key={item.id}
-              style={[styles.categoryCard, { backgroundColor: t.inset, borderColor: t.hairline }]}
+              style={[styles.categoryCard, { backgroundColor: tokens.inset, borderColor: tokens.hairline }]}
               testID={`group-settings.category.row.${item.id}`}
             >
               <View style={styles.categoryTop}>
                 {thumbUri ? (
-                  <Image source={{ uri: thumbUri }} style={[styles.thumb, { backgroundColor: t.insetDeep }]} />
+                  <Image source={{ uri: thumbUri }} style={[styles.thumb, { backgroundColor: tokens.insetDeep }]} />
                 ) : (
                   <View
                     style={[
                       styles.thumb,
                       styles.thumbFallback,
                       {
-                        backgroundColor: t.accentWash,
-                        borderColor: t.hairlineStrong,
+                        backgroundColor: tokens.accentWash,
+                        borderColor: tokens.hairlineStrong,
                       },
                     ]}
                   >
-                    <Text style={[styles.thumbInitial, { color: t.accentSoft }]}>{initial}</Text>
+                    <Text style={[styles.thumbInitial, { color: tokens.accentSoft }]}>{initial}</Text>
                   </View>
                 )}
                 <TextInput
-                  accessibilityLabel={`Category ${item.name}`}
+                  accessibilityLabel={t('groups.settings.categoryLabel', { name: item.name })}
                   value={draft}
                   onChangeText={(value) => setDraft(item.id, value)}
                   style={[
                     styles.categoryNameInput,
                     {
-                      color: t.text,
-                      backgroundColor: t.inputSurface,
+                      color: tokens.text,
+                      backgroundColor: tokens.inputSurface,
                     },
                   ]}
                   testID={`group-settings.category.row.${item.id}.name`}
-                  placeholder="Untitled category"
-                  placeholderTextColor={t.mutedSoft}
+                  placeholder={t('groups.settings.untitled')}
+                  placeholderTextColor={tokens.mutedSoft}
                 />
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Delete ${item.name}`}
+                  accessibilityLabel={t('groups.settings.deleteCategoryLabel', { name: item.name })}
                   onPress={() => remove(item)}
                   testID={`group-settings.category.row.${item.id}.delete`}
                   style={({ pressed }) => [
                     styles.iconButton,
-                    { backgroundColor: t.dangerSoft },
+                    { backgroundColor: tokens.dangerSoft },
                     pressed && styles.pressed,
                   ]}
                 >
-                  <Ionicons name="trash-outline" size={18} color={t.danger} />
+                  <Ionicons name="trash-outline" size={18} color={tokens.danger} />
                 </Pressable>
               </View>
 
-              <View style={[styles.categoryDivider, { backgroundColor: t.hairline }]} />
+              <View style={[styles.categoryDivider, { backgroundColor: tokens.hairline }]} />
 
               <View style={styles.categoryActions}>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Rename ${item.name}`}
+                  accessibilityLabel={t('groups.settings.renameLabel', { name: item.name })}
                   onPress={() => save(item)}
                   testID={`group-settings.category.row.${item.id}.save`}
                   disabled={!isDirty}
                   style={({ pressed }) => [
                     styles.actionChip,
                     {
-                      borderColor: t.hairlineStrong,
-                      backgroundColor: t.accentWash,
+                      borderColor: tokens.hairlineStrong,
+                      backgroundColor: tokens.accentWash,
                     },
                     pressed && styles.pressed,
                     !isDirty && styles.actionChipDisabled,
                   ]}
                 >
-                  <Ionicons name="create-outline" size={15} color={t.text} />
-                  <Text style={[styles.actionChipText, { color: t.text }]}>Rename</Text>
+                  <Ionicons name="create-outline" size={15} color={tokens.text} />
+                  <Text style={[styles.actionChipText, { color: tokens.text }]}>{t('groups.settings.rename')}</Text>
                 </Pressable>
                 <Pressable
                   accessibilityRole="button"
-                  accessibilityLabel={`Change ${item.name} thumbnail`}
+                  accessibilityLabel={t('groups.settings.changeThumbnailLabel', { name: item.name })}
                   onPress={() => swapThumbnail(item)}
                   testID="group-settings.uploader.category-thumbnail"
                   disabled={isSwappingThumbnail}
                   style={({ pressed }) => [
                     styles.actionChip,
                     {
-                      borderColor: t.hairlineStrong,
-                      backgroundColor: t.accentWash,
+                      borderColor: tokens.hairlineStrong,
+                      backgroundColor: tokens.accentWash,
                     },
                     pressed && styles.pressed,
                     isSwappingThumbnail && styles.actionChipDisabled,
                   ]}
                 >
-                  <Ionicons name="image-outline" size={15} color={t.text} />
-                  <Text style={[styles.actionChipText, { color: t.text }]}>
-                    {isSwappingThumbnail ? 'Uploading…' : 'Thumbnail'}
+                  <Ionicons name="image-outline" size={15} color={tokens.text} />
+                  <Text style={[styles.actionChipText, { color: tokens.text }]}>
+                    {isSwappingThumbnail ? t('groups.settings.uploading') : t('groups.settings.thumbnail')}
                   </Text>
                 </Pressable>
               </View>

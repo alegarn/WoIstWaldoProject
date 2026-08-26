@@ -1,13 +1,17 @@
 import React from 'react';
 import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 type Props = { message?: string };
 
-export default function GuessAdvanceLoader({ message = 'Loading next card…' }: Props) {
+export default function GuessAdvanceLoader({ message }: Props) {
+  const { t } = useTranslation();
+  const text = message ?? t('guess.advanceLoader.message');
+
   return (
     <View style={styles.container} testID="guess-advance-loader" pointerEvents="none">
       <ActivityIndicator />
-      <Text style={styles.text}>{message}</Text>
+      <Text style={styles.text}>{text}</Text>
     </View>
   );
 }

@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react';
 import { View, FlatList, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
@@ -20,6 +21,7 @@ import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
  * (groupId, group hub refresh) into them.
  */
 export default function GroupSettingsScreen({ navigation }) {
+  const { t } = useTranslation();
   const { scope } = useActiveGroup();
   const { data, isLoading, refresh } = useGroupsHub();
 
@@ -53,7 +55,7 @@ export default function GroupSettingsScreen({ navigation }) {
   }, [navigation, theme.headerTintColor, theme.primaryColor]);
 
   if (!groupId || isLoading || !isOwner) {
-    return <LoadingOverlay message="Checking ownership..." />;
+    return <LoadingOverlay message={t('groups.settings.checkingOwnership')} />;
   }
 
   return (

@@ -1,6 +1,7 @@
 import { useContext, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 
 import ColorPalettePicker from '../../UI/ColorPalettePicker';
 import SettingsSection from './SettingsSection';
@@ -26,21 +27,22 @@ export default function GroupIdentitySection({
   testIDPrefix = 'group-settings',
   appearance = 'dark',
 }) {
+  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const [name, setName] = useState(initialName ?? '');
   const [selectedPrimaryColor, setSelectedPrimaryColor] = useState(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
   const [selectedSecondaryColor, setSelectedSecondaryColor] = useState(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
   const [isSaving, setIsSaving] = useState(false);
-  const t = getSettingsTokens({
+  const tokens = getSettingsTokens({
     appearance,
     primaryColor: selectedPrimaryColor,
     secondaryColor: selectedSecondaryColor,
   });
   const pickerThemeColors = {
-    label: t.text,
-    expandedBorder: t.hairlineStrong,
-    shadeGrid: t.accentWash,
-    selectedBorder: t.text,
+    label: tokens.text,
+    expandedBorder: tokens.hairlineStrong,
+    shadeGrid: tokens.accentWash,
+    selectedBorder: tokens.text,
   };
 
   // Re-sync from upstream when the group is refreshed after a save.
@@ -59,20 +61,20 @@ export default function GroupIdentitySection({
         secondaryColor: selectedSecondaryColor,
       });
       if (response?.status === 200 || response?.status === 204) {
-        Alert.alert('Saved', 'Group settings updated.');
+        Alert.alert(t('groups.settings.savedTitle'), t('groups.settings.savedMessage'));
         onRefresh?.();
         onSaved?.();
       } else {
-        Alert.alert(`Error ${response?.status ?? ''}`, 'Could not save settings.');
+        Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.saveFailed'));
       }
     } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not save settings.');
+      Alert.alert(t('common.error'), err?.message ?? t('groups.settings.saveFailed'));
     } finally {
       setIsSaving(false);
     }
   };
 
-  const label = isSaving ? 'Saving…' : 'Save changes';
+  const label = isSaving ? t('groups.settings.saving') : t('groups.settings.saveChanges');
 
   return (
     <SettingsSection
@@ -80,29 +82,29 @@ export default function GroupIdentitySection({
       primaryColor={selectedPrimaryColor}
       secondaryColor={selectedSecondaryColor}
       testID={`${testIDPrefix}.section.identity`}
-      title="Group identity"
-      caption="Name and colors shown across the group."
+      title={t('groups.settings.identityTitle')}
+      caption={t('groups.settings.identityCaption')}
     >
-      <Text style={[styles.fieldLabel, { color: t.muted }]}>Name</Text>
+      <Text style={[styles.fieldLabel, { color: tokens.muted }]}>{t('groups.settings.nameLabel')}</Text>
       <TextInput
-        accessibilityLabel="Group name"
+        accessibilityLabel={t('groups.settings.namePlaceholder')}
         value={name}
         onChangeText={setName}
         style={[
           styles.input,
           {
-            color: t.text,
-            backgroundColor: t.inputSurface,
-            borderColor: t.hairlineInput,
+            color: tokens.text,
+            backgroundColor: tokens.inputSurface,
+            borderColor: tokens.hairlineInput,
           },
         ]}
         testID={`${testIDPrefix}.input.name`}
-        placeholder="Group name"
-        placeholderTextColor={t.mutedSoft}
+        placeholder={t('groups.settings.namePlaceholder')}
+        placeholderTextColor={tokens.mutedSoft}
       />
       <ColorPalettePicker
         appearance={appearance}
-        label="Primary color"
+        label={t('groups.create.primaryColor')}
         value={selectedPrimaryColor}
         onValueChange={setSelectedPrimaryColor}
         themeColors={pickerThemeColors}
@@ -110,7 +112,7 @@ export default function GroupIdentitySection({
       />
       <ColorPalettePicker
         appearance={appearance}
-        label="Secondary color"
+        label={t('groups.create.secondaryColor')}
         value={selectedSecondaryColor}
         onValueChange={setSelectedSecondaryColor}
         themeColors={pickerThemeColors}
@@ -124,13 +126,13 @@ export default function GroupIdentitySection({
         testID={`${testIDPrefix}.button.save-colors`}
         style={({ pressed }) => [
           styles.saveAction,
-          { backgroundColor: t.accent },
+          { backgroundColor: tokens.accent },
           pressed && styles.pressed,
           isSaving && styles.saveActionBusy,
         ]}
       >
-        <Ionicons name="save-outline" size={17} color={t.accentText} />
-        <Text style={[styles.saveActionText, { color: t.accentText }]}>{label}</Text>
+        <Ionicons name="save-outline" size={17} color={tokens.accentText} />
+        <Text style={[styles.saveActionText, { color: tokens.accentText }]}>{label}</Text>
       </Pressable>
     </SettingsSection>
   );

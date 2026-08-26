@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { Alert, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import LogicalImagePicker from '../../components/Picture/LogicalImagePicker';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 export default function HidingPathScreen({ navigation, route }) {
+  const { t } = useTranslation();
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
@@ -15,12 +17,13 @@ export default function HidingPathScreen({ navigation, route }) {
   useEffect(() => {
     if (!isLocked) return;
     Alert.alert(
-      'Group is locked',
-      'New private games are paused until the owner renews the subscription or transfers ownership.'
+      t('guess.path.lockTitle'),
+      t('guess.path.lockMessage')
     );
     if (navigation.canGoBack?.()) {
       navigation.goBack();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- alert once per lock state, not per t identity
   }, [isLocked, navigation]);
 
   useEffect(() => {
