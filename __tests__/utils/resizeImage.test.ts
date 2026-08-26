@@ -1,3 +1,5 @@
+import type { ImageResult } from 'expo-image-manipulator';
+
 const mockManipulate = jest.fn();
 const mockResize = jest.fn();
 const mockRenderAsync = jest.fn();
@@ -8,13 +10,13 @@ const mockFileSizeFor = jest.fn();
 
 jest.mock('expo-image-manipulator', () => ({
   ImageManipulator: {
-    manipulate: (...args) => mockManipulate(...args),
+    manipulate: (...args: unknown[]) => mockManipulate(...args),
   },
   SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
 }));
 
 jest.mock('expo-file-system', () => ({
-  File: function File(uri) {
+  File: function File(this: { uri: string; size: number | undefined }, uri: string) {
     this.uri = uri;
     this.size = mockFileSizeFor(uri);
   },
@@ -25,6 +27,12 @@ import { resizeImage } from '../../utils/resizeImage';
 
 const SAVED_URI = 'file:///tmp/resized.jpeg';
 
+type ManipulatorContextMock = {
+  resize: typeof mockResize;
+  renderAsync: typeof mockRenderAsync;
+  release: typeof mockContextRelease;
+};
+
 function resetManipulatorChain() {
   mockManipulate.mockReset();
   mockResize.mockReset();
@@ -32,18 +40,20 @@ function resetManipulatorChain() {
   mockSaveAsync.mockReset();
 
   mockManipulate.mockImplementation(() => {
-    const context = {
-      resize: mockResize.mockReturnValue(context),
-      renderAsync: mockRenderAsync.mockResolvedValue({
-        saveAsync: mockSaveAsync.mockResolvedValue({
-          uri: SAVED_URI,
-          width: 120,
-          height: 90,
-        }),
-        release: mockRefRelease,
-      }),
+    const context: ManipulatorContextMock = {
+      resize: mockResize,
+      renderAsync: mockRenderAsync,
       release: mockContextRelease,
     };
+    mockResize.mockReturnValue(context);
+    mockRenderAsync.mockResolvedValue({
+      saveAsync: mockSaveAsync.mockResolvedValue({
+        uri: SAVED_URI,
+        width: 120,
+        height: 90,
+      } satisfies ImageResult),
+      release: mockRefRelease,
+    });
     return context;
   });
 }
@@ -52,7 +62,7 @@ describe('utils/resizeImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetManipulatorChain();
-    mockFileSizeFor.mockImplementation((uri) => (uri === SAVED_URI ? 12_345 : undefined));
+    mockFileSizeFor.mockImplementation((uri: string) => (uri === SAVED_URI ? 12_345 : undefined));
   });
 
   it('resizes by width when the landscape side exceeds maxLongestSide', async () => {
