@@ -1,5 +1,4 @@
 import { Pressable, Text, View, Image, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { getCategoryAssetSource } from '../../utils/categoryAssets';
 import { GlobalStyle } from '../../constants/theme';
@@ -11,7 +10,6 @@ const OTHER_CATEGORY = {
 };
 
 export default function CategoryChips({ selected, onSelect, categories = [], testIDPrefix, variant = 'light' }) {
-  const { t } = useTranslation();
   const isOverlay = variant === 'overlay';
   const visibleCategories = [
     OTHER_CATEGORY,
@@ -50,7 +48,7 @@ export default function CategoryChips({ selected, onSelect, categories = [], tes
               isOverlay && styles.chipTextOverlay,
               isSelected && styles.chipTextSelected,
             ]}>
-              {category.key === OTHER_CATEGORY.key ? t('common.other') : category.name}
+              {category.name}
             </Text>
           </Pressable>
         );

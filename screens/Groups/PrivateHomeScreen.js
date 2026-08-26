@@ -2,7 +2,6 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Share, Alert, ScrollView, Image, Pressable } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { useTranslation } from 'react-i18next';
 
 import CenteredModal from '../../components/UI/CenteredModal';
 import HomeCard from '../../components/UI/HomeCard';
@@ -25,11 +24,11 @@ const HideImage = require('../../assets/home/WoIstWaldo-character-hide.webp');
 const FindImage = require('../../assets/home/WoIstWaldo-character-guess-4-3.webp');
 const RankingImage = require('../../assets/home/WoIstWaldo-character-stats.webp');
 
-const BACKGROUND_SLOT_LABEL_KEYS = {
-  hide: 'home.hideWaldo',
-  find: 'home.findWaldo',
-  ranking: 'home.ranking',
-};
+const BACKGROUND_SLOTS = [
+  { slot: 'hide', label: 'Hide Waldo' },
+  { slot: 'find', label: 'Find Waldo' },
+  { slot: 'ranking', label: 'Ranking' },
+];
 
 const SLOT_SETTINGS_KEY = {
   hide: 'hideBgImageId',
@@ -38,7 +37,6 @@ const SLOT_SETTINGS_KEY = {
 };
 
 export default function PrivateHomeScreen({ navigation, route }) {
-  const { t } = useTranslation();
   const routeScope = route?.params?.scope;
   const { scope, clear } = useActiveGroup();
   const authContext = useContext(AuthContext);
@@ -79,7 +77,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
       ranking: group?.home_button_backgrounds?.ranking,
     };
     setBgUris({});
-    Object.keys(snapshots).forEach(async (slot) => {
+    BACKGROUND_SLOTS.forEach(async ({ slot }) => {
       const slotData = snapshots[slot];
       if (!slotData?.image_id) return;
       const imageIdAtCall = slotData.image_id;
@@ -105,16 +103,16 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const shareCode = useCallback(async () => {
     const code = group?.joining_code;
     if (!code) {
-      Alert.alert(t('groups.home.noInviteCode'));
+      Alert.alert('No invite code available.');
       return;
     }
-    const message = t('groups.home.shareMessage', { code });
+    const message = `Join my private Waldo group! Code: ${code}`;
     try {
       await Share.share({ message });
     } catch (_) {
-      Alert.alert(t('groups.home.inviteCodeTitle'), message);
+      Alert.alert('Invite code', message);
     }
-  }, [group?.joining_code, t]);
+  }, [group?.joining_code]);
 
   const openColorEditor = useCallback(() => {
     setIsColorEditorVisible(true);
@@ -143,11 +141,11 @@ export default function PrivateHomeScreen({ navigation, route }) {
       }
       await refresh();
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('groups.home.updateBackgroundFailed'));
+      Alert.alert('Error', err?.message ?? 'Could not update background.');
     } finally {
       setSaving(slot, false);
     }
-  }, [authContext, groupId, group, refresh, setSaving, t]);
+  }, [authContext, groupId, group, refresh, setSaving]);
 
   const removeSlotBackground = useCallback(async (slot) => {
     if (!groupId) return;
@@ -165,11 +163,11 @@ export default function PrivateHomeScreen({ navigation, route }) {
       deleteHomeBackgroundFile(groupId, slot, prevImageId);
       await refresh();
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('groups.home.removeBackgroundFailed'));
+      Alert.alert('Error', err?.message ?? 'Could not remove background.');
     } finally {
       setSaving(slot, false);
     }
-  }, [authContext, groupId, group, refresh, setSaving, t]);
+  }, [authContext, groupId, group, refresh, setSaving]);
 
   useEffect(() => {
     navigation.setOptions({
@@ -187,7 +185,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
               navigation.navigate('HomeScreen');
             }}
             testID="private-home.button.switch-to-public"
-            accessibilityLabel={t('groups.menu.switchToPublic')}
+            accessibilityLabel="Switch to public"
             style={{ marginRight: 12 }}
           />
           {isOwner && (
@@ -197,7 +195,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
               size={26}
               onPress={openColorEditor}
               testID="private-home.button.customize-colors"
-              accessibilityLabel={t('groups.home.customizeColors')}
+              accessibilityLabel="Customize group colors"
               style={{ marginRight: 12 }}
             />
           )}
@@ -208,7 +206,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
               size={26}
               onPress={shareCode}
               testID="private-home.button.share-code"
-              accessibilityLabel={t('groups.home.shareCodeLabel')}
+              accessibilityLabel="Share invite code"
               style={{ marginRight: 12 }}
             />
           )}
@@ -219,13 +217,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
               size={26}
               onPress={() => navigation.navigate('GroupSettingsScreen')}
               testID="private-home.button.settings"
-              accessibilityLabel={t('groups.home.settingsLabel')}
+              accessibilityLabel="Group settings"
             />
           )}
         </View>
       ),
     });
-  }, [navigation, group?.name, group?.joining_code, isOwner, clear, shareCode, openColorEditor, groupTheme.headerTintColor, groupTheme.primaryColor, t]);
+  }, [navigation, group?.name, group?.joining_code, isOwner, clear, shareCode, openColorEditor, groupTheme.headerTintColor, groupTheme.primaryColor]);
 
   useFocusEffect(
     useCallback(() => {
@@ -280,7 +278,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
       <PrivateGroupThemeProvider group={group}>
       {isLocked && (
         <Text testID="private-home.lock-badge" style={styles.lockBadge}>
-          {t('groups.home.lockedByOwner')}
+          Locked by owner
         </Text>
       )}
       {isLocked && !isOwner && (
@@ -291,7 +289,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         />
       )}
       <HomeCard
-        text={t('home.hideWaldo')}
+        text="Hide Waldo"
         onPress={isLocked ? undefined : () => goScoped('HidingPathScreen')}
         backgroundImage={bgUris.hide ? { uri: bgUris.hide } : HideImage}
         heightPercent={40}
@@ -300,7 +298,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         pointerEvents={isLocked ? 'none' : 'auto'}
       />
       <HomeCard
-        text={t('home.findWaldo')}
+        text="Find Waldo"
         onPress={isLocked ? undefined : () => goScoped('GuessPathScreen')}
         backgroundImage={bgUris.find ? { uri: bgUris.find } : FindImage}
         heightPercent={40}
@@ -309,7 +307,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
         pointerEvents={isLocked ? 'none' : 'auto'}
       />
       <HomeCard
-        text={t('home.ranking')}
+        text="Ranking"
         onPress={() => goScoped('RankingScreen')}
         backgroundImage={bgUris.ranking ? { uri: bgUris.ranking } : RankingImage}
         heightPercent={20}
@@ -323,8 +321,8 @@ export default function PrivateHomeScreen({ navigation, route }) {
         testIDPrefix="private-home.color-editor"
         confirmTestID="private-home.color-editor.confirm.ok"
         cancelTestID="private-home.color-editor.confirm.cancel"
-        confirmLabel={t('common.done')}
-        cancelLabel={t('common.cancel')}
+        confirmLabel="Done"
+        cancelLabel="Cancel"
       >
         <ScrollView keyboardShouldPersistTaps="handled">
           <GroupIdentitySection
@@ -337,12 +335,11 @@ export default function PrivateHomeScreen({ navigation, route }) {
             onSaved={closeColorEditor}
             testIDPrefix="private-home"
           />
-          <Text style={[styles.bgSectionTitle, { color: groupTheme.lightText }]}>{t('groups.home.buttonBackgrounds')}</Text>
+          <Text style={[styles.bgSectionTitle, { color: groupTheme.lightText }]}>Button backgrounds</Text>
           <Text style={[styles.bgSectionCaption, { color: groupTheme.lightMuted }]}>
-            {t('groups.home.buttonBackgroundsCaption')}
+            Custom images behind each homescreen button.
           </Text>
-          {Object.keys(BACKGROUND_SLOT_LABEL_KEYS).map((slot) => {
-            const label = t(BACKGROUND_SLOT_LABEL_KEYS[slot]);
+          {BACKGROUND_SLOTS.map(({ slot, label }) => {
             const slotData = group?.home_button_backgrounds?.[slot];
             const uri = bgUris[slot];
             const isSaving = !!savingSlot[slot];
@@ -374,13 +371,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
                 <View style={styles.bgSlotInfo}>
                   <Text style={[styles.bgSlotLabel, { color: groupTheme.lightText }]}>{label}</Text>
                   <Text style={[styles.bgSlotStatus, { color: groupTheme.lightMuted }]}>
-                    {slotData ? t('groups.home.customImage') : t('groups.home.default')}
+                    {slotData ? 'Custom image' : 'Default'}
                   </Text>
                 </View>
                 <View style={styles.bgSlotActions}>
                   <Pressable
                     accessibilityRole="button"
-                    accessibilityLabel={t('groups.home.chooseBackgroundLabel', { name: label })}
+                    accessibilityLabel={`Choose ${label} background`}
                     onPress={() => chooseSlotBackground(slot)}
                     disabled={isSaving}
                     testID={`private-home.button-bg.${slot}.choose`}
@@ -392,18 +389,18 @@ export default function PrivateHomeScreen({ navigation, route }) {
                     ]}
                   >
                     <Ionicons name="cloud-upload-outline" size={15} color={groupTheme.accentText} />
-                    <Text style={[styles.bgChooseChipText, { color: groupTheme.accentText }]}>{isSaving ? t('groups.home.saving') : t('groups.home.choose')}</Text>
+                    <Text style={[styles.bgChooseChipText, { color: groupTheme.accentText }]}>{isSaving ? 'Saving…' : 'Choose'}</Text>
                   </Pressable>
                   {slotData && (
                     <Pressable
                       accessibilityRole="button"
-                      accessibilityLabel={t('groups.home.removeBackgroundLabel', { name: label })}
+                      accessibilityLabel={`Remove ${label} background`}
                       onPress={() => removeSlotBackground(slot)}
                       testID={`private-home.button-bg.${slot}.remove`}
                       style={({ pressed }) => [styles.bgRemoveChip, pressed && styles.pressed]}
                     >
                       <Ionicons name="trash-outline" size={14} color="#E03A3A" />
-                      <Text style={styles.bgRemoveChipText}>{t('groups.home.remove')}</Text>
+                      <Text style={styles.bgRemoveChipText}>Remove</Text>
                     </Pressable>
                   )}
                 </View>

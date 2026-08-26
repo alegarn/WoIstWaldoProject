@@ -1,12 +1,10 @@
 import { useState } from 'react';
 import { View, Platform } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../UI/Button';
 import Input from './Input';
 
 const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
-  const { t } = useTranslation();
   const [enteredEmail, setEnteredEmail] = useState('');
   const [enteredConfirmEmail, setEnteredConfirmEmail] = useState('');
   const [enteredPassword, setEnteredPassword] = useState('');
@@ -54,8 +52,8 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
     <View>
       <View>
         <Input
-          accessibilityLabel={t('auth.emailAddress')}
-          label={t('auth.emailAddress')}
+          accessibilityLabel="Email Address"
+          label="Email Address"
           onUpdateValue={updateInputValueHandler.bind(this, 'email')}
           testID="auth.input.email"
           value={enteredEmail}
@@ -64,8 +62,8 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
         />
         {!isLogin && (
           <Input
-            accessibilityLabel={t('auth.confirmEmailAddress')}
-            label={t('auth.confirmEmailAddress')}
+            accessibilityLabel="Confirm Email Address"
+            label="Confirm Email Address"
             onUpdateValue={updateInputValueHandler.bind(this, 'confirmEmail')}
             testID="auth.input.confirm-email"
             value={enteredConfirmEmail}
@@ -74,8 +72,8 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
           />
         )}
         <Input
-          accessibilityLabel={t('auth.password')}
-          label={t('auth.password')}
+          accessibilityLabel="Password"
+          label="Password"
           onUpdateValue={updateInputValueHandler.bind(this, 'password')}
           secure
           testID="auth.input.password"
@@ -85,8 +83,8 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
         {!isLogin && (
           <>
             <Input
-              accessibilityLabel={t('auth.confirmPassword')}
-              label={t('auth.confirmPassword')}
+              accessibilityLabel="Confirm Password"
+              label="Confirm Password"
               onUpdateValue={updateInputValueHandler.bind(
                 this,
                 'confirmPassword'
@@ -97,8 +95,8 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
               isInvalid={passwordsDontMatch}
             />
             <Input
-              accessibilityLabel={t('auth.username')}
-              label={t('auth.username')}
+              accessibilityLabel="Username"
+              label="Username"
               onUpdateValue={updateInputValueHandler.bind(
                 this,
                 'username'
@@ -110,13 +108,13 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
         )}
         <View style={{ marginTop: height * 0.02 }}>
           <Button
-            accessibilityLabel={isLogin ? t('auth.submitLoginLabel') : t('auth.submitSignupLabel')}
+            accessibilityLabel={isLogin ? 'Submit Login' : 'Submit Signup'}
             onPress={submitHandler}
             mode={Platform.OS === "ios" ? "flat" : null}
             testID={isLogin ? 'auth.button.login-submit' : 'auth.button.signup-submit'}
             thin={true}
             >
-            {isLogin ? t('auth.logIn') : t('auth.signUp')}
+            {isLogin ? 'Log In' : 'Sign Up'}
           </Button>
         </View>
       </View>

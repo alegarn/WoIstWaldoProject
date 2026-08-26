@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import { OverlayZIndex } from '../../constants/overlayZIndex';
@@ -15,8 +14,6 @@ const PANEL_WIDTH = 160;
 // (ShowPicture's nested RNGH surface detector) and drives `isOpen` from the
 // parent. This component is purely presentational.
 export default function GuessExitSwipeMenu({ isOpen, onClose, onHome, showHints = false, onInteract }) {
-  const { t } = useTranslation();
-
   useEffect(() => {
     if (isOpen) {
       onInteract?.();
@@ -28,7 +25,7 @@ export default function GuessExitSwipeMenu({ isOpen, onClose, onHome, showHints 
       {isOpen ? (
         <>
           <Pressable
-            accessibilityLabel={t('guess.exitMenu.closeExitPanel')}
+            accessibilityLabel="Close exit panel"
             accessibilityRole="button"
             onPress={onClose}
             style={styles.scrim}
@@ -40,7 +37,7 @@ export default function GuessExitSwipeMenu({ isOpen, onClose, onHome, showHints 
           >
             <View style={styles.panelHeader}>
               <Pressable
-                accessibilityLabel={t('guess.exitMenu.closeExitPanel')}
+                accessibilityLabel="Close exit panel"
                 accessibilityRole="button"
                 onPress={onClose}
                 style={styles.closeButton}
@@ -50,13 +47,13 @@ export default function GuessExitSwipeMenu({ isOpen, onClose, onHome, showHints 
               </Pressable>
             </View>
             <Pressable
-              accessibilityLabel={t('guess.exitMenu.goHome')}
+              accessibilityLabel="Go home"
               accessibilityRole="button"
               onPress={onHome}
               style={styles.homeButton}
               testID="guess.exit.home"
             >
-              <Text style={styles.homeLabel}>{t('common.home')}</Text>
+              <Text style={styles.homeLabel}>Home</Text>
             </Pressable>
           </Animated.View>
         </>

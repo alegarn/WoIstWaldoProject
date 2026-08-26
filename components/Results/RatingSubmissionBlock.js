@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { View, Text, Pressable, StyleSheet, TextInput } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 
@@ -53,7 +52,6 @@ export default function RatingSubmissionBlock({
   const [addingTag, setAddingTag] = useState(false);
   const [savingDetails, setSavingDetails] = useState(false);
   const [submitError, setSubmitError] = useState(null);
-  const { t } = useTranslation();
 
   const debounceTimerRef = useRef(null);
   const hasAutoSubmittedRef = useRef(false);
@@ -123,7 +121,7 @@ export default function RatingSubmissionBlock({
 
     if (response?.isError) {
       hasAutoSubmittedRef.current = false;
-      setSubmitError(response.message || t('result.rating.submitFailed'));
+      setSubmitError(response.message || 'Failed to submit rating');
       return;
     }
 
@@ -167,7 +165,7 @@ export default function RatingSubmissionBlock({
     setSavingDetails(false);
 
     if (response?.isError) {
-      setSubmitError(response.message || t('result.rating.submitFailed'));
+      setSubmitError(response.message || 'Failed to submit rating');
       return;
     }
 
@@ -192,7 +190,7 @@ export default function RatingSubmissionBlock({
       });
 
       if (response?.isError) {
-        setTagError(response.message || t('result.rating.addTagFailed'));
+        setTagError(response.message || 'Failed to add tag');
         return;
       }
 
@@ -207,7 +205,7 @@ export default function RatingSubmissionBlock({
       ]);
       setTagInput('');
     } catch (error) {
-      setTagError(error?.message || t('result.rating.addTagFailed'));
+      setTagError(error?.message || 'Failed to add tag');
     } finally {
       setAddingTag(false);
     }
@@ -229,13 +227,13 @@ export default function RatingSubmissionBlock({
       });
 
       if (response?.isError) {
-        setTagError(response.message || t('result.rating.removeTagFailed'));
+        setTagError(response.message || 'Failed to remove tag');
         return;
       }
 
       setTags((prev) => prev.filter((currentTag) => currentTag.name !== tag.name));
     } catch (error) {
-      setTagError(error?.message || t('result.rating.removeTagFailed'));
+      setTagError(error?.message || 'Failed to remove tag');
     }
   };
 
@@ -279,14 +277,14 @@ export default function RatingSubmissionBlock({
           onPress={() => setTagsModalOpen(true)}
           style={styles.link}
         >
-          <Text style={styles.linkText}>{t('result.rating.addTags')}</Text>
+          <Text style={styles.linkText}>Add tags (optional)</Text>
         </Pressable>
         <Pressable
           testID={`${testIDPrefix}.details.link`}
           onPress={() => setDetailsModalOpen(true)}
           style={styles.link}
         >
-          <Text style={styles.linkText}>{t('result.rating.addDetails')}</Text>
+          <Text style={styles.linkText}>Add details (optional)</Text>
         </Pressable>
       </View>
 
@@ -297,7 +295,7 @@ export default function RatingSubmissionBlock({
         testIDPrefix={`${testIDPrefix}.tags.modal`}
       >
         <View style={styles.tagsSection}>
-          <Text style={styles.detailModalTitle}>{t('result.rating.tagsTitle')}</Text>
+          <Text style={styles.detailModalTitle}>Tags</Text>
           <View style={styles.tagInputRow}>
             <TextInput
               testID={`${testIDPrefix}.tags.input`}
@@ -306,7 +304,7 @@ export default function RatingSubmissionBlock({
               onSubmitEditing={() => {
                 void handleAddTag();
               }}
-              placeholder={t('result.rating.addTagPlaceholder')}
+              placeholder="Add a tag"
               autoCapitalize="none"
               autoCorrect={false}
               style={styles.tagInput}
@@ -319,7 +317,7 @@ export default function RatingSubmissionBlock({
               disabled={!canAddTag}
               style={[styles.addTagButton, !canAddTag && styles.validateDisabled]}
             >
-              <Text style={styles.addTagButtonText}>{t('result.rating.addTagButton')}</Text>
+              <Text style={styles.addTagButtonText}>Add</Text>
             </Pressable>
           </View>
 
@@ -371,7 +369,7 @@ export default function RatingSubmissionBlock({
       >
         <View style={styles.detailModalBody}>
           <View style={styles.detailModalHeader}>
-            <Text style={styles.detailModalTitle}>{t('result.rating.rateInDetails')}</Text>
+            <Text style={styles.detailModalTitle}>Rate in details</Text>
             <View style={styles.detailModalDivider} />
           </View>
           <View style={styles.detailRowsContainer}>

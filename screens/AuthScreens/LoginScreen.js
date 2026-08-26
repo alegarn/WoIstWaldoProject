@@ -1,6 +1,5 @@
 import { useState, useContext } from 'react';
 import { Alert } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import AuthContent from '../../components/Auth/AuthContent';
@@ -9,7 +8,6 @@ import { login } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 
 function LoginScreen() {
-  const { t } = useTranslation();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const authContext = useContext(AuthContext);
 
@@ -72,29 +70,30 @@ function LoginScreen() {
       const response = await login({email, password});
       if (response.status === 200) {
         const authConfirmed = await handleAuthDataSaving(response, email);
-        if (!authConfirmed) {
+        if (!authConfirmed) {    
           Alert.alert(
-            t('auth.serverProblemTitle'),
-            t('auth.authSaveFailedMessage'));
+            "There is a problem with the server", 
+            "Try to reconnect. You authentification informations failed to be saved.");
         };
       } else if (response.status === 401) {
-        Alert.alert(t('auth.invalidCredentialsTitle'), t('auth.invalidCredentialsMessage', { response }));
+        Alert.alert('Invalid credentials, please retry', `Change your email or password before retrying \n ${response}`); 
       } else if (response.status === 500) {
-        Alert.alert(t('auth.serverErrorTitle'), t('auth.serverErrorMessage', { response }));
+        Alert.alert('Server error, please retry later', `Server problem on our side :/ \n ${response}`);
       } else {
-        Alert.alert(t('auth.retryLaterTitle'), `${response}`);
+        Alert.alert('Error, please retry later', `${response}`);
       };
       setIsAuthenticating(false);
     } catch (err) {
       //console.log(err);
-      Alert.alert(t('auth.caughtErrorTitle'), err);
+      Alert.alert('There is an error', err);
       setIsAuthenticating(false);
     };
   };
 
   if (isAuthenticating) {
+    const message = 'Authenticating...';
     return (
-      <LoadingOverlay message={t('auth.authenticating')} />
+      <LoadingOverlay message={message} />
     );
   };
 

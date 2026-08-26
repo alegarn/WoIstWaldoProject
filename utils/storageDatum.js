@@ -14,7 +14,6 @@ import { SERVING_CYCLE_PREFIX } from "./servingCycle";
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
 const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
-const UI_LOCALE_KEY = 'uiLocale';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
@@ -480,16 +479,6 @@ export async function getPreferredLanguage() {
 
 export async function savePreferredLanguage(code) {
   await AsyncStorage.setItem(PREFERRED_LANGUAGE_KEY, code);
-  return null;
-};
-
-export async function getUiLocale() {
-  const stored = await AsyncStorage.getItem(UI_LOCALE_KEY);
-  return stored || null;
-};
-
-export async function saveUiLocale(code) {
-  await AsyncStorage.setItem(UI_LOCALE_KEY, code);
   return null;
 };
 

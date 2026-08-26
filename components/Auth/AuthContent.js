@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { SafeAreaView, ScrollView, Alert, StyleSheet, View, Platform, Dimensions } from 'react-native';
 
 import { useNavigation } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../UI/Button';
 import AuthForm from './AuthForm';
@@ -15,7 +14,6 @@ const { width, height } = Dimensions.get('window');
 const AuthContent = ({ isLogin, onAuthenticate }) => {
 
   const navigation = useNavigation();
-  const { t } = useTranslation();
 
   const [credentialsInvalid, setCredentialsInvalid] = useState({
     email: false,
@@ -56,7 +54,7 @@ const AuthContent = ({ isLogin, onAuthenticate }) => {
       !usernameIsValid ||
       (!isLogin && (!emailsAreEqual || !passwordsAreEqual))
     ) {
-      Alert.alert(t('auth.invalidInputTitle'), t('auth.invalidInputMessage'));
+      Alert.alert('Invalid input', 'Please check your entered credentials.');
       setCredentialsInvalid({
         email: !emailIsValid,
         confirmEmail: !emailIsValid || !emailsAreEqual,
@@ -84,13 +82,13 @@ const AuthContent = ({ isLogin, onAuthenticate }) => {
         />
         <View style={styles.buttons}>
           <Button
-            accessibilityLabel={isLogin ? t('auth.switchToSignupLabel') : t('auth.switchToLoginLabel')}
+            accessibilityLabel={isLogin ? 'Switch to signup' : 'Switch to login'}
             onPress={switchAuthModeHandler}
             mode={Platform.OS === "ios" ? "flat" : null}
             testID={isLogin ? 'auth.button.switch-to-signup' : 'auth.button.switch-to-login'}
             thin={true}
           >
-            {isLogin ? t('auth.createAccount') : t('auth.loginInstead')}
+            {isLogin ? 'Create a new user' : 'Log in instead'}
           </Button>
         </View>
       </ScrollView>

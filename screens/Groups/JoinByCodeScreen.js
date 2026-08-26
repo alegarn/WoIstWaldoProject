@@ -1,6 +1,5 @@
 import { useContext, useState } from 'react';
 import { View, Text, TextInput, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../../components/UI/Button';
 import { GlobalStyle } from '../../constants/theme';
@@ -9,7 +8,6 @@ import { joinByCode } from '../../services/groups/groupJoinApi';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 
 export default function JoinByCodeScreen({ navigation }) {
-  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const { setActive } = useActiveGroup();
   const [code, setCode] = useState('');
@@ -20,7 +18,7 @@ export default function JoinByCodeScreen({ navigation }) {
     setErrorMessage('');
     const trimmed = code.trim();
     if (!trimmed) {
-      setErrorMessage(t('groups.join.enterCodeError'));
+      setErrorMessage('Please enter a code.');
       return;
     }
 
@@ -43,27 +41,27 @@ export default function JoinByCodeScreen({ navigation }) {
       }
 
       if (status === 429) {
-        setErrorMessage(t('groups.join.tooManyAttempts'));
+        setErrorMessage('Too many attempts — wait a minute.');
         return;
       }
 
       if (status === 422) {
         const reason = response?.data?.error || response?.data?.reason;
         if (reason === 'locked' || reason === 'group_locked') {
-          setErrorMessage(t('groups.join.locked'));
+          setErrorMessage('Group is locked.');
         } else if (reason === 'unknown_code') {
-          setErrorMessage(t('groups.join.unknownCode'));
+          setErrorMessage('Unknown code.');
         } else if (reason === 'already_member') {
-          setErrorMessage(t('groups.join.alreadyMember'));
+          setErrorMessage('You are already in this group.');
         } else {
-          setErrorMessage(t('groups.join.full'));
+          setErrorMessage('Group is full.');
         }
         return;
       }
 
-      setErrorMessage(t('groups.join.failed'));
+      setErrorMessage('Could not join. Please try again.');
     } catch (err) {
-      setErrorMessage(err?.message ?? t('groups.join.failed'));
+      setErrorMessage(err?.message ?? 'Could not join. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
@@ -71,9 +69,9 @@ export default function JoinByCodeScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t('groups.join.enterCode')}</Text>
+      <Text style={styles.label}>Enter the joining code</Text>
       <TextInput
-        accessibilityLabel={t('groups.join.codeLabel')}
+        accessibilityLabel="Joining code"
         value={code}
         onChangeText={setCode}
         autoCapitalize="characters"
@@ -86,12 +84,12 @@ export default function JoinByCodeScreen({ navigation }) {
         </Text>
       )}
       <Button
-        accessibilityLabel={t('groups.join.submitLabel')}
+        accessibilityLabel="Join group submit"
         onPress={submit}
         style={styles.button}
         testID="join-code.button.submit"
       >
-        {t('groups.join.join')}
+        Join
       </Button>
     </View>
   );

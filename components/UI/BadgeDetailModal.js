@@ -1,7 +1,4 @@
 import { Modal, View, Text, ScrollView, Pressable, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
-
-import { LANGUAGES } from '../../constants/languages';
 import { RATING_DIMENSIONS } from '../../constants/rating';
 
 function normalizeTags(tags) {
@@ -38,13 +35,9 @@ function formatCreatedAt(value) {
 }
 
 export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDPrefix }) {
-  const { t } = useTranslation();
   const tags = normalizeTags(image?.tags);
   const category = image?.category?.name ?? image?.category;
   const language = image?.language;
-  // Show the localized English language NAME (constants/languages.js `name`),
-  // not the raw code; unknown codes fall back to themselves.
-  const languageName = LANGUAGES.find((entry) => entry.code === language)?.name ?? language;
   const creator = image?.creatorUsername ?? image?.creator_username;
   const createdAt = formatCreatedAt(image?.createdAt ?? image?.created_at);
   const fullDescription = image?.fullDescription ?? image?.full_description;
@@ -61,7 +54,7 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
       <View testID={`${testIDPrefix}.modal`} style={styles.container}>
         <View style={styles.header}>
           <Pressable onPress={onOpenFilter} testID={`${testIDPrefix}.filter`} style={styles.filterButton}>
-            <Text style={styles.filterText}>{t('ui.badgeDetail.filter')}</Text>
+            <Text style={styles.filterText}>⚙ Filter</Text>
           </Pressable>
           <Pressable onPress={onClose} testID={`${testIDPrefix}.close`} style={styles.closeButton}>
             <Text style={styles.closeText}>X</Text>
@@ -73,56 +66,56 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
 
           {tags.length > 0 && (
             <View style={styles.row} testID={`${testIDPrefix}.row.tags`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.tags')}</Text>
+              <Text style={styles.label}>Tags</Text>
               <Text style={styles.value}>{tags.join(', ')}</Text>
             </View>
           )}
 
           {category ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.category`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.category')}</Text>
+              <Text style={styles.label}>Category</Text>
               <Text style={styles.value}>{category}</Text>
             </View>
           ) : null}
 
           {language ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.language`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.language')}</Text>
-              <Text style={styles.value}>{languageName}</Text>
+              <Text style={styles.label}>Language</Text>
+              <Text style={styles.value}>{language}</Text>
             </View>
           ) : null}
 
           {creator ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.creator`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.creator')}</Text>
+              <Text style={styles.label}>Creator</Text>
               <Text style={styles.value}>{creator}</Text>
             </View>
           ) : null}
 
           {createdAt ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.date`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.created')}</Text>
+              <Text style={styles.label}>Created</Text>
               <Text style={styles.value}>{createdAt}</Text>
             </View>
           ) : null}
 
           {Number.isFinite(averageRating) ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.global-rating`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.globalRating')}</Text>
+              <Text style={styles.label}>Global rating</Text>
               <Text style={styles.value}>{`★ ${averageRating} (${ratingsCount ?? 0})`}</Text>
             </View>
           ) : null}
 
           {fullDescription ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.enigma`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.enigma')}</Text>
+              <Text style={styles.label}>Enigma</Text>
               <Text style={styles.value}>{fullDescription}</Text>
             </View>
           ) : null}
 
           {detailedRatings.length > 0 ? (
             <View style={styles.row} testID={`${testIDPrefix}.row.detailed-ratings`}>
-              <Text style={styles.label}>{t('ui.badgeDetail.ratings')}</Text>
+              <Text style={styles.label}>Ratings</Text>
               {detailedRatings.map(({ key, label, value }) => (
                 <View
                   key={key}

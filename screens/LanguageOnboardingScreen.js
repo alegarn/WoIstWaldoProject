@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../components/UI/Button';
 import LanguageSelector from '../components/UI/LanguageSelector';
@@ -9,7 +8,6 @@ import { resolveDefaultLanguage } from '../utils/languageDefaults';
 import { savePreferredLanguage, setOnboardingCompleted } from '../utils/storageDatum';
 
 export default function LanguageOnboardingScreen({ onDone }) {
-  const { t } = useTranslation();
   const [selectedLanguage, setSelectedLanguage] = useState(resolveDefaultLanguage() || 'en');
   const [isSaving, setIsSaving] = useState(false);
 
@@ -33,30 +31,30 @@ export default function LanguageOnboardingScreen({ onDone }) {
     <SafeAreaView style={styles.container} testID="language-onboarding.screen">
       <View style={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>
-          {t('onboarding.title')}
+          Pick your preferred language
         </Text>
         <Text style={styles.subtitle}>
-          {t('onboarding.subtitle')}
+          This sets the default language for new enigmas. You can change it later in settings.
         </Text>
 
         <View style={styles.selectorBlock}>
-          <Text style={styles.label}>{t('onboarding.preferredLanguage')}</Text>
+          <Text style={styles.label}>Preferred language</Text>
           <LanguageSelector
             value={selectedLanguage}
             onChange={setSelectedLanguage}
-            accessibilityLabel={t('onboarding.selectorLabel')}
-            accessibilityHint={t('onboarding.selectorHint')}
+            accessibilityLabel="Select preferred language for new enigmas"
+            accessibilityHint="Opens the language list before you finish onboarding"
             testIDPrefix="language-onboarding.selector"
           />
         </View>
 
         <Button
-          accessibilityLabel={t('onboarding.confirmLabel')}
+          accessibilityLabel="Confirm preferred language and finish onboarding"
           onPress={handleConfirm}
           style={styles.button}
           testID="language-onboarding.button.confirm"
         >
-          {t('onboarding.confirm')}
+          Confirm
         </Button>
       </View>
     </SafeAreaView>

@@ -1,17 +1,16 @@
 import React, { useCallback, useMemo } from 'react';
 import { FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
 import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
 const COLUMNS = [
-  { header: 'Rank',       field: 'rank',      flex: 0.7, kind: 'rank', key: 'ui.ranking.rank' },
-  { header: 'Name',       field: 'name',      flex: 1.6, kind: 'name', key: 'ui.ranking.name' },
-  { header: 'Score',      field: 'score',     flex: 1,   kind: 'score', key: 'ui.ranking.score' },
-  { header: 'Max Streak', field: 'maxStreak', flex: 1,   kind: 'text', key: 'ui.ranking.maxStreak' },
-  { header: 'Others',     field: 'others',    flex: 0.9, kind: 'button', key: 'ui.ranking.others' },
+  { header: 'Rank',       field: 'rank',      flex: 0.7, kind: 'rank' },
+  { header: 'Name',       field: 'name',      flex: 1.6, kind: 'name' },
+  { header: 'Score',      field: 'score',     flex: 1,   kind: 'score' },
+  { header: 'Max Streak', field: 'maxStreak', flex: 1,   kind: 'text' },
+  { header: 'Others',     field: 'others',    flex: 0.9, kind: 'button' },
 ];
 
 function getColumnDescriptor(header) {
@@ -62,7 +61,7 @@ function cellTextStyle(kind, styles, rankColor) {
   return [styles.text];
 }
 
-const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics, styles, t }) {
+const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics, styles }) {
   const rankColor = getRankColor(row.rank);
   const rowBackground = getRowBackground(row.rank);
   return (
@@ -74,7 +73,7 @@ const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics
           return (
             <View key={key} style={[styles.cell, { flex: column.flex }]}>
               <TableButton
-                accessibilityLabel={t('ui.ranking.moreScores', { name: row.name })}
+                accessibilityLabel={`Show more scores for ${row.name}`}
                 onPress={() => onPressMore(row.name)}
                 testID={`ranking.row.${row.rank}.more`}
                 buttonWidth={metrics.buttonWidth}
@@ -102,7 +101,6 @@ const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics
 
 export default function TableComponent({ data, onPress, onEndReached }) {
   const { width, height } = useWindowDimensions();
-  const { t } = useTranslation();
   const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
   const theme = usePrivateGroupTheme();
   const containerBg = theme ? theme.screen : GlobalStyle.color.primaryColor800;
@@ -184,20 +182,20 @@ export default function TableComponent({ data, onPress, onEndReached }) {
           return (
             <View key={`${header}-${index}`} style={[styles.cell, { flex: column?.flex ?? 1 }]}>
               <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
-                {column ? t(column.key) : header}
+                {header}
               </Text>
             </View>
           );
         })}
       </View>
     );
-  }, [headers, styles, t]);
+  }, [headers, styles]);
 
   const renderItem = useCallback(
     ({ item }) => {
-      return <RowItem row={item} headers={headers} onPressMore={onPressMore} metrics={metrics} styles={styles} t={t} />;
+      return <RowItem row={item} headers={headers} onPressMore={onPressMore} metrics={metrics} styles={styles} />;
     },
-    [headers, onPressMore, metrics, styles, t]
+    [headers, onPressMore, metrics, styles]
   );
 
   return (

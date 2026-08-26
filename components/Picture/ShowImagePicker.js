@@ -1,45 +1,43 @@
 import { View, Image, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import BigButton from '../UI/BigButton';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowImagePicker(
-  { takePictureHandler,
-    image,
-    imageWidth,
-    imageHeight,
-    pickImage,
-    isTutorial
+  { takePictureHandler, 
+    image, 
+    imageWidth, 
+    imageHeight, 
+    pickImage, 
+    isTutorial 
   }) {
-  const { t } = useTranslation();
-
+  
 
   return (
     <View style={[styles.container, { paddingTop: image ? 10 : 0, justifyContent: image ? 'flex-start' : 'center' }]}>
       <View style={[styles.buttonsContainer, {marginTop: image ? 10 : 0,}]}>
         {isTutorial ?
-            <BigButton
-              accessibilityLabel={t('hide.takePictureLabel')}
+            <BigButton 
+              accessibilityLabel="Take a picture"
               testID="image-picker.button.take-picture"
-              text={t('hide.takePicture')}
+              text="Take a Picture" 
               onPress={takePictureHandler}
               />
-          :
+          : 
             <>
-              <BigButton
-                accessibilityLabel={t('hide.takePictureLabel')}
+              <BigButton 
+                accessibilityLabel="Take a picture"
                 testID="image-picker.button.take-picture"
-                text={t('hide.takePicture')}
+                text="Take a Picture" 
                 onPress={takePictureHandler}
-              />
-              <BigButton accessibilityLabel={t('hide.selectImageLabel')} testID="image-picker.button.select-image" text={t('hide.selectImage')} onPress={pickImage} />
+              /> 
+              <BigButton accessibilityLabel="Select an image" testID="image-picker.button.select-image" text="Select an Image" onPress={pickImage} />
             </>
-        }
+        } 
       </View>
       {image && (
         <View style={styles.imageContainer}>
-          <Image accessibilityLabel={t('hide.previewLabel')} source={{uri: image}} style={[styles.image, { width: imageWidth, height: imageHeight }]} testID="image-picker.preview" />
+          <Image accessibilityLabel="Selected image preview" source={{uri: image}} style={[styles.image, { width: imageWidth, height: imageHeight }]} testID="image-picker.preview" />
         </View>
       )}
       {isTutorial && (

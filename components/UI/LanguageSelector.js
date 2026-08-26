@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Pressable, View, Text, Modal, ScrollView, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { LANGUAGES } from '../../constants/languages';
 import { GlobalStyle } from '../../constants/theme';
@@ -9,90 +8,66 @@ export default function LanguageSelector({
   value,
   onChange,
   testIDPrefix,
-  accessibilityLabel = undefined,
-  accessibilityHint = undefined,
+  accessibilityLabel,
+  accessibilityHint,
   variant = 'light',
-  visible,
-  onClose,
 }) {
-  const [internalVisible, setInternalVisible] = useState(false);
-  const { t } = useTranslation();
+  const [visible, setVisible] = useState(false);
   const isOverlay = variant === 'overlay';
-  const isControlled = visible !== undefined;
 
-  const modalVisible = isControlled ? visible : internalVisible;
-  const handleClose = () => {
-    if (isControlled) {
-      onClose?.();
-      return;
-    }
-    setInternalVisible(false);
-  };
-
-  const selectedLanguage = LANGUAGES.find((language) => language.code === value);
   const selectedName =
-    (selectedLanguage && (selectedLanguage.nativeName ?? selectedLanguage.name)) ||
-    value ||
-    t('common.selectLanguage');
+    LANGUAGES.find((language) => language.code === value)?.name || value || 'Select language';
 
   const handleSelect = (code) => {
     onChange(code);
-    handleClose();
+    setVisible(false);
   };
-
-  const modal = (
-    <Modal
-      visible={modalVisible}
-      onRequestClose={handleClose}
-      animationType="slide"
-      transparent={false}>
-      <View style={styles.modalContainer} testID={testIDPrefix}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{t('common.selectLanguage')}</Text>
-          <Pressable
-            onPress={handleClose}
-            testID={`${testIDPrefix}.close`}
-            style={styles.closeButton}>
-            <Text style={styles.closeText}>{t('common.close')}</Text>
-          </Pressable>
-        </View>
-        <ScrollView>
-          {LANGUAGES.map((language) => {
-            const isSelected = language.code === value;
-            return (
-              <Pressable
-                key={language.code}
-                onPress={() => handleSelect(language.code)}
-                testID={`${testIDPrefix}.option.${language.code}`}
-                style={[styles.option, isSelected && styles.optionSelected]}>
-                <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                  {language.nativeName ?? language.name}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </ScrollView>
-      </View>
-    </Modal>
-  );
-
-  if (isControlled) {
-    return modal;
-  }
 
   return (
     <View>
       <Pressable
         accessibilityHint={accessibilityHint}
-        accessibilityLabel={accessibilityLabel ?? t('common.selectLanguage')}
+        accessibilityLabel={accessibilityLabel}
         accessibilityRole="button"
-        onPress={() => setInternalVisible(true)}
+        onPress={() => setVisible(true)}
         testID={`${testIDPrefix}.button`}
         style={[styles.button, isOverlay && styles.buttonOverlay]}>
         <Text style={[styles.buttonText, isOverlay && styles.buttonTextOverlay]}>{selectedName}</Text>
       </Pressable>
 
-      {modal}
+      <Modal
+        visible={visible}
+        onRequestClose={() => setVisible(false)}
+        animationType="slide"
+        transparent={false}>
+        <View style={styles.modalContainer}>
+          <View style={styles.header}>
+            <Text style={styles.title}>Select language</Text>
+            <Pressable
+              onPress={() => setVisible(false)}
+              testID={`${testIDPrefix}.close`}
+              style={styles.closeButton}>
+              <Text style={styles.closeText}>Close</Text>
+            </Pressable>
+          </View>
+          <ScrollView>
+            {LANGUAGES.map((language) => {
+              const isSelected = language.code === value;
+              return (
+                <Pressable
+                  key={language.code}
+                  onPress={() => handleSelect(language.code)}
+                  testID={`${testIDPrefix}.option.${language.code}`}
+                  style={[styles.option, isSelected && styles.optionSelected]}>
+                  <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
+                    {language.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      </Modal>
     </View>
   );
 }

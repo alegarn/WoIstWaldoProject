@@ -1,7 +1,5 @@
 import { useState } from "react";
 import { View, Text, ScrollView, StyleSheet, Keyboard } from "react-native";
-import { useTranslation } from "react-i18next";
-
 import Button from "../../UI/Button";
 import InputDescription from "./InputDescription";
 import LanguageSelector from "../../UI/LanguageSelector";
@@ -24,7 +22,6 @@ export default function ShowHideDescription({
   selectedCategory,
   onCategorySelect,
 }) {
-  const { t } = useTranslation();
   const [step, setStep] = useState(STEP_DESCRIBE);
 
   const goNext = () => {
@@ -55,12 +52,12 @@ export default function ShowHideDescription({
         <View style={styles.column}>
           {step === STEP_DESCRIBE && (
             <InputDescription
-              label={t('hideInstructions.describeLabel')}
+              label="Describe the hidden point"
               invalid={false}
               style={styles.input}
               textInputConfig={{
-                accessibilityLabel: t('hideInstructions.inputLabel'),
-                placeholder: t('hideInstructions.placeholder'),
+                accessibilityLabel: "Hidden point description",
+                placeholder: "How is your hiding location?",
                 placeholderTextColor: "white",
                 keyboardType: "default",
                 onChangeText: inputChangeHandler,
@@ -71,18 +68,16 @@ export default function ShowHideDescription({
 
           {step === STEP_LANGUAGE && (
             <View style={styles.field}>
-              <Text style={styles.label}>{t('hideInstructions.language')}</Text>
+              <Text style={styles.label}>Language</Text>
               <LanguageSelector
                 value={language}
                 onChange={onLanguageChange}
                 variant="overlay"
-                accessibilityLabel={t('hideInstructions.languageSelectorLabel')}
-                accessibilityHint={t('hideInstructions.languageSelectorHint')}
                 testIDPrefix="setInstructions.language"
               />
               {(languageError || languageMissing) && (
                 <Text testID="set-instructions.language.error" style={styles.errorText}>
-                  {t('hideInstructions.languageRequired')}
+                  Please select a language
                 </Text>
               )}
             </View>
@@ -90,7 +85,7 @@ export default function ShowHideDescription({
 
           {step === STEP_CATEGORY && (
             <View style={styles.field}>
-              <Text style={styles.label}>{t('hideInstructions.category')}</Text>
+              <Text style={styles.label}>Category</Text>
               <CategoryChips
                 categories={categories}
                 selected={selectedCategory}
@@ -104,13 +99,13 @@ export default function ShowHideDescription({
                     {categoriesError}
                   </Text>
                   <Button
-                    accessibilityLabel={t('hideInstructions.retryCategoriesLabel')}
+                    accessibilityLabel="Retry category loading"
                     style={styles.retryButton}
                     thin={true}
                     onPress={onRetryCategories}
                     testID="set-instructions.button.retry-categories"
                   >
-                    {t('common.retry')}
+                    Retry
                   </Button>
                 </View>
               )}
@@ -120,44 +115,44 @@ export default function ShowHideDescription({
           <View style={styles.buttonContainer}>
             {step > STEP_DESCRIBE && (
               <Button
-                accessibilityLabel={t('hideInstructions.backLabel')}
+                accessibilityLabel="Back to previous step"
                 mode="flat"
                 style={styles.button}
                 onPress={goBack}
                 testID="set-instructions.button.back"
               >
-                {t('hideInstructions.back')}
+                Back
               </Button>
             )}
             <Button
-              accessibilityLabel={t('hideInstructions.cancelLabel')}
+              accessibilityLabel="Cancel hidden point description"
               style={styles.button}
               thin={true}
               onPress={onCancel}
               testID="set-instructions.button.cancel-description"
             >
-              {t('common.cancel')}
+              Cancel
             </Button>
             {step < STEP_CATEGORY && (
               <Button
-                accessibilityLabel={t('hideInstructions.nextLabel')}
+                accessibilityLabel="Continue to next step"
                 style={styles.button}
                 thin={true}
                 onPress={handleNext}
                 testID="set-instructions.button.next"
               >
-                {t('hideInstructions.next')}
+                Next
               </Button>
             )}
             {step === STEP_CATEGORY && (
               <Button
-                accessibilityLabel={t('hideInstructions.confirmLabel')}
+                accessibilityLabel="Confirm hidden point description"
                 style={styles.button}
                 thin={true}
                 onPress={submitHandler}
                 testID="set-instructions.button.confirm-description"
               >
-                {t('hideInstructions.confirm')}
+                Confirm ?
               </Button>
             )}
           </View>

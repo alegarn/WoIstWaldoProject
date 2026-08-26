@@ -1,6 +1,5 @@
 import { useContext, useLayoutEffect, useState } from 'react';
 import { View, Text, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import Button from '../components/UI/Button';
 import Input from '../components/Auth/Input';
 import LanguageSelector from '../components/UI/LanguageSelector';
@@ -9,7 +8,6 @@ import { settingsTokens } from '../components/Groups/Settings/settingsTokens';
 import { GlobalStyle } from '../constants/theme';
 import { updateUser, deleteAccount } from '../utils/auth';
 import { AuthContext } from '../store/auth-context';
-import { useUiLocale } from '../store/i18n-context';
 import { checkSecureStoreItem } from '../utils/auth';
 import { getPreferredLanguage, savePreferredLanguage, wipePublicGuessStorage } from '../utils/storageDatum';
 import { resetServingCycles } from '../utils/servingCycle';
@@ -19,8 +17,6 @@ import LoadingOverlay from '../components/UI/LoadingOverlay';
 
 const SettingsScreen = ({ navigation }) => {
 
-  const { t } = useTranslation();
-  const { uiLocale, setUiLocale } = useUiLocale();
   const [email, setEmail] = useState('');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -30,7 +26,7 @@ const SettingsScreen = ({ navigation }) => {
   // UI states __________________________________________________________________
   const [isLoading, setIsLoading] = useState(false);
   const [isModalVisible, setIsModalVisible] = useState(false);
-  const [confirmMessage, setConfirmMessage] = useState(null);
+  const [confirmMessage, setConfirmMessage] = useState('');
   const [selectedOption, setSelectedOption] = useState(null);
 
   const context = useContext(AuthContext);
@@ -62,10 +58,6 @@ const SettingsScreen = ({ navigation }) => {
 
   // useEffect to fetch email and username_________________________________________
   useLayoutEffect(() => {
-    navigation?.setOptions({ title: t('settings.title') });
-  }, [navigation, t]);
-
-  useLayoutEffect(() => {
     let mounted = true;
     Promise.all([
       getEmail(),
@@ -93,12 +85,12 @@ const SettingsScreen = ({ navigation }) => {
 
     if (response?.status === 200) {
       await context.changeUserEmail(response?.data?.email);
-      Alert.alert(t('settings.emailChangedTitle'), t('settings.emailChangedMessage', { email: response?.data?.email }));
+      Alert.alert('Email changed successfully!', `Your new email is: ${response?.data?.email}`);
       console.log("setting response", response?.status);
       return;
     }
 
-    Alert.alert(t('settings.updateErrorTitle', { status: response?.status }), t('settings.emailErrorMessage', { data: String(response?.data) }));
+    Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}.`);
     console.log("setting response", response?.status);
   };
 
@@ -112,11 +104,11 @@ const SettingsScreen = ({ navigation }) => {
 
     if (response?.status === 200) {
       await context.changeUsername(response?.data?.username ?? username);
-      Alert.alert(t('settings.usernameChangedTitle'), t('settings.usernameChangedMessage', { username: response?.data?.username }));
+      Alert.alert('Username changed successfully!', `Your new username is ${response?.data?.username}`);
       return;
     }
 
-    Alert.alert(t('settings.updateErrorTitle', { status: response?.status }), t('settings.usernameErrorMessage', { data: String(response?.data) }));
+    Alert.alert(`Error status code: ${response?.status}`,`There is an an error: ${response?.data}\n\nYou can retry later or your username is already taken.`);
 
   };
 
@@ -124,8 +116,8 @@ const SettingsScreen = ({ navigation }) => {
     await savePreferredLanguage(code);
     setPreferredLanguage(code);
     Alert.alert(
-      t('settings.preferredSavedTitle'),
-      t('settings.preferredSavedMessage', { code })
+      'Preferred language saved!',
+      `Your preferred language for new enigmas is now: ${code}`
     );
   };
 
@@ -153,10 +145,10 @@ const SettingsScreen = ({ navigation }) => {
     console.log("handleChangePassword setting response", response?.status);
 
     response?.status === 200 &&
-      Alert.alert(t('settings.passwordChangedTitle'), t('settings.passwordChangedMessage'));
+      Alert.alert('Password changed successfully!', 'Your new password is ready!');
       // weird error (success but error)
     response?.status !== 200 &&
-      Alert.alert(t('common.error'), t('settings.errorMessage', { data: String(response?.data) }));
+      Alert.alert('Error', `${response?.data}`);
   };
 
   const handleDeleteAccount = async () => {
@@ -166,13 +158,13 @@ const SettingsScreen = ({ navigation }) => {
     if (response?.status === 200) {
       context.logout();
       Alert.alert(
-        t('settings.accountDeletedTitle'),
-      t('settings.accountDeletedMessage', { message: response?.data?.message })
+        'Account deleted successfully!',
+      `${response?.data?.message}\nWe are sorry to see you go!`
       );
     };
 
     response?.status !== 200
-      && Alert.alert(t('settings.updateErrorTitle', { status: response?.status }), t('settings.accountErrorMessage', { data: String(response?.data) }));
+      && Alert.alert(`Error status code: ${response?.status}`, `There is an an error: ${response?.data}`);
     return null;
   };
 
@@ -183,16 +175,16 @@ const SettingsScreen = ({ navigation }) => {
     setSelectedOption(option);
     switch (option) {
       case 'email':
-        setConfirmMessage({ key: 'settings.confirmEmailChange', params: { email } });
+        setConfirmMessage(`Are you sure you want to change your email to ${email} ?`);
         break;
       case 'username':
-        setConfirmMessage({ key: 'settings.confirmUsernameChange', params: { username } });
+        setConfirmMessage(`Are you sure you want to change your username to ${username}?`);
         break;
       case 'password':
-        setConfirmMessage({ key: 'settings.confirmPasswordChange' });
+        setConfirmMessage('Are you sure you want to change your password?');
         break;
       case 'delete':
-        setConfirmMessage({ key: 'settings.confirmDelete' });
+        setConfirmMessage(`!!! PERMANENT DELETION !!! \n\nAre you sure you want to delete your account?\n\n !!! PERMANENT DELETION !!!`);
         break;
       default:
         console.log('Invalid option selected');
@@ -231,7 +223,7 @@ const SettingsScreen = ({ navigation }) => {
 
   // LoadingOverlay functions ________________________________________________________
   const showLoadingOverlay = () => {
-    const message = t('settings.updating');
+    const message = "Updating...";
     return <LoadingOverlay message={message} />;
   };
 
@@ -245,94 +237,92 @@ const SettingsScreen = ({ navigation }) => {
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.screenBody} testID="settings.screen">
             <View style={styles.section}>
-              <SettingsSection title={t('settings.changeEmail')}>
+              <SettingsSection title="Change Email">
               <Input
-                accessibilityLabel={t('settings.settingsEmailLabel')}
+                accessibilityLabel="Settings email"
                 keyboardType="email-address"
-                label={t('settings.newEmail')}
+                label="New email"
                 onUpdateValue={setEmail}
                 testID="settings.input.email"
                 value={email}
               />
               <Button
-                accessibilityLabel={t('settings.saveEmailLabel')}
+                accessibilityLabel="Save email"
                 onPress={() => handleButtonClick('email')}
                 style={styles.button}
                 testID="settings.button.save-email"
               >
-                {t('settings.saveEmail')}
+                Save Email
               </Button>
               </SettingsSection>
             </View>
 
             <View style={styles.section}>
-              <SettingsSection title={t('settings.changeUsername')}>
+              <SettingsSection title="Change Username">
               <Input
-                accessibilityLabel={t('settings.settingsUsernameLabel')}
-                label={t('settings.newUsername')}
+                accessibilityLabel="Settings username"
+                label="New username"
                 onUpdateValue={setUsername}
                 testID="settings.input.username"
                 value={username}
               />
               <Button
-                accessibilityLabel={t('settings.saveUsernameLabel')}
+                accessibilityLabel="Save username"
                 onPress={() => handleButtonClick('username')}
                 style={styles.button}
                 testID="settings.button.save-username"
               >
-                {t('settings.saveUsername')}
+                Save Username
               </Button>
               </SettingsSection>
             </View>
 
             <View style={styles.section}>
-              <SettingsSection title={t('settings.changePassword')}>
+              <SettingsSection title="Change Password">
               <Input
-                accessibilityLabel={t('settings.currentPassword')}
-                label={t('settings.currentPassword')}
+                accessibilityLabel="Current password"
+                label="Current password"
                 onUpdateValue={setOldPassword}
                 secure
                 testID="settings.input.current-password"
                 value={oldPassword}
               />
               <Input
-                accessibilityLabel={t('settings.newPassword')}
-                label={t('settings.newPassword')}
+                accessibilityLabel="New password"
+                label="New password"
                 onUpdateValue={setPassword}
                 secure
                 testID="settings.input.new-password"
                 value={password}
               />
               <Input
-                accessibilityLabel={t('settings.confirmNewPassword')}
-                label={t('settings.confirmNewPassword')}
+                accessibilityLabel="Confirm new password"
+                label="Confirm new password"
                 onUpdateValue={setConfirmPassword}
                 secure
                 testID="settings.input.confirm-password"
                 value={confirmPassword}
               />
               <Button
-                accessibilityLabel={t('settings.savePasswordLabel')}
+                accessibilityLabel="Save password"
                 onPress={() => handleButtonClick('password')}
                 style={styles.button}
                 testID="settings.button.save-password"
               >
-                {t('settings.savePassword')}
+                Save Password
               </Button>
               </SettingsSection>
             </View>
 
             <View style={styles.section}>
               <SettingsSection
-                title={t('settings.preferredLanguage')}
+                title="Preferred Language"
               >
-              <Text style={styles.languageCaption}>{t('settings.preferredLanguageCaption')}</Text>
+              <Text style={styles.languageCaption}>Preferred language (for new enigmas):</Text>
               <View testID="settings.input.preferred-language">
                 <LanguageSelector
                   value={preferredLanguage}
                   onChange={handleSelectPreferredLanguage}
-                  accessibilityLabel={t('settings.preferredLanguageLabel')}
-                  accessibilityHint={t('settings.preferredLanguageHint')}
                   testIDPrefix="settings.input.preferred-language.selector"
                 />
               </View>
@@ -341,42 +331,25 @@ const SettingsScreen = ({ navigation }) => {
 
             <View style={styles.section}>
               <SettingsSection
-                title={t('settings.appLanguage')}
-              >
-              <Text style={styles.languageCaption}>{t('settings.appLanguageCaption')}</Text>
-              <View testID="settings.input.ui-locale">
-                <LanguageSelector
-                  value={uiLocale}
-                  onChange={setUiLocale}
-                  accessibilityLabel={t('settings.appLanguageLabel')}
-                  accessibilityHint={t('settings.appLanguageHint')}
-                  testIDPrefix="settings.input.ui-locale.selector"
-                />
-              </View>
-              </SettingsSection>
-            </View>
-
-            <View style={styles.section}>
-              <SettingsSection
-                title={t('settings.subscription')}
+                title="Subscription"
               >
               <Button
-                accessibilityLabel={t('settings.manageSubscriptionLabel')}
+                accessibilityLabel="Open subscription management"
                 onPress={() => navigation.navigate('SubscriptionManagementScreen')}
                 style={styles.button}
                 testID="settings.button.subscription"
               >
-                {t('settings.manageSubscription')}
+                Manage Subscription
               </Button>
               {(context?.paidTier ?? 0) < 3 && (
                 <Button
-                  accessibilityLabel={t('settings.viewPlans')}
+                  accessibilityLabel="View plans"
                   mode="flat"
                   onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
                   style={styles.button}
                   testID="settings.button.view-plans"
                 >
-                  {t('settings.viewPlans')}
+                  View plans
                 </Button>
               )}
               </SettingsSection>
@@ -398,18 +371,18 @@ const SettingsScreen = ({ navigation }) => {
             )}
 
             <View style={styles.dangerZoneContainer}>
-              <Text style={styles.dangerZoneText}>{t('settings.dangerZone')}</Text>
+              <Text style={styles.dangerZoneText}>Danger Zone</Text>
               <Text style={styles.dangerZoneCaption}>
-                {t('settings.dangerZoneCaption')}
+                Deleting your account is permanent and cannot be undone.
               </Text>
               <Button
-                accessibilityLabel={t('settings.deleteAccountLabel')}
+                accessibilityLabel="Delete account"
                 cancel={true}
                 onPress={() => handleButtonClick('delete')}
                 style={styles.button}
                 testID="settings.button.delete-account"
               >
-                {t('settings.deleteAccount')}
+                Delete Account
               </Button>
             </View>
           </View>
@@ -418,7 +391,7 @@ const SettingsScreen = ({ navigation }) => {
             onPress={handleConfirm}
             onCancel={handleCancel}
             testIDPrefix="settings.confirm-modal"
-            children={confirmMessage ? t(confirmMessage.key, confirmMessage.params) : ''}
+            children={confirmMessage}
           />
         </ScrollView>
       </SafeAreaView>

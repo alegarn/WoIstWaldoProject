@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 const GOLD = '#FFD700';
 
@@ -8,7 +7,6 @@ export default function ScoreCelebration({
   points = 1,
   testIDPrefix = 'result.celebration',
 }) {
-  const { t } = useTranslation();
   const scoreScale = useRef(new Animated.Value(0)).current;
   const leftFavorScale = useRef(new Animated.Value(0)).current;
   const leftFavorTranslateY = useRef(new Animated.Value(0)).current;
@@ -72,7 +70,7 @@ export default function ScoreCelebration({
     rightFavorTranslateY,
   ]);
 
-  const pointsLabel = t('result.points', { count: points });
+  const pointsLabel = `+${points} point${points === 1 ? '' : 's'}`;
 
   return (
     <View style={styles.container}>

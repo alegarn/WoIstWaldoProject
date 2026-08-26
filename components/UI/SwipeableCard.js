@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { ImageBackground, StyleSheet, PanResponder, Animated, Pressable, Text, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import GuessDescription from '../Picture/Descriptions/GuessDescription';
 import StarRatingBadge from './StarRatingBadge';
@@ -9,7 +8,6 @@ import { isE2EMode } from '../../utils/e2eMode';
 const TAP_SLOP = 8;
 
 export default function SwipeableCard({ item, removeCard, swipedDirection, screenWidth, screenHeight, onSwipe, onBadgePress }) {
-  const { t } = useTranslation();
   const e2eMode = isE2EMode();
 
   // States _________________________________________________________________
@@ -225,7 +223,7 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
   return (
     <Animated.View
       {...panResponder.panHandlers}
-      accessibilityLabel={t('guess.card.swipeableLabel', { id: item.listId })}
+      accessibilityLabel={`Swipeable card ${item.listId}`}
       testID={`guess-path.card.${item.listId}`}
       style={[
         styles.cardStyle,
@@ -251,19 +249,19 @@ export default function SwipeableCard({ item, removeCard, swipedDirection, scree
         {
           e2eMode ?
             <Pressable
-              accessibilityLabel={t('guess.card.openLabel', { id: item.listId })}
+              accessibilityLabel={`Open guess card ${item.listId}`}
               accessibilityRole="button"
               onPress={() => onSwipe({ item })}
               style={styles.e2eOpenButton}
               testID={`guess-path.card.open.${item.listId}`}
             >
-              <Text style={styles.e2eOpenButtonText}>{t('guess.card.open')}</Text>
+              <Text style={styles.e2eOpenButtonText}>Open</Text>
             </Pressable>
           : null
         }
 
         <ImageBackground
-          accessibilityLabel={t('guess.card.imageLabel', { id: item.listId })}
+          accessibilityLabel={`Guess path image ${item.listId}`}
           source={{ uri: item.imageFile}}
           resizeMode='contain'
           style={[styles.imageStyle, styles.expanded]}

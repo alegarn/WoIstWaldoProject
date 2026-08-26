@@ -1,6 +1,5 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Alert } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { AuthContext } from '../store/auth-context';
 import {
@@ -36,7 +35,6 @@ import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpl
  *   affect group-level data (e.g. a thumbnail swap).
  */
 export function useGroupCategories({ groupId, onRefresh }) {
-  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
 
   const [categories, setCategories] = useState([]);
@@ -132,9 +130,9 @@ export function useGroupCategories({ groupId, onRefresh }) {
       setNewCategoryName('');
       await writeThrough();
     } else {
-      Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.addFailed'));
+      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not add category.');
     }
-  }, [authContext, groupId, newCategoryName, writeThrough, t]);
+  }, [authContext, groupId, newCategoryName, writeThrough]);
 
   const saveCategory = useCallback(
     async (category) => {
@@ -146,35 +144,35 @@ export function useGroupCategories({ groupId, onRefresh }) {
       if (response?.status === 200 || response?.status === 204) {
         await writeThrough();
       } else {
-        Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.updateFailed'));
+        Alert.alert(`Error ${response?.status ?? ''}`, 'Could not update category.');
       }
     },
-    [authContext, groupId, drafts, writeThrough, t],
+    [authContext, groupId, drafts, writeThrough],
   );
 
   const removeCategory = useCallback(
     (category) => {
       Alert.alert(
-        t('groups.settings.deleteTitle'),
-        t('groups.settings.deleteMessage', { name: category.name }),
+        'Delete category?',
+        `"${category.name}" will be removed.`,
         [
-          { text: t('common.cancel'), style: 'cancel' },
+          { text: 'Cancel', style: 'cancel' },
           {
-            text: t('common.delete'),
+            text: 'Delete',
             style: 'destructive',
             onPress: async () => {
               const response = await deleteGroupCategory(authContext, groupId, category.id);
               if (response?.status === 200 || response?.status === 204) {
                 await writeThrough();
               } else {
-                Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.deleteFailed'));
+                Alert.alert(`Error ${response?.status ?? ''}`, 'Could not delete category.');
               }
             },
           },
         ],
       );
     },
-    [authContext, groupId, writeThrough, t],
+    [authContext, groupId, writeThrough],
   );
 
   // Category thumbnail swap via the shared helper (same flow used by
@@ -195,18 +193,18 @@ export function useGroupCategories({ groupId, onRefresh }) {
         });
         if (updateResponse?.status === 200 || updateResponse?.status === 204) {
           await writeThrough();
-          Alert.alert(t('groups.settings.uploadedTitle'), t('groups.settings.thumbnailUpdated'));
+          Alert.alert('Uploaded', 'Category thumbnail updated.');
           onRefresh?.();
         } else {
-          Alert.alert(`${t('common.error')} ${updateResponse?.status ?? ''}`, t('groups.settings.updateFailed'));
+          Alert.alert(`Error ${updateResponse?.status ?? ''}`, 'Could not update category.');
         }
       } catch (err) {
-        Alert.alert(t('common.error'), err?.message ?? t('groups.settings.updateThumbnailFailed'));
+        Alert.alert('Error', err?.message ?? 'Could not update thumbnail.');
       } finally {
         setIsSwappingThumbnail(false);
       }
     },
-    [authContext, groupId, writeThrough, onRefresh, t],
+    [authContext, groupId, writeThrough, onRefresh],
   );
 
   return {

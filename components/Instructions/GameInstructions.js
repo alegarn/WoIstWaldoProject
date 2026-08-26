@@ -1,20 +1,18 @@
 import { Pressable, View, Text, ImageBackground, StyleSheet } from "react-native";
 
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { useTranslation } from 'react-i18next';
 
 import BigButton from '../UI/BigButton';
 import { isE2EMode } from '../../utils/e2eMode';
 
 export default function GameInstructions({ uri, game, screenHeight, screenWidth, imageIsPortrait, handleFilterClick, imageDimensionStyle }) {
-  const { t } = useTranslation();
 
   console.log("imageDimensionStyle", imageDimensionStyle);
   const isGuess = game === 'guess';
   const FilterContainer = isE2EMode() ? Pressable : View;
   const filterContainerProps = isE2EMode()
     ? {
-        accessibilityLabel: t('game.instructions.dismissLabel', { game }),
+        accessibilityLabel: `Dismiss ${game} instructions overlay`,
         onPress: handleFilterClick,
         testID: `game.instructions.${game}.overlay`,
       }
@@ -24,28 +22,28 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
 
     if (!guess) {
       return (
-        <Text style={styles.filterText}>{t('game.instructions.hidePrompt')}</Text>
+        <Text style={styles.filterText}>Touch the screen to hide your Waldo!</Text>
       );
     };
 
     if (imageIsPortrait && guess) {
       return (
         <>
-          <Text style={styles.filterText}>{t('game.instructions.guessPromptLine1')}</Text>
-          <Text style={styles.filterText}>{t('game.instructions.guessPromptLine2')}</Text>
+          <Text style={styles.filterText}>Guess where the Waldo is,</Text>
+          <Text style={styles.filterText}>touch the screen!</Text>
         </>
       );
     };
 
     if (!imageIsPortrait && guess) {
       return (
-        <Text style={styles.filterText}>{t('game.instructions.guessPrompt')}</Text>
+        <Text style={styles.filterText}>Guess where the Waldo is, touch the screen!</Text>
       );
     };
   };
 
   let instructionsSupplement = "";
-  isGuess ? instructionsSupplement = (t('game.instructions.orShowDescription')): null;
+  isGuess ? instructionsSupplement = ("or show the description"): null;
 
   let portraitStyles = {
     flexDirection: 'column',
@@ -67,9 +65,9 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
 
           <View style={styles.marginTop}>
             <BigButton
-              accessibilityLabel={t('game.instructions.startLabel', { game })}
+              accessibilityLabel={`Start ${game} instructions`}
               testID={`game.instructions.${game}.start`}
-              text={t('game.instructions.play')}
+              text="Play!"
               onPress={handleFilterClick}
               buttonStyle="ranking"
             />
@@ -77,10 +75,10 @@ export default function GameInstructions({ uri, game, screenHeight, screenWidth,
 
           <View style={[styles.filterIconContainer, styles.marginTop, portraitStyles]}>
             <View style={styles.filterIconContainer}>
-              <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>{t('game.instructions.touchThe')}</Text>
+              <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>Touch the</Text>
               <Ionicons name={"close-circle-outline"} color={"white"} size={screenWidth/20}/>
             </View>
-            <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>{t('game.instructions.againToConfirm')}</Text>
+            <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>again to confirm</Text>
             <Text style={[styles.filterText, imageIsPortrait ? {padding: 3} : {padding: 10}]}>{instructionsSupplement}</Text>
           </View>
 

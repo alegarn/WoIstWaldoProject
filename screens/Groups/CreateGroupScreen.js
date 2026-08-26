@@ -1,6 +1,5 @@
 import { useContext, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import BigButton from '../../components/UI/BigButton';
 import Button from '../../components/UI/Button';
@@ -14,7 +13,6 @@ import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { createGroup } from '../../services/groups/groupApi';
 
 export default function CreateGroupScreen({ navigation }) {
-  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const { data, isLoading } = useGroupsHub();
   const { setActive } = useActiveGroup();
@@ -30,7 +28,7 @@ export default function CreateGroupScreen({ navigation }) {
   const alreadyOwns = owned.length > 0;
 
   if (isLoading && !data) {
-    return <LoadingOverlay message={t('groups.create.loading')} />;
+    return <LoadingOverlay message="Loading..." />;
   }
 
   if (alreadyOwns) {
@@ -49,13 +47,13 @@ export default function CreateGroupScreen({ navigation }) {
           style={styles.lockedMessage}
           testID="create-group.message.already-owns"
         >
-          {t('groups.create.onlyOne')}
+          You can only create 1 group.
         </Text>
         <BigButton
-          text={t('groups.create.goToGroup')}
+          text="Go to my group"
           onPress={goToGroup}
           testID="create-group.button.go-to-group"
-          accessibilityLabel={t('groups.create.goToGroup')}
+          accessibilityLabel="Go to my group"
         />
       </View>
     );
@@ -65,13 +63,13 @@ export default function CreateGroupScreen({ navigation }) {
     return (
       <View style={styles.lockedContainer}>
         <Text style={styles.lockedMessage}>
-          {t('groups.create.privateFeature')}
+          Group creation is a Private Group feature.
         </Text>
         <BigButton
-          text={t('groups.create.unlock')}
+          text="Unlock group creation"
           onPress={() => navigation.replace('PaywallScreen', { intent: 'create-group' })}
           testID="create-group.button.unlock"
-          accessibilityLabel={t('groups.create.unlock')}
+          accessibilityLabel="Unlock group creation"
         />
       </View>
     );
@@ -79,7 +77,7 @@ export default function CreateGroupScreen({ navigation }) {
 
   const submit = () => {
     if (!name.trim()) {
-      Alert.alert(t('groups.create.nameRequiredTitle'), t('groups.create.nameRequiredMessage'));
+      Alert.alert('Name required', 'Please enter a group name.');
       return;
     }
     setIsConfirmVisible(true);
@@ -108,23 +106,23 @@ export default function CreateGroupScreen({ navigation }) {
         return;
       }
 
-      Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.create.createFailed'));
+      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not create the group. Please try again.');
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('groups.create.createFailed'));
+      Alert.alert('Error', err?.message ?? 'Could not create the group. Please try again.');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   if (isSubmitting) {
-    return <LoadingOverlay message={t('groups.create.creating')} />;
+    return <LoadingOverlay message="Creating group..." />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{t('groups.create.nameLabel')}</Text>
+      <Text style={styles.label}>Group name</Text>
       <TextInput
-        accessibilityLabel={t('groups.create.nameLabel')}
+        accessibilityLabel="Group name"
         value={name}
         onChangeText={setName}
         style={styles.input}
@@ -132,26 +130,26 @@ export default function CreateGroupScreen({ navigation }) {
       />
 
       <ColorPalettePicker
-        label={t('groups.create.primaryColor')}
+        label="Primary color"
         value={primaryColor}
         onValueChange={setPrimaryColor}
         testIDPrefix="create-group.color-primary"
       />
 
       <ColorPalettePicker
-        label={t('groups.create.secondaryColor')}
+        label="Secondary color"
         value={secondaryColor}
         onValueChange={setSecondaryColor}
         testIDPrefix="create-group.color-secondary"
       />
 
       <Button
-        accessibilityLabel={t('groups.create.submitLabel')}
+        accessibilityLabel="Create group submit"
         onPress={submit}
         style={styles.button}
         testID="create-group.button.submit"
       >
-        {t('common.create')}
+        Create
       </Button>
 
       <CenteredModal
@@ -161,10 +159,10 @@ export default function CreateGroupScreen({ navigation }) {
         testIDPrefix="create-group.confirm"
         confirmTestID="create-group.confirm.ok"
         cancelTestID="create-group.confirm.cancel"
-        confirmLabel={t('common.create')}
-        cancelLabel={t('common.cancel')}
+        confirmLabel="Create"
+        cancelLabel="Cancel"
       >
-        {t('groups.create.confirmMessage', { name: name.trim() })}
+        {`Create group "${name.trim()}"?`}
       </CenteredModal>
     </View>
   );

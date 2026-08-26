@@ -1,10 +1,8 @@
 import { View, Text, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import IconButton from '../../UI/IconButton';
 import { GlobalStyle } from '../../../constants/theme';
 
 export default function GuessDescription({ item, showFullDescription, toggleDescription, style }) {
-  const { t } = useTranslation();
   const text = item?.description || item?.fullDescription || item?.full_description;
   const hasDescription = !(text === undefined || text === '');
 
@@ -14,7 +12,7 @@ export default function GuessDescription({ item, showFullDescription, toggleDesc
         style={styles.cardDescriptionStyle}
         testID="guess-description.text"
         numberOfLines={showFullDescription ? undefined : 2}>
-        {hasDescription ? text : t('guess.noDescription')}
+        {hasDescription ? text : "No description"}
       </Text>
     </View>
   )

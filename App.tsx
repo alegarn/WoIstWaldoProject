@@ -1,7 +1,6 @@
 import { useContext, useEffect, useRef, useState/* , useEffect, useLayoutEffect */ } from 'react';
 
 import { AppState, Platform } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { CommonActions, DefaultTheme, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -53,7 +52,6 @@ import SubscriptionManagementScreen from './screens/Billing/SubscriptionManageme
 
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
-import I18nProvider from './store/i18n-context';
 
 import LoadingOverlay from './components/UI/LoadingOverlay';
 
@@ -129,10 +127,6 @@ function LanguageOnboardingStack({ onDone }: { onDone: () => void }) {
 
 
 function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) {
-  // Nav titles translate through t() here; useTranslation re-renders this
-  // component on locale change so every screen's options (and titles) refresh.
-  const { t } = useTranslation();
-
   /* Start loading ads */
 /*   const { isLoaded, load } = __DEV__ ? useInterstitialAd(TestIds.INTERSTITIAL, {
     requestNonPersonalizedAdsOnly: true,
@@ -150,7 +144,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
 
   // functions __________________________________________________________
   const showLoadingOverlay = () => {
-    const message = t('app.disconnecting');
+    const message = "Disconnecting...";
     return <LoadingOverlay message={message} />;
   };
 
@@ -193,7 +187,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
                   onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
                 />
                 <IconButton
-                  accessibilityLabel={t('app.openSettings')}
+                  accessibilityLabel="Open settings"
                   icon="settings"
                   color={tintColor}
                   size={24}
@@ -202,7 +196,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
                   style={{ marginRight: 20 }}
                 />
                 <IconButton
-                  accessibilityLabel={t('app.logoutLabel')}
+                  accessibilityLabel="Log out"
                   icon="exit"
                   color={tintColor}
                   size={24}
@@ -224,7 +218,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           component={HidingPathScreen}
           options={{
             presentation: "modal",
-            title: t('nav.hideWaldo')
+            title:"Hide Waldo"
           }} />
         <Stack.Screen
           name="HideScreen"
@@ -245,10 +239,10 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           component={GuessPathScreen}
           options={({ navigation }) => ({
             presentation: "modal",
-            title: t('nav.guessPath'),
+            title:"Guess Path Screen",
             headerLeft: () => (
               <IconButton
-                accessibilityLabel={t('common.back')}
+                accessibilityLabel="Go back"
                 icon="arrow-back"
                 color={"white"}
                 size={24}
@@ -262,10 +256,10 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           options={({ navigation }) => ({
             presentation: "modal",
             headerShown: true,
-            title: t('nav.guessFeed'),
+            title: "Guess Feed",
             headerLeft: () => (
               <IconButton
-                accessibilityLabel={t('common.back')}
+                accessibilityLabel="Go back"
                 icon="arrow-back"
                 color={"white"}
                 size={24}
@@ -294,7 +288,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="RankingScreen"
           component={RankingScreen}
           options={{
-            title: t('nav.ranking'),
+            title: "Ranking",
             presentation: "modal",
             headerShown: true
           }} />
@@ -302,7 +296,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="GroupsListScreen"
           component={GroupsListScreen}
           options={{
-            title: t('nav.privateGroups'),
+            title: "Private Groups",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -317,7 +311,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="CreateGroupScreen"
           component={CreateGroupScreen}
           options={{
-            title: t('nav.createGroup'),
+            title: "Create Group",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -325,7 +319,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="JoinByCodeScreen"
           component={JoinByCodeScreen}
           options={{
-            title: t('nav.joinByCode'),
+            title: "Join by Code",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -333,7 +327,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="GroupSettingsScreen"
           component={GroupSettingsScreen}
           options={{
-            title: t('nav.groupSettings'),
+            title: "Group Settings",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -341,7 +335,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="MemberManagementScreen"
           component={MemberManagementScreen}
           options={{
-            title: t('nav.members'),
+            title: "Members",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -349,7 +343,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="PaywallScreen"
           component={PaywallScreen}
           options={{
-            title: t('nav.plans'),
+            title: "Plans",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -357,7 +351,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           name="SubscriptionManagementScreen"
           component={SubscriptionManagementScreen}
           options={{
-            title: t('nav.subscription'),
+            title: "Subscription",
             presentation: "modal",
             headerShown: true,
           }} />
@@ -365,7 +359,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
           <Stack.Screen
             name="MockPreview"
             component={MockPreviewScreen}
-            options={{ title: t('nav.mockPreview') }} />
+            options={{ title: "Mock Preview" }} />
         )}
       </Stack.Navigator>
     </>
@@ -374,7 +368,6 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
 
 
 function Navigation({ authContext }: { authContext: AuthContextValue }) {
-  const { t } = useTranslation();
   const navigationRef = useNavigationContainerRef();
   const e2eHomeResetTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isOnboardingResolved, setIsOnboardingResolved] = useState(!authContext.IsAuthenticated);
@@ -524,7 +517,7 @@ function Navigation({ authContext }: { authContext: AuthContextValue }) {
   }, [authContext.IsAuthenticated, authContext, showLanguageOnboarding]);
 
   if (!isOnboardingResolved) {
-    return <LoadingOverlay message={t('app.loadingPreferences')} />;
+    return <LoadingOverlay message="Loading preferences..." />;
   }
 
   return (
@@ -642,12 +635,10 @@ export default function App() {
 
   return (
     <AuthContextProvider>
-      <I18nProvider>
-        {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
-        <AdMobInterstitialBridge />
-        <NavigationBar hidden />
-        <Root />
-      </I18nProvider>
+      {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
+      <AdMobInterstitialBridge />
+      <NavigationBar hidden />
+      <Root />
     </AuthContextProvider>
   );
 };

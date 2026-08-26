@@ -1,6 +1,5 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { useTranslation } from 'react-i18next';
 
 import SettingsSection from './SettingsSection';
 import { getSettingsTokens } from './settingsTokens';
@@ -18,8 +17,7 @@ export default function GroupMembersSection({
   primaryColor,
   secondaryColor,
 }) {
-  const { t } = useTranslation();
-  const tokens = getSettingsTokens({ appearance, primaryColor, secondaryColor });
+  const t = getSettingsTokens({ appearance, primaryColor, secondaryColor });
 
   return (
     <SettingsSection
@@ -30,23 +28,23 @@ export default function GroupMembersSection({
     >
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={t('groups.settings.manageMembers')}
+        accessibilityLabel="Manage members"
         onPress={onManageMembers}
         testID="group-settings.button.members"
         style={({ pressed }) => [
           styles.row,
-          { backgroundColor: tokens.inset, borderColor: tokens.hairline },
+          { backgroundColor: t.inset, borderColor: t.hairline },
           pressed && styles.pressed,
         ]}
       >
-        <View style={[styles.iconWell, { backgroundColor: tokens.accent }]}>
-          <Ionicons name="people-outline" size={20} color={tokens.text} />
+        <View style={[styles.iconWell, { backgroundColor: t.accent }]}>
+          <Ionicons name="people-outline" size={20} color={t.text} />
         </View>
         <View style={styles.labelCol}>
-          <Text style={[styles.rowTitle, { color: tokens.text }]}>{t('groups.settings.manageMembers')}</Text>
-          <Text style={[styles.rowCaption, { color: tokens.muted }]}>{t('groups.settings.manageMembersCaption')}</Text>
+          <Text style={[styles.rowTitle, { color: t.text }]}>Manage members</Text>
+          <Text style={[styles.rowCaption, { color: t.muted }]}>Add or remove members, transfer ownership.</Text>
         </View>
-        <Ionicons name="chevron-forward" size={20} color={tokens.muted} />
+        <Ionicons name="chevron-forward" size={20} color={t.muted} />
       </Pressable>
     </SettingsSection>
   );

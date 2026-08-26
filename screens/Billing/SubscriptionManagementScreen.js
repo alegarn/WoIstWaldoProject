@@ -1,7 +1,6 @@
 import { useCallback, useContext, useState } from 'react';
 import { View, Text, StyleSheet, Alert, Platform, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../../components/UI/Button';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -14,6 +13,13 @@ import {
   refreshEntitlement,
 } from '../../utils/purchases';
 
+function tierLabel(tier) {
+  if (tier >= 3) return 'Premium';
+  if (tier === 2) return 'Private Group';
+  if (tier === 1) return 'No-ads';
+  return 'Free';
+}
+
 function platformSubscriptionUrl() {
   return Platform.OS === 'ios'
     ? 'https://apps.apple.com/account/subscriptions'
@@ -21,15 +27,6 @@ function platformSubscriptionUrl() {
 }
 
 export default function SubscriptionManagementScreen({ navigation }) {
-  const { t } = useTranslation();
-
-  const tierLabel = (tier) => {
-    if (tier >= 3) return t('billing.subscription.tierPremium');
-    if (tier === 2) return t('billing.subscription.tierPrivateGroup');
-    if (tier === 1) return t('billing.subscription.tierNoAds');
-    return t('billing.subscription.tierFree');
-  };
-
   const authContext = useContext(AuthContext);
   const [isWorking, setIsWorking] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
@@ -66,11 +63,11 @@ export default function SubscriptionManagementScreen({ navigation }) {
       }
     } catch (error) {
       setRestoreError(true);
-      Alert.alert(t('billing.paywall.restoreFailed'), error?.message ?? '');
+      Alert.alert('Restore failed', error?.message ?? '');
     } finally {
       setIsWorking(false);
     }
-  }, [authContext, t]);
+  }, [authContext]);
 
   const handleManage = useCallback(async () => {
     const url = platformSubscriptionUrl();
@@ -78,70 +75,70 @@ export default function SubscriptionManagementScreen({ navigation }) {
       const Linking = require('expo-linking');
       await Linking.openURL(url);
     } catch (error) {
-      Alert.alert(t('billing.subscription.openSettingsFailed'), error?.message ?? '');
+      Alert.alert('Could not open subscription settings', error?.message ?? '');
     }
   }, []);
 
   if (isWorking) {
-    return <LoadingOverlay message={t('billing.subscription.restoring')} />;
+    return <LoadingOverlay message="Restoring..." />;
   }
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>{t('billing.subscription.currentPlan')}</Text>
+      <Text style={styles.title}>Current plan</Text>
       <Text style={styles.tier}>{tierLabel(authContext?.paidTier ?? 0)}</Text>
 
       {refreshing && (
         <Text style={styles.refreshHint} testID="subscription-refresh.hint">
-          {t('billing.subscription.refreshing')}
+          Refreshing plan…
         </Text>
       )}
 
       {refreshError && (
         <View style={styles.refreshErrorRow}>
-          <Text style={styles.error}>{t('billing.subscription.refreshFailed')}</Text>
+          <Text style={styles.error}>Couldn’t refresh plan.</Text>
           <TouchableOpacity
-            accessibilityLabel={t('billing.subscription.retryRefreshLabel')}
+            accessibilityLabel="Retry plan refresh"
             onPress={refreshFromBackend}
             testID="subscription-refresh.retry"
           >
-            <Text style={styles.retryText}>{t('common.retry')}</Text>
+            <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
-          {t('billing.paywall.noSubscription')}
+          No active subscription found.
         </Text>
       )}
 
       <View style={styles.buttonGroup}>
         {(authContext?.paidTier ?? 0) < 3 && (
           <Button
-            accessibilityLabel={t('billing.subscription.upgrade')}
+            accessibilityLabel="Upgrade"
             onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
             style={styles.button}
             testID="subscription-manage.button.upgrade"
           >
-            {t('billing.subscription.upgrade')}
+            Upgrade
           </Button>
         )}
         <Button
-          accessibilityLabel={t('billing.paywall.restorePurchases')}
+          accessibilityLabel="Restore purchases"
           onPress={handleRestore}
           style={styles.button}
           testID="subscription-manage.button.restore"
         >
-          {t('billing.paywall.restorePurchases')}
+          Restore purchases
         </Button>
         <Button
-          accessibilityLabel={t('billing.subscription.manage')}
+          accessibilityLabel="Manage subscription"
           onPress={handleManage}
           style={styles.button}
           testID="subscription-manage.button.manage"
         >
-          {t('billing.subscription.manage')}
+          Manage subscription
         </Button>
       </View>
     </View>

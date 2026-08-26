@@ -1,5 +1,4 @@
 import { Modal, View, Text, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import Button from '../UI/Button';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
@@ -14,8 +13,7 @@ export default function LockedGroupOwnerModal({
   onDismiss,
   testIDPrefix = 'private-home.locked-owner-modal',
 }) {
-  const { t } = useTranslation();
-  const name = groupName && groupName.trim().length > 0 ? groupName : t('groups.locked.thisGroup');
+  const name = groupName && groupName.trim().length > 0 ? groupName : 'this group';
   const theme = getPrivateGroupTheme({ primaryColor, secondaryColor });
 
   return (
@@ -27,10 +25,10 @@ export default function LockedGroupOwnerModal({
           testID={`${testIDPrefix}.content`}
         >
           <Text style={[styles.title, { color: theme.lightText }]} testID={`${testIDPrefix}.title`}>
-            {t('groups.locked.ownerTitle')}
+            Your private-group access ended
           </Text>
           <Text style={[styles.body, { color: theme.lightMuted }] }>
-            {t('groups.locked.ownerBody', { name })}
+            {`${name} is now locked and read-only. Members can still view existing images and rankings, but new private games are paused until you renew your private-group subscription or transfer ownership to a member with private-group access.`}
           </Text>
 
           <View style={styles.actions}>
@@ -39,18 +37,18 @@ export default function LockedGroupOwnerModal({
               style={{ backgroundColor: theme.primaryColor }}
               textStyle={{ color: theme.accentText }}
               testID={`${testIDPrefix}.button.renew`}
-              accessibilityLabel={t('groups.locked.renew')}
+              accessibilityLabel="Renew subscription"
             >
-              {t('groups.locked.renew')}
+              Renew subscription
             </Button>
             <Button
               mode="flat"
               onPress={onTransfer}
               textStyle={{ color: theme.secondaryColor }}
               testID={`${testIDPrefix}.button.transfer`}
-              accessibilityLabel={t('groups.locked.transfer')}
+              accessibilityLabel="Transfer ownership"
             >
-              {t('groups.locked.transfer')}
+              Transfer ownership
             </Button>
             <Button
               mode="flat"
@@ -58,9 +56,9 @@ export default function LockedGroupOwnerModal({
               onPress={onDismiss}
               textStyle={{ color: theme.lightMuted }}
               testID={`${testIDPrefix}.button.dismiss`}
-              accessibilityLabel={t('groups.locked.later')}
+              accessibilityLabel="Later"
             >
-              {t('groups.locked.later')}
+              Later
             </Button>
           </View>
         </View>

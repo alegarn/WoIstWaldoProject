@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
-import { resolveDefaultLanguage, resolveUiLocale } from '../utils/languageDefaults';
+import { resolveDefaultLanguage } from '../utils/languageDefaults';
 
 describe('resolveDefaultLanguage', () => {
   const originalDateTimeFormat = Intl.DateTimeFormat;
@@ -52,45 +52,6 @@ describe('resolveDefaultLanguage', () => {
   });
 });
 
-describe('resolveUiLocale', () => {
-  const originalDateTimeFormat = Intl.DateTimeFormat;
-
-  function mockDeviceLocale(locale) {
-    Intl.DateTimeFormat = jest.fn(() => ({
-      resolvedOptions: () => ({ locale }),
-    }));
-  }
-
-  afterEach(() => {
-    Intl.DateTimeFormat = originalDateTimeFormat;
-    jest.restoreAllMocks();
-  });
-
-  it('resolves the device locale on first boot with no stored uiLocale (id-ID -> id)', () => {
-    mockDeviceLocale('id-ID');
-
-    expect(resolveUiLocale(null)).toBe('id');
-  });
-
-  it('falls through an unsupported stored uiLocale to the device locale', () => {
-    mockDeviceLocale('fr-FR');
-
-    expect(resolveUiLocale('xx')).toBe('fr');
-  });
-
-  it('falls back to "en" when the device locale is unsupported and nothing is stored', () => {
-    mockDeviceLocale('xx-XX');
-
-    expect(resolveUiLocale(undefined)).toBe('en');
-  });
-
-  it('lets a supported stored uiLocale win over the device locale', () => {
-    mockDeviceLocale('fr-FR');
-
-    expect(resolveUiLocale('de')).toBe('de');
-  });
-});
-
 describe('guess screens language namespace', () => {
   function readStringConstant(relativePath, name) {
     const sourcePath = resolve(__dirname, '..', ...relativePath.split('/'));
@@ -103,7 +64,7 @@ describe('guess screens language namespace', () => {
 
   it("feed-screen default language === path-screen navigation fallback ('any')", () => {
     const feedDefault = readStringConstant(
-      'screens/GuessScreens/GuessFeedScreen.tsx',
+      'screens/GuessScreens/GuessFeedScreen.js',
       'DEFAULT_LANGUAGE'
     );
     const pathFallback = readStringConstant(

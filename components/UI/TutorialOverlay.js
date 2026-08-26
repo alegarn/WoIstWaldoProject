@@ -1,19 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated } from 'react-native';
-import { useTranslation } from 'react-i18next';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
 const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) => {
-  const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
   const [closeButtonText, setCloseButtonText] = useState("Close");
   const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
-
-  const translateInstruction = useCallback(
-    (raw) => t(raw, { defaultValue: raw }),
-    [t]
-  );
   
   //ScrollBar states, variables
   const [completeScrollBarHeight, setCompleteScrollBarHeight] = useState(1);
@@ -171,7 +164,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
                     </View>
               }
               
-              <Text style={styles.instructions}>{translateInstruction(instructions)}</Text>
+              <Text style={styles.instructions}>{instructions}</Text>
             </ScrollView>
             {/* scrollbar elements */}
             <View
@@ -199,24 +192,24 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
                 <View style={styles.buttonsContainer}>
                   <View style={styles.splitButtonContainer}>
 
-                    <Pressable
-                      onPress={() => onPress?.Hide()}
+                    <Pressable 
+                      onPress={() => onPress?.Hide()} 
                       style={[styles.splitButton, styles.splitButtonLeft]}
                     >
-                      <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.hide)}</Text>
+                      <Text style={styles.closeButtonText}>{closeButtonText?.hide}</Text>
                     </Pressable>
 
-                    <Pressable
-                      onPress={() => onPress?.Guess()}
+                    <Pressable 
+                      onPress={() => onPress?.Guess()} 
                       style={[styles.splitButton, styles.splitButtonRight]}
                     >
-                      <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.guess)}</Text>
+                      <Text style={styles.closeButtonText}>{closeButtonText?.guess}</Text>
                     </Pressable>
 
                   </View>
 
                   <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
-                    <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.finish)}</Text>
+                    <Text style={styles.closeButtonText}>{closeButtonText?.finish}</Text>
                   </Pressable>
                     
                 </View>
@@ -228,7 +221,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
             (
             <View style={styles.buttonsContainer}>
               <Pressable onPress={onPressAction} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText)}</Text>
+                <Text style={styles.closeButtonText}>{closeButtonText}</Text>
               </Pressable>
             </View>
             ) : null

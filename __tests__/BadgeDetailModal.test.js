@@ -141,7 +141,7 @@ describe('BadgeDetailModal', () => {
       expect.arrayContaining([
         'scenic, night',
         'City',
-        'French',
+        'fr',
         'live_creator',
         formatExpectedDate('2026-01-02T00:00:00Z'),
         'Find Waldo near the bridge.',

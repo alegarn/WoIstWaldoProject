@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import { useTranslation } from 'react-i18next';
 
 import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
@@ -30,7 +29,6 @@ const HANDLE_SWIPE_ACTIVE_Y = -40;
 const HANDLE_SWIPE_FAIL_Y = 10;
 
 export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
-  const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
 
@@ -135,7 +133,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
       style={[target.dragStyle, styles.dragRing, pulseStyle]}
       testID={guess ? 'game.picture.guess-target-wrap' : 'game.picture.hide-target-wrap'}
     >
-      <IconButton accessibilityLabel={t('game.picture.clearPointLabel')} icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
+      <IconButton accessibilityLabel="Clear selected point" icon={"close-circle-outline"} color={"white"} size={target.targetSize} onPress={handleIconPress} testID={guess ? 'game.picture.clear-guess' : 'game.picture.clear-hide'}/>
       {guess && speedRingActive && target?.dragSize > 0 && (
         <View style={[StyleSheet.absoluteFill, styles.speedRingWrap]} pointerEvents="none">
           <SpeedRing size={target.dragSize} durationMs={speedDurationMs} active={speedRingActive} />
@@ -149,14 +147,14 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
       <GestureDetector gesture={surfaceSwipe}>
         <View style={[styles.pressable, imageDimensionStyle]}>
           <Pressable
-            accessibilityLabel={guess ? t('game.picture.guessSurfaceLabel') : t('game.picture.hideSurfaceLabel')}
+            accessibilityLabel={guess ? 'Guess picture surface' : 'Hide picture surface'}
             onPress={handlePress}
             onLongPress={handleLongPress}
             style={StyleSheet.absoluteFill}
             testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
           >
             <ImageBackground
-              accessibilityLabel={guess ? t('game.picture.guessImageLabel') : t('game.picture.hideImageLabel')}
+              accessibilityLabel={guess ? 'Guess picture image' : 'Hide picture image'}
               source={{uri : uri}}
               resizeMode='stretch'
               style={styles.image}
@@ -189,7 +187,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
             isModalVisible={showModal}
             testIDPrefix={guess ? 'game.picture.guess-modal' : 'game.picture.hide-modal'}
           >
-            {t('game.picture.validate')}
+            {"Do you want to validate this ?"}
           </CenteredModal>
       }
     </View>

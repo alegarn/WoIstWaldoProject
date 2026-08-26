@@ -1,15 +1,13 @@
 import { ScrollView, View, Text, StyleSheet } from "react-native";
-import { useTranslation } from 'react-i18next';
 
 export default function ModalContent({ screenHeight, screenWidth, guessPath }) {
-  const { t } = useTranslation();
   const bodyMaxHeight = Math.min(screenHeight * 0.45, 260);
 
   return (
     <View
       style={[styles.descriptionViewStyle, { maxWidth: screenWidth * 0.8 }]}
     >
-      <Text style={styles.descriptionTitleStyle}>{t('ui.uploadNotice.title')}</Text>
+      <Text style={styles.descriptionTitleStyle}>Is it hiding there ?</Text>
       {guessPath === false &&
         <ScrollView
           style={[styles.descriptionBodyScrollStyle, { maxHeight: bodyMaxHeight }]}
@@ -17,11 +15,11 @@ export default function ModalContent({ screenHeight, screenWidth, guessPath }) {
           showsVerticalScrollIndicator={false}
         >
           <Text style={styles.descriptionTextStyle}>
-            {t('ui.uploadNotice.publicRelease')}</Text>
+            Your image will be sent to the server and release publicly.</Text>
           <Text style={styles.descriptionTextStyle}>
-            {t('ui.uploadNotice.noRecognizablePerson')}</Text>
+            Verify that no one is recognizable on your image.</Text>
           <Text style={styles.descriptionTextStyle}>
-            {t('ui.uploadNotice.processingDelay')}</Text>
+            Please wait for a bit that your image will be processed after confirming.</Text>
         </ScrollView>
        }
     </View>

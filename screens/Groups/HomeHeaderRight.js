@@ -2,7 +2,6 @@ import { useCallback, useContext, useState } from 'react';
 import { View, Modal, Pressable, Text, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import Ionicons from '@react-native-vector-icons/ionicons';
-import { useTranslation } from 'react-i18next';
 
 import IconButton from '../../components/UI/IconButton';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
@@ -11,7 +10,6 @@ import { AuthContext } from '../../store/auth-context';
 import { GlobalStyle } from '../../constants/theme';
 
 export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
-  const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const authContext = useContext(AuthContext);
   const { scope, activeGroupId, setActive, clear } = useActiveGroup();
@@ -43,7 +41,7 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
           });
         }
       }).catch((err) => {
-        Alert.alert(t('common.error'), err?.message ?? t('groups.menu.switchFailed'));
+        Alert.alert('Error', err?.message ?? 'Could not switch scope.');
       });
       return;
     }
@@ -59,21 +57,21 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
   const items = [
     {
       key: 'groups',
-      label: t('groups.menu.groups'),
+      label: 'Groups',
       icon: 'people',
       testID: 'home.menu.groups',
       onPress: select(() => navigation.navigate('GroupsListScreen')),
     },
     {
       key: 'store',
-      label: t('groups.menu.store'),
+      label: 'Store',
       icon: 'diamond-outline',
       testID: 'home.menu.store',
       onPress: select(() => navigation.navigate('PaywallScreen', { intent: 'store' })),
     },
     {
       key: 'scope-toggle',
-      label: isPrivate ? t('groups.menu.switchToPublic') : t('groups.menu.switchToPrivate'),
+      label: isPrivate ? 'Switch to public' : 'Switch to private',
       icon: isPrivate ? 'earth' : 'people-outline',
       testID: 'home.menu.scope-toggle',
       disabled: !canToggleScope,
@@ -81,7 +79,7 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
     },
     {
       key: 'tutorial',
-      label: t('groups.menu.tutorial'),
+      label: 'Tutorial',
       icon: 'book',
       testID: 'home.menu.tutorial',
       onPress: select(() => onStartTutorial?.()),
@@ -91,7 +89,7 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
   return (
     <View style={{ flexDirection: 'row' }}>
       <IconButton
-        accessibilityLabel={t('groups.menu.moreOptions')}
+        accessibilityLabel="More options"
         icon="ellipsis-vertical"
         color={tintColor}
         size={24}

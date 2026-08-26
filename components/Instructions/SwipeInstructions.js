@@ -1,43 +1,41 @@
 import { View, Text, StyleSheet } from "react-native";
 
 import { Ionicons } from '@react-native-vector-icons/ionicons';
-import { useTranslation } from 'react-i18next';
 
 import BigButton from '../UI/BigButton';
 import { GlobalStyle } from "../../constants/theme";
 
 export default function SwipeInstructions({ screenWidth, handleFilterClick }) {
 
-  const { t } = useTranslation();
   const textSize = { fontSize: screenWidth/10 };
 
   return(
     <View style={styles.container}>
         <View style={styles.filter}>
           <View style={styles.marginTop}>
-            <Text style={[styles.filterText, textSize]}>{t('guess.swipeInstructions.title')}</Text>
+            <Text style={[styles.filterText, textSize]}>Swipe !</Text>
           </View>
-
+          
 
           <View style={styles.filterIconContainer}>
             <Ionicons name={"arrow-up-circle"} color={"white"} size={screenWidth/10}/>
             <Ionicons name={"arrow-down-circle"} color={"white"} size={screenWidth/10}/>
-            <Text style={[styles.filterText, textSize]}>{t('guess.swipeInstructions.description')}</Text>
+            <Text style={[styles.filterText, textSize]}>Description</Text>
           </View>
 
           <View style={styles.marginTop}>
-            <BigButton accessibilityLabel={t('guess.swipeInstructions.startLabel')} testID="guess-path.button.start" text={t('guess.swipeInstructions.start')} onPress={handleFilterClick} buttonStyle="ranking" />
+            <BigButton accessibilityLabel="Start guessing" testID="guess-path.button.start" text="Let's go!" onPress={handleFilterClick} buttonStyle="ranking" />
           </View>
 
 
           <View style={styles.filterIconContainer}>
             <Ionicons name={"arrow-back-circle"} color={"white"} size={screenWidth/10}/>
-            <Text style={[styles.filterText, textSize]}>{t('guess.swipeInstructions.pass')}</Text>
+            <Text style={[styles.filterText, textSize]}>Pass</Text>
           </View>
 
           <View style={styles.filterIconContainer}>
             <Ionicons name={"arrow-forward-circle"} color={"white"} size={screenWidth/10}/>
-            <Text style={[styles.filterText, textSize]}>{t('guess.swipeInstructions.play')}</Text>
+            <Text style={[styles.filterText, textSize]}>Play</Text>
           </View>
 
         </View>

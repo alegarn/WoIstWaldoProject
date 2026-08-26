@@ -1,7 +1,6 @@
 import { useContext, useEffect, useState } from 'react';
 import { View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { useTranslation } from 'react-i18next';
 
 import HomeCard from '../components/UI/HomeCard';
 import { GlobalStyle } from '../constants/theme';
@@ -20,7 +19,6 @@ const RankingImage = require('../assets/home/WoIstWaldo-character-stats.webp');
 
 export default function HomeScreen({ navigation, route }) {
   // States __________________________________________________________________
-  const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [isTutorial, setIsTutorial] = useState(false);
 
@@ -32,7 +30,7 @@ export default function HomeScreen({ navigation, route }) {
     const response = await getScoreId(context);
     
     if (response?.status !== 200 && response?.status !== 401) {
-      Alert.alert(t('home.serverProblemTitle'), t('home.serverProblemMessage'));
+      Alert.alert("Error, there is a server problem.", "Any upload will not be possible. \nPlease wait and try again later");
       return false;
     };
 
@@ -51,8 +49,8 @@ export default function HomeScreen({ navigation, route }) {
       response ? 
         null : 
         Alert.alert(
-          t('home.sessionExpiredTitle'), 
-          t('home.sessionExpiredMessage'));
+          "Error, your session has expired", 
+          "Any upload will not be possible. \nPlease re-log in first");
     };
     return null;
   };
@@ -185,32 +183,32 @@ export default function HomeScreen({ navigation, route }) {
     <>
       <View style={styles.homeContainer}>
         <HomeCard
-          text={t('home.hideWaldo')}
+          text="Hide Waldo"
           onPress={toHidingPathScreen}
           backgroundImage={HideImage}
           heightPercent={40}
           testID="home.button.hide"
         />
         <HomeCard
-          text={t('home.findWaldo')}
+          text="Find Waldo"
           onPress={toGuessPathScreen}
           backgroundImage={MainImage}
           heightPercent={40}
           testID="home.button.guess"
         />
         <HomeCard
-          text={t('home.ranking')}
+          text="Ranking"
           onPress={toRankingScreen}
           backgroundImage={RankingImage}
           heightPercent={20}
           testID="home.button.ranking"
         />
         {
-          showModal &&
-          <CenteredModal
+          showModal && 
+          <CenteredModal 
             isModalVisible={showModal}
-            children={t('home.tutorialModal')}
-            onCancel={() => cancelTutorial()}
+            children={"Welcome, do you want to do the tutorial? \n\n It will help you to learn how to play the game in 5 minutes. \n\n Later it is possible to do it again."} 
+            onCancel={() => cancelTutorial()} 
             onPress={() => startTutorial()}
             testIDPrefix="home.tutorial-modal"
             />

@@ -1,11 +1,8 @@
 import { Modal, View, Text,  StyleSheet, Platform } from 'react-native';
-import { useTranslation } from 'react-i18next';
-
 import Button from './Button';
 
 
 export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal', confirmTestID, cancelTestID, confirmLabel, cancelLabel }) {
-  const { t } = useTranslation();
   const shouldRenderTextChild = typeof children === 'string' || typeof children === 'number';
 
   return (
@@ -26,20 +23,20 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
           <View style={styles.buttonContainer}>
           <View style={styles.space}>
             <Button
-              accessibilityLabel={t('common.confirm')}
+              accessibilityLabel={`${testIDPrefix} confirm`}
               onPress={onPress}
               mode={Platform.OS === "ios" ? "flat" : null}
               testID={confirmTestID || `${testIDPrefix}.confirm`}
-              thin={true}>{confirmLabel || t('common.confirm')}</Button>
+              thin={true}>{confirmLabel || "Confirm"}</Button>
           </View>
           <View style={styles.space}>
             <Button
-              accessibilityLabel={t('common.close')}
+              accessibilityLabel={`${testIDPrefix} close`}
               onPress={onCancel}
               mode={Platform.OS === "ios" ? "flat" : null}
               testID={cancelTestID || `${testIDPrefix}.close`}
               thin={true}
-              cancel={true}>{cancelLabel || t('common.close')}</Button>
+              cancel={true}>{cancelLabel || "Close"}</Button>
           </View>
           </View>
         </View>

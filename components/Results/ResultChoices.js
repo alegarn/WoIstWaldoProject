@@ -1,5 +1,4 @@
 import { View, StyleSheet } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import { useContext } from 'react';
@@ -8,7 +7,6 @@ import Button from '../UI/Button';
 
 export default function ResultChoices({ navigation, route, success, retryGuess, isTutorial, onNextCard }) {
 
-  const { t } = useTranslation();
   const context = useContext(AuthContext);
 
   const routeParams = route?.params ?? {};
@@ -86,32 +84,32 @@ export default function ResultChoices({ navigation, route, success, retryGuess, 
     <View style={styles.buttonContainer}>
       {isFailure && (
         <Button
-          accessibilityLabel={t('result.retry')}
+          accessibilityLabel="Retry this one"
           testID="result.button.retry"
           onPress={handleRetry}
           style={[styles.button, styles.primary]}
           textStyle={styles.primaryText}
         >
-          {t('result.retry')}
+          Retry this one
         </Button>
       )}
       <Button
-        accessibilityLabel={t('result.nextCard')}
+        accessibilityLabel="Next Card"
         testID="result.button.next"
         onPress={backToSwipe}
         style={[styles.button, nextIsPrimary ? styles.primary : styles.secondary]}
         textStyle={nextIsPrimary ? styles.primaryText : styles.secondaryText}
       >
-        {t('result.nextCard')}
+        Next Card
       </Button>
       <Button
-        accessibilityLabel={t('common.home')}
+        accessibilityLabel="Home"
         testID="result.button.home"
         onPress={returnHome}
         style={[styles.button, isFailure ? styles.secondary : styles.homeButton]}
         textStyle={isFailure ? styles.secondaryText : undefined}
       >
-        {t('common.home')}
+        Home
       </Button>
     </View>
   );

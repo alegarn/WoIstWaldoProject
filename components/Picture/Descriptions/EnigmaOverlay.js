@@ -1,6 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Animated } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import IconButton from '../../UI/IconButton';
 import { OverlayZIndex } from '../../../constants/overlayZIndex';
@@ -22,9 +21,8 @@ function buildPanelHeight(screenHeight) {
 // (ShowPicture's nested RNGH surface detector) and drives `isOpen` from the
 // parent. This component is purely presentational.
 export default function EnigmaOverlay({ description, screenHeight, isOpen, onClose }) {
-  const { t } = useTranslation();
   const panelHeight = buildPanelHeight(screenHeight);
-  const text = description && description !== '' ? description : t('guess.noDescription');
+  const text = description && description !== '' ? description : 'No description';
 
   if (!isOpen) {
     return null;
@@ -33,7 +31,7 @@ export default function EnigmaOverlay({ description, screenHeight, isOpen, onClo
   return (
     <View pointerEvents="box-none" style={[StyleSheet.absoluteFill, { zIndex: OverlayZIndex.ENIGMA_ROOT, elevation: OverlayZIndex.ENIGMA_ROOT }]}>
       <Pressable
-        accessibilityLabel={t('guess.enigma.closeLabel')}
+        accessibilityLabel="Close enigma"
         accessibilityRole="button"
         onPress={() => onClose?.()}
         style={styles.scrim}
@@ -45,7 +43,7 @@ export default function EnigmaOverlay({ description, screenHeight, isOpen, onClo
       >
         <View style={styles.panelHeader}>
           <IconButton
-            accessibilityLabel={t('guess.enigma.closeLabel')}
+            accessibilityLabel="Close enigma"
             color="white"
             icon="chevron-down"
             onPress={() => onClose?.()}

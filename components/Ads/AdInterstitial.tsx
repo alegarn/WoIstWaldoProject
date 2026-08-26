@@ -1,6 +1,5 @@
 import { useEffect, useRef } from 'react';
 import { BackHandler, View } from 'react-native';
-import { useTranslation } from 'react-i18next';
 
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import type { AdSource } from '../../services/ads/AdSource';
@@ -18,7 +17,6 @@ interface AdInterstitialProps {
  * in-flight show(); re-subscription early-returns via the shownRef guard).
  */
 export default function AdInterstitial({ adSource, onDone }: AdInterstitialProps) {
-  const { t } = useTranslation();
   const shownRef = useRef(false);
   const doneRef = useRef(false);
 
@@ -45,7 +43,7 @@ export default function AdInterstitial({ adSource, onDone }: AdInterstitialProps
 
   return (
     <View style={{ flex: 1 }}>
-      {surface !== null ? surface : <LoadingOverlay message={t('ads.loading')} />}
+      {surface !== null ? surface : <LoadingOverlay message="Loading Ads…" />}
     </View>
   );
 }
