@@ -1,14 +1,55 @@
-const mockGuessCategoryCard = jest.fn(() => null);
-const mockTutorialOverlay = jest.fn(() => null);
-const mockIconButton = jest.fn(() => null);
+import type { ContextType } from 'react';
+import React from 'react';
+import { Alert, Dimensions } from 'react-native';
+import { act, create } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
+
+type MockCardProps = {
+  category: { id?: string; key?: string; name?: string };
+  thumbnailUrl?: string | null;
+  count?: number;
+  onPress: () => void | Promise<void>;
+  testIDPrefix?: string;
+};
+
+type MockIconButtonProps = {
+  icon?: string;
+  color?: string;
+  size?: number;
+  onPress: () => void | Promise<void>;
+  testID?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
+};
+
+type MockTutorialOverlayProps = {
+  screen?: string;
+  instructionsPosition?: { top: number; left: number };
+};
+
+type PrivateCategory = {
+  id: string;
+  key: string;
+  name: string;
+  thumbnail_image_id?: string;
+  thumbnail_url?: string;
+};
+
+type OnCategories = (list: PrivateCategory[]) => void;
+
+type FocusEffectCallback = () => void | (() => void);
+
+const mockGuessCategoryCard = jest.fn((_props: MockCardProps) => null);
+const mockTutorialOverlay = jest.fn((_props: MockTutorialOverlayProps) => null);
+const mockIconButton = jest.fn((_props: MockIconButtonProps) => null);
 const mockUseGroupsHub = jest.fn();
-const mockFocusEffects = new Set();
+const mockFocusEffects = new Set<FocusEffectCallback>();
 
 jest.mock('@react-navigation/native', () => {
   const React = require('react');
 
   return {
-    useFocusEffect: (callback) => {
+    useFocusEffect: (callback: FocusEffectCallback) => {
       React.useEffect(() => {
         mockFocusEffects.add(callback);
         const cleanup = callback();
@@ -23,65 +64,65 @@ jest.mock('@react-navigation/native', () => {
 });
 
 jest.mock('../components/UI/GuessCategoryCard', () => {
-  return function MockGuessCategoryCard(props) {
+  return function MockGuessCategoryCard(props: MockCardProps) {
     mockGuessCategoryCard(props);
     return null;
   };
 });
 
 jest.mock('../components/UI/TutorialOverlay', () => {
-  return function MockTutorialOverlay(props) {
+  return function MockTutorialOverlay(props: MockTutorialOverlayProps) {
     mockTutorialOverlay(props);
     return null;
   };
 });
 
 jest.mock('../components/UI/IconButton', () => {
-  return function MockIconButton(props) {
+  return function MockIconButton(props: MockIconButtonProps) {
     mockIconButton(props);
     return null;
   };
 });
 
 jest.mock('../hooks/useGroupsHub', () => ({
-  useGroupsHub: (...args) => mockUseGroupsHub(...args),
+  useGroupsHub: (...args: unknown[]) => mockUseGroupsHub(...args),
 }));
 
 jest.mock('../utils/categoryRequests', () => ({
-  getCategories: jest.fn(),
+  getCategories: (...args: unknown[]) => mockGetCategories(...args),
 }));
 
 jest.mock('../utils/storageDatum', () => ({
-  getPreferredLanguage: jest.fn(),
-  getSessionLanguageFilter: jest.fn(),
-  saveSessionLanguageFilter: jest.fn(),
+  getPreferredLanguage: (...args: unknown[]) => mockGetPreferredLanguage(...args),
+  getSessionLanguageFilter: (...args: unknown[]) => mockGetSessionLanguageFilter(...args),
+  saveSessionLanguageFilter: (...args: unknown[]) => mockSaveSessionLanguageFilter(...args),
 }));
 
 jest.mock('../utils/e2eMode', () => ({
-  isE2EMode: jest.fn(),
+  isE2EMode: (...args: unknown[]) => mockIsE2EMode(...args),
 }));
 
 jest.mock('../services/groups/groupCategoriesApi', () => ({
-  createGroupCategory: jest.fn(),
-  updateGroupCategory: jest.fn(),
-  deleteGroupCategory: jest.fn(),
+  createGroupCategory: (...args: unknown[]) => mockCreateGroupCategory(...args),
+  updateGroupCategory: (...args: unknown[]) => mockUpdateGroupCategory(...args),
+  deleteGroupCategory: (...args: unknown[]) => mockDeleteGroupCategory(...args),
 }));
 
 jest.mock('../services/groups/groupCategoriesStore', () => ({
-  loadGroupCategoriesOptimistic: jest.fn(),
+  loadGroupCategoriesOptimistic: (...args: unknown[]) => mockLoadGroupCategoriesOptimistic(...args),
 }));
 
 jest.mock('../services/groups/groupCategoryThumbnails', () => ({
-  resolveCategoryThumbnail: jest.fn(),
-  deleteCategoryThumbnailFile: jest.fn(),
+  resolveCategoryThumbnail: (...args: unknown[]) => mockResolveCategoryThumbnail(...args),
+  deleteCategoryThumbnailFile: (...args: unknown[]) => mockDeleteCategoryThumbnailFile(...args),
 }));
 
 jest.mock('../services/groups/categoryThumbnailUpload', () => ({
-  uploadCategoryThumbnail: jest.fn(),
+  uploadCategoryThumbnail: (...args: unknown[]) => mockUploadCategoryThumbnail(...args),
 }));
 
 jest.mock('../services/groups/groupApi', () => ({
-  fetchGroups: jest.fn(),
+  fetchGroups: (...args: unknown[]) => mockFetchGroups(...args),
 }));
 
 jest.mock('../store/auth-context', () => {
@@ -92,31 +133,22 @@ jest.mock('../store/auth-context', () => {
   };
 });
 
-import React from 'react';
-import { Alert, Dimensions } from 'react-native';
-import { act, create } from 'react-test-renderer';
+const mockGetCategories = jest.fn();
+const mockGetPreferredLanguage = jest.fn();
+const mockGetSessionLanguageFilter = jest.fn();
+const mockSaveSessionLanguageFilter = jest.fn();
+const mockIsE2EMode = jest.fn();
+const mockCreateGroupCategory = jest.fn();
+const mockUpdateGroupCategory = jest.fn();
+const mockDeleteGroupCategory = jest.fn();
+const mockLoadGroupCategoriesOptimistic = jest.fn();
+const mockResolveCategoryThumbnail = jest.fn();
+const mockDeleteCategoryThumbnailFile = jest.fn();
+const mockUploadCategoryThumbnail = jest.fn();
+const mockFetchGroups = jest.fn();
 
 import GuessPathScreen from '../screens/GuessScreens/GuessPathScreen';
 import { AuthContext } from '../store/auth-context';
-import { getCategories } from '../utils/categoryRequests';
-import {
-  getPreferredLanguage,
-  getSessionLanguageFilter,
-  saveSessionLanguageFilter,
-} from '../utils/storageDatum';
-import { isE2EMode } from '../utils/e2eMode';
-import {
-  createGroupCategory,
-  deleteGroupCategory,
-  updateGroupCategory,
-} from '../services/groups/groupCategoriesApi';
-import { loadGroupCategoriesOptimistic } from '../services/groups/groupCategoriesStore';
-import {
-  resolveCategoryThumbnail,
-  deleteCategoryThumbnailFile,
-} from '../services/groups/groupCategoryThumbnails';
-import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
-import { fetchGroups } from '../services/groups/groupApi';
 
 const BUNDLED_CATEGORY_KEYS = [
   'other',
@@ -130,7 +162,7 @@ const BUNDLED_CATEGORY_KEYS = [
   'landmarks',
 ];
 
-const PRIVATE_THUMBNAIL_CATEGORIES = [
+const PRIVATE_THUMBNAIL_CATEGORIES: PrivateCategory[] = [
   {
     id: 'c-1',
     key: 'c-1',
@@ -147,12 +179,12 @@ const PRIVATE_THUMBNAIL_CATEGORIES = [
   },
 ];
 
-const PRIVATE_CREATED_CATEGORIES = [
+const PRIVATE_CREATED_CATEGORIES: PrivateCategory[] = [
   { id: 'c-new', key: 'c-new', name: 'NewCat' },
 ];
 
-function emitCategoriesViaStore(list) {
-  loadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }) => {
+function emitCategoriesViaStore(list: PrivateCategory[]) {
+  mockLoadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
     if (typeof onCategories === 'function') {
       onCategories(list);
     }
@@ -161,31 +193,38 @@ function emitCategoriesViaStore(list) {
 
 describe('GuessPathScreen', () => {
   const contextValue = { token: 'Bearer token' };
-  const mountedRenderers = [];
-  let navigation;
+  const mountedRenderers: ReactTestRenderer[] = [];
+  let navigation: {
+    navigate: jest.Mock;
+    popToTop: jest.Mock;
+    goBack: jest.Mock;
+    setOptions: jest.Mock;
+  };
+  let alertSpy: jest.SpyInstance;
+  let dimensionsGetSpy: jest.SpyInstance;
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockFocusEffects.clear();
-    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
-    jest.spyOn(Dimensions, 'get').mockReturnValue({
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    dimensionsGetSpy = jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
       scale: 1,
       fontScale: 1,
     });
-    isE2EMode.mockReturnValue(false);
-    getCategories.mockResolvedValue({ data: [] });
-    createGroupCategory.mockResolvedValue({ status: 201, data: {} });
-    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
-    deleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
-    resolveCategoryThumbnail.mockResolvedValue(null);
-    deleteCategoryThumbnailFile.mockReturnValue(undefined);
-    uploadCategoryThumbnail.mockResolvedValue(null);
-    fetchGroups.mockResolvedValue({ status: 200, data: { owned: [], joined: [] } });
-    getPreferredLanguage.mockResolvedValue(null);
-    getSessionLanguageFilter.mockResolvedValue(null);
-    saveSessionLanguageFilter.mockResolvedValue(undefined);
+    mockIsE2EMode.mockReturnValue(false);
+    mockGetCategories.mockResolvedValue({ data: [] });
+    mockCreateGroupCategory.mockResolvedValue({ status: 201, data: {} });
+    mockUpdateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+    mockDeleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
+    mockResolveCategoryThumbnail.mockResolvedValue(null);
+    mockDeleteCategoryThumbnailFile.mockReturnValue(undefined);
+    mockUploadCategoryThumbnail.mockResolvedValue(null);
+    mockFetchGroups.mockResolvedValue({ status: 200, data: { owned: [], joined: [] } });
+    mockGetPreferredLanguage.mockResolvedValue(null);
+    mockGetSessionLanguageFilter.mockResolvedValue(null);
+    mockSaveSessionLanguageFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     emitCategoriesViaStore([]);
     navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
@@ -196,8 +235,8 @@ describe('GuessPathScreen', () => {
       mountedRenderers.splice(0).forEach((renderer) => renderer.unmount());
     });
 
-    Alert.alert.mockRestore();
-    Dimensions.get.mockRestore();
+    alertSpy.mockRestore();
+    dimensionsGetSpy.mockRestore();
   });
 
   async function flushEffects() {
@@ -213,12 +252,14 @@ describe('GuessPathScreen', () => {
     });
   }
 
-  async function renderScreen(route = { params: {} }) {
-    let renderer;
+  async function renderScreen(
+    route: { params?: { isTutorial?: boolean; scope?: { kind: 'private'; groupId: string } } } = { params: {} }
+  ) {
+    let renderer!: ReactTestRenderer;
 
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={contextValue}>
+        <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
           <GuessPathScreen navigation={navigation} route={route} />
         </AuthContext.Provider>
       );
@@ -238,7 +279,7 @@ describe('GuessPathScreen', () => {
     expect(mockUseGroupsHub.mock.calls.every(([options]) => options?.enabled === false)).toBe(true);
   });
 
-  function getCardPropsByKey(key) {
+  function getCardPropsByKey(key: string): MockCardProps | undefined {
     for (let i = mockGuessCategoryCard.mock.calls.length - 1; i >= 0; i -= 1) {
       const [props] = mockGuessCategoryCard.mock.calls[i];
       if (props.category.id === key) {
@@ -248,35 +289,35 @@ describe('GuessPathScreen', () => {
     return undefined;
   }
 
-  function getDetailsButtonProps() {
+  function getDetailsButtonProps(): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.details'
     );
     return call?.[0];
   }
 
-  function getAddCategoryButtonProps() {
+  function getAddCategoryButtonProps(): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.add-category'
     );
     return call?.[0];
   }
 
-  function getPencilEditButtonProps(categoryId) {
+  function getPencilEditButtonProps(categoryId: string): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === `guess-path.category.edit.${categoryId}`
     );
     return call?.[0];
   }
 
-  function getManageButtonProps() {
+  function getManageButtonProps(): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.manage'
     );
     return call?.[0];
   }
 
-  function getDeleteButtonProps(categoryId) {
+  function getDeleteButtonProps(categoryId: string): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === `guess-path.category.delete.${categoryId}`
     );
@@ -284,17 +325,17 @@ describe('GuessPathScreen', () => {
   }
 
   function invokeAlertDelete() {
-    expect(Alert.alert).toHaveBeenCalled();
-    const buttons = Alert.alert.mock.calls[Alert.alert.mock.calls.length - 1][2];
-    const deleteButton = buttons.find((b) => b.text === 'Delete');
+    expect(alertSpy).toHaveBeenCalled();
+    const buttons = alertSpy.mock.calls[alertSpy.mock.calls.length - 1][2];
+    const deleteButton = buttons.find((b: { text: string }) => b.text === 'Delete');
     return deleteButton.onPress;
   }
 
   it('renders the bundled default categories on mount without any network call', async () => {
     await renderScreen();
 
-    expect(getCategories).not.toHaveBeenCalled();
-    expect(loadGroupCategoriesOptimistic).not.toHaveBeenCalled();
+    expect(mockGetCategories).not.toHaveBeenCalled();
+    expect(mockLoadGroupCategoriesOptimistic).not.toHaveBeenCalled();
 
     const renderedKeys = [...new Set(mockGuessCategoryCard.mock.calls.map(
       ([props]) => props.category.id
@@ -306,7 +347,7 @@ describe('GuessPathScreen', () => {
   it('reads the persisted session language filter on mount', async () => {
     await renderScreen();
 
-    expect(getSessionLanguageFilter).toHaveBeenCalledTimes(1);
+    expect(mockGetSessionLanguageFilter).toHaveBeenCalledTimes(1);
   });
 
   it('renders the synthetic Recent/All card as the first grid item', async () => {
@@ -337,7 +378,7 @@ describe('GuessPathScreen', () => {
   it('navigates to GuessFeedScreen with the selected category and resolved language', async () => {
     await renderScreen();
 
-    const natureCard = getCardPropsByKey('nature');
+    const natureCard = getCardPropsByKey('nature')!;
 
     await act(async () => {
       natureCard.onPress();
@@ -350,7 +391,7 @@ describe('GuessPathScreen', () => {
   });
 
   it('falls back to the preferred language when the session filter is unset', async () => {
-    getPreferredLanguage.mockResolvedValue('fr');
+    mockGetPreferredLanguage.mockResolvedValue('fr');
 
     const renderer = await renderScreen();
 
@@ -359,7 +400,7 @@ describe('GuessPathScreen', () => {
         .children
     ).toBe('fr');
 
-    const natureCard = getCardPropsByKey('nature');
+    const natureCard = getCardPropsByKey('nature')!;
 
     await act(async () => {
       natureCard.onPress();
@@ -383,7 +424,7 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    const privateCard = getCardPropsByKey('c-1');
+    const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
       privateCard.onPress();
@@ -409,14 +450,14 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    const privateCard = getCardPropsByKey('c-1');
+    const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
       await privateCard.onPress();
     });
 
     expect(navigation.navigate).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
+    expect(alertSpy).toHaveBeenCalledWith(
       'Group is locked',
       'New private games are paused until the owner renews the subscription or transfers ownership.'
     );
@@ -425,7 +466,7 @@ describe('GuessPathScreen', () => {
   it('fetches groups on press when private hub data is still missing and then threads the active-group snapshot', async () => {
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
-    fetchGroups.mockResolvedValue({
+    mockFetchGroups.mockResolvedValue({
       status: 200,
       data: {
         owned: [{ id: 'g-1', role: 'owner', member_count: 7 }],
@@ -435,13 +476,13 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    const privateCard = getCardPropsByKey('c-1');
+    const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
       await privateCard.onPress();
     });
 
-    expect(fetchGroups).toHaveBeenCalledWith(contextValue);
+    expect(mockFetchGroups).toHaveBeenCalledWith(contextValue);
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
       language: 'any',
@@ -453,7 +494,7 @@ describe('GuessPathScreen', () => {
   it('blocks navigation and shows the lock alert when the on-demand fetch resolves a locked group', async () => {
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
-    fetchGroups.mockResolvedValue({
+    mockFetchGroups.mockResolvedValue({
       status: 200,
       data: {
         owned: [{ id: 'g-1', role: 'owner', member_count: 7, locked: true }],
@@ -463,29 +504,29 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    const privateCard = getCardPropsByKey('c-1');
+    const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
       await privateCard.onPress();
     });
 
-    expect(fetchGroups).toHaveBeenCalledWith(contextValue);
+    expect(mockFetchGroups).toHaveBeenCalledWith(contextValue);
     expect(navigation.navigate).not.toHaveBeenCalled();
-    expect(Alert.alert).toHaveBeenCalledWith(
+    expect(alertSpy).toHaveBeenCalledWith(
       'Group is locked',
       'New private games are paused until the owner renews the subscription or transfers ownership.'
     );
   });
 
   it('renders private categories optimistically via the store onCategories callback', async () => {
-    const cachedCategories = [
+    const cachedCategories: PrivateCategory[] = [
       { id: 'c-cached', key: 'c-cached', name: 'Cached' },
     ];
     emitCategoriesViaStore(cachedCategories);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledWith(expect.objectContaining({
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledWith(expect.objectContaining({
       context: contextValue,
       groupId: 'g-1',
       onCategories: expect.any(Function),
@@ -498,12 +539,12 @@ describe('GuessPathScreen', () => {
   });
 
   it('replaces the optimistic list with the revalidated fresh list from the store', async () => {
-    const freshCategories = [
+    const freshCategories: PrivateCategory[] = [
       { id: 'c-fresh', key: 'c-fresh', name: 'Fresh' },
     ];
-    let onCategoriesRef = null;
-    loadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }) => {
-      onCategoriesRef = onCategories;
+    let onCategoriesRef: OnCategories | null = null;
+    mockLoadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
+      onCategoriesRef = onCategories ?? null;
       if (typeof onCategories === 'function') {
         onCategories([{ id: 'c-cached', key: 'c-cached', name: 'Cached' }]);
       }
@@ -518,7 +559,7 @@ describe('GuessPathScreen', () => {
     const callsBeforeFresh = mockGuessCategoryCard.mock.calls.length;
 
     await act(async () => {
-      onCategoriesRef(freshCategories);
+      onCategoriesRef!(freshCategories);
       await flushEffects();
     });
 
@@ -546,7 +587,7 @@ describe('GuessPathScreen', () => {
     ).toThrow();
 
     await act(async () => {
-      getDetailsButtonProps().onPress();
+      getDetailsButtonProps()!.onPress();
     });
 
     expect(
@@ -561,7 +602,7 @@ describe('GuessPathScreen', () => {
     const renderer = await renderScreen();
 
     await act(async () => {
-      getDetailsButtonProps().onPress();
+      getDetailsButtonProps()!.onPress();
     });
 
     expect(
@@ -574,7 +615,7 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(saveSessionLanguageFilter).toHaveBeenCalledWith('fr');
+    expect(mockSaveSessionLanguageFilter).toHaveBeenCalledWith('fr');
     expect(
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
         .children
@@ -582,8 +623,8 @@ describe('GuessPathScreen', () => {
   });
 
   it('keeps the e2e home button available on the category screen', async () => {
-    isE2EMode.mockReturnValue(true);
-    getCategories.mockResolvedValue({ data: [] });
+    mockIsE2EMode.mockReturnValue(true);
+    mockGetCategories.mockResolvedValue({ data: [] });
 
     const renderer = await renderScreen();
 
@@ -635,11 +676,11 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    loadGroupCategoriesOptimistic
-      .mockImplementationOnce(async ({ onCategories }) => {
+    mockLoadGroupCategoriesOptimistic
+      .mockImplementationOnce(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories([]);
       })
-      .mockImplementation(async ({ onCategories }) => {
+      .mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories(PRIVATE_CREATED_CATEGORIES);
       });
 
@@ -653,7 +694,7 @@ describe('GuessPathScreen', () => {
     ).toThrow();
 
     await act(async () => {
-      addButtonProps.onPress();
+      addButtonProps!.onPress();
       await flushEffects();
     });
 
@@ -673,13 +714,13 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(createGroupCategory).toHaveBeenCalledWith(
+    expect(mockCreateGroupCategory).toHaveBeenCalledWith(
       contextValue,
       'g-1',
       { name: 'NewCat' }
     );
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
-    expect(loadGroupCategoriesOptimistic).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenLastCalledWith(expect.objectContaining({
       context: contextValue,
       groupId: 'g-1',
       onCategories: expect.any(Function),
@@ -693,18 +734,18 @@ describe('GuessPathScreen', () => {
 
   it('prefers resolved local private thumbnail uris and falls back to presigned urls', async () => {
     emitCategoriesViaStore(PRIVATE_THUMBNAIL_CATEGORIES);
-    resolveCategoryThumbnail
+    mockResolveCategoryThumbnail
       .mockResolvedValueOnce('file:///cache/private-thumb-g-1-thumb-1.webp')
       .mockResolvedValueOnce(null);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    expect(resolveCategoryThumbnail).toHaveBeenCalledTimes(2);
-    expect(resolveCategoryThumbnail).toHaveBeenNthCalledWith(1, contextValue, {
+    expect(mockResolveCategoryThumbnail).toHaveBeenCalledTimes(2);
+    expect(mockResolveCategoryThumbnail).toHaveBeenNthCalledWith(1, contextValue, {
       groupId: 'g-1',
       category: PRIVATE_THUMBNAIL_CATEGORIES[0],
     });
-    expect(resolveCategoryThumbnail).toHaveBeenNthCalledWith(2, contextValue, {
+    expect(mockResolveCategoryThumbnail).toHaveBeenNthCalledWith(2, contextValue, {
       groupId: 'g-1',
       category: PRIVATE_THUMBNAIL_CATEGORIES[1],
     });
@@ -721,23 +762,23 @@ describe('GuessPathScreen', () => {
   });
 
   it('refetches private categories on focus and resolves thumbnails for categories added on the server', async () => {
-    const initialCategory = {
+    const initialCategory: PrivateCategory = {
       id: 'c-1',
       key: 'c-1',
       name: 'Cats',
       thumbnail_image_id: 'thumb-1',
       thumbnail_url: 'https://example.com/thumb-1.webp',
     };
-    const newServerCategory = {
+    const newServerCategory: PrivateCategory = {
       id: 'c-2',
       key: 'c-2',
       name: 'Dogs',
       thumbnail_image_id: 'thumb-2',
       thumbnail_url: 'https://example.com/thumb-2.webp',
     };
-    let serverCategories = [initialCategory];
+    let serverCategories: PrivateCategory[] = [initialCategory];
 
-    loadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }) => {
+    mockLoadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
       if (typeof onCategories === 'function') {
         onCategories(serverCategories);
       }
@@ -745,15 +786,15 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(1);
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(1);
     expect(getCardPropsByKey('c-2')).toBeUndefined();
 
     serverCategories = [initialCategory, newServerCategory];
 
     await triggerFocusEffects();
 
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
-    expect(loadGroupCategoriesOptimistic).toHaveBeenLastCalledWith(expect.objectContaining({
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenLastCalledWith(expect.objectContaining({
       context: contextValue,
       groupId: 'g-1',
       onCategories: expect.any(Function),
@@ -763,7 +804,7 @@ describe('GuessPathScreen', () => {
         category: expect.objectContaining({ id: 'c-2', name: 'Dogs' }),
       })
     );
-    expect(resolveCategoryThumbnail).toHaveBeenCalledWith(contextValue, {
+    expect(mockResolveCategoryThumbnail).toHaveBeenCalledWith(contextValue, {
       groupId: 'g-1',
       category: newServerCategory,
     });
@@ -778,7 +819,7 @@ describe('GuessPathScreen', () => {
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getAddCategoryButtonProps().onPress();
+      getAddCategoryButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -789,7 +830,7 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(createGroupCategory).not.toHaveBeenCalled();
+    expect(mockCreateGroupCategory).not.toHaveBeenCalled();
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.add-category.input.name' })
     ).toThrow();
@@ -800,19 +841,19 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    uploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-7' });
-    loadGroupCategoriesOptimistic
-      .mockImplementationOnce(async ({ onCategories }) => {
+    mockUploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-7' });
+    mockLoadGroupCategoriesOptimistic
+      .mockImplementationOnce(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories([]);
       })
-      .mockImplementation(async ({ onCategories }) => {
+      .mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories(PRIVATE_CREATED_CATEGORIES);
       });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getAddCategoryButtonProps().onPress();
+      getAddCategoryButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -836,12 +877,12 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(uploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
-    expect(createGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', {
+    expect(mockUploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
+    expect(mockCreateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', {
       name: 'NewCat',
       thumbnailImageId: 'img-7',
     });
-    expect(updateGroupCategory).not.toHaveBeenCalled();
+    expect(mockUpdateGroupCategory).not.toHaveBeenCalled();
   });
 
   it('disables the create confirm button while a thumbnail pick is in flight and drops create presses', async () => {
@@ -849,15 +890,15 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    let resolveUpload;
-    uploadCategoryThumbnail.mockImplementation(
-      () => new Promise((resolve) => { resolveUpload = resolve; })
+    let resolveUpload!: (value: { imageId: string } | null) => void;
+    mockUploadCategoryThumbnail.mockImplementation(
+      () => new Promise<{ imageId: string } | null>((resolve) => { resolveUpload = resolve; })
     );
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getAddCategoryButtonProps().onPress();
+      getAddCategoryButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -881,7 +922,7 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(createGroupCategory).not.toHaveBeenCalled();
+    expect(mockCreateGroupCategory).not.toHaveBeenCalled();
 
     await act(async () => {
       resolveUpload(null);
@@ -894,23 +935,23 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    let resolveUpload;
-    uploadCategoryThumbnail.mockImplementation(
-      () => new Promise((resolve) => { resolveUpload = resolve; })
+    let resolveUpload!: (value: { imageId: string } | null) => void;
+    mockUploadCategoryThumbnail.mockImplementation(
+      () => new Promise<{ imageId: string } | null>((resolve) => { resolveUpload = resolve; })
     );
-    createGroupCategory.mockResolvedValue({ status: 201, data: { id: 'c-new' } });
-    loadGroupCategoriesOptimistic
-      .mockImplementationOnce(async ({ onCategories }) => {
+    mockCreateGroupCategory.mockResolvedValue({ status: 201, data: { id: 'c-new' } });
+    mockLoadGroupCategoriesOptimistic
+      .mockImplementationOnce(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories([]);
       })
-      .mockImplementation(async ({ onCategories }) => {
+      .mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories(PRIVATE_CREATED_CATEGORIES);
       });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getAddCategoryButtonProps().onPress();
+      getAddCategoryButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -936,18 +977,18 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(createGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', { name: 'NewCat' });
+    expect(mockCreateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', { name: 'NewCat' });
 
     await act(async () => {
       resolveUpload({ imageId: 'img-late' });
       await flushEffects();
     });
 
-    expect(updateGroupCategory).toHaveBeenCalledTimes(1);
-    expect(updateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-new', {
+    expect(mockUpdateGroupCategory).toHaveBeenCalledTimes(1);
+    expect(mockUpdateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-new', {
       thumbnailImageId: 'img-late',
     });
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(3);
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(3);
   });
 
   it('renders a pencil edit affordance on owned category cards and swaps the thumbnail on press', async () => {
@@ -955,7 +996,7 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = {
+    const category: PrivateCategory = {
       id: 'c-1',
       key: 'c-1',
       name: 'Cats',
@@ -963,14 +1004,14 @@ describe('GuessPathScreen', () => {
       thumbnail_url: 'https://example.com/old.webp',
     };
     emitCategoriesViaStore([category]);
-    resolveCategoryThumbnail.mockResolvedValue('file:///cache/old.webp');
-    uploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-new' });
-    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+    mockResolveCategoryThumbnail.mockResolvedValue('file:///cache/old.webp');
+    mockUploadCategoryThumbnail.mockResolvedValue({ imageId: 'img-new' });
+    mockUpdateGroupCategory.mockResolvedValue({ status: 200, data: {} });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -990,16 +1031,16 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(uploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
-    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'old-thumb');
-    expect(deleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
-      updateGroupCategory.mock.invocationCallOrder[0],
+    expect(mockUploadCategoryThumbnail).toHaveBeenCalledWith({ context: contextValue, groupId: 'g-1' });
+    expect(mockDeleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'old-thumb');
+    expect(mockDeleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
+      mockUpdateGroupCategory.mock.invocationCallOrder[0],
     );
-    expect(updateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1', {
+    expect(mockUpdateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1', {
       thumbnailImageId: 'img-new',
     });
     // reloadCategories fired after successful swap.
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
   });
 
   it('does not render the pencil edit affordance for non-owner members', async () => {
@@ -1010,7 +1051,7 @@ describe('GuessPathScreen', () => {
       },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
@@ -1026,7 +1067,7 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
@@ -1047,7 +1088,7 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
@@ -1057,7 +1098,7 @@ describe('GuessPathScreen', () => {
     ).toThrow();
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1085,13 +1126,13 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1109,25 +1150,25 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = {
+    const category: PrivateCategory = {
       id: 'c-1',
       key: 'c-1',
       name: 'Cats',
       thumbnail_image_id: 'thumb-1',
     };
-    loadGroupCategoriesOptimistic
-      .mockImplementationOnce(async ({ onCategories }) => {
+    mockLoadGroupCategoriesOptimistic
+      .mockImplementationOnce(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories([category]);
       })
-      .mockImplementation(async ({ onCategories }) => {
+      .mockImplementation(async ({ onCategories }: { onCategories?: OnCategories }) => {
         if (typeof onCategories === 'function') onCategories([]);
       });
-    deleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
+    mockDeleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1139,7 +1180,7 @@ describe('GuessPathScreen', () => {
     const trashProps = getDeleteButtonProps('c-1');
 
     await act(async () => {
-      trashProps.onPress();
+      trashProps!.onPress();
       await flushEffects();
     });
 
@@ -1150,9 +1191,9 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(deleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
-    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'thumb-1');
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
+    expect(mockDeleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
+    expect(mockDeleteCategoryThumbnailFile).toHaveBeenCalledWith('g-1', 'thumb-1');
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(2);
   });
 
   it('delete error branch: reload NOT called and Alert error path triggered', async () => {
@@ -1160,16 +1201,16 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
-    deleteGroupCategory.mockResolvedValue({ status: 500, data: {} });
+    mockDeleteGroupCategory.mockResolvedValue({ status: 500, data: {} });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
-    const initialCalls = loadGroupCategoriesOptimistic.mock.calls.length;
+    const initialCalls = mockLoadGroupCategoriesOptimistic.mock.calls.length;
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1181,7 +1222,7 @@ describe('GuessPathScreen', () => {
     const trashProps = getDeleteButtonProps('c-1');
 
     await act(async () => {
-      trashProps.onPress();
+      trashProps!.onPress();
       await flushEffects();
     });
 
@@ -1192,9 +1233,9 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(deleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
-    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(initialCalls);
-    expect(Alert.alert).toHaveBeenLastCalledWith(
+    expect(mockDeleteGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-1');
+    expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(initialCalls);
+    expect(alertSpy).toHaveBeenLastCalledWith(
       'Error 500',
       'Could not delete category.'
     );
@@ -1208,7 +1249,7 @@ describe('GuessPathScreen', () => {
       },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
@@ -1223,7 +1264,7 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
@@ -1233,7 +1274,7 @@ describe('GuessPathScreen', () => {
     ).toThrow();
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1265,13 +1306,13 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1294,18 +1335,18 @@ describe('GuessPathScreen', () => {
       data: { owned: [{ id: 'g-1', role: 'owner' }] },
       refresh: jest.fn(),
     });
-    const category = { id: 'c-1', key: 'c-1', name: 'Cats' };
+    const category: PrivateCategory = { id: 'c-1', key: 'c-1', name: 'Cats' };
     emitCategoriesViaStore([category]);
 
-    let resolveFirstDelete;
-    deleteGroupCategory.mockImplementation(
-      () => new Promise((resolve) => { resolveFirstDelete = resolve; })
+    let resolveFirstDelete!: (value: { status: number; data: object }) => void;
+    mockDeleteGroupCategory.mockImplementation(
+      () => new Promise<{ status: number; data: object }>((resolve) => { resolveFirstDelete = resolve; })
     );
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
     await act(async () => {
-      getManageButtonProps().onPress();
+      getManageButtonProps()!.onPress();
       await flushEffects();
     });
 
@@ -1315,7 +1356,7 @@ describe('GuessPathScreen', () => {
     });
 
     await act(async () => {
-      getDeleteButtonProps('c-1').onPress();
+      getDeleteButtonProps('c-1')!.onPress();
       await flushEffects();
     });
     const firstDeleteOnPress = invokeAlertDelete();
@@ -1325,7 +1366,7 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
+    expect(mockDeleteGroupCategory).toHaveBeenCalledTimes(1);
 
     const trashCalls = mockIconButton.mock.calls.filter(
       ([props]) => props.testID === 'guess-path.category.delete.c-1'
@@ -1343,13 +1384,13 @@ describe('GuessPathScreen', () => {
       await flushEffects();
     });
 
-    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
+    expect(mockDeleteGroupCategory).toHaveBeenCalledTimes(1);
 
     await act(async () => {
       resolveFirstDelete({ status: 204, data: {} });
       await flushEffects();
     });
 
-    expect(deleteGroupCategory).toHaveBeenCalledTimes(1);
+    expect(mockDeleteGroupCategory).toHaveBeenCalledTimes(1);
   });
 });

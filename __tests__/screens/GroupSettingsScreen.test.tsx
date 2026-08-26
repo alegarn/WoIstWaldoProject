@@ -1,11 +1,13 @@
-const mockBigButton = jest.fn(() => null);
-const mockButton = jest.fn(() => null);
-const mockLoadingOverlay = jest.fn(() => null);
+import type { ImageResult } from 'expo-image-manipulator';
+
+const mockBigButton = jest.fn((_props: Record<string, unknown>) => null);
+const mockButton = jest.fn((_props: Record<string, unknown>) => null);
+const mockLoadingOverlay = jest.fn((_props: Record<string, unknown>) => null);
 const mockUseActiveGroup = jest.fn();
 const mockUseGroupsHub = jest.fn();
 
 jest.mock('@react-navigation/native', () => ({
-  useFocusEffect: (callback) => {
+  useFocusEffect: (callback: () => void) => {
     const React = require('react');
     React.useEffect(() => callback(), [callback]);
   },
@@ -23,13 +25,13 @@ const mockFileSizeFor = jest.fn();
 
 jest.mock('expo-image-manipulator', () => ({
   ImageManipulator: {
-    manipulate: (...args) => mockManipulate(...args),
+    manipulate: (...args: unknown[]) => mockManipulate(...args),
   },
   SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
 }));
 
 jest.mock('expo-file-system', () => ({
-  File: function File(uri) {
+  File: function File(this: { uri: string; size: number | undefined }, uri: string) {
     this.uri = uri;
     this.size = mockFileSizeFor(uri);
   },
@@ -38,6 +40,12 @@ jest.mock('expo-file-system', () => ({
 const RESIZED_URI = 'file:///tmp/category-thumb.jpeg';
 const RESIZED_SIZE = 4_321;
 
+type ManipulatorContextMock = {
+  resize: typeof mockResize;
+  renderAsync: typeof mockRenderAsync;
+  release: jest.Mock;
+};
+
 function resetManipulatorChain() {
   mockManipulate.mockReset();
   mockResize.mockReset();
@@ -45,18 +53,20 @@ function resetManipulatorChain() {
   mockSaveAsync.mockReset();
 
   mockManipulate.mockImplementation(() => {
-    const context = {
-      resize: mockResize.mockReturnValue(context),
-      renderAsync: mockRenderAsync.mockResolvedValue({
-        saveAsync: mockSaveAsync.mockResolvedValue({
-          uri: RESIZED_URI,
-          width: 120,
-          height: 90,
-        }),
-        release: jest.fn(),
-      }),
+    const context: ManipulatorContextMock = {
+      resize: mockResize,
+      renderAsync: mockRenderAsync,
       release: jest.fn(),
     };
+    mockResize.mockReturnValue(context);
+    mockRenderAsync.mockResolvedValue({
+      saveAsync: mockSaveAsync.mockResolvedValue({
+        uri: RESIZED_URI,
+        width: 120,
+        height: 90,
+      } satisfies ImageResult),
+      release: jest.fn(),
+    });
     return context;
   });
 }
@@ -67,21 +77,21 @@ jest.mock('@react-native-vector-icons/ionicons', () => ({
 }));
 
 jest.mock('../../components/UI/BigButton', () => {
-  return function MockBigButton(props) {
+  return function MockBigButton(props: Record<string, unknown>) {
     mockBigButton(props);
     return null;
   };
 });
 
 jest.mock('../../components/UI/Button', () => {
-  return function MockButton(props) {
+  return function MockButton(props: Record<string, unknown>) {
     mockButton(props);
     return null;
   };
 });
 
 jest.mock('../../components/UI/LoadingOverlay', () => {
-  return function MockLoadingOverlay(props) {
+  return function MockLoadingOverlay(props: Record<string, unknown>) {
     mockLoadingOverlay(props);
     return null;
   };
@@ -128,6 +138,7 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import type { ReactTestRenderer } from 'react-test-renderer';
 import { Alert, StyleSheet } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
@@ -142,29 +153,56 @@ import { deleteCategoryThumbnailFile } from '../../services/groups/groupCategory
 import { performImageUpload } from '../../utils/imagesRequests';
 import { getPrivateGroupSettingsTokens } from '../../utils/privateGroupTheme';
 
+const mockedLaunchImageLibraryAsync = ImagePicker.launchImageLibraryAsync as jest.Mock;
+const mockedListGroupCategories = jest.mocked(listGroupCategories);
+const mockedUpdateGroupCategory = jest.mocked(updateGroupCategory);
+const mockedUpdateGroupSettings = jest.mocked(updateGroupSettings);
+const mockedPreparePrivateUpload = jest.mocked(preparePrivateUpload);
+const mockedDeleteCategoryThumbnailFile = jest.mocked(deleteCategoryThumbnailFile);
+const mockedPerformImageUpload = performImageUpload as jest.Mock;
+
 async function flushEffects() {
   await Promise.resolve();
   await Promise.resolve();
 }
 
+type ScopeMock = { kind: string; groupId: string };
+
+type GroupsHubDataMock = {
+  owned: Array<Record<string, unknown>>;
+  joined: Array<Record<string, unknown>>;
+};
+
+type NavigationMock = { replace: jest.Mock; navigate?: jest.Mock };
+
 describe('GroupSettingsScreen', () => {
+  let alertSpy: jest.SpyInstance;
+
   beforeEach(() => {
     jest.clearAllMocks();
     resetManipulatorChain();
-    mockFileSizeFor.mockImplementation((uri) => (uri === RESIZED_URI ? RESIZED_SIZE : undefined));
-    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
-    listGroupCategories.mockResolvedValue({ status: 200, data: [] });
+    mockFileSizeFor.mockImplementation((uri: string) => (uri === RESIZED_URI ? RESIZED_SIZE : undefined));
+    alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    mockedListGroupCategories.mockResolvedValue({ status: 200, data: [] });
   });
 
   afterEach(() => {
-    Alert.alert.mockRestore();
+    alertSpy.mockRestore();
   });
 
-  async function renderScreen({ scope = { kind: 'private', groupId: 'g-3' }, groupsData, navigation = { replace: jest.fn() } } = {}) {
+  async function renderScreen({
+    scope = { kind: 'private', groupId: 'g-3' },
+    groupsData,
+    navigation = { replace: jest.fn() },
+  }: {
+    scope?: ScopeMock;
+    groupsData?: GroupsHubDataMock | null;
+    navigation?: NavigationMock;
+  } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope });
     mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading: false, refresh: jest.fn() });
 
-    let renderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
         <GroupSettingsScreen navigation={navigation} />
@@ -220,7 +258,7 @@ describe('GroupSettingsScreen', () => {
     const tokens = getPrivateGroupSettingsTokens({
       primaryColor: group.primary_color,
       secondaryColor: group.secondary_color,
-    });
+    } as Parameters<typeof getPrivateGroupSettingsTokens>[0]);
 
     const { renderer } = await renderScreen({
       groupsData: {
@@ -233,7 +271,7 @@ describe('GroupSettingsScreen', () => {
       .findAllByProps({ testID: 'group-settings.section.identity' })
       .find((node) => node.props.style);
     expect(identitySection).toBeTruthy();
-    expect(StyleSheet.flatten(identitySection.props.style).backgroundColor).toBe(tokens.panel);
+    expect(StyleSheet.flatten(identitySection!.props.style).backgroundColor).toBe(tokens.panel);
 
     const membersButton = renderer.root.findByProps({ testID: 'group-settings.button.members' });
     const membersStyle = StyleSheet.flatten(membersButton.props.style({ pressed: false }));
@@ -255,7 +293,7 @@ describe('GroupSettingsScreen', () => {
       refresh: jest.fn(),
     });
 
-    let renderer;
+    let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(<GroupSettingsScreen navigation={navigation} />);
       await flushEffects();
@@ -289,7 +327,7 @@ describe('GroupSettingsScreen', () => {
   });
 
   it('surfaces an Alert and resets isSavingSettings when updateGroupSettings rejects', async () => {
-    updateGroupSettings.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
+    mockedUpdateGroupSettings.mockRejectedValue({ response: { status: 422, data: { error: 'boom' } } });
 
     const { renderer } = await renderScreen({
       groupsData: {
@@ -312,12 +350,12 @@ describe('GroupSettingsScreen', () => {
 
   it('launches picker and prepares category thumbnail upload without categoryId payload', async () => {
     const category = { id: 'cat-1', name: 'Cats' };
-    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockedListGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    mockedLaunchImageLibraryAsync.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.png', fileSize: 42 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 400, data: {} });
+    mockedPreparePrivateUpload.mockResolvedValue({ status: 400, data: {} });
 
     const { renderer } = await renderScreen({
       groupsData: {
@@ -331,13 +369,13 @@ describe('GroupSettingsScreen', () => {
       await flushEffects();
     });
 
-    expect(ImagePicker.launchImageLibraryAsync).toHaveBeenCalledWith({
+    expect(mockedLaunchImageLibraryAsync).toHaveBeenCalledWith({
       allowsEditing: false,
       mediaTypes: ['images'],
       quality: 0.5,
     });
 
-    const uploadArgs = preparePrivateUpload.mock.calls[0][0];
+    const uploadArgs = mockedPreparePrivateUpload.mock.calls[0][0];
     expect(uploadArgs).toMatchObject({
       context: {},
       groupId: 'g-3',
@@ -352,14 +390,14 @@ describe('GroupSettingsScreen', () => {
 
   it('updates category thumbnail with thumbnailImageId and reloads categories after successful upload', async () => {
     const category = { id: 'cat-1', name: 'Cats' };
-    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockedListGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    mockedLaunchImageLibraryAsync.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.webp', fileSize: 42 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
-    performImageUpload.mockResolvedValue({ status: 200 });
-    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+    mockedPreparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
+    mockedPerformImageUpload.mockResolvedValue({ status: 200 });
+    mockedUpdateGroupCategory.mockResolvedValue({ status: 200, data: {} });
 
     const { renderer } = await renderScreen({
       groupsData: {
@@ -373,22 +411,22 @@ describe('GroupSettingsScreen', () => {
       await flushEffects();
     });
 
-    expect(updateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
       thumbnailImageId: 'img-9',
     });
-    expect(listGroupCategories).toHaveBeenCalledTimes(2);
+    expect(mockedListGroupCategories).toHaveBeenCalledTimes(2);
   });
 
   it('deletes previous local thumbnail before updating category on re-upload', async () => {
     const category = { id: 'cat-1', name: 'Cats', thumbnail_image_id: 'old-thumb' };
-    listGroupCategories.mockResolvedValue({ status: 200, data: [category] });
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockedListGroupCategories.mockResolvedValue({ status: 200, data: [category] });
+    mockedLaunchImageLibraryAsync.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.jpg', fileSize: 42 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-new' } });
-    performImageUpload.mockResolvedValue({ status: 200 });
-    updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
+    mockedPreparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-new' } });
+    mockedPerformImageUpload.mockResolvedValue({ status: 200 });
+    mockedUpdateGroupCategory.mockResolvedValue({ status: 200, data: {} });
 
     const { renderer } = await renderScreen({
       groupsData: {
@@ -402,11 +440,11 @@ describe('GroupSettingsScreen', () => {
       await flushEffects();
     });
 
-    expect(deleteCategoryThumbnailFile).toHaveBeenCalledWith('g-3', 'old-thumb');
-    expect(deleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
-      updateGroupCategory.mock.invocationCallOrder[0],
+    expect(mockedDeleteCategoryThumbnailFile).toHaveBeenCalledWith('g-3', 'old-thumb');
+    expect(mockedDeleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
+      mockedUpdateGroupCategory.mock.invocationCallOrder[0],
     );
-    expect(updateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
       thumbnailImageId: 'img-new',
     });
   });

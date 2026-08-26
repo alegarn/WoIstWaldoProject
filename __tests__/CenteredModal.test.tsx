@@ -1,7 +1,7 @@
 jest.mock('react-native', () => {
   const React = require('react');
 
-  function MockModal({ children, visible }) {
+  function MockModal({ children, visible }: { children?: React.ReactNode; visible?: boolean }) {
     if (!visible) {
       return null;
     }
@@ -14,7 +14,7 @@ jest.mock('react-native', () => {
     View: 'View',
     Text: 'Text',
     StyleSheet: {
-      create: (styles) => styles,
+      create: (styles: unknown) => styles,
     },
     Platform: { OS: 'android' },
   };
@@ -24,19 +24,21 @@ jest.mock('../components/UI/Button', () => {
   const React = require('react');
   const { Text } = require('react-native');
 
-  return function MockButton({ children, testID, disabled }) {
+  return function MockButton({ children, testID, disabled }: { children?: React.ReactNode; testID?: string; disabled?: boolean }) {
     return <Text testID={testID} disabled={disabled}>{children}</Text>;
   };
 });
 
 import React from 'react';
 import { Text, View } from 'react-native';
-import { act, create } from 'react-test-renderer';
+import { act, create, ReactTestRenderer } from 'react-test-renderer';
 
 import CenteredModal from '../components/UI/CenteredModal';
 
-async function renderModal(children, props = {}) {
-  let renderer;
+type ModalProps = Partial<React.ComponentProps<typeof CenteredModal>>;
+
+async function renderModal(children: React.ReactNode, props: ModalProps = {}) {
+  let renderer: ReactTestRenderer | undefined;
 
   await act(async () => {
     renderer = create(
@@ -50,10 +52,10 @@ async function renderModal(children, props = {}) {
     );
   });
 
-  return renderer;
+  return renderer as ReactTestRenderer;
 }
 
-function getBodyElement(renderer) {
+function getBodyElement(renderer: ReactTestRenderer) {
   const contentElement = renderer.root.findByProps({ testID: 'modal.content' });
 
   return contentElement.props.children[0];

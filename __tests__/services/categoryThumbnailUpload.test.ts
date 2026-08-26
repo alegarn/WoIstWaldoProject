@@ -1,41 +1,47 @@
-jest.mock('expo-image-picker', () => ({
-  launchImageLibraryAsync: jest.fn(),
-}));
-
+const mockLaunchImageLibrary = jest.fn();
+const mockPreparePrivateUpload = jest.fn();
+const mockPerformImageUpload = jest.fn();
 const mockManipulate = jest.fn();
 const mockResize = jest.fn();
 const mockRenderAsync = jest.fn();
 const mockSaveAsync = jest.fn();
 const mockFileSizeFor = jest.fn();
 
+jest.mock('expo-image-picker', () => ({
+  launchImageLibraryAsync: (...args: unknown[]) => mockLaunchImageLibrary(...args),
+}));
+
 jest.mock('expo-image-manipulator', () => ({
   ImageManipulator: {
-    manipulate: (...args) => mockManipulate(...args),
+    manipulate: (...args: unknown[]) => mockManipulate(...args),
   },
   SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
 }));
 
 jest.mock('expo-file-system', () => ({
-  File: function File(uri) {
+  File: function File(this: { uri: string; size: number | undefined }, uri: string) {
     this.uri = uri;
     this.size = mockFileSizeFor(uri);
   },
 }));
 
 jest.mock('../../services/groups/groupUploadApi', () => ({
-  preparePrivateUpload: jest.fn(),
+  preparePrivateUpload: (...args: unknown[]) => mockPreparePrivateUpload(...args),
 }));
 
 jest.mock('../../utils/imagesRequests', () => ({
-  performImageUpload: jest.fn(),
+  performImageUpload: (...args: unknown[]) => mockPerformImageUpload(...args),
 }));
 
-import * as ImagePicker from 'expo-image-picker';
-import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
-import { performImageUpload } from '../../utils/imagesRequests';
 import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
 
 const SAVED_URI = 'file:///tmp/category-thumb.jpeg';
+
+type ManipulatorContextMock = {
+  resize: typeof mockResize;
+  renderAsync: typeof mockRenderAsync;
+  release: jest.Mock;
+};
 
 function resetManipulatorChain() {
   mockManipulate.mockReset();
@@ -44,18 +50,20 @@ function resetManipulatorChain() {
   mockSaveAsync.mockReset();
 
   mockManipulate.mockImplementation(() => {
-    const context = {
-      resize: mockResize.mockReturnValue(context),
-      renderAsync: mockRenderAsync.mockResolvedValue({
-        saveAsync: mockSaveAsync.mockResolvedValue({
-          uri: SAVED_URI,
-          width: 120,
-          height: 90,
-        }),
-        release: jest.fn(),
-      }),
+    const context: ManipulatorContextMock = {
+      resize: mockResize,
+      renderAsync: mockRenderAsync,
       release: jest.fn(),
     };
+    mockResize.mockReturnValue(context);
+    mockRenderAsync.mockResolvedValue({
+      saveAsync: mockSaveAsync.mockResolvedValue({
+        uri: SAVED_URI,
+        width: 120,
+        height: 90,
+      }),
+      release: jest.fn(),
+    });
     return context;
   });
 }
@@ -67,26 +75,26 @@ describe('uploadCategoryThumbnail', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resetManipulatorChain();
-    mockFileSizeFor.mockImplementation((uri) => (uri === SAVED_URI ? 4_321 : undefined));
+    mockFileSizeFor.mockImplementation((uri: string) => (uri === SAVED_URI ? 4_321 : undefined));
   });
 
   it('returns null when the user cancels the picker without firing presign', async () => {
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({ canceled: true, assets: [] });
+    mockLaunchImageLibrary.mockResolvedValue({ canceled: true, assets: [] });
 
     const result = await uploadCategoryThumbnail({ context, groupId });
 
     expect(result).toBeNull();
-    expect(preparePrivateUpload).not.toHaveBeenCalled();
-    expect(performImageUpload).not.toHaveBeenCalled();
+    expect(mockPreparePrivateUpload).not.toHaveBeenCalled();
+    expect(mockPerformImageUpload).not.toHaveBeenCalled();
   });
 
   it('downscales to a 600px WebP, presigns with the rendered size and webp extension, and uploads the saved uri', async () => {
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockLaunchImageLibrary.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.webp', width: 2400, height: 1800, fileSize: 2_200_000 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
-    performImageUpload.mockResolvedValue({ status: 200 });
+    mockPreparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
+    mockPerformImageUpload.mockResolvedValue({ status: 200 });
 
     const result = await uploadCategoryThumbnail({ context, groupId });
 
@@ -95,7 +103,7 @@ describe('uploadCategoryThumbnail', () => {
     expect(mockResize).toHaveBeenCalledWith({ width: 600 });
     expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.85, format: 'webp' });
 
-    const presignArgs = preparePrivateUpload.mock.calls[0][0];
+    const presignArgs = mockPreparePrivateUpload.mock.calls[0][0];
     expect(presignArgs).toMatchObject({
       context,
       groupId,
@@ -107,7 +115,7 @@ describe('uploadCategoryThumbnail', () => {
     });
     expect(presignArgs).not.toHaveProperty('categoryId');
 
-    expect(performImageUpload).toHaveBeenCalledWith(
+    expect(mockPerformImageUpload).toHaveBeenCalledWith(
       expect.objectContaining({
         plan: { imageId: 'img-9' },
         fileUrl: SAVED_URI,
@@ -119,7 +127,7 @@ describe('uploadCategoryThumbnail', () => {
   });
 
   it('aborts before presign when the resized size cannot be determined', async () => {
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockLaunchImageLibrary.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.webp', width: 2400, height: 1800, fileSize: 2_200_000 }],
     });
@@ -128,30 +136,30 @@ describe('uploadCategoryThumbnail', () => {
     await expect(
       uploadCategoryThumbnail({ context, groupId }),
     ).rejects.toThrow('Could not determine resized image size.');
-    expect(preparePrivateUpload).not.toHaveBeenCalled();
-    expect(performImageUpload).not.toHaveBeenCalled();
+    expect(mockPreparePrivateUpload).not.toHaveBeenCalled();
+    expect(mockPerformImageUpload).not.toHaveBeenCalled();
   });
 
   it('throws when presign returns a non-success status', async () => {
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockLaunchImageLibrary.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.png', width: 640, height: 480, fileSize: 1 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 422, data: {} });
+    mockPreparePrivateUpload.mockResolvedValue({ status: 422, data: {} });
 
     await expect(
       uploadCategoryThumbnail({ context, groupId }),
     ).rejects.toThrow('Could not prepare upload.');
-    expect(performImageUpload).not.toHaveBeenCalled();
+    expect(mockPerformImageUpload).not.toHaveBeenCalled();
   });
 
   it('throws when the PUT upload step fails', async () => {
-    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+    mockLaunchImageLibrary.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.png', width: 640, height: 480, fileSize: 1 }],
     });
-    preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-x' } });
-    performImageUpload.mockResolvedValue({ status: 500 });
+    mockPreparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-x' } });
+    mockPerformImageUpload.mockResolvedValue({ status: 500 });
 
     await expect(
       uploadCategoryThumbnail({ context, groupId }),

@@ -6,6 +6,49 @@ import { performImageUpload } from '../../utils/imagesRequests';
 import { resizeImage } from '../../utils/resizeImage';
 
 const MAX_LONGEST_SIDE = 600;
+const WEBP_COMPRESS_QUALITY = 0.85;
+
+// Minimal slice of the AuthContext value from store/auth-context.js that this service reads.
+type AuthContextLike = { token: string | null };
+
+export type CategoryThumbnailUploadOptions = {
+  context: AuthContextLike;
+  groupId: string;
+};
+
+export type CategoryThumbnailUploadResult = { imageId: string };
+
+type PresignedUploadPlan = { imageId: string };
+
+type PresignOptions = {
+  context: AuthContextLike;
+  groupId: string;
+  kind: string;
+  fileExtension: string;
+  contentType: string;
+  contentLength: number;
+  isCategoryThumbnail: boolean;
+};
+
+type PresignResponse = {
+  status: number;
+  data: PresignedUploadPlan;
+};
+
+type PerformUploadOptions = {
+  plan: PresignedUploadPlan;
+  fileUrl: string;
+  fileExtension: string;
+  contentLength: number;
+  context: AuthContextLike;
+};
+
+type UploadResponse = { status: number };
+
+// The .js sources type every destructured option as required; only the fields
+// below are sent by this service (the rest default to undefined at runtime).
+const presignUpload = preparePrivateUpload as (options: PresignOptions) => Promise<PresignResponse | undefined>;
+const uploadImage = performImageUpload as (options: PerformUploadOptions) => Promise<UploadResponse | undefined>;
 
 // Opens the image picker and uploads the chosen asset as a private category thumbnail.
 // Returns { imageId } on success, or null when the user cancels the picker.
@@ -13,7 +56,10 @@ const MAX_LONGEST_SIDE = 600;
 //
 // Caller owns the post-upload lifecycle: swap (deleteCategoryThumbnailFile + updateGroupCategory)
 // or create-with-thumbnail (createGroupCategory with thumbnailImageId).
-export async function uploadCategoryThumbnail({ context, groupId }) {
+export async function uploadCategoryThumbnail({
+  context,
+  groupId,
+}: CategoryThumbnailUploadOptions): Promise<CategoryThumbnailUploadResult | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: false,
     mediaTypes: ['images'],
@@ -31,11 +77,11 @@ export async function uploadCategoryThumbnail({ context, groupId }) {
     height: asset.height,
     maxLongestSide: MAX_LONGEST_SIDE,
     format: SaveFormat.WEBP,
-    compress: 0.85,
+    compress: WEBP_COMPRESS_QUALITY,
   });
   const fileExtension = resized.fileExtension;
 
-  const presignResponse = await preparePrivateUpload({
+  const presignResponse = await presignUpload({
     context,
     groupId,
     kind: 'category-thumbnail',
@@ -49,7 +95,7 @@ export async function uploadCategoryThumbnail({ context, groupId }) {
   }
 
   const uploadPlan = presignResponse.data;
-  const uploadResponse = await performImageUpload({
+  const uploadResponse = await uploadImage({
     plan: uploadPlan,
     fileUrl: resized.uri,
     fileExtension,
