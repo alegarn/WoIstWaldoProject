@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Dimensions, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, StyleSheet, Text } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
-import { LANGUAGES } from '../../constants/languages';
+import LanguageSelector from '../../components/UI/LanguageSelector';
 import {
   getOnboardingCompleted,
   getSessionLanguageFilter,
@@ -18,15 +18,13 @@ import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { handleOrientation } from '../../utils/orientation';
 
-const DEFAULT_LANGUAGE = 'en';
-
-const TEST_IDS = {
-  currentLanguage: 'guess-feed.filter.language.current',
-  languageFilter: 'guess-feed.filter.language',
-  languageClose: 'guess-feed.filter.language.close',
-};
-
-type LanguageEntry = { code: string; name: string };
+// Language namespace contract (I6): an unset filter means NO server filter.
+// GuessPathScreen navigates with NAVIGATION_ANY_LANGUAGE ('any') when no stored
+// pick exists, and resolveServerLanguage (cardDeck.js) strips 'any' at the
+// server boundary — mirroring getSessionLanguageFilter's "unset" sentinel
+// (storageDatum.js). A hard 'en' default here made every unset query hit
+// `WHERE language = 'en'` against fr/null rows → empty feed until manual reload.
+const DEFAULT_LANGUAGE = 'any';
 
 type Theme = {
   primaryColor?: string;
@@ -57,17 +55,14 @@ type GuessFeedScreenProps = {
   route: RouteProp<GuessFeedParamList, 'GuessFeedScreen'>;
 };
 
-const languageOptionTestId = (code: string) => `guess-feed.filter.language.option.${code}`;
-
-const resolveHiddenLocation = (item?: SwipeItem) => item?.hiddenLocation ?? item?.touchLocation;
-
 // SwipeImage treats `category` and `language` as optional (defaults to 'all' / 'any').
 // GuessFeedScreen is currently the only caller in the authenticated stack, but we
 // still pass them explicitly so the cache namespace + filter plumbing stays explicit.
 export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenProps) {
   const authContext = useAuthContext();
   useFlushOnLeave({ navigation, authContext });
-  const { category, language: routeLanguage, scope: routeScope, skipInstructions } = route.params || {};
+  const { category, language: routeLanguage, skipInstructions } = route.params || {};
+  const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   // useScopedPrivateGroupTheme is a JS module with no exported types; narrow to local Theme.
@@ -137,21 +132,19 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
     setIsFilterModalVisible(false);
   };
 
-  const activeLanguage = language ?? DEFAULT_LANGUAGE;
-
   const startGuessing = ({ item }: { item: SwipeItem }) => {
     navigation.navigate('GuessScreen', {
       ...route.params,
       ...item,
-      hiddenLocation: resolveHiddenLocation(item),
+      hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
-      language: activeLanguage,
+      language: language || DEFAULT_LANGUAGE,
     });
   };
 
   if (!routeLanguage && language === null) {
     return (
-      <Text style={styles.hiddenCurrent} testID={TEST_IDS.currentLanguage}>
+      <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
         {DEFAULT_LANGUAGE}
       </Text>
     );
@@ -160,8 +153,8 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
   return (
     <PrivateGroupThemeProvider group={group}>
     <>
-      <Text style={styles.hiddenCurrent} testID={TEST_IDS.currentLanguage}>
-        {activeLanguage}
+      <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
+        {language || DEFAULT_LANGUAGE}
       </Text>
 
       {showOverlay ? (
@@ -171,54 +164,24 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
         />
       ) : (
         <SwipeImage
-          key={`${category?.key || 'all'}:${activeLanguage}`}
+          key={`${category?.key || 'all'}:${language || 'any'}`}
           screenWidth={screenWidth}
           screenHeight={screenHeight}
           startGuessing={startGuessing}
           category={category}
-          language={activeLanguage}
+          language={language || DEFAULT_LANGUAGE}
           onOpenFilter={handleOpenFilter}
           scope={scope}
         />
       )}
 
-      <Modal
+      <LanguageSelector
+        value={language || DEFAULT_LANGUAGE}
+        onChange={handleSelectLanguage}
+        onClose={handleCloseFilter}
+        testIDPrefix="guess-feed.filter.language"
         visible={isFilterModalVisible}
-        onRequestClose={handleCloseFilter}
-        animationType="slide"
-        transparent={false}
-      >
-        <View style={styles.modalContainer} testID={TEST_IDS.languageFilter}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select language</Text>
-            <Pressable
-              onPress={handleCloseFilter}
-              testID={TEST_IDS.languageClose}
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </Pressable>
-          </View>
-          <ScrollView>
-            {LANGUAGES.map((entry: LanguageEntry) => {
-              const isSelected = entry.code === activeLanguage;
-
-              return (
-                <Pressable
-                  key={entry.code}
-                  onPress={() => handleSelectLanguage(entry.code)}
-                  testID={languageOptionTestId(entry.code)}
-                  style={[styles.option, isSelected && styles.optionSelected]}
-                >
-                  <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                    {entry.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </Modal>
+      />
     </>
     </PrivateGroupThemeProvider>
   );
@@ -230,46 +193,5 @@ const styles = StyleSheet.create({
     width: 0,
     height: 0,
     opacity: 0,
-  },
-  modalContainer: {
-    flex: 1,
-    backgroundColor: '#FFF',
-    paddingHorizontal: 16,
-    paddingTop: 40,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'GlobalStyle.color.tertiaryColor900',
-  },
-  modalCloseButton: {
-    padding: 8,
-  },
-  modalCloseText: {
-    fontSize: 15,
-    color: 'GlobalStyle.color.tertiaryColor900',
-  },
-  option: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#DDD',
-  },
-  optionSelected: {
-    backgroundColor: 'rgba(29, 19, 61, 0.08)',
-  },
-  optionText: {
-    fontSize: 16,
-    color: '#333',
-  },
-  optionTextSelected: {
-    fontWeight: 'bold',
-    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

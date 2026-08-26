@@ -1,5 +1,6 @@
 import { useContext, useState } from 'react';
 import { Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import AuthContent from '../../components/Auth/AuthContent';
 import { createUser } from '../../utils/auth';
@@ -8,6 +9,7 @@ import { AuthContext } from '../../store/auth-context';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 
 function SignupScreen({navigation}) {
+  const { t } = useTranslation();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
 
   const authContext = useContext(AuthContext);
@@ -41,13 +43,13 @@ function SignupScreen({navigation}) {
           await handleAuthDataSaving(response);
           break;
         case 422:
-          Alert.alert('User creation failed', `${response.status}: Please choose an other email.`);
+          Alert.alert(t('auth.userCreationFailedTitle'), t('auth.userCreationFailedEmail', { status: response.status }));
           break;
         case 500:
-          Alert.alert('User creation failed', `${response.status}: Sorry, it's the server... or your username is already taken. Please retry later.`);
+          Alert.alert(t('auth.userCreationFailedTitle'), t('auth.userCreationFailedServer', { status: response.status }));
           break;
         default:
-          Alert.alert('User creation failed', 'Please retry later.');
+          Alert.alert(t('auth.userCreationFailedTitle'), t('auth.userCreationFailedRetry'));
           break;
       };
       setIsAuthenticating(false);
@@ -59,9 +61,8 @@ function SignupScreen({navigation}) {
   };
 
   if (isAuthenticating) {
-    const message = 'Creating user...';
     return (
-      <LoadingOverlay message={message} />
+      <LoadingOverlay message={t('auth.creatingUser')} />
     );
   }
 

@@ -1,6 +1,10 @@
 process.env.EXPO_OS = 'ios';
 process.env.EXPO_PUBLIC_APP_BACKEND_URL = process.env.EXPO_PUBLIC_APP_BACKEND_URL || 'https://backend.example/';
 
+// Default test locale 'en' for every suite: initializes i18next and the
+// react-i18next global instance so existing English assertions stay valid.
+require('./i18n');
+
 globalThis.fetch;
 
 jest.mock('@react-native-async-storage/async-storage', () => ({

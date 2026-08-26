@@ -105,6 +105,7 @@ describe('SettingsScreen', () => {
     let renderer;
     const navigation = {
       navigate: jest.fn(),
+      setOptions: jest.fn(),
       ...navigationOverride,
     };
 
@@ -128,6 +129,13 @@ describe('SettingsScreen', () => {
 
   function getModalProps() {
     return mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+  }
+
+  function getPreferredLanguageSelectorProps() {
+    const matchingCalls = mockLanguageSelector.mock.calls.filter(
+      ([props]) => props.testIDPrefix === 'settings.input.preferred-language.selector'
+    );
+    return matchingCalls[matchingCalls.length - 1][0];
   }
 
   it('preloads the stored email and username into the form fields', async () => {
@@ -224,9 +232,7 @@ describe('SettingsScreen', () => {
     await renderScreen();
 
     expect(getPreferredLanguage).toHaveBeenCalledTimes(1);
-    const lastCall =
-      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
-    expect(lastCall).toEqual(
+    expect(getPreferredLanguageSelectorProps()).toEqual(
       expect.objectContaining({
         value: 'fr',
         testIDPrefix: 'settings.input.preferred-language.selector',
@@ -237,9 +243,7 @@ describe('SettingsScreen', () => {
   it('persists the selected preferred language, updates the row, and shows a success alert', async () => {
     await renderScreen();
 
-    const lastCall =
-      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
-    const onChange = lastCall.onChange;
+    const onChange = getPreferredLanguageSelectorProps().onChange;
 
     await act(async () => {
       onChange('de');
@@ -247,9 +251,7 @@ describe('SettingsScreen', () => {
     });
 
     expect(savePreferredLanguage).toHaveBeenCalledWith('de');
-    const updatedCall =
-      mockLanguageSelector.mock.calls[mockLanguageSelector.mock.calls.length - 1][0];
-    expect(updatedCall.value).toBe('de');
+    expect(getPreferredLanguageSelectorProps().value).toBe('de');
     expect(Alert.alert).toHaveBeenCalledWith(
       'Preferred language saved!',
       'Your preferred language for new enigmas is now: de'

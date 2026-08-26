@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Pressable, View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { generateShades } from '../../utils/colorShades';
 
@@ -71,6 +72,7 @@ export default function ColorPalettePicker({
   appearance = 'dark',
   themeColors,
 }) {
+  const { t } = useTranslation();
   const theme = {
     ...(appearanceThemes[appearance] ?? appearanceThemes.dark),
     ...(themeColors ?? {}),
@@ -138,7 +140,7 @@ export default function ColorPalettePicker({
               <Pressable
                 key={shadeHex}
                 testID={`${testIDPrefix}.shade.${noHash(expanded.hex)}.${noHash(shadeHex)}`}
-                accessibilityLabel={`${expanded.name} shade`}
+                accessibilityLabel={t('ui.colorPalette.shade', { name: expanded.name })}
                 accessibilityRole="button"
                 accessibilityState={selected ? { selected: true } : undefined}
                 onPress={() => onValueChange?.(shadeHex)}

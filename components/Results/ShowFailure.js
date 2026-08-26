@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import ResultChoices from './ResultChoices';
 import TutorialOverlay from '../UI/TutorialOverlay';
@@ -11,6 +12,7 @@ import { flush } from '../../utils/sessionScoreStore';
 
 export default function ShowFailure({ navigation, route }) {
 
+  const { t } = useTranslation();
   const authContext = useAuthContext();
 
   const {
@@ -95,7 +97,7 @@ export default function ShowFailure({ navigation, route }) {
             testID="result.screen.failure.title"
             style={[styles.title, { transform: [{ scale: messageScale }] }]}
           >
-            You didn't find it 😢
+            {t('result.failureTitle')}
           </Animated.Text>
           <ResultChoices 
             navigation={navigation} 

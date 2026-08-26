@@ -1,5 +1,6 @@
 import { useState, useContext } from 'react';
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import ResultChoices from './ResultChoices';
 import RatingSubmissionBlock from './RatingSubmissionBlock';
@@ -9,6 +10,7 @@ import { AuthContext } from '../../store/auth-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowSuccess({ navigation, route }) {
+  const { t } = useTranslation();
   const scope = route.params?.scope;
   const isPrivateScope = scope?.kind === 'private';
 
@@ -36,7 +38,7 @@ export default function ShowSuccess({ navigation, route }) {
   return (
     <View style={styles.container} testID="result.screen.success.container">
       <View testID="result.screen.success" style={styles.result}>
-        <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>You Found It!</Text>
+        <Text testID="result.screen.success.title" style={[styles.title, styles.marginBottom]}>{t('result.successTitle')}</Text>
         <ScoreCelebration points={1} testIDPrefix="result.celebration" />
         {phase === 'rated' && (
           <ResultChoices

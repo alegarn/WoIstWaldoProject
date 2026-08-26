@@ -1,6 +1,7 @@
 import { useCallback, useContext } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import BigButton from '../../components/UI/BigButton';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -10,6 +11,7 @@ import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { AuthContext } from '../../store/auth-context';
 
 export default function GroupsListScreen({ navigation }) {
+  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const { data, isLoading, error, refresh } = useGroupsHub();
   const { setActive } = useActiveGroup();
@@ -36,20 +38,20 @@ export default function GroupsListScreen({ navigation }) {
         });
       }
     } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not open the group.');
+      Alert.alert(t('common.error'), err?.message ?? t('groups.list.openFailed'));
     }
   };
 
   if (isLoading && !data) {
-    return <LoadingOverlay message="Loading groups..." />;
+    return <LoadingOverlay message={t('groups.list.loading')} />;
   }
 
   if (error && !data) {
     return (
       <View style={styles.container} testID="groups-list.container">
-        <Text style={styles.errorText}>Couldn't load groups.</Text>
+        <Text style={styles.errorText}>{t('groups.list.loadFailed')}</Text>
         <BigButton
-          text="Retry"
+          text={t('common.retry')}
           onPress={() => refresh()}
           testID="groups-list.button.retry"
         />
@@ -61,20 +63,20 @@ export default function GroupsListScreen({ navigation }) {
     return (
       <View style={styles.container} testID="groups-list.container">
         <Text style={styles.emptyText} testID="groups-list.empty">
-          You're not in any private group yet.
+          {t('groups.list.empty')}
         </Text>
         <BigButton
-          text="Join another group"
+          text={t('groups.list.joinAnother')}
           onPress={() => navigation.navigate('JoinByCodeScreen')}
           testID="groups-list.button.join"
         />
         <BigButton
-          text="Create group"
+          text={t('groups.list.create')}
           onPress={() => navigation.navigate('CreateGroupScreen')}
           testID="groups-list.button.create"
         />
         <BigButton
-          text="Store"
+          text={t('groups.list.store')}
           onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
           testID="groups-list.button.store"
         />
@@ -93,9 +95,9 @@ export default function GroupsListScreen({ navigation }) {
             testID="groups-list.item.group"
           >
             <Text style={styles.rowTitle}>{item.name}</Text>
-            {item.role === 'owner' && <Text style={styles.rowRole}>Owner</Text>}
+            {item.role === 'owner' && <Text style={styles.rowRole}>{t('groups.list.owner')}</Text>}
             <BigButton
-              text="Open"
+              text={t('groups.list.open')}
               onPress={() => openGroup(item)}
               testID={`groups-list.button.open-${item.id}`}
             />
@@ -103,17 +105,17 @@ export default function GroupsListScreen({ navigation }) {
         )}
       />
       <BigButton
-        text="Join another group"
+        text={t('groups.list.joinAnother')}
         onPress={() => navigation.navigate('JoinByCodeScreen')}
         testID="groups-list.button.join"
       />
       <BigButton
-        text="Create group"
+        text={t('groups.list.create')}
         onPress={() => navigation.navigate('CreateGroupScreen')}
         testID="groups-list.button.create"
       />
       <BigButton
-        text="Store"
+        text={t('groups.list.store')}
         onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
         testID="groups-list.button.store"
       />

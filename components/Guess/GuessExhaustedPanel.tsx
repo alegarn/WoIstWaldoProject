@@ -4,6 +4,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import { OverlayZIndex } from '../../constants/overlayZIndex';
@@ -15,34 +16,33 @@ type Props = {
   message?: string;
 };
 
-const DEFAULT_TITLE = 'No more cards';
-const BODY_TEXT =
-  "You've played every card in this category. Switch to keep your streak going, or leave to bank your score.";
-
 export default function GuessExhaustedPanel({ onSwitch, onLeave, streak, message }: Props) {
-  const title = message ?? DEFAULT_TITLE;
+  const { t } = useTranslation();
+  const title = message ?? t('guess.exhausted.noMoreCards');
 
   return (
     <View style={styles.overlay} testID="guess-exhausted-panel">
       <View style={styles.card}>
         <Text style={styles.title}>{title}</Text>
-        <Text style={styles.body}>{BODY_TEXT}</Text>
+        <Text style={styles.body}>{t('guess.exhausted.body')}</Text>
         {typeof streak === 'number' && (
-          <Text style={styles.streak} testID="guess-exhausted-streak">{`Streak: ${streak}`}</Text>
+          <Text style={styles.streak} testID="guess-exhausted-streak">
+            {t('guess.exhausted.streak', { count: streak })}
+          </Text>
         )}
         <TouchableOpacity
           style={[styles.button, styles.primaryButton]}
           onPress={onSwitch}
           testID="guess-exhausted-switch"
         >
-          <Text style={styles.primaryButtonText}>Switch category</Text>
+          <Text style={styles.primaryButtonText}>{t('guess.exhausted.switchCategory')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.button, styles.secondaryButton]}
           onPress={onLeave}
           testID="guess-exhausted-leave"
         >
-          <Text style={styles.secondaryButtonText}>Leave game</Text>
+          <Text style={styles.secondaryButtonText}>{t('guess.exhausted.leaveGame')}</Text>
         </TouchableOpacity>
       </View>
     </View>

@@ -1,5 +1,6 @@
 import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
 
 import BadgeDetailModal from './BadgeDetailModal';
@@ -20,7 +21,22 @@ import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetche
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
 
+// Feed-error payloads come from non-React transports (utils/imagesRequests.js,
+// services/groups/groupFeedApi.js) as English title/message strings. Mapping
+// them here to i18n keys keeps the transports untouched; unknown strings fall
+// back to themselves via t(raw, { defaultValue: raw }).
+const FEED_ERROR_KEYS = {
+  "There is an error downloading user's images.": 'guess.feedErrors.downloadTitle',
+  'There is an authentication error.': 'guess.feedErrors.authTitle',
+  'Failed to load private images.': 'guess.feedErrors.privateTitle',
+  'Please retry later...': 'guess.feedErrors.downloadMessage',
+  'Please reconnect': 'guess.feedErrors.reconnectMessage',
+};
+
 export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
+  const { t } = useTranslation();
+
+  const translateFeedErrorText = (raw) => t(FEED_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
 
   const categoryKey = category?.key || 'all';
   const lang = language || 'any';
@@ -128,7 +144,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     });
 
     if (response.isError === true) {
-      Alert.alert(response.title, response.message);
+      Alert.alert(translateFeedErrorText(response.title), translateFeedErrorText(response.message));
       return 'error';
     };
     if (response.isError === false) {
@@ -502,18 +518,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
   // Components functions ________________________________________________________
   const showIsLoading = () => {
-    const message='Loading new images...';
-    return <LoadingOverlay message={message} />
+    return <LoadingOverlay message={t('guess.loading')} />
   };
 
   const showNoMoreCard = () => {
     return(
       <View style={styles.emptyStateContainer}>
-        <Text style={styles.emptyStateText}>The list is not there, there is a problem... No new images? :O</Text>
+        <Text style={styles.emptyStateText}>{t('guess.emptyErrorTitle')}</Text>
         <View style={styles.emptyStateActions}>
-          <Text style={styles.emptyStateText}>To play you can:</Text>
-          <Text style={styles.emptyStateText}> - Upload new images</Text>
-          <Text style={styles.emptyStateText}> - Wait until someone else upload new images</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyPlayHint')}</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyUploadHint')}</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyWaitUploadHint')}</Text>
         </View>
       </View>
     );
@@ -522,11 +537,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const showNoMoreImages = () => {
     return(
       <View style={styles.emptyStateContainer}>
-        <Text style={styles.emptyStateText}>No more images to guess right now!</Text>
+        <Text style={styles.emptyStateText}>{t('guess.emptyExhaustedTitle')}</Text>
         <View style={styles.emptyStateActions}>
-          <Text style={styles.emptyStateText}>To play you can:</Text>
-          <Text style={styles.emptyStateText}> - Upload new images</Text>
-          <Text style={styles.emptyStateText}> - Wait until someone else uploads new images</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyPlayHint')}</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyUploadHint')}</Text>
+          <Text style={styles.emptyStateText}>{t('guess.emptyWaitUploadsHint')}</Text>
         </View>
       </View>
     );

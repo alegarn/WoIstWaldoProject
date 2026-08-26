@@ -1,8 +1,11 @@
 import { Pressable, Text, View , StyleSheet} from "react-native";
+import { useTranslation } from 'react-i18next';
+
 import { GlobalStyle } from "../../constants/theme";
 import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
 
   export default function TableButton({ onPress, buttonWidth, buttonHeight, buttonBorderRadius, testID, accessibilityLabel }) {
+    const { t } = useTranslation();
     const theme = usePrivateGroupTheme();
     const fill = theme ? theme.primaryColor : GlobalStyle.color.primaryColor;
     return(
@@ -12,7 +15,7 @@ import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
           onPress={onPress}
           testID={testID}
           style={ ({pressed}) => pressed && styles.pressed}>
-            <Text style={styles.btnText}>More</Text>
+            <Text style={styles.btnText}>{t('common.more')}</Text>
         </Pressable>
       </View>
     );
