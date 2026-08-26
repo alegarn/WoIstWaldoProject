@@ -1,5 +1,7 @@
 import { Modal, View, Text,  StyleSheet, Platform } from 'react-native';
 import Clipboard from '@react-native-clipboard/clipboard';
+import { useTranslation } from 'react-i18next';
+
 import Button from './Button';
 import { ScrollView } from 'react-native-gesture-handler';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,6 +9,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {GestureHandlerRootView} from 'react-native-gesture-handler';
 
 export default function ClipboardModal({  onCancel, onPress , isModalVisible, debugText}) {
+  const { t } = useTranslation();
 
   const copyToClipboard = () => {
     console.log("copyToClipboard", debugText);
@@ -31,7 +34,7 @@ export default function ClipboardModal({  onCancel, onPress , isModalVisible, de
             <Button
               onPress={copyToClipboard}
               mode={Platform.OS === "ios" ? "flat" : null}
-              thin={true}>Copy
+              thin={true}>{t('common.copy')}
             </Button>
           </View>
           <View style={styles.space}>
@@ -39,7 +42,7 @@ export default function ClipboardModal({  onCancel, onPress , isModalVisible, de
               onPress={onCancel}
               mode={Platform.OS === "ios" ? "flat" : null}
               thin={true}
-              cancel={true}>Close</Button>
+              cancel={true}>{t('common.close')}</Button>
           </View>
           </View>
         </ScrollView>

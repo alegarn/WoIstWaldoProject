@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 import { RANKING } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
@@ -16,6 +17,8 @@ import { useActiveGroup } from '../hooks/useActiveGroup';
 const RANKING_RESIDENT_ROW_CAP = 150;
 
 export default function RankingScreen({ route, navigation }) {
+
+  const { t } = useTranslation();
 
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
@@ -43,7 +46,7 @@ export default function RankingScreen({ route, navigation }) {
     const response = await getUserScores({username, context: context, scope: rankingScope});
     if (response?.status !== 200) {
       if (response?.status === 404) {
-        Alert.alert("User not found", `No scores found for ${username}.`);
+        Alert.alert(t('ranking.userNotFound'), t('ranking.noScoresForUser', { name: username }));
         return
       }
       handleError(response?.message, response?.status);
@@ -56,27 +59,27 @@ export default function RankingScreen({ route, navigation }) {
     const guessInfo = scores?.guess_info;
 
     if (!total || !hideInfo || !guessInfo) {
-      Alert.alert("Scores unavailable", `Couldn't load detailed scores for ${username}.`);
+      Alert.alert(t('ranking.scoresUnavailable'), t('ranking.detailsUnavailable', { name: username }));
       return
     }
     let infoString = '';
 
-    infoString += `Total Score: ${total.total_score}\n`;
-    infoString += `Total Hide Score: ${total.total_hide_score}\n`;
-    infoString += `Total Guess Score: ${total.total_guess_score}\n`;
-    infoString += `Hidden Images Count: ${hideInfo.hide_count}\n`;
-    infoString += `Guessed Images Count: ${guessInfo.guess_count}\n`;
+    infoString += `${t('ranking.totalScore', { value: total.total_score })}\n`;
+    infoString += `${t('ranking.totalHideScore', { value: total.total_hide_score })}\n`;
+    infoString += `${t('ranking.totalGuessScore', { value: total.total_guess_score })}\n`;
+    infoString += `${t('ranking.hiddenCount', { value: hideInfo.hide_count })}\n`;
+    infoString += `${t('ranking.guessedCount', { value: guessInfo.guess_count })}\n`;
 
-    Alert.alert("Complementary Scores of " + username, infoString);
-  }, [context, rankingScope]);
+    Alert.alert(t('ranking.complementaryTitle', { name: username }), infoString);
+  }, [context, rankingScope, t]);
 
   function handleError(message, status) {
     if (status === 401) {
-      Alert.alert("There is a problem with the server", `${message}. Your authentication failed. Try to reconnect. You canno't get a ranking.`);
+      Alert.alert(t('auth.serverProblemTitle'), t('ranking.authFailed', { message }));
       return
     };
     if (status !== 200) {
-      Alert.alert("There is a problem with the server", `${message}. Try to reconnect. You canno't get a ranking.`);
+      Alert.alert(t('auth.serverProblemTitle'), t('ranking.genericFailed', { message }));
       return
     };
   };
@@ -84,14 +87,14 @@ export default function RankingScreen({ route, navigation }) {
   useEffect(() => {
     if (theme) {
       navigation.setOptions({
-        title: group?.name ?? 'Ranking',
+        title: group?.name ?? t('ranking.title'),
         headerStyle: { backgroundColor: theme.primaryColor },
         headerTintColor: theme.headerTintColor,
       });
     } else {
-      navigation.setOptions({ title: group?.name ?? 'Ranking' });
+      navigation.setOptions({ title: group?.name ?? t('ranking.title') });
     }
-  }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor]);
+  }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor, t]);
 
 
 
@@ -191,7 +194,7 @@ export default function RankingScreen({ route, navigation }) {
           <TableComponent data={rankingDatum} onPress={showSpecificDatum} onEndReached={handleEndReached} />
         </View>
       ) : (
-        <LoadingOverlay message={"Loading ranking table..."}/>
+        <LoadingOverlay message={t('ranking.loadingTable')}/>
       )}
     </PrivateGroupThemeProvider>
   );

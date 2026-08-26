@@ -1,6 +1,7 @@
 import { useRef, useState, useContext, useEffect } from 'react';
 import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
 import * as MediaLibrary from 'expo-media-library';
 import * as Linking from 'expo-linking';
 
@@ -34,7 +35,37 @@ function normalizeUploadCategoryKey(categoryKey) {
   return isUploadableCategoryKey(categoryKey) ? categoryKey : null;
 }
 
+// Upload-error payloads come from non-React transports (utils/imagesRequests.js)
+// as English title/message strings. Mapping them here to i18n keys keeps the
+// transports untouched; unknown strings fall back to themselves via
+// t(raw, { defaultValue: raw }) — same boundary pattern as SwipeImage's
+// guess.feedErrors.* mapping.
+const UPLOAD_ERROR_KEYS = {
+  'Unauthorized, please try to reconnect': 'errors.unauthorized',
+  'Internal server error, please wait and try again': 'errors.serverError',
+  'Something went wrong, please try again later': 'errors.generic',
+};
+const UPLOAD_FILE_GONE_PREFIX = 'Your file might not exist anymore but should be uploaded. You can continue to play.';
+const UPLOAD_UNSUPPORTED_METHOD_PREFIX = 'Unsupported upload method: ';
+
 export default function SetInstructionsScreen({ navigation, route }) {
+  const { t } = useTranslation();
+
+  const translateUploadErrorText = (raw) => {
+    if (typeof raw !== 'string' || raw === '') {
+      return raw;
+    }
+    if (UPLOAD_ERROR_KEYS[raw]) {
+      return t(UPLOAD_ERROR_KEYS[raw]);
+    }
+    if (raw.startsWith(UPLOAD_FILE_GONE_PREFIX)) {
+      return t('errors.uploadFileGone') + raw.slice(UPLOAD_FILE_GONE_PREFIX.length);
+    }
+    if (raw.startsWith(UPLOAD_UNSUPPORTED_METHOD_PREFIX)) {
+      return t('errors.uploadUnsupportedMethod', { method: raw.slice(UPLOAD_UNSUPPORTED_METHOD_PREFIX.length) });
+    }
+    return t(raw, { defaultValue: raw });
+  };
 
   const [showModal, setShowModal] = useState(false);
   const [description, setDescription] = useState("");
@@ -148,7 +179,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       currentPermission = await requestPermission();
     };
     if (!currentPermission?.canAskAgain || currentPermission?.status === "denied") {
-      Alert.alert("Insufficient Permissions", 'Access to  Photos and Videos is denied');
+      Alert.alert(t('hide.insufficientPermissions'), t('hide.photosDenied'));
       Linking.openSettings();
     } else {
       if (currentPermission?.status === "granted") {
@@ -203,14 +234,14 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
       if (uploadState.status !== 200) {
         setIsLoading(false);
-        Alert.alert(`Uploading error: ${uploadState.title}`, uploadState.message+ "\nPlease try again later");
+        Alert.alert(`${t('hide.uploadingError')}: ${translateUploadErrorText(uploadState.title)}`, `${translateUploadErrorText(uploadState.message)}\n${t('hide.tryAgainLater')}`);
         return uploadState;
       };
 
       return uploadState;
     } catch (error) {
       setIsLoading(false);
-      Alert.alert("Uploading error", `${error?.message || "Unexpected error"}\nPlease try again later`);
+      Alert.alert(t('hide.uploadingError'), `${error?.message || t('hide.unexpectedError')}\n${t('hide.tryAgainLater')}`);
       return { status: 500 };
     }
   };
@@ -305,7 +336,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
       const validType = isTypeValid(fileExtension);
 
       if (!validType) {
-        Alert.alert("Invalid image type", "Please select a valid image type (png, jpg or jpeg)");
+        Alert.alert(t('hide.invalidTypeTitle'), t('hide.invalidTypeMessage'));
         return;
       };
 
@@ -346,7 +377,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
 
   if (isLoading) {
-    return <LoadingOverlay message={"Image is being uploaded"} />;
+    return <LoadingOverlay message={t('hide.uploading')} />;
   };
 
 
@@ -354,7 +385,7 @@ export default function SetInstructionsScreen({ navigation, route }) {
     <PrivateGroupThemeProvider group={group}>
       <View style={styles.container} testID="set-instructions.screen">
         <ImageBackground
-          accessibilityLabel="Set instructions image"
+          accessibilityLabel={t('hide.setInstructionsImageLabel')}
           source={{uri : uri}}
           resizeMode='stretch'
           style={imageDimensionStyle}

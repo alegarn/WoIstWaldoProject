@@ -11,6 +11,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
@@ -18,7 +19,7 @@ import TutorialOverlay from '../../components/UI/TutorialOverlay';
 import IconButton from '../../components/UI/IconButton';
 import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
-import { LANGUAGES } from '../../constants/languages';
+import LanguageSelector from '../../components/UI/LanguageSelector';
 import { getDefaultCategories } from '../../constants/defaultCategories';
 import { getCategories } from '../../utils/categoryRequests';
 import {
@@ -82,6 +83,7 @@ async function resolveActiveGroupSnapshot({ activeGroup, context, scope }) {
 }
 
 export default function GuessPathScreen({ navigation, route }) {
+  const { t } = useTranslation();
   const context = useContext(AuthContext);
   const [categories, setCategories] = useState([]);
   const [sessionLanguage, setSessionLanguage] = useState(null);
@@ -190,8 +192,8 @@ export default function GuessPathScreen({ navigation, route }) {
   const handleCategoryPress = async (category) => {
     if (isPrivateScope && isGroupLocked) {
       Alert.alert(
-        'Group is locked',
-        'New private games are paused until the owner renews the subscription or transfers ownership.'
+        t('guess.path.lockTitle'),
+        t('guess.path.lockMessage')
       );
       return;
     }
@@ -209,8 +211,8 @@ export default function GuessPathScreen({ navigation, route }) {
       });
       if (resolvedActiveGroup?.locked) {
         Alert.alert(
-          'Group is locked',
-          'New private games are paused until the owner renews the subscription or transfers ownership.'
+          t('guess.path.lockTitle'),
+          t('guess.path.lockMessage')
         );
         return;
       }
@@ -259,7 +261,7 @@ export default function GuessPathScreen({ navigation, route }) {
       setNewCategoryThumbnailImageId(null);
       await reloadCategories();
     } else {
-      Alert.alert('Error', 'Could not create category.');
+      Alert.alert(t('common.error'), t('guess.path.createCategoryFailed'));
     }
   };
 
@@ -274,7 +276,7 @@ export default function GuessPathScreen({ navigation, route }) {
         setNewCategoryThumbnailImageId(uploaded.imageId);
       }
     } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not pick thumbnail.');
+      Alert.alert(t('common.error'), err?.message ?? t('guess.path.pickThumbnailFailed'));
     } finally {
       setIsPickingCreateThumbnail(false);
     }
@@ -297,21 +299,21 @@ export default function GuessPathScreen({ navigation, route }) {
       if (response?.status === 200 || response?.status === 204) {
         await reloadCategories();
       } else {
-        Alert.alert('Error', 'Could not update thumbnail.');
+        Alert.alert(t('common.error'), t('guess.path.updateThumbnailFailed'));
       }
     } catch (err) {
-      Alert.alert('Error', err?.message ?? 'Could not update thumbnail.');
+      Alert.alert(t('common.error'), err?.message ?? t('guess.path.updateThumbnailFailed'));
     }
   };
 
   const handleDeleteCategory = async (item) => {
     Alert.alert(
-      'Delete category?',
-      `"${item.name}" will be removed.`,
+      t('guess.path.deleteCategoryTitle'),
+      t('guess.path.deleteCategoryMessage', { name: item.name }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('common.delete'),
           style: 'destructive',
           onPress: async () => {
             if (isDeletingCategory) {
@@ -326,7 +328,7 @@ export default function GuessPathScreen({ navigation, route }) {
                 }
                 await reloadCategories();
               } else {
-                Alert.alert(`Error ${response?.status ?? ''}`, 'Could not delete category.');
+                Alert.alert(t('guess.path.deleteFailedStatus', { status: response?.status ?? '' }), t('guess.path.deleteCategoryFailed'));
               }
             } finally {
               setIsDeletingCategory(false);
@@ -344,13 +346,13 @@ export default function GuessPathScreen({ navigation, route }) {
     <>
       {isE2EMode() && (
         <Pressable
-          accessibilityLabel="Return to home"
+          accessibilityLabel={t('guess.path.returnHome')}
           accessibilityRole="button"
           onPress={() => navigation.popToTop()}
           style={styles.e2eHomeButton}
           testID="guess-path.button.home"
         >
-          <Text style={styles.e2eHomeButtonText}>Home</Text>
+          <Text style={styles.e2eHomeButtonText}>{t('common.home')}</Text>
         </Pressable>
       )}
 
@@ -368,7 +370,7 @@ export default function GuessPathScreen({ navigation, route }) {
                 size={24}
                 onPress={handleOpenAddCategory}
                 testID="guess-path.button.add-category"
-                accessibilityLabel="Add category"
+                accessibilityLabel={t('guess.path.addCategory')}
               />
             )}
             {isOwner && (
@@ -378,7 +380,7 @@ export default function GuessPathScreen({ navigation, route }) {
                 size={24}
                 onPress={() => setIsManageModalVisible(true)}
                 testID="guess-path.button.manage"
-                accessibilityLabel="Manage categories"
+                accessibilityLabel={t('guess.path.manageCategories')}
               />
             )}
             <IconButton
@@ -387,22 +389,22 @@ export default function GuessPathScreen({ navigation, route }) {
               size={24}
               onPress={() => setIsFilterModalVisible(true)}
               testID="guess-path.button.details"
-              accessibilityLabel="Open language filter"
+              accessibilityLabel={t('guess.path.openLanguageFilter')}
             />
           </View>
         </View>
         {manageMode !== null && (
           <View style={styles.manageBanner}>
             <Text style={styles.manageBannerText}>
-              {manageMode === 'update' ? 'Updating images' : 'Deleting categories'}
+              {manageMode === 'update' ? t('guess.path.updatingImages') : t('guess.path.deletingCategories')}
             </Text>
             <Button
               onPress={() => setManageMode(null)}
               testID="guess-path.button.manage-done"
-              accessibilityLabel="Done managing"
+              accessibilityLabel={t('guess.path.doneManaging')}
               thin={true}
             >
-              Done
+              {t('common.done')}
             </Button>
           </View>
         )}
@@ -430,7 +432,7 @@ export default function GuessPathScreen({ navigation, route }) {
                   size={18}
                   onPress={() => handleEditCategoryThumbnail(item)}
                   testID={`guess-path.category.edit.${item.id}`}
-                  accessibilityLabel={`Edit ${item.name} thumbnail`}
+                  accessibilityLabel={t('guess.path.editThumbnailLabel', { name: item.name })}
                   style={styles.cardEditButton}
                 />
               )}
@@ -442,7 +444,7 @@ export default function GuessPathScreen({ navigation, route }) {
                   onPress={() => handleDeleteCategory(item)}
                   disabled={isDeletingCategory}
                   testID={`guess-path.category.delete.${item.id}`}
-                  accessibilityLabel={`Delete ${item.name}`}
+                  accessibilityLabel={t('guess.path.deleteCategoryLabel', { name: item.name })}
                   style={styles.cardEditButton}
                 />
               )}
@@ -458,42 +460,13 @@ export default function GuessPathScreen({ navigation, route }) {
         />
       )}
 
-      <Modal
+      <LanguageSelector
+        value={resolvedLanguage}
+        onChange={handleSelectLanguage}
+        onClose={() => setIsFilterModalVisible(false)}
+        testIDPrefix="guess-path.filter.language"
         visible={isFilterModalVisible}
-        onRequestClose={() => setIsFilterModalVisible(false)}
-        animationType="slide"
-        transparent={false}
-      >
-        <View style={styles.modalContainer} testID="guess-path.filter.language">
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select language</Text>
-            <Pressable
-              onPress={() => setIsFilterModalVisible(false)}
-              testID="guess-path.filter.language.close"
-              style={styles.modalCloseButton}
-            >
-              <Text style={styles.modalCloseText}>Close</Text>
-            </Pressable>
-          </View>
-          <ScrollView>
-            {LANGUAGES.map((language) => {
-              const isSelected = language.code === resolvedLanguage;
-              return (
-                <Pressable
-                  key={language.code}
-                  onPress={() => handleSelectLanguage(language.code)}
-                  testID={`guess-path.filter.language.option.${language.code}`}
-                  style={[styles.option, isSelected && styles.optionSelected]}
-                >
-                  <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
-                    {language.name}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        </View>
-      </Modal>
+      />
 
       <CenteredModal
         isModalVisible={isAddCategoryVisible}
@@ -502,14 +475,14 @@ export default function GuessPathScreen({ navigation, route }) {
         testIDPrefix="guess-path.add-category"
         confirmTestID="guess-path.add-category.button.create"
         cancelTestID="guess-path.add-category.button.cancel"
-        confirmLabel={isCreatingCategory ? 'Creating...' : 'Create'}
-        cancelLabel="Cancel"
+        confirmLabel={isCreatingCategory ? t('common.creating') : t('common.create')}
+        cancelLabel={t('common.cancel')}
       >
         <View style={styles.addCategoryBody}>
           <TextInput
             testID="guess-path.add-category.input.name"
-            accessibilityLabel="New category name"
-            placeholder="New category"
+            accessibilityLabel={t('guess.path.newCategoryName')}
+            placeholder={t('guess.path.newCategoryPlaceholder')}
             value={newCategoryName}
             onChangeText={setNewCategoryName}
             editable={!isCreatingCategory}
@@ -518,11 +491,11 @@ export default function GuessPathScreen({ navigation, route }) {
           <Button
             onPress={handlePickCreateThumbnail}
             testID="guess-path.add-category.button.pick-thumbnail"
-            accessibilityLabel="Pick category thumbnail"
+            accessibilityLabel={t('guess.path.pickThumbnailLabel')}
             disabled={isPickingCreateThumbnail || isCreatingCategory}
             thin={true}
           >
-            {newCategoryThumbnailImageId ? 'Thumbnail ready' : 'Add thumbnail (optional)'}
+            {newCategoryThumbnailImageId ? t('guess.path.thumbnailReady') : t('guess.path.addThumbnailOptional')}
           </Button>
         </View>
       </CenteredModal>
@@ -535,15 +508,15 @@ export default function GuessPathScreen({ navigation, route }) {
       >
         <View style={styles.modalContainer} testID="guess-path.manage">
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Manage categories</Text>
+            <Text style={styles.modalTitle}>{t('guess.path.manageCategories')}</Text>
             <Pressable
               onPress={() => setIsManageModalVisible(false)}
               testID="guess-path.manage.close"
               accessibilityRole="button"
-              accessibilityLabel="Close manage categories"
+              accessibilityLabel={t('guess.path.closeManageCategories')}
               style={styles.modalCloseButton}
             >
-              <Text style={styles.modalCloseText}>Close</Text>
+              <Text style={styles.modalCloseText}>{t('common.close')}</Text>
             </Pressable>
           </View>
           <ScrollView>
@@ -554,10 +527,10 @@ export default function GuessPathScreen({ navigation, route }) {
               }}
               testID="guess-path.manage.option.update"
               accessibilityRole="button"
-              accessibilityLabel="Update category images"
+              accessibilityLabel={t('guess.path.updateCategoryImages')}
               style={styles.option}
             >
-              <Text style={styles.optionText}>Update images</Text>
+              <Text style={styles.optionText}>{t('guess.path.updateImages')}</Text>
             </Pressable>
             <Pressable
               onPress={() => {
@@ -566,10 +539,10 @@ export default function GuessPathScreen({ navigation, route }) {
               }}
               testID="guess-path.manage.option.delete"
               accessibilityRole="button"
-              accessibilityLabel="Delete categories"
+              accessibilityLabel={t('guess.path.deleteCategories')}
               style={styles.option}
             >
-              <Text style={styles.optionText}>Delete categories</Text>
+              <Text style={styles.optionText}>{t('guess.path.deleteCategories')}</Text>
             </Pressable>
           </ScrollView>
         </View>
@@ -689,15 +662,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#DDD',
   },
-  optionSelected: {
-    backgroundColor: 'rgba(29, 19, 61, 0.08)',
-  },
   optionText: {
     fontSize: 16,
     color: '#333',
-  },
-  optionTextSelected: {
-    fontWeight: 'bold',
-    color: 'GlobalStyle.color.tertiaryColor900',
   },
 });

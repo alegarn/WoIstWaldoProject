@@ -1,6 +1,7 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
@@ -27,8 +28,20 @@ export function transferErrorMessageFor(response) {
   return response?.data?.message ?? 'Could not transfer ownership. Please try again.';
 }
 
+// Transfer-error payloads are transport-level English strings (either the
+// reason-mapped literals above or a server message). Same boundary mapping
+// pattern as SwipeImage's guess.feedErrors.*: lookup + defaultValue passthrough.
+const TRANSFER_ERROR_KEYS = {
+  'This member needs to hold a "Group Creator" tier before transfer to own the group.': 'groups.members.transferNotCreator',
+  'This member is no longer in the group.': 'groups.members.transferNotMember',
+  'Could not transfer ownership. Please try again.': 'groups.members.transferFailed',
+};
+
 export default function MemberManagementScreen({ navigation }) {
+  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
+
+  const translateTransferError = (raw) => t(TRANSFER_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
   const { scope } = useActiveGroup();
   const { data, refresh } = useGroupsHub();
 
@@ -78,7 +91,7 @@ export default function MemberManagementScreen({ navigation }) {
   }, [navigation, theme.headerTintColor, theme.primaryColor]);
 
   if (!groupId) {
-    return <LoadingOverlay message="Loading group..." />;
+    return <LoadingOverlay message={t('groups.members.loadingGroup')} />;
   }
 
   const confirmRemove = async () => {
@@ -95,7 +108,7 @@ export default function MemberManagementScreen({ navigation }) {
     if (response?.status === 200 || response?.status === 204) {
       await loadMembers();
     } else {
-      Alert.alert(`Error ${response?.status ?? ''}`, 'Could not remove member.');
+      Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.members.removeFailed'));
     }
   };
 
@@ -113,12 +126,12 @@ export default function MemberManagementScreen({ navigation }) {
       await loadMembers();
       refresh();
     } else {
-      Alert.alert('Cannot transfer ownership', transferErrorMessageFor(response));
+      Alert.alert(t('groups.members.transferFailedTitle'), translateTransferError(transferErrorMessageFor(response)));
     }
   };
 
   if (isLoading && members.length === 0) {
-    return <LoadingOverlay message="Loading members..." />;
+    return <LoadingOverlay message={t('groups.members.loading')} />;
   }
 
   return (
@@ -126,15 +139,15 @@ export default function MemberManagementScreen({ navigation }) {
       <FlatList
         data={members}
         keyExtractor={(item) => String(item.id)}
-        ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>No members.</Text>}
+        ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>{t('groups.members.empty')}</Text>}
         renderItem={({ item }) => (
           <View
             testID={`member-mgmt.row.${item.id}`}
             style={[styles.row, { backgroundColor: theme.surface, borderColor: theme.hairline }] }
           >
             <View style={styles.info}>
-              <Text style={[styles.username, { color: theme.text }]}>{item.username ?? item.user_id ?? 'Member'}</Text>
-              {item.role === 'owner' && <Text style={[styles.role, { color: theme.warning }]}>Owner</Text>}
+              <Text style={[styles.username, { color: theme.text }]}>{item.username ?? item.user_id ?? t('groups.members.memberFallback')}</Text>
+              {item.role === 'owner' && <Text style={[styles.role, { color: theme.warning }]}>{t('groups.members.owner')}</Text>}
             </View>
             {isOwner && item.role !== 'owner' && (
               <View style={styles.actions}>
@@ -145,7 +158,7 @@ export default function MemberManagementScreen({ navigation }) {
                   textStyle={{ color: '#fff' }}
                   testID="member-mgmt.button.remove"
                 >
-                  Remove
+                  {t('groups.members.remove')}
                 </Button>
                 <Button
                   disabled={isWorking}
@@ -154,7 +167,7 @@ export default function MemberManagementScreen({ navigation }) {
                   textStyle={{ color: theme.accentText }}
                   testID="member-mgmt.button.transfer"
                 >
-                  Transfer
+                  {t('groups.members.transfer')}
                 </Button>
               </View>
             )}
@@ -169,10 +182,10 @@ export default function MemberManagementScreen({ navigation }) {
         testIDPrefix="members.remove.confirm"
         confirmTestID="members.remove.confirm.ok"
         cancelTestID="members.remove.confirm.cancel"
-        confirmLabel="Remove"
-        cancelLabel="Cancel"
+        confirmLabel={t('groups.members.remove')}
+        cancelLabel={t('common.cancel')}
       >
-        {`Remove ${removeTarget?.username ?? 'this member'} from the group?`}
+        {t('groups.members.removeConfirm', { name: removeTarget?.username ?? t('groups.members.thisMember') })}
       </CenteredModal>
 
       <CenteredModal
@@ -182,10 +195,10 @@ export default function MemberManagementScreen({ navigation }) {
         testIDPrefix="members.transfer.confirm"
         confirmTestID="members.transfer.confirm.ok"
         cancelTestID="members.transfer.confirm.cancel"
-        confirmLabel="Transfer"
-        cancelLabel="Cancel"
+        confirmLabel={t('groups.members.transfer')}
+        cancelLabel={t('common.cancel')}
       >
-        {`Transfer ownership to ${transferTarget?.username ?? 'this member'}?`}
+        {t('groups.members.transferConfirm', { name: transferTarget?.username ?? t('groups.members.thisMember') })}
       </CenteredModal>
     </View>
   );

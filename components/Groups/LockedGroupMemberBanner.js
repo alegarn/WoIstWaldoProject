@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
@@ -8,18 +9,19 @@ export default function LockedGroupMemberBanner({
   secondaryColor,
   testID = 'private-home.locked-member-banner',
 }) {
-  const name = groupName && groupName.trim().length > 0 ? groupName : 'This group';
+  const { t } = useTranslation();
+  const name = groupName && groupName.trim().length > 0 ? groupName : t('groups.locked.thisGroupCapital');
   const theme = getPrivateGroupTheme({ primaryColor, secondaryColor });
 
   return (
     <View
       style={[styles.container, { backgroundColor: theme.surface, borderColor: theme.warning }]}
       testID={testID}
-      accessibilityLabel="Locked group banner"
+      accessibilityLabel={t('groups.locked.bannerLabel')}
     >
-      <Text style={[styles.title, { color: theme.warning }]}>{`${name} is temporarily locked`}</Text>
+      <Text style={[styles.title, { color: theme.warning }]}>{t('groups.locked.memberTitle', { name })}</Text>
       <Text style={[styles.body, { color: theme.text }] }>
-        {`The owner's private-group subscription ended. The group is read-only — you can still view existing images and rankings, but new games are paused until the owner renews.`}
+        {t('groups.locked.memberBody')}
       </Text>
     </View>
   );

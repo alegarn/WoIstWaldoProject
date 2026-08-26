@@ -1,5 +1,6 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import BigButton from '../../components/UI/BigButton';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
@@ -16,6 +17,7 @@ import {
 } from '../../utils/purchases';
 
 export default function PaywallScreen({ navigation, route }) {
+  const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const intent = route?.params?.intent;
   const [packages, setPackages] = useState([]);
@@ -39,11 +41,11 @@ export default function PaywallScreen({ navigation, route }) {
       }).filter(Boolean);
       setPackages(resolved);
     } catch (error) {
-      Alert.alert('Could not load offerings', error?.message ?? '');
+      Alert.alert(t('billing.paywall.loadFailed'), error?.message ?? '');
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     loadOfferings();
@@ -58,8 +60,8 @@ export default function PaywallScreen({ navigation, route }) {
     }
     if (!ok) {
       Alert.alert(
-        'Purchase recorded',
-        "We couldn't confirm your purchase with the server yet. Open this screen again or tap 'Restore purchases' shortly to refresh your plan.",
+        t('billing.paywall.purchaseRecorded'),
+        t('billing.paywall.purchaseRecordedMessage'),
       );
     }
     if (intent === 'create-group') {
@@ -67,7 +69,7 @@ export default function PaywallScreen({ navigation, route }) {
     } else {
       navigation.replace('SubscriptionManagementScreen');
     }
-  }, [authContext, intent, navigation]);
+  }, [authContext, intent, navigation, t]);
 
   const handlePurchase = async (pkg) => {
     const Purchases = getPurchasesModule();
@@ -82,7 +84,7 @@ export default function PaywallScreen({ navigation, route }) {
       if (error?.userCancelled) {
         return;
       }
-      Alert.alert('Purchase failed', error?.message ?? '');
+      Alert.alert(t('billing.paywall.purchaseFailed'), error?.message ?? '');
     } finally {
       setIsPurchasing(false);
     }
@@ -103,22 +105,22 @@ export default function PaywallScreen({ navigation, route }) {
       applyEntitlementToContext(authContext, result.entitlement);
     } catch (error) {
       setRestoreError(true);
-      Alert.alert('Restore failed', error?.message ?? '');
+      Alert.alert(t('billing.paywall.restoreFailed'), error?.message ?? '');
     }
   };
 
   const renderHeader = () => (
     <View style={styles.header}>
-      <Text style={styles.eyebrow}>STORE</Text>
-      <Text style={styles.headline}>Find your plan</Text>
-      <Text style={styles.sub}>Unlock more ways to play. Pick the tier that fits.</Text>
+      <Text style={styles.eyebrow}>{t('billing.paywall.eyebrow')}</Text>
+      <Text style={styles.headline}>{t('billing.paywall.headline')}</Text>
+      <Text style={styles.sub}>{t('billing.paywall.sub')}</Text>
       <View style={styles.rule} />
     </View>
   );
 
   const renderFooter = () => (
     <Text style={styles.legal}>
-      Auto-renews monthly. Cancel anytime from your store settings.
+      {t('billing.paywall.legal')}
     </Text>
   );
 
@@ -137,14 +139,14 @@ export default function PaywallScreen({ navigation, route }) {
         features={tier.features}
         ctaText={tier.ctaText}
         featured={tier.featured}
-        accessibilityLabel={`Subscribe to ${tier.label}`}
+        accessibilityLabel={t('billing.paywall.subscribeLabel', { tier: tier.label })}
         onCta={() => handlePurchase(pkg)}
       />
     );
   };
 
   if (isLoading || isPurchasing) {
-    return <LoadingOverlay message={isPurchasing ? 'Processing purchase...' : 'Loading offerings...'} />;
+    return <LoadingOverlay message={isPurchasing ? t('billing.paywall.processingPurchase') : t('billing.paywall.loadingOfferings')} />;
   }
 
   return (
@@ -153,7 +155,7 @@ export default function PaywallScreen({ navigation, route }) {
         data={packages}
         keyExtractor={(item, index) => item?.tier?.key ?? `tier-${index}`}
         ListHeaderComponent={renderHeader}
-        ListEmptyComponent={<Text style={styles.empty}>No offerings available right now.</Text>}
+        ListEmptyComponent={<Text style={styles.empty}>{t('billing.paywall.empty')}</Text>}
         ListFooterComponent={renderFooter}
         renderItem={renderItem}
         contentContainerStyle={styles.listContent}
@@ -161,12 +163,12 @@ export default function PaywallScreen({ navigation, route }) {
       />
       {restoreError && (
         <Text style={styles.error} testID="subscription-error">
-          No active subscription found.
+          {t('billing.paywall.noSubscription')}
         </Text>
       )}
       <View style={styles.restoreWrap}>
         <BigButton
-          text="Restore purchases"
+          text={t('billing.paywall.restorePurchases')}
           onPress={handleRestore}
           testID="paywall.button.restore"
         />

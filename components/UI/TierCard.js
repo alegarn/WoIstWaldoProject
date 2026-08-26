@@ -1,4 +1,6 @@
 import { Image, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+
 import { GlobalStyle } from '../../constants/theme';
 import Button from './Button';
 
@@ -16,6 +18,8 @@ export default function TierCard({
   featured,
   accessibilityLabel,
 }) {
+  const { t } = useTranslation();
+
   return (
     <View testID={testID} style={[styles.card, featured && styles.cardFeatured]}>
       <View style={styles.hero}>
@@ -26,7 +30,7 @@ export default function TierCard({
         )}
         {featured ? (
           <View style={styles.popularTag}>
-            <Text style={styles.popularText}>Popular</Text>
+            <Text style={styles.popularText}>{t('ui.tierCard.popular')}</Text>
           </View>
         ) : null}
       </View>
@@ -46,12 +50,12 @@ export default function TierCard({
 
         {isSubscription ? (
           <View style={styles.subscriptionPill}>
-            <Text style={styles.subscriptionPillText}>Subscription</Text>
+            <Text style={styles.subscriptionPillText}>{t('ui.tierCard.subscription')}</Text>
           </View>
         ) : null}
 
         {isSubscription ? (
-          <Text style={styles.caption}>Auto-renews monthly</Text>
+          <Text style={styles.caption}>{t('ui.tierCard.autoRenewMonthly')}</Text>
         ) : null}
 
         {features && features.length ? (
