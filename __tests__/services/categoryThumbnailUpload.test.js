@@ -80,7 +80,7 @@ describe('uploadCategoryThumbnail', () => {
     expect(performImageUpload).not.toHaveBeenCalled();
   });
 
-  it('downscales to a 120px JPEG, presigns with the rendered size, and uploads the saved uri', async () => {
+  it('downscales to a 600px WebP, presigns with the rendered size and webp extension, and uploads the saved uri', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
       assets: [{ uri: 'file:///thumb.webp', width: 2400, height: 1800, fileSize: 2_200_000 }],
@@ -92,16 +92,16 @@ describe('uploadCategoryThumbnail', () => {
 
     expect(result).toEqual({ imageId: 'img-9' });
 
-    expect(mockResize).toHaveBeenCalledWith({ width: 120 });
-    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.7, format: 'jpeg' });
+    expect(mockResize).toHaveBeenCalledWith({ width: 600 });
+    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.85, format: 'webp' });
 
     const presignArgs = preparePrivateUpload.mock.calls[0][0];
     expect(presignArgs).toMatchObject({
       context,
       groupId,
       kind: 'category-thumbnail',
-      fileExtension: 'jpeg',
-      contentType: 'image/jpeg',
+      fileExtension: 'webp',
+      contentType: 'image/webp',
       contentLength: 4_321,
       isCategoryThumbnail: true,
     });
@@ -111,7 +111,7 @@ describe('uploadCategoryThumbnail', () => {
       expect.objectContaining({
         plan: { imageId: 'img-9' },
         fileUrl: SAVED_URI,
-        fileExtension: 'jpeg',
+        fileExtension: 'webp',
         contentLength: 4_321,
         context,
       }),

@@ -342,8 +342,8 @@ describe('GroupSettingsScreen', () => {
       context: {},
       groupId: 'g-3',
       kind: 'category-thumbnail',
-      fileExtension: 'jpeg',
-      contentType: 'image/jpeg',
+      fileExtension: 'webp',
+      contentType: 'image/webp',
       contentLength: RESIZED_SIZE,
       isCategoryThumbnail: true,
     });

@@ -1,10 +1,11 @@
 import * as ImagePicker from 'expo-image-picker';
+import { SaveFormat } from 'expo-image-manipulator';
 
 import { preparePrivateUpload } from './groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
-import { resizeToJpeg } from '../../utils/resizeToJpeg';
+import { resizeImage } from '../../utils/resizeImage';
 
-const MAX_LONGEST_SIDE = 120;
+const MAX_LONGEST_SIDE = 600;
 
 // Opens the image picker and uploads the chosen asset as a private category thumbnail.
 // Returns { imageId } on success, or null when the user cancels the picker.
@@ -24,13 +25,15 @@ export async function uploadCategoryThumbnail({ context, groupId }) {
 
   const asset = result.assets[0];
 
-  const resized = await resizeToJpeg({
+  const resized = await resizeImage({
     uri: asset.uri,
     width: asset.width,
     height: asset.height,
     maxLongestSide: MAX_LONGEST_SIDE,
+    format: SaveFormat.WEBP,
+    compress: 0.85,
   });
-  const fileExtension = 'jpeg';
+  const fileExtension = resized.fileExtension;
 
   const presignResponse = await preparePrivateUpload({
     context,
