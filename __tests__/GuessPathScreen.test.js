@@ -841,6 +841,113 @@ describe('GuessPathScreen', () => {
       name: 'NewCat',
       thumbnailImageId: 'img-7',
     });
+    expect(updateGroupCategory).not.toHaveBeenCalled();
+  });
+
+  it('disables the create confirm button while a thumbnail pick is in flight and drops create presses', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    let resolveUpload;
+    uploadCategoryThumbnail.mockImplementation(
+      () => new Promise((resolve) => { resolveUpload = resolve; })
+    );
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getAddCategoryButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.pick-thumbnail',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    const confirmButton = renderer.root.findByProps({
+      testID: 'guess-path.add-category.button.create',
+    });
+    expect(confirmButton.props.disabled).toBe(true);
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.add-category.button.cancel' }).props.disabled
+    ).toBeUndefined();
+
+    await act(async () => {
+      confirmButton.props.onPress();
+      await flushEffects();
+    });
+
+    expect(createGroupCategory).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveUpload(null);
+      await flushEffects();
+    });
+  });
+
+  it('PATCHes the thumbnail onto the created category when the pending pick completes after create', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: jest.fn(),
+    });
+    let resolveUpload;
+    uploadCategoryThumbnail.mockImplementation(
+      () => new Promise((resolve) => { resolveUpload = resolve; })
+    );
+    createGroupCategory.mockResolvedValue({ status: 201, data: { id: 'c-new' } });
+    loadGroupCategoriesOptimistic
+      .mockImplementationOnce(async ({ onCategories }) => {
+        if (typeof onCategories === 'function') onCategories([]);
+      })
+      .mockImplementation(async ({ onCategories }) => {
+        if (typeof onCategories === 'function') onCategories(PRIVATE_CREATED_CATEGORIES);
+      });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await act(async () => {
+      getAddCategoryButtonProps().onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.input.name',
+      }).props.onChangeText('NewCat');
+    });
+
+    const staleCreateOnPress = renderer.root.findByProps({
+      testID: 'guess-path.add-category.button.create',
+    }).props.onPress;
+
+    await act(async () => {
+      renderer.root.findByProps({
+        testID: 'guess-path.add-category.button.pick-thumbnail',
+      }).props.onPress();
+      await flushEffects();
+    });
+
+    await act(async () => {
+      staleCreateOnPress();
+      await flushEffects();
+    });
+
+    expect(createGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', { name: 'NewCat' });
+
+    await act(async () => {
+      resolveUpload({ imageId: 'img-late' });
+      await flushEffects();
+    });
+
+    expect(updateGroupCategory).toHaveBeenCalledTimes(1);
+    expect(updateGroupCategory).toHaveBeenCalledWith(contextValue, 'g-1', 'c-new', {
+      thumbnailImageId: 'img-late',
+    });
+    expect(loadGroupCategoriesOptimistic).toHaveBeenCalledTimes(3);
   });
 
   it('renders a pencil edit affordance on owned category cards and swaps the thumbnail on press', async () => {

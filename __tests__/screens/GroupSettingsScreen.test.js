@@ -15,6 +15,52 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+const mockManipulate = jest.fn();
+const mockResize = jest.fn();
+const mockRenderAsync = jest.fn();
+const mockSaveAsync = jest.fn();
+const mockFileSizeFor = jest.fn();
+
+jest.mock('expo-image-manipulator', () => ({
+  ImageManipulator: {
+    manipulate: (...args) => mockManipulate(...args),
+  },
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+}));
+
+jest.mock('expo-file-system', () => ({
+  File: function File(uri) {
+    this.uri = uri;
+    this.size = mockFileSizeFor(uri);
+  },
+}));
+
+const RESIZED_URI = 'file:///tmp/category-thumb.jpeg';
+const RESIZED_SIZE = 4_321;
+
+function resetManipulatorChain() {
+  mockManipulate.mockReset();
+  mockResize.mockReset();
+  mockRenderAsync.mockReset();
+  mockSaveAsync.mockReset();
+
+  mockManipulate.mockImplementation(() => {
+    const context = {
+      resize: mockResize.mockReturnValue(context),
+      renderAsync: mockRenderAsync.mockResolvedValue({
+        saveAsync: mockSaveAsync.mockResolvedValue({
+          uri: RESIZED_URI,
+          width: 120,
+          height: 90,
+        }),
+        release: jest.fn(),
+      }),
+      release: jest.fn(),
+    };
+    return context;
+  });
+}
+
 jest.mock('@react-native-vector-icons/ionicons', () => ({
   Ionicons: () => null,
   default: () => null,
@@ -104,6 +150,8 @@ async function flushEffects() {
 describe('GroupSettingsScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetManipulatorChain();
+    mockFileSizeFor.mockImplementation((uri) => (uri === RESIZED_URI ? RESIZED_SIZE : undefined));
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     listGroupCategories.mockResolvedValue({ status: 200, data: [] });
   });
@@ -294,9 +342,9 @@ describe('GroupSettingsScreen', () => {
       context: {},
       groupId: 'g-3',
       kind: 'category-thumbnail',
-      fileExtension: 'png',
-      contentType: 'image/png',
-      contentLength: 42,
+      fileExtension: 'jpeg',
+      contentType: 'image/jpeg',
+      contentLength: RESIZED_SIZE,
       isCategoryThumbnail: true,
     });
     expect(uploadArgs).not.toHaveProperty('categoryId');

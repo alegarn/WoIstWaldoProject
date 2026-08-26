@@ -24,8 +24,8 @@ jest.mock('../components/UI/Button', () => {
   const React = require('react');
   const { Text } = require('react-native');
 
-  return function MockButton({ children }) {
-    return <Text>{children}</Text>;
+  return function MockButton({ children, testID, disabled }) {
+    return <Text testID={testID} disabled={disabled}>{children}</Text>;
   };
 });
 
@@ -35,7 +35,7 @@ import { act, create } from 'react-test-renderer';
 
 import CenteredModal from '../components/UI/CenteredModal';
 
-async function renderModal(children) {
+async function renderModal(children, props = {}) {
   let renderer;
 
   await act(async () => {
@@ -45,6 +45,7 @@ async function renderModal(children) {
         isModalVisible={true}
         onCancel={jest.fn()}
         onPress={jest.fn()}
+        {...props}
       />
     );
   });
@@ -80,5 +81,12 @@ describe('CenteredModal', () => {
 
     expect(renderer.root.findByProps({ testID: 'modal.confirm' }).props.children).toBe('Confirm');
     expect(renderer.root.findByProps({ testID: 'modal.close' }).props.children).toBe('Close');
+  });
+
+  it('forwards confirmDisabled to the confirm button only', async () => {
+    const renderer = await renderModal('Do you want to validate this ?', { confirmDisabled: true });
+
+    expect(renderer.root.findByProps({ testID: 'modal.confirm' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ testID: 'modal.close' }).props.disabled).toBeUndefined();
   });
 });

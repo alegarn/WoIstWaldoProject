@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
@@ -96,6 +96,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const [isPickingCreateThumbnail, setIsPickingCreateThumbnail] = useState(false);
   const [manageMode, setManageMode] = useState(null);
   const [isManageModalVisible, setIsManageModalVisible] = useState(false);
+  const lateAttachRef = useRef({ createdCategoryId: null, pendingImageId: null });
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
@@ -232,6 +233,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const handleOpenAddCategory = () => {
     setNewCategoryName('');
     setNewCategoryThumbnailImageId(null);
+    lateAttachRef.current = { createdCategoryId: null, pendingImageId: null };
     setIsAddCategoryVisible(true);
   };
 
@@ -241,8 +243,33 @@ export default function GuessPathScreen({ navigation, route }) {
     setNewCategoryThumbnailImageId(null);
   };
 
+  // Late-attach fallback: PATCH only when create went out without a thumbnail id —
+  // update_category destroys the replaced thumbnail row, so never re-attach.
+  const tryLateAttachThumbnail = async () => {
+    const { createdCategoryId, pendingImageId } = lateAttachRef.current;
+    if (!createdCategoryId || !pendingImageId) {
+      return;
+    }
+    lateAttachRef.current = { createdCategoryId: null, pendingImageId: null };
+    try {
+      const response = await updateGroupCategory(context, scope.groupId, createdCategoryId, {
+        thumbnailImageId: pendingImageId,
+      });
+      if (response?.status === 200 || response?.status === 204) {
+        await reloadCategories();
+      } else {
+        Alert.alert(t('common.error'), t('guess.path.updateThumbnailFailed'));
+      }
+    } catch (err) {
+      Alert.alert(t('common.error'), err?.message ?? t('guess.path.updateThumbnailFailed'));
+    }
+  };
+
   const handleCreateCategory = async () => {
     if (isCreatingCategory) {
+      return;
+    }
+    if (isPickingCreateThumbnail) {
       return;
     }
     const trimmed = newCategoryName.trim();
@@ -250,15 +277,24 @@ export default function GuessPathScreen({ navigation, route }) {
       return;
     }
     setIsCreatingCategory(true);
+    const hasThumbnail = newCategoryThumbnailImageId != null;
+    const thumbnailImageId = hasThumbnail ? newCategoryThumbnailImageId : undefined;
     const response = await createGroupCategory(context, scope.groupId, {
       name: trimmed,
-      thumbnailImageId: newCategoryThumbnailImageId ?? undefined,
+      thumbnailImageId,
     });
     setIsCreatingCategory(false);
     if (response?.status === 200 || response?.status === 201) {
       setIsAddCategoryVisible(false);
       setNewCategoryName('');
       setNewCategoryThumbnailImageId(null);
+      if (!hasThumbnail) {
+        lateAttachRef.current = {
+          ...lateAttachRef.current,
+          createdCategoryId: response?.data?.id ?? null,
+        };
+        await tryLateAttachThumbnail();
+      }
       await reloadCategories();
     } else {
       Alert.alert(t('common.error'), t('guess.path.createCategoryFailed'));
@@ -274,6 +310,11 @@ export default function GuessPathScreen({ navigation, route }) {
       const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId });
       if (uploaded) {
         setNewCategoryThumbnailImageId(uploaded.imageId);
+        lateAttachRef.current = {
+          ...lateAttachRef.current,
+          pendingImageId: uploaded.imageId,
+        };
+        await tryLateAttachThumbnail();
       }
     } catch (err) {
       Alert.alert(t('common.error'), err?.message ?? t('guess.path.pickThumbnailFailed'));
@@ -477,6 +518,7 @@ export default function GuessPathScreen({ navigation, route }) {
         cancelTestID="guess-path.add-category.button.cancel"
         confirmLabel={isCreatingCategory ? t('common.creating') : t('common.create')}
         cancelLabel={t('common.cancel')}
+        confirmDisabled={isPickingCreateThumbnail}
       >
         <View style={styles.addCategoryBody}>
           <TextInput

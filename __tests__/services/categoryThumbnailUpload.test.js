@@ -2,6 +2,26 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+const mockManipulate = jest.fn();
+const mockResize = jest.fn();
+const mockRenderAsync = jest.fn();
+const mockSaveAsync = jest.fn();
+const mockFileSizeFor = jest.fn();
+
+jest.mock('expo-image-manipulator', () => ({
+  ImageManipulator: {
+    manipulate: (...args) => mockManipulate(...args),
+  },
+  SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
+}));
+
+jest.mock('expo-file-system', () => ({
+  File: function File(uri) {
+    this.uri = uri;
+    this.size = mockFileSizeFor(uri);
+  },
+}));
+
 jest.mock('../../services/groups/groupUploadApi', () => ({
   preparePrivateUpload: jest.fn(),
 }));
@@ -15,12 +35,39 @@ import { preparePrivateUpload } from '../../services/groups/groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
 import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnailUpload';
 
+const SAVED_URI = 'file:///tmp/category-thumb.jpeg';
+
+function resetManipulatorChain() {
+  mockManipulate.mockReset();
+  mockResize.mockReset();
+  mockRenderAsync.mockReset();
+  mockSaveAsync.mockReset();
+
+  mockManipulate.mockImplementation(() => {
+    const context = {
+      resize: mockResize.mockReturnValue(context),
+      renderAsync: mockRenderAsync.mockResolvedValue({
+        saveAsync: mockSaveAsync.mockResolvedValue({
+          uri: SAVED_URI,
+          width: 120,
+          height: 90,
+        }),
+        release: jest.fn(),
+      }),
+      release: jest.fn(),
+    };
+    return context;
+  });
+}
+
 describe('uploadCategoryThumbnail', () => {
   const context = { token: 'Bearer x' };
   const groupId = 'g-1';
 
   beforeEach(() => {
     jest.clearAllMocks();
+    resetManipulatorChain();
+    mockFileSizeFor.mockImplementation((uri) => (uri === SAVED_URI ? 4_321 : undefined));
   });
 
   it('returns null when the user cancels the picker without firing presign', async () => {
@@ -33,10 +80,10 @@ describe('uploadCategoryThumbnail', () => {
     expect(performImageUpload).not.toHaveBeenCalled();
   });
 
-  it('presigns without categoryId, uploads, and returns the new imageId', async () => {
+  it('downscales to a 120px JPEG, presigns with the rendered size, and uploads the saved uri', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///thumb.webp', fileSize: 42 }],
+      assets: [{ uri: 'file:///thumb.webp', width: 2400, height: 1800, fileSize: 2_200_000 }],
     });
     preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-9' } });
     performImageUpload.mockResolvedValue({ status: 200 });
@@ -45,14 +92,17 @@ describe('uploadCategoryThumbnail', () => {
 
     expect(result).toEqual({ imageId: 'img-9' });
 
+    expect(mockResize).toHaveBeenCalledWith({ width: 120 });
+    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.7, format: 'jpeg' });
+
     const presignArgs = preparePrivateUpload.mock.calls[0][0];
     expect(presignArgs).toMatchObject({
       context,
       groupId,
       kind: 'category-thumbnail',
-      fileExtension: 'webp',
-      contentType: 'image/webp',
-      contentLength: 42,
+      fileExtension: 'jpeg',
+      contentType: 'image/jpeg',
+      contentLength: 4_321,
       isCategoryThumbnail: true,
     });
     expect(presignArgs).not.toHaveProperty('categoryId');
@@ -60,18 +110,32 @@ describe('uploadCategoryThumbnail', () => {
     expect(performImageUpload).toHaveBeenCalledWith(
       expect.objectContaining({
         plan: { imageId: 'img-9' },
-        fileUrl: 'file:///thumb.webp',
-        fileExtension: 'webp',
-        contentLength: 42,
+        fileUrl: SAVED_URI,
+        fileExtension: 'jpeg',
+        contentLength: 4_321,
         context,
       }),
     );
   });
 
+  it('aborts before presign when the resized size cannot be determined', async () => {
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///thumb.webp', width: 2400, height: 1800, fileSize: 2_200_000 }],
+    });
+    mockFileSizeFor.mockReturnValue(undefined);
+
+    await expect(
+      uploadCategoryThumbnail({ context, groupId }),
+    ).rejects.toThrow('Could not determine resized image size.');
+    expect(preparePrivateUpload).not.toHaveBeenCalled();
+    expect(performImageUpload).not.toHaveBeenCalled();
+  });
+
   it('throws when presign returns a non-success status', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///thumb.png', fileSize: 1 }],
+      assets: [{ uri: 'file:///thumb.png', width: 640, height: 480, fileSize: 1 }],
     });
     preparePrivateUpload.mockResolvedValue({ status: 422, data: {} });
 
@@ -84,7 +148,7 @@ describe('uploadCategoryThumbnail', () => {
   it('throws when the PUT upload step fails', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
-      assets: [{ uri: 'file:///thumb.png', fileSize: 1 }],
+      assets: [{ uri: 'file:///thumb.png', width: 640, height: 480, fileSize: 1 }],
     });
     preparePrivateUpload.mockResolvedValue({ status: 201, data: { imageId: 'img-x' } });
     performImageUpload.mockResolvedValue({ status: 500 });

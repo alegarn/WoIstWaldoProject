@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import Button from './Button';
 
 
-export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal', confirmTestID, cancelTestID, confirmLabel, cancelLabel }) {
+export default function CenteredModal({ children, onCancel, onPress , isModalVisible, testIDPrefix = 'modal', confirmTestID, cancelTestID, confirmLabel, cancelLabel, confirmDisabled }) {
   const { t } = useTranslation();
   const shouldRenderTextChild = typeof children === 'string' || typeof children === 'number';
 
@@ -30,6 +30,7 @@ export default function CenteredModal({ children, onCancel, onPress , isModalVis
               onPress={onPress}
               mode={Platform.OS === "ios" ? "flat" : null}
               testID={confirmTestID || `${testIDPrefix}.confirm`}
+              disabled={confirmDisabled}
               thin={true}>{confirmLabel || t('common.confirm')}</Button>
           </View>
           <View style={styles.space}>
