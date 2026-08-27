@@ -1,7 +1,7 @@
 jest.mock('react-native', () => {
   const React = require('react');
 
-  function MockModal({ children, visible }) {
+  function MockModal({ children, visible }: { children?: React.ReactNode; visible?: boolean }) {
     if (!visible) {
       return null;
     }
@@ -14,7 +14,7 @@ jest.mock('react-native', () => {
     View: 'View',
     Text: 'Text',
     StyleSheet: {
-      create: (styles) => styles,
+      create: (styles: unknown) => styles,
     },
     Platform: { OS: 'android' },
   };
@@ -24,19 +24,21 @@ jest.mock('../components/UI/Button', () => {
   const React = require('react');
   const { Text } = require('react-native');
 
-  return function MockButton({ children }) {
-    return <Text>{children}</Text>;
+  return function MockButton({ children, testID, disabled }: { children?: React.ReactNode; testID?: string; disabled?: boolean }) {
+    return <Text testID={testID} disabled={disabled}>{children}</Text>;
   };
 });
 
 import React from 'react';
 import { Text, View } from 'react-native';
-import { act, create } from 'react-test-renderer';
+import { act, create, ReactTestRenderer } from 'react-test-renderer';
 
 import CenteredModal from '../components/UI/CenteredModal';
 
-async function renderModal(children) {
-  let renderer;
+type ModalProps = Partial<React.ComponentProps<typeof CenteredModal>>;
+
+async function renderModal(children: React.ReactNode, props: ModalProps = {}) {
+  let renderer: ReactTestRenderer | undefined;
 
   await act(async () => {
     renderer = create(
@@ -45,14 +47,15 @@ async function renderModal(children) {
         isModalVisible={true}
         onCancel={jest.fn()}
         onPress={jest.fn()}
+        {...props}
       />
     );
   });
 
-  return renderer;
+  return renderer as ReactTestRenderer;
 }
 
-function getBodyElement(renderer) {
+function getBodyElement(renderer: ReactTestRenderer) {
   const contentElement = renderer.root.findByProps({ testID: 'modal.content' });
 
   return contentElement.props.children[0];
@@ -80,5 +83,12 @@ describe('CenteredModal', () => {
 
     expect(renderer.root.findByProps({ testID: 'modal.confirm' }).props.children).toBe('Confirm');
     expect(renderer.root.findByProps({ testID: 'modal.close' }).props.children).toBe('Close');
+  });
+
+  it('forwards confirmDisabled to the confirm button only', async () => {
+    const renderer = await renderModal('Do you want to validate this ?', { confirmDisabled: true });
+
+    expect(renderer.root.findByProps({ testID: 'modal.confirm' }).props.disabled).toBe(true);
+    expect(renderer.root.findByProps({ testID: 'modal.close' }).props.disabled).toBeUndefined();
   });
 });

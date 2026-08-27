@@ -1,4 +1,5 @@
-import { useCallback, useContext, useEffect, useState } from 'react';
+import { useCallback, useContext, useEffect, useRef, useState } from 'react';
+import type { ContextType, FC, ReactNode } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import {
   Alert,
@@ -11,13 +12,14 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
-import TutorialOverlay from '../../components/UI/TutorialOverlay';
-import IconButton from '../../components/UI/IconButton';
-import Button from '../../components/UI/Button';
+import TutorialOverlayDefault from '../../components/UI/TutorialOverlay';
+import IconButtonDefault from '../../components/UI/IconButton';
+import ButtonDefault from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
 import LanguageSelector from '../../components/UI/LanguageSelector';
 import { getDefaultCategories } from '../../constants/defaultCategories';
@@ -51,7 +53,105 @@ export { RECENT_ALL_CATEGORY };
 const DEFAULT_LANGUAGE = 'en';
 const NAVIGATION_ANY_LANGUAGE = 'any';
 
-function buildActiveGroupSnapshot(groupsHubData, groupId) {
+type IconButtonProps = {
+  icon: string;
+  color?: string;
+  size?: number;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
+};
+
+type ButtonProps = {
+  children?: ReactNode;
+  onPress?: () => void;
+  testID?: string;
+  accessibilityLabel?: string;
+  disabled?: boolean;
+  thin?: boolean;
+};
+
+type TutorialOverlayProps = {
+  screen?: string;
+  instructionsPosition?: { top: number; left: number };
+};
+
+// IconButton.js/Button.js/TutorialOverlay.js are .js deps whose destructured
+// (default-less) props TS infers as all-required; cast to the optional-prop
+// shapes this screen actually passes — behavior preserved.
+const IconButton = IconButtonDefault as unknown as FC<IconButtonProps>;
+const Button = ButtonDefault as unknown as FC<ButtonProps>;
+const TutorialOverlay = TutorialOverlayDefault as unknown as FC<TutorialOverlayProps>;
+
+// Public scope carries no groupId; the optional-undefined keeps `scope?.groupId`
+// honest at every access site without a discriminant dance.
+type PublicScope = { kind: 'public'; groupId?: undefined };
+type PrivateScope = { kind: 'private'; groupId: string };
+type GuessPathScope = PrivateScope | PublicScope;
+
+type GroupsHubGroup = {
+  id?: string;
+  role?: string;
+  memberCount?: number;
+  member_count?: number;
+  locked?: boolean;
+};
+
+type GroupsHubData = {
+  owned?: GroupsHubGroup[];
+  joined?: GroupsHubGroup[];
+};
+
+type ActiveGroupSnapshot = {
+  isOwnedByViewer: boolean;
+  memberCount: number;
+  locked: boolean;
+};
+
+type GuessPathCategory = {
+  id?: string;
+  key?: string;
+  name: string;
+  count?: number;
+  thumbnail_image_id?: string;
+  thumbnail_url?: string;
+  thumbnailUrl?: string | null;
+};
+
+type GuessPathRouteParams = {
+  isTutorial?: boolean;
+  scope?: PrivateScope;
+};
+
+type GuessPathNavigation = {
+  navigate(name: 'GuessFeedScreen', params?: Record<string, unknown>): void;
+  popToTop(): void;
+  setOptions(options: { headerStyle?: { backgroundColor?: string }; headerTintColor?: string }): void;
+};
+
+type GuessPathScreenProps = {
+  navigation: GuessPathNavigation;
+  route?: { params?: GuessPathRouteParams };
+};
+
+type Theme = {
+  primaryColor?: string;
+  headerTintColor?: string;
+};
+
+type LateAttachState = {
+  createdCategoryId: string | null;
+  pendingImageId: string | null;
+};
+
+type AuthContextValue = ContextType<typeof AuthContext>;
+
+function buildActiveGroupSnapshot(
+  groupsHubData: GroupsHubData | null | undefined,
+  groupId: string
+): ActiveGroupSnapshot | null {
   const groups = [
     ...(groupsHubData?.owned ?? []),
     ...(groupsHubData?.joined ?? []),
@@ -69,7 +169,15 @@ function buildActiveGroupSnapshot(groupsHubData, groupId) {
   };
 }
 
-async function resolveActiveGroupSnapshot({ activeGroup, context, scope }) {
+async function resolveActiveGroupSnapshot({
+  activeGroup,
+  context,
+  scope,
+}: {
+  activeGroup: ActiveGroupSnapshot | null;
+  context: AuthContextValue;
+  scope: GuessPathScope;
+}): Promise<ActiveGroupSnapshot | null> {
   if (activeGroup || scope?.kind !== 'private') {
     return activeGroup;
   }
@@ -82,33 +190,40 @@ async function resolveActiveGroupSnapshot({ activeGroup, context, scope }) {
   return buildActiveGroupSnapshot(response.data, scope.groupId);
 }
 
-export default function GuessPathScreen({ navigation, route }) {
+export default function GuessPathScreen({ navigation, route }: GuessPathScreenProps) {
   const { t } = useTranslation();
   const context = useContext(AuthContext);
-  const [categories, setCategories] = useState([]);
-  const [sessionLanguage, setSessionLanguage] = useState(null);
+  const [categories, setCategories] = useState<GuessPathCategory[]>([]);
+  const [sessionLanguage, setSessionLanguage] = useState<string | null>(null);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [isAddCategoryVisible, setIsAddCategoryVisible] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
   const [isCreatingCategory, setIsCreatingCategory] = useState(false);
   const [isDeletingCategory, setIsDeletingCategory] = useState(false);
-  const [newCategoryThumbnailImageId, setNewCategoryThumbnailImageId] = useState(null);
+  const [newCategoryThumbnailImageId, setNewCategoryThumbnailImageId] = useState<string | null>(null);
   const [isPickingCreateThumbnail, setIsPickingCreateThumbnail] = useState(false);
-  const [manageMode, setManageMode] = useState(null);
+  const [manageMode, setManageMode] = useState<'update' | 'delete' | null>(null);
   const [isManageModalVisible, setIsManageModalVisible] = useState(false);
+  const lateAttachRef = useRef<LateAttachState>({ createdCategoryId: null, pendingImageId: null });
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
-  const { scope: activeScope } = useActiveGroup();
-  const scope = routeScope ?? activeScope;
+  // useActiveGroup.js is untyped JS returning the same scope union; keep the cast local.
+  const { scope: activeScope } = useActiveGroup() as { scope: GuessPathScope };
+  const scope: GuessPathScope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
-  const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope });
+  // useGroupsHub.js is untyped JS; data is the groups hub payload or null.
+  const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope }) as { data: GroupsHubData | null };
   const activeGroup = isPrivateScope ? buildActiveGroupSnapshot(groupsHubData, scope.groupId) : null;
   const isOwner = activeGroup?.isOwnedByViewer === true;
-  const { group, theme } = useScopedPrivateGroupTheme(routeScope);
+  // useScopedPrivateGroupTheme.js is untyped JS; narrow to the local structural shapes.
+  const { group, theme } = useScopedPrivateGroupTheme(routeScope) as {
+    group: GroupsHubGroup | null;
+    theme: Theme | null;
+  };
   const isGroupLocked = isPrivateScope && group?.locked === true;
 
-  const enrichAndSetPrivateCategories = useCallback(async (nextCategories) => {
+  const enrichAndSetPrivateCategories = useCallback(async (nextCategories: GuessPathCategory[]) => {
     const list = Array.isArray(nextCategories) ? nextCategories : [];
     const resolvedThumbnailUrls = await Promise.all(
       list.map((category) => (
@@ -189,7 +304,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const resolvedLanguage = sessionLanguage ?? DEFAULT_LANGUAGE;
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
 
-  const handleCategoryPress = async (category) => {
+  const handleCategoryPress = async (category: GuessPathCategory) => {
     if (isPrivateScope && isGroupLocked) {
       Alert.alert(
         t('guess.path.lockTitle'),
@@ -198,7 +313,12 @@ export default function GuessPathScreen({ navigation, route }) {
       return;
     }
 
-    const params = {
+    const params: {
+      category: GuessPathCategory;
+      language: string;
+      scope?: GuessPathScope;
+      activeGroup?: ActiveGroupSnapshot | null;
+    } = {
       category,
       language: navigationLanguage,
     };
@@ -223,7 +343,7 @@ export default function GuessPathScreen({ navigation, route }) {
     navigation.navigate('GuessFeedScreen', params);
   };
 
-  const handleSelectLanguage = async (code) => {
+  const handleSelectLanguage = async (code: string) => {
     await saveSessionLanguageFilter(code);
     setSessionLanguage(code);
     setIsFilterModalVisible(false);
@@ -232,6 +352,7 @@ export default function GuessPathScreen({ navigation, route }) {
   const handleOpenAddCategory = () => {
     setNewCategoryName('');
     setNewCategoryThumbnailImageId(null);
+    lateAttachRef.current = { createdCategoryId: null, pendingImageId: null };
     setIsAddCategoryVisible(true);
   };
 
@@ -241,8 +362,33 @@ export default function GuessPathScreen({ navigation, route }) {
     setNewCategoryThumbnailImageId(null);
   };
 
+  // Late-attach fallback: PATCH only when create went out without a thumbnail id —
+  // update_category destroys the replaced thumbnail row, so never re-attach.
+  const tryLateAttachThumbnail = async () => {
+    const { createdCategoryId, pendingImageId } = lateAttachRef.current;
+    if (!createdCategoryId || !pendingImageId) {
+      return;
+    }
+    lateAttachRef.current = { createdCategoryId: null, pendingImageId: null };
+    try {
+      const response = await updateGroupCategory(context, scope.groupId, createdCategoryId, {
+        thumbnailImageId: pendingImageId,
+      });
+      if (response?.status === 200 || response?.status === 204) {
+        await reloadCategories();
+      } else {
+        Alert.alert(t('common.error'), t('guess.path.updateThumbnailFailed'));
+      }
+    } catch (err) {
+      Alert.alert(t('common.error'), (err as { message?: string })?.message ?? t('guess.path.updateThumbnailFailed'));
+    }
+  };
+
   const handleCreateCategory = async () => {
     if (isCreatingCategory) {
+      return;
+    }
+    if (isPickingCreateThumbnail) {
       return;
     }
     const trimmed = newCategoryName.trim();
@@ -250,15 +396,24 @@ export default function GuessPathScreen({ navigation, route }) {
       return;
     }
     setIsCreatingCategory(true);
+    const hasThumbnail = newCategoryThumbnailImageId != null;
+    const thumbnailImageId = hasThumbnail ? newCategoryThumbnailImageId : undefined;
     const response = await createGroupCategory(context, scope.groupId, {
       name: trimmed,
-      thumbnailImageId: newCategoryThumbnailImageId ?? undefined,
+      thumbnailImageId,
     });
     setIsCreatingCategory(false);
     if (response?.status === 200 || response?.status === 201) {
       setIsAddCategoryVisible(false);
       setNewCategoryName('');
       setNewCategoryThumbnailImageId(null);
+      if (!hasThumbnail) {
+        lateAttachRef.current = {
+          ...lateAttachRef.current,
+          createdCategoryId: response?.data?.id ?? null,
+        };
+        await tryLateAttachThumbnail();
+      }
       await reloadCategories();
     } else {
       Alert.alert(t('common.error'), t('guess.path.createCategoryFailed'));
@@ -271,12 +426,19 @@ export default function GuessPathScreen({ navigation, route }) {
     }
     setIsPickingCreateThumbnail(true);
     try {
-      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId });
+      // Pick affordances render only for owners in private scope; groupId is a
+      // string whenever this handler can run.
+      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId as string });
       if (uploaded) {
         setNewCategoryThumbnailImageId(uploaded.imageId);
+        lateAttachRef.current = {
+          ...lateAttachRef.current,
+          pendingImageId: uploaded.imageId,
+        };
+        await tryLateAttachThumbnail();
       }
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('guess.path.pickThumbnailFailed'));
+      Alert.alert(t('common.error'), (err as { message?: string })?.message ?? t('guess.path.pickThumbnailFailed'));
     } finally {
       setIsPickingCreateThumbnail(false);
     }
@@ -284,9 +446,10 @@ export default function GuessPathScreen({ navigation, route }) {
 
   // Per-card thumbnail swap from the grid (owner only). Old local cache file purged
   // before the PATCH so a failed update does not leave stale bytes for the new imageId.
-  const handleEditCategoryThumbnail = async (category) => {
+  const handleEditCategoryThumbnail = async (category: GuessPathCategory) => {
     try {
-      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId });
+      // Same private-scope-only invariant as handlePickCreateThumbnail.
+      const uploaded = await uploadCategoryThumbnail({ context, groupId: scope.groupId as string });
       if (!uploaded) {
         return;
       }
@@ -302,11 +465,11 @@ export default function GuessPathScreen({ navigation, route }) {
         Alert.alert(t('common.error'), t('guess.path.updateThumbnailFailed'));
       }
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('guess.path.updateThumbnailFailed'));
+      Alert.alert(t('common.error'), (err as { message?: string })?.message ?? t('guess.path.updateThumbnailFailed'));
     }
   };
 
-  const handleDeleteCategory = async (item) => {
+  const handleDeleteCategory = async (item: GuessPathCategory) => {
     Alert.alert(
       t('guess.path.deleteCategoryTitle'),
       t('guess.path.deleteCategoryMessage', { name: item.name }),
@@ -339,7 +502,7 @@ export default function GuessPathScreen({ navigation, route }) {
     );
   };
 
-  const gridData = [RECENT_ALL_CATEGORY, ...categories];
+  const gridData: GuessPathCategory[] = [RECENT_ALL_CATEGORY, ...categories];
 
   return (
     <PrivateGroupThemeProvider group={group}>
@@ -412,7 +575,7 @@ export default function GuessPathScreen({ navigation, route }) {
           data={gridData}
           extraData={navigationLanguage}
           numColumns={2}
-          keyExtractor={(item) => item.key ?? item.id}
+          keyExtractor={(item) => (item.key ?? item.id) as string}
           columnWrapperStyle={styles.columnWrapper}
           contentContainerStyle={styles.gridContent}
           testID="guess-path.category.grid"
@@ -477,6 +640,7 @@ export default function GuessPathScreen({ navigation, route }) {
         cancelTestID="guess-path.add-category.button.cancel"
         confirmLabel={isCreatingCategory ? t('common.creating') : t('common.create')}
         cancelLabel={t('common.cancel')}
+        confirmDisabled={isPickingCreateThumbnail}
       >
         <View style={styles.addCategoryBody}>
           <TextInput

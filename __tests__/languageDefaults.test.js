@@ -107,7 +107,7 @@ describe('guess screens language namespace', () => {
       'DEFAULT_LANGUAGE'
     );
     const pathFallback = readStringConstant(
-      'screens/GuessScreens/GuessPathScreen.js',
+      'screens/GuessScreens/GuessPathScreen.tsx',
       'NAVIGATION_ANY_LANGUAGE'
     );
 
