@@ -268,7 +268,17 @@
     "showSuccess": "你找到了！\n\n太棒了，每次猜对都能得分！",
     "showSuccessBtn": "查看结果",
     "showFailure": "你错过了！\n\n再试一次或拍一张新图片！",
-    "showFailureBtn": "继续"
+    "showFailureBtn": "继续",
+    "quick": {
+      "title": "怎么玩",
+      "hide": "创建谜题：拍一张图片，让其他玩家猜你描述的是图中的哪个点 — “{{button}}”。",
+      "guess": "猜出其他玩家想给你看的内容，解开他们的谜题 — “{{button}}”。",
+      "ranking": "通过藏图和猜图积累积分，在“{{button}}”中与好友一较高下。",
+      "next": "下一步",
+      "skip": "跳过",
+      "done": "明白了！",
+      "openBtn": "玩法简介"
+    }
   },
   "auth": {
     "invalidInputTitle": "无效输入",

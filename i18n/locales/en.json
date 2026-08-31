@@ -269,7 +269,17 @@
     "showSuccess": "You found it!\n\nBravo, you earned point each time you guess right!",
     "showSuccessBtn": "Show the results",
     "showFailure": "You missed it!\n\nTry again or take a new picture !",
-    "showFailureBtn": "Continue"
+    "showFailureBtn": "Continue",
+    "quick": {
+      "title": "How to play",
+      "hide": "Create enigmas: take an image and try to make other players guess which point of the image you described — \"{{button}}\".",
+      "guess": "Solve other players' enigmas by guessing what they wanted to show you — \"{{button}}\".",
+      "ranking": "Accumulate points by hiding and guessing, and compete with your friends in the \"{{button}}\".",
+      "next": "Next",
+      "skip": "Skip",
+      "done": "Got it!",
+      "openBtn": "How to play (quick)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Invalid input",

@@ -1,4 +1,4 @@
-import { useContext, useEffect, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import { View, StyleSheet, Alert} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +13,7 @@ import { isTutorialFinished } from '../utils/tutorialHandler';
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
+import QuickTutorial from '../components/UI/QuickTutorial';
 
 const HideImage = require('../assets/home/WoIstWaldo-character-hide.webp');
 const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -23,6 +24,9 @@ export default function HomeScreen({ navigation, route }) {
   const { t } = useTranslation();
   const [showModal, setShowModal] = useState(false);
   const [isTutorial, setIsTutorial] = useState(false);
+  const [showQuickTutorial, setShowQuickTutorial] = useState(false);
+  const [quickTutorialFromWelcome, setQuickTutorialFromWelcome] = useState(false);
+  const quickTutorialShownRef = useRef(false);
 
   // Variables __________________________________________________________________
   const context = useContext(AuthContext);
@@ -74,7 +78,12 @@ export default function HomeScreen({ navigation, route }) {
 
     // Not doing the tutorial yet
     if ((isTutorial === true) && (route?.params?.isTutorial === undefined)) {
-      setShowModal(true) 
+      // First connect: quick tutorial first, welcome modal follows via handleQuickTutorialDone
+      if (quickTutorialShownRef.current !== true) {
+        quickTutorialShownRef.current = true;
+        setQuickTutorialFromWelcome(true);
+        setShowQuickTutorial(true);
+      };
       return;
     };
 
@@ -131,6 +140,20 @@ export default function HomeScreen({ navigation, route }) {
   const startTutorial = async () => {
     await context.turnTutorialOn(true);
     setIsTutorial(true);
+  };
+
+  const handleQuickTutorialDone = () => {
+    setShowQuickTutorial(false);
+    if (quickTutorialFromWelcome === true) {
+      setQuickTutorialFromWelcome(false);
+      setShowModal(true);
+    };
+  };
+
+  const openQuickTutorialFromOverlay = () => {
+    setIsTutorial(false);
+    setQuickTutorialFromWelcome(false);
+    setShowQuickTutorial(true);
   };
 
   const toGuessTutorial = () => {
@@ -224,8 +247,13 @@ export default function HomeScreen({ navigation, route }) {
               Hide: () => toHideTutorial(),
               finish: () => cancelTutorial()
             }}
+            onShowQuickTutorial={openQuickTutorialFromOverlay}
             />
         }
+        <QuickTutorial
+          visible={showQuickTutorial}
+          onDone={handleQuickTutorialDone}
+          />
 
       </View>
   </>

@@ -269,7 +269,17 @@
     "showSuccess": "L'hai trovato!\n\nBravo, guadagni un punto ogni volta che indovini!",
     "showSuccessBtn": "Mostra i risultati",
     "showFailure": "L'hai mancato!\n\nRiprova o prendi una nuova immagine!",
-    "showFailureBtn": "Continua"
+    "showFailureBtn": "Continua",
+    "quick": {
+      "title": "Come si gioca",
+      "hide": "Crea indovinelli: scatta un'immagine e fai indovinare agli altri giocatori quale punto dell'immagine hai descritto — \"{{button}}\".",
+      "guess": "Risolvi gli indovinelli degli altri giocatori indovinando cosa volevano mostrarti — \"{{button}}\".",
+      "ranking": "Accumula punti nascondendo e indovinando, e sfida i tuoi amici nella \"{{button}}\".",
+      "next": "Avanti",
+      "skip": "Salta",
+      "done": "Capito!",
+      "openBtn": "Come si gioca (veloce)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Input non valido",

@@ -268,7 +268,17 @@
     "showSuccess": "Kamu menemukannya!\n\nBravo, kamu mendapat poin setiap kali menebak dengan benar!",
     "showSuccessBtn": "Tampilkan hasilnya",
     "showFailure": "Kamu melewatkannya!\n\nCoba lagi atau ambil gambar baru!",
-    "showFailureBtn": "Lanjutkan"
+    "showFailureBtn": "Lanjutkan",
+    "quick": {
+      "title": "Cara bermain",
+      "hide": "Buat teka-teki: ambil gambar dan coba buat pemain lain menebak titik gambar mana yang kamu deskripsikan — \"{{button}}\".",
+      "guess": "Selesaikan teka-teki pemain lain dengan menebak apa yang ingin mereka tunjukkan — \"{{button}}\".",
+      "ranking": "Kumpulkan poin dari menyembunyikan dan menebak, lalu bersaing dengan teman-temanmu di \"{{button}}\".",
+      "next": "Berikutnya",
+      "skip": "Lewati",
+      "done": "Mengerti!",
+      "openBtn": "Cara bermain (singkat)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Masukan tidak valid",

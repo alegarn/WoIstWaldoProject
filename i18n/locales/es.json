@@ -269,7 +269,17 @@
     "showSuccess": "¡Lo encontraste!\n\n¡Bravo, ganas un punto cada vez que aciertas!",
     "showSuccessBtn": "Mostrar los resultados",
     "showFailure": "¡Lo fallaste!\n\n¡Inténtalo de nuevo o toma una imagen nueva!",
-    "showFailureBtn": "Continuar"
+    "showFailureBtn": "Continuar",
+    "quick": {
+      "title": "Cómo jugar",
+      "hide": "Crea enigmas: toma una imagen e intenta que otros jugadores adivinen qué punto de la imagen describiste — \"{{button}}\".",
+      "guess": "Resuelve los enigmas de otros jugadores adivinando qué quisieron mostrarte — \"{{button}}\".",
+      "ranking": "Acumula puntos escondiendo y adivinando, y compite con tus amigos en el \"{{button}}\".",
+      "next": "Siguiente",
+      "skip": "Saltar",
+      "done": "¡Entendido!",
+      "openBtn": "Cómo jugar (rápido)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Entrada no válida",

@@ -268,7 +268,17 @@
     "showSuccess": "見つけた！\n\nブラボー！正しく当てるたびにポイントがもらえます！",
     "showSuccessBtn": "結果を見る",
     "showFailure": "逃した！\n\nもう一度試すか、新しい画像を撮りましょう！",
-    "showFailureBtn": "続ける"
+    "showFailureBtn": "続ける",
+    "quick": {
+      "title": "遊び方",
+      "hide": "なぞなぞを作ろう：画像を撮って、描写した場所を他のプレイヤーに当ててもらおう — 「{{button}}」。",
+      "guess": "他のプレイヤーが見せたい場所を当てて、彼らのなぞなぞを解こう — 「{{button}}」。",
+      "ranking": "隠すことと当てることでポイントをためて、「{{button}}」で友達と競おう。",
+      "next": "次へ",
+      "skip": "スキップ",
+      "done": "わかった！",
+      "openBtn": "遊び方（クイック）"
+    }
   },
   "auth": {
     "invalidInputTitle": "無効な入力",
