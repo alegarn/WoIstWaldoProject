@@ -1,17 +1,38 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated } from 'react-native';
+import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated, type StyleProp, type ViewStyle, type NativeSyntheticEvent, type NativeScrollEvent } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
-const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onShowQuickTutorial }) => {
+// Values for `${screen}ModalBtn` keys: an object on HomeScreen, a plain i18n key elsewhere.
+type TutorialHomeButtonLabels = {
+  hide: string;
+  guess: string;
+  finish: string;
+};
+
+type TutorialHomeActions = {
+  Hide: () => void;
+  Guess: () => void;
+  finish: () => void;
+};
+
+type TutorialOverlayProps = {
+  screen: string;
+  instructionsPosition?: StyleProp<ViewStyle>;
+  onPress?: TutorialHomeActions | (() => void);
+  isPortrait?: boolean;
+  onShowQuickTutorial?: () => void;
+};
+
+const TutorialOverlay = ({ screen, instructionsPosition, onPress, isPortrait, onShowQuickTutorial }: TutorialOverlayProps) => {
   const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
-  const [closeButtonText, setCloseButtonText] = useState("Close");
-  const [imageUrl, setImageUrl] = useState(require("../../assets/tutorial/farm_pict_320.jpg"));
+  const [closeButtonText, setCloseButtonText] = useState<string | TutorialHomeButtonLabels>("Close");
+  const [imageUrl, setImageUrl] = useState<number>(require("../../assets/tutorial/farm_pict_320.jpg"));
 
   const translateInstruction = useCallback(
-    (raw) => t(raw, { defaultValue: raw }),
+    (raw: string) => t(raw, { defaultValue: raw }),
     [t]
   );
   
@@ -56,7 +77,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
   );
 
   const handleScroll = useCallback(
-    (event) => {
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       onScrollAnimatedEvent(event);
 
       const { contentOffset, layoutMeasurement, contentSize } = event.nativeEvent;
@@ -70,7 +91,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
   // Scrollbar end 
 
   // UseEffect ________________________________________________________________
-  const updateImageUrl = useCallback((screen) => {
+  const updateImageUrl = useCallback((screen: string) => {
     switch (screen) {
       case 'HomeScreen':
         setImageUrl(require('../../assets/tutorial/farm_pict_home_320.jpg'));
@@ -101,8 +122,9 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
   }, []);
 
   useEffect(() => {
-    setInstructions(INSTRUCTIONS.Tutorial[`${screen}`]);
-    setCloseButtonText(INSTRUCTIONS.Tutorial[`${screen}ModalBtn`]);
+    const tutorialInstructions = INSTRUCTIONS.Tutorial as Record<string, string | TutorialHomeButtonLabels | undefined>;
+    setInstructions(tutorialInstructions[`${screen}`] as string);
+    setCloseButtonText(tutorialInstructions[`${screen}ModalBtn`] as string | TutorialHomeButtonLabels);
     updateImageUrl(screen);
   }, [screen, updateImageUrl]);
 
@@ -112,13 +134,13 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
   }, []);
 
   const onPressAction = useCallback(() => {
-    if (onPress !== undefined) {
-      closeModal();
-      onPress();
-    };
     if (onPress === undefined) {
-      closeModal();
-    };
+      return;
+    }
+    closeModal();
+    if (typeof onPress === 'function') {
+      onPress();
+    }
   }, [closeModal, onPress]);
 
   const onQuickTutorialAction = useCallback(() => {
@@ -217,23 +239,23 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
                   <View style={styles.splitButtonContainer}>
 
                     <Pressable
-                      onPress={() => onPress?.Hide()}
+                      onPress={() => (onPress as TutorialHomeActions)?.Hide()}
                       style={[styles.splitButton, styles.splitButtonLeft]}
                     >
-                      <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.hide)}</Text>
+                      <Text style={styles.closeButtonText}>{translateInstruction((closeButtonText as TutorialHomeButtonLabels)?.hide)}</Text>
                     </Pressable>
 
                     <Pressable
-                      onPress={() => onPress?.Guess()}
+                      onPress={() => (onPress as TutorialHomeActions)?.Guess()}
                       style={[styles.splitButton, styles.splitButtonRight]}
                     >
-                      <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.guess)}</Text>
+                      <Text style={styles.closeButtonText}>{translateInstruction((closeButtonText as TutorialHomeButtonLabels)?.guess)}</Text>
                     </Pressable>
 
                   </View>
 
-                  <Pressable onPress={() => onPress?.finish()} style={styles.closeButton}>
-                    <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText?.finish)}</Text>
+                  <Pressable onPress={() => (onPress as TutorialHomeActions)?.finish()} style={styles.closeButton}>
+                    <Text style={styles.closeButtonText}>{translateInstruction((closeButtonText as TutorialHomeButtonLabels)?.finish)}</Text>
                   </Pressable>
                     
                 </View>
@@ -245,7 +267,7 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onS
             (
             <View style={styles.buttonsContainer}>
               <Pressable onPress={onPressAction} style={styles.closeButton}>
-                <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText)}</Text>
+                <Text style={styles.closeButtonText}>{translateInstruction(closeButtonText as string)}</Text>
               </Pressable>
             </View>
             ) : null
@@ -334,11 +356,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-around',
     borderRadius: 5,
     backgroundColor: '#3498db',
-    borderStyle: 'solid',    
+    borderStyle: 'solid',
     borderWidth: 1,
     fontSize: 18,
+    width: '100%',
   },
   splitButton: {
+    flex: 1,
     paddingVertical: 10,
     paddingHorizontal: 20,
   },
@@ -356,6 +380,7 @@ const styles = StyleSheet.create({
   },
   quickButton: {
     backgroundColor: '#52057b',
+    marginBottom: 10,
   },
   closeButtonText: {
     color: 'white',

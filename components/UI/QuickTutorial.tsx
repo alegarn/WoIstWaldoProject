@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Modal, View, Text, StyleSheet, Pressable, Animated } from 'react-native';
+import { Modal, View, Text, StyleSheet, Pressable, Animated, Image } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
@@ -7,21 +7,25 @@ import { GlobalStyle } from '../../constants/theme';
 
 type QuickTutorialPanel = {
   key: 'hide' | 'guess' | 'ranking';
-  icon: React.ComponentProps<typeof Ionicons>['name'];
+  image?: number;
+  icon?: React.ComponentProps<typeof Ionicons>['name'];
   buttonKey: string;
   bodyKey: string;
 };
 
+const HIDE_PANEL_IMAGE = require('../../assets/tutorial/farm_pict_hide_320.jpg');
+const GUESS_PANEL_IMAGE = require('../../assets/tutorial/farm_pict_guess_320.jpg');
+
 const PANELS: QuickTutorialPanel[] = [
   {
     key: 'hide',
-    icon: 'camera-outline',
+    image: HIDE_PANEL_IMAGE,
     buttonKey: 'home.hideWaldo',
     bodyKey: 'tutorial.quick.hide',
   },
   {
     key: 'guess',
-    icon: 'eye-outline',
+    image: GUESS_PANEL_IMAGE,
     buttonKey: 'home.findWaldo',
     bodyKey: 'tutorial.quick.guess',
   },
@@ -138,7 +142,18 @@ export default function QuickTutorial({ visible, onDone }: QuickTutorialProps) {
               style={styles.panelContent}
               testID={`tutorial.quick.panel.${panel.key}`}
             >
-              <Ionicons name={panel.icon} size={48} color={GlobalStyle.color.secondaryColor} style={styles.panelIcon} />
+              {panel.image !== undefined ? (
+                <Image source={panel.image} style={styles.panelImage} resizeMode="cover" />
+              ) : (
+                panel.icon && (
+                  <Ionicons
+                    name={panel.icon}
+                    size={48}
+                    color={GlobalStyle.color.secondaryColor}
+                    style={styles.panelIcon}
+                  />
+                )
+              )}
 
               <Animated.View style={{ transform: [{ scale: pulseScale }] }}>
                 <View style={styles.mockButton} testID="tutorial.quick.panelLabel">
@@ -223,6 +238,12 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   panelIcon: {
+    marginBottom: 12,
+  },
+  panelImage: {
+    width: 220,
+    height: 200,
+    borderRadius: 10,
     marginBottom: 12,
   },
   mockButton: {
