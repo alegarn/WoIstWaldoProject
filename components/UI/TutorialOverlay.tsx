@@ -134,9 +134,6 @@ const TutorialOverlay = ({ screen, instructionsPosition, onPress, isPortrait, on
   }, []);
 
   const onPressAction = useCallback(() => {
-    if (onPress === undefined) {
-      return;
-    }
     closeModal();
     if (typeof onPress === 'function') {
       onPress();
