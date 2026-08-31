@@ -10,6 +10,7 @@ export const INSTRUCTIONS = {
       guess: "tutorial.homeGuessBtn",
       finish: "tutorial.homeFinishBtn"
     },
+    HomeScreenQuickBtn: "tutorial.quick.openBtn",
     HidingPathScreen: "tutorial.hidingPath",
     HidingPathScreenModalBtn: "tutorial.hidingPathBtn",
     HideScreen: "tutorial.hideScreen",

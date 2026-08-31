@@ -269,7 +269,17 @@
     "showSuccess": "Vous l'avez trouvé !\n\nBravo, vous gagnez un point à chaque bonne devinette !",
     "showSuccessBtn": "Afficher les résultats",
     "showFailure": "Vous l'avez manqué !\n\nRéessayez ou prenez une nouvelle photo !",
-    "showFailureBtn": "Continuer"
+    "showFailureBtn": "Continuer",
+    "quick": {
+      "title": "Comment jouer",
+      "hide": "Créez des énigmes : prenez une image et faites deviner aux autres joueurs quel point de l'image vous avez décrit — \"{{button}}\".",
+      "guess": "Résolvez les énigmes des autres joueurs en devinant ce qu'ils voulaient vous montrer — \"{{button}}\".",
+      "ranking": "Accumulez des points en cachant et en devinant, puis affrontez vos amis dans le \"{{button}}\".",
+      "next": "Suivant",
+      "skip": "Passer",
+      "done": "Compris !",
+      "openBtn": "Comment jouer (rapide)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Saisie invalide",

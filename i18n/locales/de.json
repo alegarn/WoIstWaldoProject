@@ -269,7 +269,17 @@
     "showSuccess": "Du hast es gefunden!\n\nBravo, du bekommst jedes Mal einen Punkt, wenn du richtig rätst!",
     "showSuccessBtn": "Ergebnisse anzeigen",
     "showFailure": "Du hast es verpasst!\n\nVersuche es erneut oder nimm ein neues Bild!",
-    "showFailureBtn": "Weiter"
+    "showFailureBtn": "Weiter",
+    "quick": {
+      "title": "So wird gespielt",
+      "hide": "Erstelle Rätsel: Mach ein Bild und versuche, andere Spieler raten zu lassen, welchen Punkt des Bildes du beschrieben hast — \"{{button}}\".",
+      "guess": "Löse die Rätsel anderer Spieler, indem du errätst, was sie dir zeigen wollten — \"{{button}}\".",
+      "ranking": "Sammle Punkte beim Verstecken und Raten und messe dich mit deinen Freunden in der \"{{button}}\".",
+      "next": "Weiter",
+      "skip": "Überspringen",
+      "done": "Verstanden!",
+      "openBtn": "Spielanleitung (kurz)"
+    }
   },
   "auth": {
     "invalidInputTitle": "Ungültige Eingabe",

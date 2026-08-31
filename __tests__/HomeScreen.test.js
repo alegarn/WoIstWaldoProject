@@ -1,6 +1,7 @@
 const mockHomeCard = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockTutorialOverlay = jest.fn(() => null);
+const mockQuickTutorial = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 
 jest.mock('@react-navigation/native', () => {
@@ -50,6 +51,13 @@ jest.mock('../components/UI/CenteredModal', () => {
 jest.mock('../components/UI/TutorialOverlay', () => {
   return function MockTutorialOverlay(props) {
     mockTutorialOverlay(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/QuickTutorial', () => {
+  return function MockQuickTutorial(props) {
+    mockQuickTutorial(props);
     return null;
   };
 });
@@ -155,7 +163,7 @@ describe('HomeScreen post-launch session validation', () => {
     expect(navigation.navigate).toHaveBeenNthCalledWith(3, 'RankingScreen');
   });
 
-  it('opens the tutorial modal when the context says the tutorial still needs to run', async () => {
+  it('shows the quick tutorial first on first connect, then the tutorial modal once done', async () => {
     const contextValue = {
       verifyIsLoggedIn: jest.fn().mockResolvedValue(true),
       logout: jest.fn(),
@@ -169,6 +177,22 @@ describe('HomeScreen post-launch session validation', () => {
     };
 
     await renderScreen(contextValue);
+
+    expect(mockQuickTutorial).toHaveBeenCalledWith(
+      expect.objectContaining({
+        visible: true,
+      })
+    );
+    expect(mockCenteredModal).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        isModalVisible: true,
+      })
+    );
+
+    const quickProps = mockQuickTutorial.mock.calls[mockQuickTutorial.mock.calls.length - 1][0];
+    await act(async () => {
+      quickProps.onDone();
+    });
 
     expect(mockCenteredModal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -192,6 +216,11 @@ describe('HomeScreen post-launch session validation', () => {
 
     await renderScreen(contextValue);
 
+    const quickProps = mockQuickTutorial.mock.calls[mockQuickTutorial.mock.calls.length - 1][0];
+    await act(async () => {
+      quickProps.onDone();
+    });
+
     const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
 
     await act(async () => {
@@ -207,6 +236,38 @@ describe('HomeScreen post-launch session validation', () => {
         },
       },
     });
+  });
+
+  it('opens the quick tutorial from the tutorial overlay without re-showing the welcome modal', async () => {
+    const contextValue = {
+      verifyIsLoggedIn: jest.fn().mockResolvedValue(true),
+      logout: jest.fn(),
+      token: 'Bearer persisted-token',
+      isTutorialFinished: {},
+      turnTutorialOn: jest.fn(),
+    };
+    const navigation = await renderScreen(contextValue, { params: { tutorialToken: 1234 } });
+
+    const overlayProps = mockTutorialOverlay.mock.calls[mockTutorialOverlay.mock.calls.length - 1][0];
+    expect(overlayProps.onShowQuickTutorial).toBeDefined();
+
+    await act(async () => {
+      overlayProps.onShowQuickTutorial();
+    });
+
+    const quickProps = mockQuickTutorial.mock.calls[mockQuickTutorial.mock.calls.length - 1][0];
+    expect(quickProps.visible).toBe(true);
+
+    await act(async () => {
+      quickProps.onDone();
+    });
+
+    expect(mockCenteredModal).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        isModalVisible: true,
+      })
+    );
+    expect(navigation.replace).not.toHaveBeenCalled();
   });
 
   it('shows the tutorial overlay and routes its Guess/Hide actions when already inside the tutorial', async () => {

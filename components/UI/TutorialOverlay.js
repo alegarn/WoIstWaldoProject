@@ -3,7 +3,7 @@ import { Modal, View, Text, StyleSheet, Pressable, ScrollView, Image, Animated }
 import { useTranslation } from 'react-i18next';
 import { INSTRUCTIONS } from '../../constants/instructions';
 
-const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) => {
+const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait, onShowQuickTutorial }) => {
   const { t } = useTranslation();
   const [isVisible, setIsVisible] = useState(true);
   const [instructions, setInstructions] = useState("instructions");
@@ -121,6 +121,11 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
     };
   }, [closeModal, onPress]);
 
+  const onQuickTutorialAction = useCallback(() => {
+    closeModal();
+    onShowQuickTutorial?.();
+  }, [closeModal, onShowQuickTutorial]);
+
   return (
     <Modal transparent={true} animationType="fade" visible={isVisible}>
       <View style={styles.overlay}>
@@ -197,6 +202,18 @@ const TutorialOverlay =({ screen, instructionsPosition, onPress, isPortrait }) =
               buttonIsVisible === true ?
               (
                 <View style={styles.buttonsContainer}>
+                  
+                  {
+                    onShowQuickTutorial !== undefined &&
+                    <Pressable
+                      onPress={onQuickTutorialAction}
+                      style={[styles.closeButton, styles.quickButton]}
+                      testID="tutorial.overlay.quickBtn"
+                    >
+                      <Text style={styles.closeButtonText}>{translateInstruction(INSTRUCTIONS.Tutorial.HomeScreenQuickBtn)}</Text>
+                    </Pressable>
+                  }
+
                   <View style={styles.splitButtonContainer}>
 
                     <Pressable
@@ -336,6 +353,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'red',
     borderRadius: 5,
     width: '100%',
+  },
+  quickButton: {
+    backgroundColor: '#52057b',
   },
   closeButtonText: {
     color: 'white',
