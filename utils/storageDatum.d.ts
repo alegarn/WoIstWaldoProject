@@ -75,3 +75,14 @@ export function markCategoryExhausted(categoryKey: string | null | undefined, la
 export function isCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<boolean>;
 export function clearExhaustedCategory(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;
 
+// Persist the feed cursor (last-served image uuid) for (categoryKey, language,
+// scope). PUBLIC scope stores at `lastImageUuid:<cat|'all'>:<lang|'any'>`;
+// PRIVATE scope stores at the group-scoped
+// `groupFeed:<groupId>:game:<cat|'all'>:<lang|'any'>:cursor` key.
+export function saveLastImageUuid(
+  imageUuid: string,
+  categoryKey?: string | null,
+  language?: string | null,
+  scope?: unknown
+): Promise<null>;
+

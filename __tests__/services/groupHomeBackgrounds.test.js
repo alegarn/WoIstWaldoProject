@@ -2,17 +2,13 @@ jest.mock('axios', () => ({
   get: jest.fn(),
 }));
 
-jest.mock('base64-js', () => ({
-  fromByteArray: jest.fn((bytes) => `b64:${bytes.length}`),
-}));
-
 jest.mock('expo-file-system', () => {
   const state = {
     existsOverride: null,
     deletedUris: [],
     createdUris: [],
-    writtenUris: [],
-    writeError: null,
+    movedUris: [],
+    moveError: null,
     listings: {},
   };
 
@@ -39,11 +35,15 @@ jest.mock('expo-file-system', () => {
     this.exists = typeof override === 'function'
       ? override(this.uri)
       : (override === null ? true : override);
-    this.write = jest.fn((data, options) => {
-      if (state.writeError) {
-        throw state.writeError;
+    this.write = jest.fn();
+    this.moveSync = jest.fn((destination) => {
+      if (state.moveError) {
+        throw state.moveError;
       }
-      state.writtenUris.push({ uri: this.uri, data, options });
+      state.movedUris.push({
+        from: this.uri,
+        to: typeof destination === 'string' ? destination : destination?.uri,
+      });
     });
     this.delete = jest.fn(() => {
       state.deletedUris.push(this.uri);
@@ -64,8 +64,8 @@ jest.mock('expo-file-system', () => {
     state.existsOverride = null;
     state.deletedUris.length = 0;
     state.createdUris.length = 0;
-    state.writtenUris.length = 0;
-    state.writeError = null;
+    state.movedUris.length = 0;
+    state.moveError = null;
     state.listings = {};
     cacheStore.list = () => [];
     cacheStore.create = jest.fn();
@@ -86,6 +86,10 @@ jest.mock('expo-file-system', () => {
   return { File, Directory, Paths };
 });
 
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(),
+}));
+
 jest.mock('../../utils/imagesRequests', () => ({
   usesBackendStorage: jest.fn(() => false),
   setStorageDownloadHeaders: jest.fn((token) => ({
@@ -95,8 +99,7 @@ jest.mock('../../utils/imagesRequests', () => ({
   getBackendHeaders: jest.fn(async () => ({ token: 'Bearer t' })),
 }));
 
-import axios from 'axios';
-import { fromByteArray } from 'base64-js';
+import { downloadAsync } from 'expo-file-system/legacy';
 import { File } from 'expo-file-system';
 import {
   SLOTS,
@@ -107,11 +110,15 @@ import {
 import { usesBackendStorage } from '../../utils/imagesRequests';
 
 const CONTEXT = { token: 'Bearer t', userId: 'u-1' };
+const downloadResult = ({ status = 200, contentType } = {}) => ({
+  uri: 'file:///cache/tmp.download',
+  status,
+  headers: contentType ? { 'content-type': contentType } : {},
+});
 
 describe('services/groups/groupHomeBackgrounds', () => {
   beforeEach(() => {
-    axios.get.mockReset();
-    fromByteArray.mockClear();
+    downloadAsync.mockReset();
     File.__reset();
     usesBackendStorage.mockReset();
     usesBackendStorage.mockReturnValue(false);
@@ -133,18 +140,14 @@ describe('services/groups/groupHomeBackgrounds', () => {
       url: 'https://presigned.example.com/home/img-1.png',
     });
 
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
     expect(uri).toEqual(expect.stringContaining('private-home-bg/g-1/hide-img-1.png'));
-    expect(File.__state.writtenUris).toHaveLength(0);
+    expect(File.__state.movedUris).toHaveLength(0);
   });
 
-  it('ensures the nested dir, downloads, and writes the file when missing', async () => {
+  it('ensures the nested dir, downloads through the raw native transport, and moves the file into place when missing', async () => {
     File.__state.existsOverride = false;
-    const bytes = new Uint8Array([1, 2, 3, 4]);
-    axios.get.mockResolvedValue({
-      data: bytes,
-      headers: { 'content-type': 'image/png' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
 
     const uri = await resolveHomeBackground({
       context: CONTEXT,
@@ -155,28 +158,63 @@ describe('services/groups/groupHomeBackgrounds', () => {
       url: 'https://presigned.example.com/home/img-2.png',
     });
 
-    expect(axios.get).toHaveBeenCalledWith(
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://presigned.example.com/home/img-2.png',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-home-bg/g-1/find-img-2.download',
+      undefined
     );
-    expect(fromByteArray).toHaveBeenCalledWith(bytes);
     expect(uri).toEqual(
       expect.stringContaining('private-home-bg/g-1/find-img-2.png')
     );
-    expect(File.__state.createdUris).toEqual([
-      expect.stringContaining('private-home-bg/g-1'),
-    ]);
-    expect(File.__state.writtenUris).toHaveLength(1);
-    expect(File.__state.writtenUris[0]).toEqual({
-      uri: expect.stringContaining('private-home-bg/g-1/find-img-2.png'),
-      data: 'b64:4',
-      options: { encoding: 'base64' },
+    // ensureGroupDir creates the dir and the downloader re-asserts it idempotently.
+    expect(File.__state.createdUris).toEqual(
+      expect.arrayContaining([expect.stringContaining('private-home-bg/g-1')])
+    );
+    expect(File.__state.movedUris).toHaveLength(1);
+    expect(File.__state.movedUris[0]).toEqual({
+      from: expect.stringContaining('private-home-bg/g-1/find-img-2.download'),
+      to: expect.stringContaining('private-home-bg/g-1/find-img-2.png'),
     });
+  });
+
+  it('derives the file extension from the response content-type when no fileExtension is given', async () => {
+    File.__state.existsOverride = false;
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/webp' }));
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-1',
+      slot: 'find',
+      imageId: 'img-ct',
+      url: 'https://presigned.example.com/home/img-ct',
+    });
+
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-1/find-img-ct.webp')
+    );
+  });
+
+  it('keeps the explicit fileExtension over the response content-type (cache-key convention)', async () => {
+    File.__state.existsOverride = false;
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/webp' }));
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-1',
+      slot: 'find',
+      imageId: 'img-explicit',
+      fileExtension: 'png',
+      url: 'https://presigned.example.com/home/img-explicit',
+    });
+
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-1/find-img-explicit.png')
+    );
   });
 
   it('falls back to the remote url when the download fails', async () => {
     File.__state.existsOverride = false;
-    axios.get.mockRejectedValue(new Error('network down'));
+    downloadAsync.mockRejectedValue(new Error('network down'));
 
     const uri = await resolveHomeBackground({
       context: CONTEXT,
@@ -188,17 +226,13 @@ describe('services/groups/groupHomeBackgrounds', () => {
     });
 
     expect(uri).toBe('https://presigned.example.com/home/img-3.png');
-    expect(File.__state.writtenUris).toHaveLength(0);
+    expect(File.__state.movedUris).toHaveLength(0);
   });
 
-  it('downloads from backend storage with text + data-url prefix stripping and writes the cached file', async () => {
+  it('downloads from backend storage with auth headers and writes the cached file', async () => {
     usesBackendStorage.mockReturnValue(true);
     File.__state.existsOverride = false;
-    const dataUrl = 'data:image/jpeg;base64,ChQe';
-    axios.get.mockResolvedValue({
-      data: dataUrl,
-      headers: { 'content-type': 'text/plain' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/jpeg' }));
 
     const uri = await resolveHomeBackground({
       context: CONTEXT,
@@ -209,30 +243,52 @@ describe('services/groups/groupHomeBackgrounds', () => {
       url: 'https://api.example.com/storage/home/img-be-1.jpeg',
     });
 
-    expect(axios.get).toHaveBeenCalledWith(
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://api.example.com/storage/home/img-be-1.jpeg',
+      'file:///cache/private-home-bg/g-2/hide-img-be-1.download',
       {
         headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
-        responseType: 'text',
-        timeout: 15000,
       }
     );
-    expect(fromByteArray).not.toHaveBeenCalled();
     expect(uri).toEqual(
       expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg')
     );
-    expect(File.__state.writtenUris).toHaveLength(1);
-    expect(File.__state.writtenUris[0]).toEqual({
-      uri: expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg'),
-      data: 'ChQe',
-      options: { encoding: 'base64' },
+    expect(File.__state.movedUris).toHaveLength(1);
+    expect(File.__state.movedUris[0]).toEqual({
+      from: expect.stringContaining('private-home-bg/g-2/hide-img-be-1.download'),
+      to: expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg'),
     });
   });
 
-  it('returns null instead of the remote url when a backend-storage download fails', async () => {
+  it('serves a gif content-type as a local gif file from backend storage', async () => {
     usesBackendStorage.mockReturnValue(true);
     File.__state.existsOverride = false;
-    axios.get.mockRejectedValue(new Error('401'));
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/gif' }));
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-2',
+      slot: 'find',
+      imageId: 'img-be-gif',
+      url: 'https://api.example.com/storage/home/img-be-gif',
+    });
+
+    expect(downloadAsync).toHaveBeenCalledWith(
+      'https://api.example.com/storage/home/img-be-gif',
+      'file:///cache/private-home-bg/g-2/find-img-be-gif.download',
+      {
+        headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
+      }
+    );
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-2/find-img-be-gif.gif')
+    );
+  });
+
+  it('returns null instead of the remote url when a backend-storage download resolves non-2xx', async () => {
+    usesBackendStorage.mockReturnValue(true);
+    File.__state.existsOverride = false;
+    downloadAsync.mockResolvedValue(downloadResult({ status: 401 }));
 
     const uri = await resolveHomeBackground({
       context: CONTEXT,
@@ -244,7 +300,7 @@ describe('services/groups/groupHomeBackgrounds', () => {
     });
 
     expect(uri).toBeNull();
-    expect(File.__state.writtenUris).toHaveLength(0);
+    expect(File.__state.movedUris).toHaveLength(0);
   });
 
   it('returns null when imageId or slot is missing', async () => {
@@ -258,7 +314,7 @@ describe('services/groups/groupHomeBackgrounds', () => {
     });
 
     expect(uri).toBeNull();
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
   });
 
   it('deleteHomeBackgroundFile best-effort deletes the slot cache file across extensions', () => {

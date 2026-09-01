@@ -2,14 +2,21 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
 
+export type CachedFeedImage = {
+  imageFile?: string | null;
+  pictureId?: string | null;
+  listId?: number;
+  [key: string]: unknown;
+};
+
 const PREFIX = 'groupFeed';
 const EXHAUSTED_PREFIX = 'groupFeedExhausted';
 
-function groupFeedListKey(groupId, categoryKey, language) {
+function groupFeedListKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
 }
 
-function groupFeedCursorKey(groupId, categoryKey, language) {
+function groupFeedCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   return `${groupFeedListKey(groupId, categoryKey, language)}:cursor`;
 }
 
@@ -20,17 +27,17 @@ function groupFeedCursorKey(groupId, categoryKey, language) {
  * match the servingCycle group-branch clear (`groupFeed:<gid>:*:<lang>:cursor`)
  * so a cycle transition wipes it together with the other group cursors.
  */
-function groupGameCursorKey(groupId, categoryKey, language) {
+function groupGameCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${language || 'any'}:cursor`;
 }
 
-function groupFeedExhaustedKey(groupId, categoryKey, language) {
+function groupFeedExhaustedKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
 }
 
 export { groupFeedListKey, groupFeedCursorKey, groupGameCursorKey, groupFeedExhaustedKey };
 
-function localFileExists(uri) {
+function localFileExists(uri: string) {
   try {
     return !!new File(uri).exists;
   } catch {
@@ -38,7 +45,7 @@ function localFileExists(uri) {
   }
 }
 
-function deleteFileIfPresent(uri) {
+function deleteFileIfPresent(uri: string) {
   try {
     const file = new File(uri);
     if (file?.exists) {
@@ -49,7 +56,10 @@ function deleteFileIfPresent(uri) {
   }
 }
 
-export async function readGroupFeedCache(groupId, { categoryId, language } = {}) {
+export async function readGroupFeedCache(
+  groupId: string | number,
+  { categoryId, language }: { categoryId?: string | null; language?: string | null } = {}
+): Promise<{ images: CachedFeedImage[]; nextCursor: string | null } | null> {
   const categoryKey = categoryId || 'all';
   const languageKey = language || 'any';
   const listKey = groupFeedListKey(groupId, categoryKey, languageKey);
@@ -80,7 +90,7 @@ export async function readGroupFeedCache(groupId, { categoryId, language } = {})
   const cursorStored = await AsyncStorage.getItem(cursorKey);
   let nextCursor = null;
   try {
-    nextCursor = JSON.parse(cursorStored)?.nextCursor ?? null;
+    nextCursor = JSON.parse(cursorStored ?? 'null')?.nextCursor ?? null;
   } catch {
     nextCursor = null;
   }
@@ -88,7 +98,11 @@ export async function readGroupFeedCache(groupId, { categoryId, language } = {})
   return { images: viable, nextCursor };
 }
 
-export async function writeGroupFeedCache(groupId, { categoryId, language } = {}, { images, nextCursor } = {}) {
+export async function writeGroupFeedCache(
+  groupId: string | number,
+  { categoryId, language }: { categoryId?: string | null; language?: string | null } = {},
+  { images, nextCursor }: { images?: CachedFeedImage[]; nextCursor?: string | null } = {}
+) {
   const categoryKey = categoryId || 'all';
   const languageKey = language || 'any';
 
@@ -102,7 +116,7 @@ export async function writeGroupFeedCache(groupId, { categoryId, language } = {}
   );
 }
 
-export async function clearGroupFeedCache(groupId) {
+export async function clearGroupFeedCache(groupId: string | number) {
   const keys = await AsyncStorage.getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:${groupId}:`));
 
@@ -110,7 +124,7 @@ export async function clearGroupFeedCache(groupId) {
     await AsyncStorage.multiRemove(target);
   }
 
-  await clearPlayedPictureIdsForGroup(groupId);
+  await clearPlayedPictureIdsForGroup(groupId as string);
 }
 
 export async function clearAllGroupFeedCaches() {
@@ -122,15 +136,15 @@ export async function clearAllGroupFeedCaches() {
   }
 }
 
-export async function markGroupCategoryExhausted(groupId, categoryKey, language) {
+export async function markGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   await AsyncStorage.setItem(groupFeedExhaustedKey(groupId, categoryKey, language), '1');
 }
 
-export async function isGroupCategoryExhausted(groupId, categoryKey, language) {
+export async function isGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   return (await AsyncStorage.getItem(groupFeedExhaustedKey(groupId, categoryKey, language))) === '1';
 }
 
-export async function clearGroupCategoryExhausted(groupId, categoryKey, language) {
+export async function clearGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
   await AsyncStorage.removeItem(groupFeedExhaustedKey(groupId, categoryKey, language));
 }
 
@@ -144,13 +158,13 @@ export async function clearAllGroupFeedExhaustedMarkers() {
 }
 
 // Private group feed images are written under Paths.cache with a `private-`
-// basename prefix (see services/groups/groupFeedApi.js extractBase64) so the
+// basename prefix (see services/groups/groupFeedApi downloadImageToFile) so the
 // purge below can target them without touching public cache files written by
-// utils/imagesRequests.js. Pre-existing private entries written before the
+// utils/imagesRequests. Pre-existing private entries written before the
 // prefix was introduced are intentionally left alone and will age out.
 const PRIVATE_CACHE_PREFIX = 'private-';
 
-function isPrivateCacheUri(uri) {
+function isPrivateCacheUri(uri: unknown) {
   if (typeof uri !== 'string') {
     return false;
   }

@@ -1,0 +1,4 @@
+{
+  "source": "Mirrors Storage::UploadConstraints in WoIstWaldoProjectApi/app/services/storage/upload_constraints.rb (READ-ONLY). Update both sides together when the server allowlist changes. Note: the server also keeps a DECODE_CONTENT_TYPES allowlist (upload types + image/gif) for its read-side gif shim; the client no longer mirrors it — image transport is raw bytes with no client-side decode.",
+  "uploadContentTypes": ["image/webp", "image/jpeg", "image/jpg", "image/heic", "image/heif", "image/png"]
+}

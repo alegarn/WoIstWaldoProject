@@ -144,6 +144,36 @@ describe('services/groups/homeBackgroundUpload', () => {
     );
   });
 
+  it('throws and never presigns when the rendered file size cannot be determined', async () => {
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///photos/big.jpg', width: 2000, fileSize: 2_000_000 }],
+    });
+    mockFileSizeFor.mockReturnValue(undefined);
+
+    await expect(
+      uploadHomeBackground({ context: CONTEXT, groupId: 'g-1' })
+    ).rejects.toThrow('Could not determine rendered image size.');
+    expect(preparePrivateUpload).not.toHaveBeenCalled();
+    expect(performImageUpload).not.toHaveBeenCalled();
+  });
+
+  it('throws and never presigns when reading the rendered file size fails', async () => {
+    ImagePicker.launchImageLibraryAsync.mockResolvedValue({
+      canceled: false,
+      assets: [{ uri: 'file:///photos/big.jpg', width: 2000, fileSize: 2_000_000 }],
+    });
+    mockFileSizeFor.mockImplementation(() => {
+      throw new Error('stat failed');
+    });
+
+    await expect(
+      uploadHomeBackground({ context: CONTEXT, groupId: 'g-1' })
+    ).rejects.toThrow('Could not determine rendered image size.');
+    expect(preparePrivateUpload).not.toHaveBeenCalled();
+    expect(performImageUpload).not.toHaveBeenCalled();
+  });
+
   it('throws when presign does not return a success status', async () => {
     ImagePicker.launchImageLibraryAsync.mockResolvedValue({
       canceled: false,
