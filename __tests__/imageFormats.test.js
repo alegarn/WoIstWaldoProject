@@ -1,9 +1,7 @@
 import {
   SUPPORTED_IMAGE_TYPES,
-  LEGACY_DECODE_ONLY_TYPES,
   extensionForContentType,
   sniffImageType,
-  decodeImagePayload,
 } from '../utils/imageFormats';
 import serverConstraints from './fixtures/serverUploadConstraints.json';
 
@@ -45,15 +43,8 @@ describe('utils/imageFormats', () => {
       expect([...SUPPORTED_IMAGE_TYPES]).toEqual(serverConstraints.uploadContentTypes);
     });
 
-    it('supported + legacy decode types mirror Storage::UploadConstraints DECODE_CONTENT_TYPES', () => {
-      expect([...SUPPORTED_IMAGE_TYPES, ...LEGACY_DECODE_ONLY_TYPES]).toEqual(
-        serverConstraints.decodeContentTypes
-      );
-    });
-
-    it('gif is decode-only: never uploadable, still readable', () => {
+    it('gif is never uploadable (server keeps its own decode-side gif shim)', () => {
       expect(SUPPORTED_IMAGE_TYPES).not.toContain('image/gif');
-      expect(LEGACY_DECODE_ONLY_TYPES).toEqual(['image/gif']);
     });
   });
 
@@ -65,6 +56,7 @@ describe('utils/imageFormats', () => {
       expect(extensionForContentType('image/heic')).toBe('heic');
       expect(extensionForContentType('image/heif')).toBe('heif');
       expect(extensionForContentType('image/png')).toBe('png');
+      expect(extensionForContentType('image/gif')).toBe('gif');
     });
 
     it('normalizes parameters, case and whitespace before mapping', () => {
@@ -76,6 +68,7 @@ describe('utils/imageFormats', () => {
     it('returns null for unknown or missing content types', () => {
       expect(extensionForContentType('text/html')).toBeNull();
       expect(extensionForContentType('image/tiff')).toBeNull();
+      expect(extensionForContentType('binary/octet-stream')).toBeNull();
       expect(extensionForContentType('')).toBeNull();
       expect(extensionForContentType(undefined)).toBeNull();
       expect(extensionForContentType(null)).toBeNull();
@@ -124,86 +117,6 @@ describe('utils/imageFormats', () => {
         0x00, 0x00, 0x00, 0x18, 0x66, 0x74, 0x79, 0x70, 0x69, 0x73, 0x6f, 0x6d,
       ]);
       expect(sniffImageType(mp4)).toBeNull();
-    });
-  });
-
-  describe('decodeImagePayload', () => {
-    it('encodes raw sniffed bytes to base64 and derives the extension from the sniffed type', () => {
-      const decoded = decodeImagePayload(PNG_BYTES, undefined);
-
-      expect(decoded.extension).toBe('png');
-      expect(decoded.base64).toHaveLength(Math.ceil((PNG_BYTES.length / 3) * 4));
-    });
-
-    it('prefers a valid response Content-Type over the sniffed type for the extension', () => {
-      const decoded = decodeImagePayload(PNG_BYTES, 'image/webp');
-
-      expect(decoded.extension).toBe('webp');
-    });
-
-    it('falls through to the sniffed type when the Content-Type is not an image type', () => {
-      const decoded = decodeImagePayload(JPEG_BYTES, 'text/plain');
-
-      expect(decoded.extension).toBe('jpeg');
-    });
-
-    it('accepts ArrayBuffer payloads (axios arraybuffer responses)', () => {
-      const decoded = decodeImagePayload(JPEG_BYTES.slice().buffer, 'image/jpeg');
-
-      expect(decoded.extension).toBe('jpeg');
-    });
-
-    it('decodes raw sniffed gif bytes with a gif Content-Type to a gif file', () => {
-      const decoded = decodeImagePayload(GIF89A_BYTES.slice().buffer, 'image/gif');
-
-      expect(decoded.extension).toBe('gif');
-      expect(decoded.base64).toHaveLength(Math.ceil((GIF89A_BYTES.length / 3) * 4));
-    });
-
-    it('C8: decodes legacy ASCII "data:image/" ArrayBuffer payloads byte-level', () => {
-      const bytes = legacyDataUrlBytes('data:image/png;base64,AAEC');
-
-      const decoded = decodeImagePayload(bytes, 'text/plain');
-
-      expect(decoded.base64).toBe('AAEC');
-      expect(decoded.extension).toBe('png');
-    });
-
-    it('C5: gif stays decodable through the legacy branch', () => {
-      const bytes = legacyDataUrlBytes('data:image/gif;base64,R0lGODlh');
-
-      const decoded = decodeImagePayload(bytes, undefined);
-
-      expect(decoded.base64).toBe('R0lGODlh');
-      expect(decoded.extension).toBe('gif');
-    });
-
-    it('prefers a valid Content-Type header extension for legacy payloads', () => {
-      const bytes = legacyDataUrlBytes('data:image/png;base64,AAEC');
-
-      const decoded = decodeImagePayload(bytes, 'image/webp');
-
-      expect(decoded.extension).toBe('webp');
-    });
-
-    it('decodes legacy string data-URL responses', () => {
-      const decoded = decodeImagePayload('data:image/jpeg;base64,/9j/4AAQ', undefined);
-
-      expect(decoded.base64).toBe('/9j/4AAQ');
-      expect(decoded.extension).toBe('jpeg');
-    });
-
-    it('rejects legacy payloads whose type is neither supported nor legacy-decodable', () => {
-      expect(decodeImagePayload('data:image/tiff;base64,AAEC', undefined)).toBeNull();
-      expect(decodeImagePayload(legacyDataUrlBytes('data:image/bmp;base64,AAEC'), undefined)).toBeNull();
-    });
-
-    it('rejects payloads that neither sniff nor carry the legacy prefix', () => {
-      expect(decodeImagePayload(new Uint8Array([0x00, 0x01, 0x02]), 'image/png')).toBeNull();
-      expect(decodeImagePayload('not-base64', undefined)).toBeNull();
-      expect(decodeImagePayload('', undefined)).toBeNull();
-      expect(decodeImagePayload(null, undefined)).toBeNull();
-      expect(decodeImagePayload(new ArrayBuffer(0), undefined)).toBeNull();
     });
   });
 });

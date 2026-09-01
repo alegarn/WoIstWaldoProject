@@ -1,8 +1,8 @@
 import axios from 'axios';
-import type { AxiosRequestConfig, AxiosResponse } from 'axios';
-import { File, Paths } from 'expo-file-system';
-import { decodeImagePayload } from '../../utils/imageFormats';
+import type { AxiosRequestConfig } from 'axios';
+import { Paths } from 'expo-file-system';
 import Image from '../../models/image';
+import { downloadImageFile } from '../../utils/imageDownloader';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
 
@@ -58,7 +58,11 @@ function imagesUrl(groupId: string | number | null | undefined) {
   return `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/${groupId}/images`;
 }
 
-function setStorageDownloadHeaders(token: string | null | undefined) {
+function setStorageDownloadHeaders(token: string | null | undefined): Record<string, string> {
+  if (typeof token !== 'string' || token.length === 0) {
+    return {};
+  }
+
   return {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
@@ -71,31 +75,19 @@ function usesBackendStorage(storageUrl: string) {
   return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
 }
 
-async function ensureDirExists(): Promise<void> {
-  Paths.cache.create({ idempotent: true, intermediates: true });
-}
-
 async function downloadImageToFile(
   url: string,
   imageId: string | number | null | undefined,
   token: string | null | undefined
 ): Promise<string | null> {
-  const downloadConfig: AxiosRequestConfig = usesBackendStorage(url)
-    ? { headers: setStorageDownloadHeaders(token), responseType: 'arraybuffer', timeout: 15000 }
-    : { responseType: 'arraybuffer', timeout: 15000 };
-
   try {
-    const response: AxiosResponse = await axios.get(url, downloadConfig);
-    const decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
-    if (!decoded) {
-      return null;
-    }
-
-    await ensureDirExists();
-    const imageFile = new File(Paths.cache, `private-${imageId}.${decoded.extension}`);
-    imageFile.write(decoded.base64, { encoding: 'base64' });
-
-    return imageFile.uri;
+    const { fileUri } = await downloadImageFile({
+      url,
+      directory: Paths.cache,
+      name: `private-${imageId}`,
+      headers: usesBackendStorage(url) ? setStorageDownloadHeaders(token) : undefined,
+    });
+    return fileUri;
   } catch {
     return null;
   }

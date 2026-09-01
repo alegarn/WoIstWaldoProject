@@ -2,16 +2,12 @@ jest.mock('axios', () => ({
   get: jest.fn(),
 }));
 
-jest.mock('base64-js', () => ({
-  fromByteArray: jest.fn((bytes) => `b64:${bytes.length}`),
-}));
-
 jest.mock('expo-file-system', () => {
   const state = {
     existsOverride: null,
     deletedUris: [],
-    writtenUris: [],
-    writeError: null,
+    movedUris: [],
+    moveError: null,
   };
 
   const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
@@ -21,11 +17,15 @@ jest.mock('expo-file-system', () => {
     this.exists = typeof override === 'function'
       ? override(this.uri)
       : (override === null ? true : override);
-    this.write = jest.fn((data, options) => {
-      if (state.writeError) {
-        throw state.writeError;
+    this.write = jest.fn();
+    this.moveSync = jest.fn((destination) => {
+      if (state.moveError) {
+        throw state.moveError;
       }
-      state.writtenUris.push({ uri: this.uri, data, options });
+      state.movedUris.push({
+        from: this.uri,
+        to: typeof destination === 'string' ? destination : destination?.uri,
+      });
     });
     this.delete = jest.fn(() => {
       state.deletedUris.push(this.uri);
@@ -41,8 +41,8 @@ jest.mock('expo-file-system', () => {
   function resetMockState() {
     state.existsOverride = null;
     state.deletedUris.length = 0;
-    state.writtenUris.length = 0;
-    state.writeError = null;
+    state.movedUris.length = 0;
+    state.moveError = null;
     cacheStore.list = () => [];
     cacheStore.create = jest.fn();
     File.mockClear();
@@ -61,8 +61,22 @@ jest.mock('expo-file-system', () => {
   return { File, Paths };
 });
 
-import axios from 'axios';
-import { fromByteArray } from 'base64-js';
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(),
+}));
+
+jest.mock('../../utils/imagesRequests', () => ({
+  usesBackendStorage: jest.fn((url) =>
+    typeof url === 'string' && url.startsWith('https://backend.example.com/')
+  ),
+  setStorageDownloadHeaders: jest.fn((token) => ({
+    Authorization: token,
+    HTTP_AUTHORIZATION: token,
+  })),
+  getBackendHeaders: jest.fn(async () => ({ token: 'Bearer t' })),
+}));
+
+import { downloadAsync } from 'expo-file-system/legacy';
 import { File } from 'expo-file-system';
 import {
   resolveCategoryThumbnail,
@@ -71,29 +85,21 @@ import {
 } from '../../services/groups/groupCategoryThumbnails';
 
 const CONTEXT = { token: 'Bearer t', userId: 'u-1' };
-const PNG_MAGIC = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
-const JPEG_MAGIC = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
-const WEBP_MAGIC = new Uint8Array([
-  0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
-]);
-const GIF89A_MAGIC = new Uint8Array([
-  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x0a, 0x00, 0x0a, 0x00, 0x80, 0x00,
-]);
+const downloadResult = ({ status = 200, contentType } = {}) => ({
+  uri: 'file:///cache/tmp.download',
+  status,
+  headers: contentType ? { 'content-type': contentType } : {},
+});
 
 describe('services/groups/groupCategoryThumbnails', () => {
   beforeEach(() => {
-    axios.get.mockReset();
-    fromByteArray.mockClear();
+    downloadAsync.mockReset();
     File.__reset();
   });
 
-  it('downloads the presigned thumbnail as arraybuffer and writes a private-thumb file when the local file is absent', async () => {
+  it('downloads the presigned thumbnail through the raw native transport and moves it to a private-thumb file', async () => {
     File.__state.existsOverride = false;
-    const bytes = PNG_MAGIC;
-    axios.get.mockResolvedValue({
-      data: bytes,
-      headers: { 'content-type': 'image/png' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
       groupId: 'g-1',
@@ -103,21 +109,18 @@ describe('services/groups/groupCategoryThumbnails', () => {
       },
     });
 
-    expect(axios.get).toHaveBeenCalledWith(
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://presigned.example.com/thumbs/t-1.png',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-thumb-g-1-t-1.download',
+      undefined
     );
     expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-1.png'));
-    expect(fromByteArray).toHaveBeenCalledWith(bytes);
-    expect(File.__state.writtenUris).toHaveLength(1);
-    expect(File.__state.writtenUris[0]).toEqual({
-      uri: expect.stringContaining('private-thumb-g-1-t-1.png'),
-      data: 'b64:12',
-      options: { encoding: 'base64' },
-    });
+    expect(File.__state.movedUris).toEqual([
+      { from: expect.stringContaining('private-thumb-g-1-t-1.download'), to: expect.stringContaining('private-thumb-g-1-t-1.png') },
+    ]);
   });
 
-  it('returns the cached URI without calling axios when the local file already exists', async () => {
+  it('returns the cached URI without downloading when the local file already exists', async () => {
     File.__state.existsOverride = true;
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
@@ -128,17 +131,28 @@ describe('services/groups/groupCategoryThumbnails', () => {
       },
     });
 
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
     expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-1.png'));
+  });
+
+  it('keeps the URL-path extension over the response content-type (cache-key convention)', async () => {
+    File.__state.existsOverride = false;
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/webp' }));
+
+    const uri = await resolveCategoryThumbnail(CONTEXT, {
+      groupId: 'g-1',
+      category: {
+        thumbnail_image_id: 't-url-ext',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-url-ext.png',
+      },
+    });
+
+    expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-url-ext.png'));
   });
 
   it('falls back to content-type for the file extension when the presigned URL path has none', async () => {
     File.__state.existsOverride = false;
-    const bytes = WEBP_MAGIC;
-    axios.get.mockResolvedValue({
-      data: bytes,
-      headers: { 'content-type': 'image/webp' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/webp' }));
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
       groupId: 'g-1',
@@ -149,18 +163,15 @@ describe('services/groups/groupCategoryThumbnails', () => {
     });
 
     expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-2.webp'));
-    expect(File.__state.writtenUris[0].uri).toEqual(
-      expect.stringContaining('private-thumb-g-1-t-2.webp')
-    );
+    expect(File.__state.movedUris[0]).toEqual({
+      from: expect.stringContaining('private-thumb-g-1-t-2.download'),
+      to: expect.stringContaining('private-thumb-g-1-t-2.webp'),
+    });
   });
 
-  it('decodes a raw gif arraybuffer served with Content-Type image/gif to a local gif file', async () => {
+  it('serves a gif content-type as a local gif file', async () => {
     File.__state.existsOverride = false;
-    const bytes = GIF89A_MAGIC;
-    axios.get.mockResolvedValue({
-      data: bytes.slice().buffer,
-      headers: { 'content-type': 'image/gif' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/gif' }));
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
       groupId: 'g-1',
@@ -171,12 +182,10 @@ describe('services/groups/groupCategoryThumbnails', () => {
     });
 
     expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-gif.gif'));
-    expect(fromByteArray).toHaveBeenCalledWith(bytes);
-    expect(File.__state.writtenUris).toHaveLength(1);
-    expect(File.__state.writtenUris[0]).toEqual({
-      uri: expect.stringContaining('private-thumb-g-1-t-gif.gif'),
-      data: 'b64:12',
-      options: { encoding: 'base64' },
+    expect(File.__state.movedUris).toHaveLength(1);
+    expect(File.__state.movedUris[0]).toEqual({
+      from: expect.stringContaining('private-thumb-g-1-t-gif.download'),
+      to: expect.stringContaining('private-thumb-g-1-t-gif.gif'),
     });
   });
 
@@ -187,7 +196,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
     });
 
     expect(uri).toBeNull();
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
   });
 
   it('returns null when the category has no thumbnail_image_id key at all', async () => {
@@ -197,12 +206,12 @@ describe('services/groups/groupCategoryThumbnails', () => {
     });
 
     expect(uri).toBeNull();
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
   });
 
-  it('returns the original presigned URL when the download fails', async () => {
+  it('returns the original presigned URL when the download fails at transport level', async () => {
     File.__state.existsOverride = false;
-    axios.get.mockRejectedValue(new Error('network down'));
+    downloadAsync.mockRejectedValue(new Error('network down'));
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
       groupId: 'g-1',
@@ -213,16 +222,29 @@ describe('services/groups/groupCategoryThumbnails', () => {
     });
 
     expect(uri).toBe('https://presigned.example.com/thumbs/t-3.png');
-    expect(File.__state.writtenUris).toHaveLength(0);
+    expect(File.__state.movedUris).toHaveLength(0);
   });
 
-  it('returns the original presigned URL when file write fails', async () => {
+  it('returns the original presigned URL when the download resolves non-2xx', async () => {
     File.__state.existsOverride = false;
-    File.__state.writeError = new Error('disk full');
-    axios.get.mockResolvedValue({
-      data: JPEG_MAGIC,
-      headers: { 'content-type': 'image/jpeg' },
+    downloadAsync.mockResolvedValue(downloadResult({ status: 403 }));
+
+    const uri = await resolveCategoryThumbnail(CONTEXT, {
+      groupId: 'g-1',
+      category: {
+        thumbnail_image_id: 't-http',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-http.png',
+      },
     });
+
+    expect(uri).toBe('https://presigned.example.com/thumbs/t-http.png');
+    expect(File.__state.movedUris).toHaveLength(0);
+  });
+
+  it('returns the original presigned URL when moving the downloaded file fails', async () => {
+    File.__state.existsOverride = false;
+    File.__state.moveError = new Error('disk full');
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/jpeg' }));
 
     const uri = await resolveCategoryThumbnail(CONTEXT, {
       groupId: 'g-1',
@@ -274,10 +296,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
     const originalBackendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
     process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example.com/';
     File.__state.existsOverride = false;
-    axios.get.mockResolvedValue({
-      data: 'data:image/png;base64,AAEC',
-      headers: { 'content-type': 'text/plain' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
 
     try {
       const uri = await resolveCategoryThumbnail(
@@ -292,49 +311,15 @@ describe('services/groups/groupCategoryThumbnails', () => {
         }
       );
 
-      expect(axios.get).toHaveBeenCalledWith(
+      expect(downloadAsync).toHaveBeenCalledWith(
         'https://backend.example.com/api/v1/local_image_storage/thumbs/t-backend.png',
+        'file:///cache/private-thumb-g-backend-t-backend.download',
         {
           headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
-          responseType: 'arraybuffer',
-          timeout: 15000,
         }
       );
       expect(uri).toEqual(expect.stringContaining('private-thumb-g-backend-t-backend.png'));
-      expect(File.__state.writtenUris).toHaveLength(1);
-      expect(File.__state.writtenUris[0]).toEqual({
-        uri: expect.stringContaining('private-thumb-g-backend-t-backend.png'),
-        data: 'AAEC',
-        options: { encoding: 'base64' },
-      });
-    } finally {
-      process.env.EXPO_PUBLIC_APP_BACKEND_URL = originalBackendUrl;
-    }
-  });
-
-  it('returns the presigned URL without writing when backend response is not a valid data URL', async () => {
-    const originalBackendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
-    process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example.com/';
-    File.__state.existsOverride = false;
-    axios.get.mockResolvedValue({
-      data: new Uint8Array([0, 1, 2]),
-      headers: { 'content-type': 'text/plain' },
-    });
-
-    try {
-      const uri = await resolveCategoryThumbnail(CONTEXT, {
-        groupId: 'g-backend',
-        category: {
-          thumbnail_image_id: 't-bad',
-          thumbnail_url:
-            'https://backend.example.com/api/v1/local_image_storage/thumbs/t-bad.png',
-        },
-      });
-
-      expect(uri).toBe(
-        'https://backend.example.com/api/v1/local_image_storage/thumbs/t-bad.png'
-      );
-      expect(File.__state.writtenUris).toHaveLength(0);
+      expect(File.__state.movedUris).toHaveLength(1);
     } finally {
       process.env.EXPO_PUBLIC_APP_BACKEND_URL = originalBackendUrl;
     }
@@ -342,9 +327,8 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
   it('shares a single network fetch between concurrent calls for the same group and image', async () => {
     File.__state.existsOverride = false;
-    const bytes = PNG_MAGIC;
     let deferredResolve;
-    axios.get.mockImplementation(
+    downloadAsync.mockImplementation(
       () =>
         new Promise((resolve) => {
           deferredResolve = resolve;
@@ -362,27 +346,21 @@ describe('services/groups/groupCategoryThumbnails', () => {
     const first = resolveCategoryThumbnail(CONTEXT, args);
     const second = resolveCategoryThumbnail(CONTEXT, args);
 
-    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
 
-    deferredResolve({
-      data: bytes,
-      headers: { 'content-type': 'image/png' },
-    });
+    deferredResolve(downloadResult({ contentType: 'image/png' }));
 
     const [uriA, uriB] = await Promise.all([first, second]);
 
-    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
     expect(uriA).toEqual(expect.stringContaining('private-thumb-g-dedup-t-dedup.png'));
     expect(uriB).toEqual(uriA);
-    expect(File.__state.writtenUris).toHaveLength(1);
+    expect(File.__state.movedUris).toHaveLength(1);
   });
 
   it('serves the local file on the next sequential call after a successful download', async () => {
     File.__state.existsOverride = false;
-    axios.get.mockResolvedValue({
-      data: PNG_MAGIC,
-      headers: { 'content-type': 'image/png' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
 
     const args = {
       groupId: 'g-seq',
@@ -393,21 +371,21 @@ describe('services/groups/groupCategoryThumbnails', () => {
     };
 
     const firstUri = await resolveCategoryThumbnail(CONTEXT, args);
-    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
     expect(firstUri).toEqual(expect.stringContaining('private-thumb-g-seq-t-seq.png'));
 
     File.__state.existsOverride = true;
-    axios.get.mockClear();
+    downloadAsync.mockClear();
 
     const secondUri = await resolveCategoryThumbnail(CONTEXT, args);
 
-    expect(axios.get).not.toHaveBeenCalled();
+    expect(downloadAsync).not.toHaveBeenCalled();
     expect(secondUri).toEqual(firstUri);
   });
 
   it('resolves both concurrent callers to the presigned fallback when the fetch rejects, then retries on the next call', async () => {
     File.__state.existsOverride = false;
-    axios.get.mockRejectedValue(new Error('network down'));
+    downloadAsync.mockRejectedValue(new Error('network down'));
 
     const args = {
       groupId: 'g-retry',
@@ -422,19 +400,16 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
     await expect(first).resolves.toBe('https://presigned.example.com/thumbs/t-retry.png');
     await expect(second).resolves.toBe('https://presigned.example.com/thumbs/t-retry.png');
-    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
 
     await resolveCategoryThumbnail(CONTEXT, args);
 
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    expect(downloadAsync).toHaveBeenCalledTimes(2);
   });
 
   it('fetches separately for the same image id under different group ids', async () => {
     File.__state.existsOverride = false;
-    axios.get.mockResolvedValue({
-      data: PNG_MAGIC,
-      headers: { 'content-type': 'image/png' },
-    });
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
 
     const category = {
       thumbnail_image_id: 't-shared',
@@ -446,7 +421,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
       resolveCategoryThumbnail(CONTEXT, { groupId: 'g-b', category }),
     ]);
 
-    expect(axios.get).toHaveBeenCalledTimes(2);
+    expect(downloadAsync).toHaveBeenCalledTimes(2);
     expect(uriA).toEqual(expect.stringContaining('private-thumb-g-a-t-shared.png'));
     expect(uriB).toEqual(expect.stringContaining('private-thumb-g-b-t-shared.png'));
   });

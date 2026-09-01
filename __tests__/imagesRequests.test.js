@@ -29,6 +29,10 @@ jest.mock('expo-file-system', () => ({
     this.base64 = mockBase64;
     this.write = mockWrite;
     this.upload = mockUpload;
+    this.moveSync = jest.fn((destination) => {
+      this.uri = typeof destination === 'string' ? destination : destination?.uri ?? this.uri;
+    });
+    this.delete = jest.fn();
   }),
   Paths: class MockPaths {
     static get cache() {
@@ -44,18 +48,28 @@ jest.mock('expo-file-system', () => ({
   },
 }));
 
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(),
+}));
+
 import axios from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
+import { downloadAsync } from 'expo-file-system/legacy';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { getImages, performImageUpload, prepareImageUpload, saveImageInfos, buildImageObject } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 
-const batchRow = (name) => ({
+const batchRow = (name, storageUrl) => ({
   name,
-  storage_url: `https://backend.example/api/v1/local_image_storage/${name}`,
+  storage_url: storageUrl ?? `https://backend.example/api/v1/local_image_storage/${name}`,
 });
-const batchResponse = (names) => ({ data: { data: names.map(batchRow) } });
+const batchResponse = (names) => ({ data: { data: names.map((name) => batchRow(name)) } });
+const downloadResult = ({ status = 200, contentType } = {}) => ({
+  uri: 'file:///cache/tmp.download',
+  status,
+  headers: contentType ? { 'content-type': contentType } : {},
+});
 const NETWORK_ERROR_RESULT = {
   isError: true,
   reason: 'network',
@@ -68,14 +82,6 @@ const SERVER_ERROR_RESULT = {
   title: "There is an error downloading user's images.",
   message: 'Please retry later...',
 };
-const asciiBytes = (text) => {
-  const bytes = new Uint8Array(text.length);
-  for (let i = 0; i < text.length; i++) {
-    bytes[i] = text.charCodeAt(i) & 0xff;
-  }
-  return bytes;
-};
-const JPEG_MAGIC = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
 
 describe('imagesRequests utilities', () => {
   beforeEach(() => {
@@ -393,42 +399,40 @@ describe('imagesRequests utilities', () => {
     expect(saveLastImageUuid).not.toHaveBeenCalled();
   });
 
-  it('downloads backend-hosted images with auth headers', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              name: 'img-1',
-              description: 'Find Waldo',
-              image_height: 100,
-              image_width: 200,
-              is_portrait: true,
-              x_location: 0.3,
-              y_location: 0.7,
-              screen_height: 400,
-              screen_width: 300,
-              storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+  it('downloads backend-hosted images through the raw native transport with auth headers (no base64 anywhere)', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            name: 'img-1',
+            description: 'Find Waldo',
+            image_height: 100,
+            image_width: 200,
+            is_portrait: true,
+            x_location: 0.3,
+            y_location: 0.7,
+            screen_height: 400,
+            screen_width: 300,
+            storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
+          },
+        ],
+      },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://backend.example/api/v1/local_image_storage/img-1',
+      'file:///cache/img-1.download',
       {
         headers: {
           Authorization: 'Bearer token',
           HTTP_AUTHORIZATION: 'Bearer token',
         },
-        timeout: 15000,
-        responseType: 'arraybuffer',
       }
     );
+    expect(mockCreateCacheDirectory).toHaveBeenCalledWith({ idempotent: true, intermediates: true });
     expect(File).toHaveBeenCalledWith(
       expect.objectContaining({
         uri: 'file:///cache/',
@@ -436,109 +440,76 @@ describe('imagesRequests utilities', () => {
       }),
       'img-1.png'
     );
-    expect(mockCreateCacheDirectory).toHaveBeenCalledWith({ idempotent: true, intermediates: true });
-    expect(mockWrite).toHaveBeenCalledWith(
-      'abc123',
-      { encoding: 'base64' }
-    );
+    expect(mockWrite).not.toHaveBeenCalled();
+    expect(mockBase64).not.toHaveBeenCalled();
     expect(response.isError).toBe(false);
+    expect(response.images[0].imageFile).toBe('file:///cache/img-1.png');
     expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined);
   });
 
-  it('downloads raw image bytes as arraybuffer and derives the extension from the Content-Type header', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              name: 'img-webp',
-              storage_url: 'https://backend.example/api/v1/local_image_storage/img-webp',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: JPEG_MAGIC,
-        headers: { 'content-type': 'image/webp' },
-      });
+  it('derives the file extension from the response Content-Type header', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [batchRow('img-webp')],
+      },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/webp' }));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://backend.example/api/v1/local_image_storage/img-webp',
+      'file:///cache/img-webp.download',
       {
         headers: {
           Authorization: 'Bearer token',
           HTTP_AUTHORIZATION: 'Bearer token',
         },
-        timeout: 15000,
-        responseType: 'arraybuffer',
       }
     );
     expect(File).toHaveBeenCalledWith(
       expect.objectContaining({ uri: 'file:///cache/' }),
       'img-webp.webp'
     );
-    expect(mockWrite).toHaveBeenCalledWith(
-      expect.any(String),
-      { encoding: 'base64' }
-    );
+    expect(mockWrite).not.toHaveBeenCalled();
     expect(response.isError).toBe(false);
+    expect(response.images[0].imageFile).toBe('file:///cache/img-webp.webp');
   });
 
-  it('C8: decodes a legacy ASCII data-URL ArrayBuffer from storage byte-level', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              name: 'legacy-img',
-              storage_url: 'https://backend.example/api/v1/local_image_storage/legacy-img',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: asciiBytes('data:image/png;base64,AAEC').buffer,
-        headers: { 'content-type': 'text/plain' },
-      });
+  it('sends no Authorization headers for non-backend (S3) storage URLs', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [batchRow('img-s3', 'https://s3.amazonaws.com/bucket/img-s3.jpg')],
+      },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(downloadAsync).toHaveBeenCalledWith(
+      'https://s3.amazonaws.com/bucket/img-s3.jpg',
+      'file:///cache/img-s3.download',
+      undefined
+    );
+    expect(response.isError).toBe(false);
+    expect(response.images[0].imageFile).toBe('file:///cache/img-s3.jpeg');
+  });
+
+  it('falls back to the URL path extension when the Content-Type is not an image type', async () => {
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [batchRow('img-ext', 'https://s3.amazonaws.com/bucket/img-ext.jpg')],
+      },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'binary/octet-stream' }));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
     expect(File).toHaveBeenCalledWith(
       expect.objectContaining({ uri: 'file:///cache/' }),
-      'legacy-img.png'
+      'img-ext.jpg'
     );
-    expect(mockWrite).toHaveBeenCalledWith('AAEC', { encoding: 'base64' });
-    expect(response.isError).toBe(false);
-  });
-
-  it('C5: legacy gif data-URL objects stay decodable on the read path', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              name: 'gif-img',
-              storage_url: 'https://backend.example/api/v1/local_image_storage/gif-img',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({
-        data: asciiBytes('data:image/gif;base64,R0lGODlh').buffer,
-        headers: { 'content-type': 'image/gif' },
-      });
-
-    const response = await getImages(null, { token: 'Bearer token' });
-
-    expect(File).toHaveBeenCalledWith(
-      expect.objectContaining({ uri: 'file:///cache/' }),
-      'gif-img.gif'
-    );
-    expect(mockWrite).toHaveBeenCalledWith('R0lGODlh', { encoding: 'base64' });
-    expect(response.isError).toBe(false);
+    expect(response.images[0].imageFile).toBe('file:///cache/img-ext.jpg');
   });
 
   it('skips a fully broken batch and continues to the next batch of playable images', async () => {
@@ -560,9 +531,11 @@ describe('imagesRequests utilities', () => {
             },
           ],
         },
-      })
-      .mockRejectedValueOnce({ request: { status: 404 } })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,next123' });
+      });
+
+    downloadAsync
+      .mockResolvedValueOnce(downloadResult({ status: 404 }))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     axios.post.mockResolvedValueOnce({
       data: {
@@ -603,36 +576,23 @@ describe('imagesRequests utilities', () => {
   });
 
   it('H1: aborts after one metadata request with no cursor write when every download fails network-class (no HTTP response)', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
-      .mockRejectedValue({ message: 'Network Error' });
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']));
+    downloadAsync.mockRejectedValue(new Error('Network Error'));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
     expect(response).toEqual(NETWORK_ERROR_RESULT);
     // Exactly ONE metadata request total: the head GET. The loop aborted, so
     // no next_image_batch POST was ever fired.
-    expect(axios.get).toHaveBeenCalledTimes(6); // 1 metadata + 5 downloads
-    expect(axios.post).not.toHaveBeenCalled();
-    expect(saveLastImageUuid).not.toHaveBeenCalled();
-  });
-
-  it('H1: classifies request status 0 as network-class and aborts without retry', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2']))
-      .mockRejectedValue({ request: { status: 0 } });
-
-    const response = await getImages(null, { token: 'Bearer token' });
-
-    expect(response).toEqual(NETWORK_ERROR_RESULT);
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledTimes(5);
     expect(axios.post).not.toHaveBeenCalled();
     expect(saveLastImageUuid).not.toHaveBeenCalled();
   });
 
   it('H1: retries a fully server-class 5xx batch to budget exhaustion and fails terminal server (cursor saved each iteration)', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1']))
-      .mockRejectedValue({ response: { status: 503 }, request: { status: 503 } });
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+    downloadAsync.mockResolvedValue(downloadResult({ status: 503 }));
     axios.post
       .mockResolvedValueOnce(batchResponse(['img-2']))
       .mockResolvedValueOnce(batchResponse(['img-3']))
@@ -642,7 +602,7 @@ describe('imagesRequests utilities', () => {
 
     expect(response).toEqual(SERVER_ERROR_RESULT);
     // 4 metadata requests worst case: head GET + 3 next POSTs.
-    expect(axios.get).toHaveBeenCalledTimes(5); // 1 metadata + 4 downloads
+    expect(downloadAsync).toHaveBeenCalledTimes(4);
     expect(axios.post).toHaveBeenCalledTimes(3);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(4);
     expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined);
@@ -651,10 +611,9 @@ describe('imagesRequests utilities', () => {
     expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined);
   });
 
-  it('H1: retries a fully server-class 404 batch (response received) to budget exhaustion and fails terminal server', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1']))
-      .mockRejectedValue({ request: { status: 404 }, response: { status: 404, data: 'missing' } });
+  it('H1: retries a fully server-class 404 batch (HTTP response received) to budget exhaustion and fails terminal server', async () => {
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+    downloadAsync.mockResolvedValue(downloadResult({ status: 404 }));
     axios.post
       .mockResolvedValueOnce(batchResponse(['img-2']))
       .mockResolvedValueOnce(batchResponse(['img-3']))
@@ -670,13 +629,13 @@ describe('imagesRequests utilities', () => {
   });
 
   it('H1: returns partial successes without retrying when some downloads succeed and others fail network-class', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,def456' })
-      .mockRejectedValueOnce({ message: 'Network Error' })
-      .mockRejectedValueOnce({ request: { status: 0 } })
-      .mockRejectedValueOnce({ message: 'Network Error' });
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']));
+    downloadAsync
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }))
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockRejectedValueOnce(new Error('Network Error'));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
@@ -688,13 +647,13 @@ describe('imagesRequests utilities', () => {
   });
 
   it('H1: aborts with reason network when a zero-success batch mixes network and server failures', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']))
-      .mockRejectedValueOnce({ message: 'Network Error' })
-      .mockRejectedValueOnce({ request: { status: 0 } })
-      .mockRejectedValueOnce({ response: { status: 503 }, request: { status: 503 } })
-      .mockRejectedValueOnce({ request: { status: 404 } })
-      .mockRejectedValueOnce({ response: { status: 500 }, request: { status: 500 } });
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']));
+    downloadAsync
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockRejectedValueOnce(new Error('Network Error'))
+      .mockResolvedValueOnce(downloadResult({ status: 503 }))
+      .mockResolvedValueOnce(downloadResult({ status: 404 }))
+      .mockResolvedValueOnce(downloadResult({ status: 500 }));
 
     const response = await getImages(null, { token: 'Bearer token' });
 
@@ -703,31 +662,9 @@ describe('imagesRequests utilities', () => {
     expect(axios.post).not.toHaveBeenCalled();
   });
 
-  it('H1: treats HTTP 200 non-base64 payloads as server-class and skips the batch (cursor advances, loop continues)', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['not-base64-img']))
-      .mockResolvedValueOnce({ data: 'not-base64' })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,next123' });
-    axios.post.mockResolvedValueOnce(batchResponse(['playable-img']));
-
-    const response = await getImages(null, { token: 'Bearer token' });
-
-    expect(response.isError).toBe(false);
-    expect(response.images).toEqual([
-      expect.objectContaining({
-        pictureId: 'playable-img',
-        imageFile: 'file:///cache/playable-img.png',
-      }),
-    ]);
-    expect(saveLastImageUuid).toHaveBeenCalledTimes(2);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'not-base64-img', undefined, undefined);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'playable-img', undefined, undefined);
-  });
-
   it('Fix 2a (g): persistCursor:false skips saveLastImageUuid on a successful batch', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['img-1']))
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
 
@@ -737,10 +674,10 @@ describe('imagesRequests utilities', () => {
   });
 
   it('Fix 2a (h): persistCursor:false skips the broken-batch cursor advance (loop semantics unchanged)', async () => {
-    axios.get
-      .mockResolvedValueOnce(batchResponse(['not-base64-img']))
-      .mockResolvedValueOnce({ data: 'not-base64' })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,next123' });
+    axios.get.mockResolvedValueOnce(batchResponse(['not-found-img']));
+    downloadAsync
+      .mockResolvedValueOnce(downloadResult({ status: 404 }))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
     axios.post.mockResolvedValueOnce(batchResponse(['playable-img']));
 
     const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
@@ -762,8 +699,9 @@ describe('imagesRequests utilities', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await getImages(null, { token: 'Bearer token' }, {
       category_id: 'cat-private-uuid',
@@ -803,26 +741,25 @@ describe('imagesRequests utilities', () => {
   });
 
   it('threads category_key and language into saveLastImageUuid when a batch resolves', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        data: {
-          data: [
-            {
-              name: 'img-1',
-              description: 'Find Waldo',
-              image_height: 100,
-              image_width: 200,
-              is_portrait: true,
-              x_location: 0.3,
-              y_location: 0.7,
-              screen_height: 400,
-              screen_width: 300,
-              storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
-            },
-          ],
-        },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,abc123' });
+    axios.get.mockResolvedValueOnce({
+      data: {
+        data: [
+          {
+            name: 'img-1',
+            description: 'Find Waldo',
+            image_height: 100,
+            image_width: 200,
+            is_portrait: true,
+            x_location: 0.3,
+            y_location: 0.7,
+            screen_height: 400,
+            screen_width: 300,
+            storage_url: 'https://backend.example/api/v1/local_image_storage/img-1',
+          },
+        ],
+      },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     await getImages(
       null,
@@ -894,8 +831,9 @@ describe('imagesRequests utilities', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await getImages(null, { token: 'Bearer token' }, {
       category_id: 'cat-private-uuid',

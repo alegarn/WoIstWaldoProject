@@ -1,13 +1,10 @@
-import axios from 'axios';
-import type { AxiosResponse } from 'axios';
 import { File, Directory, Paths } from 'expo-file-system';
-import { decodeImagePayload } from '../../utils/imageFormats';
-import type { DecodedImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
   getBackendHeaders,
 } from '../../utils/imagesRequests';
+import { downloadImageFile, normalizeFileExtension } from '../../utils/imageDownloader';
 
 export type HomeBackgroundSlot = 'hide' | 'find' | 'ranking';
 
@@ -58,12 +55,6 @@ function ensureGroupDir(groupId: string | number | null | undefined) {
   }
 }
 
-function normalizeExt(ext: string | null | undefined): string | null {
-  if (typeof ext !== 'string' || !ext) return null;
-  const trimmed = ext.replace(/^\./, '').toLowerCase();
-  return /^[a-zA-Z0-9]{2,5}$/.test(trimmed) ? trimmed : null;
-}
-
 export async function resolveHomeBackground({
   context,
   groupId,
@@ -81,7 +72,7 @@ export async function resolveHomeBackground({
 }): Promise<string | null> {
   if (!imageId || !SLOTS.includes(slot as HomeBackgroundSlot)) return null;
 
-  const ext = normalizeExt(fileExtension);
+  const ext = normalizeFileExtension(fileExtension);
 
   if (ext && localHomeBgExists(groupId, slot, imageId, ext)) {
     return localHomeBgUri(groupId, slot, imageId, ext);
@@ -92,36 +83,19 @@ export async function resolveHomeBackground({
   ensureGroupDir(groupId);
 
   const isBackend = usesBackendStorage(url);
-  let response: AxiosResponse | undefined;
-  let decoded: DecodedImagePayload | null = null;
   try {
-    if (isBackend) {
-      const { token } = await getBackendHeaders(context);
-      response = await axios.get(url, {
-        headers: setStorageDownloadHeaders(token),
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-    } else {
-      response = await axios.get(url, {
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-    }
-    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
-  } catch (err) {
-    return isBackend ? null : url;
-  }
-
-  if (!decoded) return isBackend ? null : url;
-
-  const finalExt = ext || decoded.extension;
-
-  try {
-    const file = localHomeBgFile(groupId, slot, imageId, finalExt);
-    file.write(decoded.base64, { encoding: 'base64' });
-    return file.uri;
-  } catch (err) {
+    const headers = isBackend
+      ? setStorageDownloadHeaders((await getBackendHeaders(context)).token)
+      : undefined;
+    const { fileUri } = await downloadImageFile({
+      url,
+      directory: groupDir(groupId),
+      name: `${slot}-${imageId}`,
+      preferredExtension: ext,
+      headers,
+    });
+    return fileUri;
+  } catch {
     return isBackend ? null : url;
   }
 }

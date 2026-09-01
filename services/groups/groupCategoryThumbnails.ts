@@ -1,13 +1,10 @@
-import axios from 'axios';
-import type { AxiosResponse } from 'axios';
 import { File, Paths } from 'expo-file-system';
-import { decodeImagePayload } from '../../utils/imageFormats';
-import type { DecodedImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
   getBackendHeaders,
 } from '../../utils/imagesRequests';
+import { downloadImageFile, extensionFromUrlPath } from '../../utils/imageDownloader';
 
 export type ThumbnailCategory = {
   thumbnail_image_id?: string | number | null;
@@ -30,18 +27,6 @@ function localThumbExists(groupId: string | number | null | undefined, id: strin
   }
 }
 
-function deriveExtFromUrl(url: string): string | null {
-  try {
-    const u = new URL(url);
-    const parts = u.pathname.split('.');
-    const last = parts[parts.length - 1];
-    if (last && /^[a-zA-Z0-9]{2,5}$/.test(last)) return last.toLowerCase();
-  } catch {
-    // not a URL
-  }
-  return null;
-}
-
 const inFlight = new Map<string, Promise<string | null>>();
 
 async function doResolveCategoryThumbnail(
@@ -54,47 +39,24 @@ async function doResolveCategoryThumbnail(
   const presignedUrl = category?.thumbnail_url;
   if (!presignedUrl || typeof presignedUrl !== 'string') return null;
 
-  const ext = deriveExtFromUrl(presignedUrl);
+  const ext = extensionFromUrlPath(presignedUrl);
 
   if (ext && localThumbExists(groupId, imageId, ext)) {
     return localThumbUri(groupId, imageId, ext);
   }
 
   try {
-    Paths.cache.create({ idempotent: true, intermediates: true });
-  } catch {
-    // best-effort
-  }
-
-  let response: AxiosResponse | undefined;
-  let decoded: DecodedImagePayload | null = null;
-  try {
-    if (usesBackendStorage(presignedUrl)) {
-      const { token } = await getBackendHeaders(context);
-      response = await axios.get(presignedUrl, {
-        headers: setStorageDownloadHeaders(token),
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-    } else {
-      response = await axios.get(presignedUrl, {
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      });
-    }
-    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
-  } catch {
-    return presignedUrl;
-  }
-
-  if (!decoded) return presignedUrl;
-
-  const finalExt = ext || decoded.extension;
-
-  try {
-    const file = new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${imageId}.${finalExt}`);
-    file.write(decoded.base64, { encoding: 'base64' });
-    return file.uri;
+    const headers = usesBackendStorage(presignedUrl)
+      ? setStorageDownloadHeaders((await getBackendHeaders(context)).token)
+      : undefined;
+    const { fileUri } = await downloadImageFile({
+      url: presignedUrl,
+      directory: Paths.cache,
+      name: `${THUMB_PREFIX}${groupId}-${imageId}`,
+      preferredExtension: ext,
+      headers,
+    });
+    return fileUri;
   } catch {
     return presignedUrl;
   }

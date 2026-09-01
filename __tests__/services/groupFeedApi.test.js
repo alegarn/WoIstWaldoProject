@@ -9,6 +9,9 @@ jest.mock('expo-file-system', () => {
     this.exists = true;
     this.write = jest.fn();
     this.delete = jest.fn();
+    this.moveSync = jest.fn((destination) => {
+      this.uri = typeof destination === 'string' ? destination : destination?.uri ?? this.uri;
+    });
   });
 
   const cacheStore = {
@@ -26,6 +29,10 @@ jest.mock('expo-file-system', () => {
     },
   };
 });
+
+jest.mock('expo-file-system/legacy', () => ({
+  downloadAsync: jest.fn(),
+}));
 
 jest.mock('../../models/image', function MockImageFactory() {
   return function MockImage(uri) {
@@ -47,6 +54,7 @@ jest.mock('../../utils/auth', () => ({
 }));
 
 import axios from 'axios';
+import { downloadAsync } from 'expo-file-system/legacy';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
 import {
@@ -59,6 +67,11 @@ import {
 const TOKEN = 'Bearer token-1';
 const AUTH_HEADERS = { Authorization: TOKEN, HTTP_AUTHORIZATION: TOKEN };
 const CONTEXT = { token: TOKEN, userId: 'user-1', scoreId: 'score-1' };
+const downloadResult = ({ status = 200, contentType } = {}) => ({
+  uri: 'file:///cache/tmp.download',
+  status,
+  headers: contentType ? { 'content-type': contentType } : {},
+});
 
 describe('services/groups/groupFeedApi', () => {
   beforeEach(() => {
@@ -105,13 +118,12 @@ describe('services/groups/groupFeedApi', () => {
     expect(response.data).toEqual({ error: 'forbidden' });
   });
 
-  it('downloadPrivateImage GETs the presign URL then downloads and decodes the base64 payload', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        status: 200,
-        data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+  it('downloadPrivateImage GETs the presign URL then downloads raw bytes to private-<id>.<ext>', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { data: { url: 'https://backend.example/storage/img-1' } },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const fileUri = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
 
@@ -120,16 +132,12 @@ describe('services/groups/groupFeedApi', () => {
       'https://backend.example/api/v1/private_groups/g-3/images/img-1',
       { headers: AUTH_HEADERS }
     );
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://backend.example/storage/img-1',
-      {
-        headers: AUTH_HEADERS,
-        responseType: 'arraybuffer',
-        timeout: 15000,
-      }
+      'file:///cache/private-img-1.download',
+      { headers: AUTH_HEADERS }
     );
-    expect(fileUri).toEqual(expect.stringContaining('img-1'));
+    expect(fileUri).toBe('file:///cache/private-img-1.png');
   });
 
   it('fetchPrivateFeedPageForGame returns an empty page without calling the API when the pictureId is the end cursor', async () => {
@@ -152,8 +160,9 @@ describe('services/groups/groupFeedApi', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -163,7 +172,7 @@ describe('services/groups/groupFeedApi', () => {
 
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
-    expect(response.images[0].imageFile).toEqual(expect.stringContaining('img-1'));
+    expect(response.images[0].imageFile).toBe('file:///cache/private-img-1.png');
   });
 
   it('Fix 2a (j): private success with persistCursor:false → no cursor save (head replay must not rewind)', async () => {
@@ -175,8 +184,9 @@ describe('services/groups/groupFeedApi', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vG5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -198,8 +208,9 @@ describe('services/groups/groupFeedApi', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vG5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -231,58 +242,43 @@ describe('services/groups/groupFeedApi', () => {
     expect(PRIVATE_FEED_END_CURSOR).toBe('__private_feed_end__');
   });
 
-  it('downloadPrivateImage requests an S3 presigned URL as arraybuffer and writes the decoded image file', async () => {
-    const jpegBytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
-    axios.get
-      .mockResolvedValueOnce({
-        status: 200,
-        data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
-      })
-      .mockResolvedValueOnce({
-        data: jpegBytes,
-        headers: { 'content-type': 'image/jpeg' },
-      });
+  it('downloadPrivateImage requests an S3 presigned URL and writes the image file with no auth headers', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
 
     const fileUri = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
 
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://s3.amazonaws.com/bucket/private/img-1.jpg',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-img-1.download',
+      undefined
     );
 
     expect(typeof fileUri).toBe('string');
-    expect(fileUri).toEqual(expect.stringContaining('private-img-1.jpeg'));
-  });
-
-  it('C8: downloadPrivateImage decodes a legacy ASCII data-URL ArrayBuffer served by S3', async () => {
-    const legacyText = 'data:image/png;base64,AAEC';
-    const legacyBytes = new Uint8Array(legacyText.length);
-    for (let i = 0; i < legacyText.length; i++) {
-      legacyBytes[i] = legacyText.charCodeAt(i) & 0xff;
-    }
-    axios.get
-      .mockResolvedValueOnce({
-        status: 200,
-        data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-legacy' } },
-      })
-      .mockResolvedValueOnce({
-        data: legacyBytes.buffer,
-        headers: { 'content-type': 'binary/octet-stream' },
-      });
-
-    const fileUri = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-legacy' });
-
-    expect(fileUri).toEqual(expect.stringContaining('private-img-legacy.png'));
+    expect(fileUri).toBe('file:///cache/private-img-1.jpeg');
   });
 
   it('downloadPrivateImage returns null instead of throwing when the presign download rejects', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        status: 200,
-        data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
-      })
-      .mockRejectedValueOnce(new Error('network down'));
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
+    });
+    downloadAsync.mockRejectedValueOnce(new Error('network down'));
+
+    const result = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
+
+    expect(result).toBeNull();
+  });
+
+  it('downloadPrivateImage returns null when the presign download resolves non-2xx', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' } },
+    });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ status: 403 }));
 
     const result = await downloadPrivateImage(CONTEXT, { groupId: 'g-3', imageId: 'img-1' });
 
@@ -290,24 +286,21 @@ describe('services/groups/groupFeedApi', () => {
   });
 
   it('E5: fetchPrivateFeedPageForGame downloads row.storage_url directly without the presign endpoint', async () => {
-    axios.get
-      .mockResolvedValueOnce({
-        status: 200,
-        data: {
-          images: [
-            {
-              id: 'img-1',
-              name: 'Waldo',
-              storage_url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg',
-            },
-          ],
-          next_cursor: null,
-        },
-      })
-      .mockResolvedValueOnce({
-        data: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
-        headers: { 'content-type': 'image/jpeg' },
-      });
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: {
+        images: [
+          {
+            id: 'img-1',
+            name: 'Waldo',
+            storage_url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg',
+          },
+        ],
+        next_cursor: null,
+      },
+    });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -315,18 +308,18 @@ describe('services/groups/groupFeedApi', () => {
       language: 'any',
     });
 
-    expect(axios.get).toHaveBeenCalledTimes(2);
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledWith(
       'https://s3.amazonaws.com/bucket/private/img-1.jpg',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-img-1.download',
+      undefined
     );
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
-    expect(response.images[0].imageFile).toEqual(expect.stringContaining('private-img-1.jpeg'));
+    expect(response.images[0].imageFile).toBe('file:///cache/private-img-1.jpeg');
   });
 
-  it('C7: a failed storage_url download (expired presign) falls back to the per-image presign endpoint', async () => {
+  it('C7: a failed storage_url download (expired presign, non-2xx) falls back to the per-image presign endpoint', async () => {
     axios.get
       .mockResolvedValueOnce({
         status: 200,
@@ -341,15 +334,14 @@ describe('services/groups/groupFeedApi', () => {
           next_cursor: null,
         },
       })
-      .mockRejectedValueOnce({ response: { status: 403 } })
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://s3.amazonaws.com/bucket/private/img-1-fresh.jpg' } },
-      })
-      .mockResolvedValueOnce({
-        data: new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]),
-        headers: { 'content-type': 'image/jpeg' },
       });
+
+    downloadAsync
+      .mockResolvedValueOnce(downloadResult({ status: 403 }))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -357,26 +349,28 @@ describe('services/groups/groupFeedApi', () => {
       language: 'any',
     });
 
-    expect(axios.get).toHaveBeenNthCalledWith(
-      2,
+    expect(downloadAsync).toHaveBeenNthCalledWith(
+      1,
       'https://s3.amazonaws.com/bucket/private/img-1.jpg?expired-signature',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-img-1.download',
+      undefined
     );
     expect(axios.get).toHaveBeenNthCalledWith(
-      3,
+      2,
       'https://backend.example/api/v1/private_groups/g-3/images/img-1',
       { headers: AUTH_HEADERS }
     );
-    expect(axios.get).toHaveBeenNthCalledWith(
-      4,
+    expect(downloadAsync).toHaveBeenNthCalledWith(
+      2,
       'https://s3.amazonaws.com/bucket/private/img-1-fresh.jpg',
-      { responseType: 'arraybuffer', timeout: 15000 }
+      'file:///cache/private-img-1.download',
+      undefined
     );
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
   });
 
-  it('C7: an expired storage_url that decodes to nothing also falls back to presign', async () => {
+  it('C7: an expired storage_url whose download rejects at transport level also falls back to presign', async () => {
     axios.get
       .mockResolvedValueOnce({
         status: 200,
@@ -386,14 +380,13 @@ describe('services/groups/groupFeedApi', () => {
         },
       })
       .mockResolvedValueOnce({
-        data: new Uint8Array([0x00, 0x01, 0x02]),
-        headers: { 'content-type': 'application/xml' },
-      })
-      .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+      });
+
+    downloadAsync
+      .mockRejectedValueOnce(new Error('network down'))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',
@@ -402,7 +395,7 @@ describe('services/groups/groupFeedApi', () => {
     });
 
     expect(axios.get).toHaveBeenNthCalledWith(
-      3,
+      2,
       'https://backend.example/api/v1/private_groups/g-3/images/img-1',
       { headers: AUTH_HEADERS }
     );
@@ -422,8 +415,9 @@ describe('services/groups/groupFeedApi', () => {
       .mockResolvedValueOnce({
         status: 200,
         data: { data: { url: 'https://backend.example/storage/img-1' } },
-      })
-      .mockResolvedValueOnce({ data: 'data:image/png;base64,Z29vZGJ5ZQ==' });
+      });
+
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
 
     const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
       groupId: 'g-3',

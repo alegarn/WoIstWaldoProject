@@ -3,8 +3,7 @@ import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
 import Image from '../models/image';
 import { setHeaders, getBackendHeaders } from './auth';
-import { decodeImagePayload } from './imageFormats';
-import type { DecodedImagePayload } from './imageFormats';
+import { downloadImageFile, ImageDownloadError } from './imageDownloader';
 
 export { getBackendHeaders };
 import { saveLastImageUuid } from './storageDatum';
@@ -97,12 +96,6 @@ export type ImageUploadOptions = {
 type ImagesInfosFailure = { data: null; errorReason: GetImagesErrorReason };
 type ImagesInfosResponse = AxiosResponse | { data: 401 } | ImagesInfosFailure;
 
-type StorageDownload = {
-  data: ArrayBuffer | string | undefined;
-  contentType?: string;
-  networkFailure: boolean;
-};
-
 function isPrivateScope(scope: GetImagesFilters['scope']): scope is PrivateScope {
   return !!scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
 }
@@ -138,7 +131,11 @@ function setUploadHeaders({ plan, fileExtension, contentLength, token }: {
   return normalizeUploadHeaders(headers);
 };
 
-export function setStorageDownloadHeaders(token: string | null | undefined) {
+export function setStorageDownloadHeaders(token: string | null | undefined): Record<string, string> {
+  if (typeof token !== 'string' || token.length === 0) {
+    return {};
+  }
+
   return {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
@@ -173,19 +170,19 @@ function classifyImagesErrorReason(error: unknown): GetImagesErrorReason {
 
 /**
  * Classify a download failure by transport class. `true` means no HTTP
- * response at all (timeout, ERR_NETWORK, connection refused): the batch is
- * unproven. ANY HTTP status — 4xx included (e.g. the anticipated 404 "key
- * does not exist") — means the server answered, so the failure is
- * server-class. Deliberately NOT part of `classifyImagesErrorReason`: that
- * helper maps every 4xx to 'network' for the metadata path, semantics
- * consumed by `useResolveLifecycle.ts` and kept intact here.
+ * response at all (timeout, connection refused): the batch is unproven.
+ * ANY HTTP status — 4xx included (e.g. the anticipated 404 "key does not
+ * exist") — means the server answered, so the failure is server-class.
+ * `ImageDownloadError.networkFailure` carries the same semantics for the
+ * raw download transport.
  *
- * @param error Axios-style error (or anything) from a download request.
  * @returns Whether the failure is network-class.
  */
 function isNetworkClassFailure(error: unknown) {
-  const candidate = error as { response?: unknown; request?: { status?: unknown } } | null;
-  return candidate?.response == null && !(typeof candidate?.request?.status === 'number' && candidate.request.status > 0);
+  if (error instanceof ImageDownloadError) {
+    return error.networkFailure;
+  }
+  return true;
 };
 
 
@@ -309,103 +306,40 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }: {
 };
 
 /**
- * Download one image's bytes from its storage URL (backend or external).
- * Always `responseType: 'arraybuffer'` — the server serves raw bytes now;
- * pre-backfill base64 text objects arrive as an ArrayBuffer of ASCII and are
- * decoded downstream (magic-byte sniff first, legacy `data:image/` ASCII
- * prefix second). GET with `timeout: 15000`; auth headers are attached only
- * when the URL is backend-hosted (`usesBackendStorage`). Never throws. On
- * failure it `console.warn`s the URL + reason and resolves
- * `{ data: undefined, networkFailure }` where `networkFailure` is `true` only
- * when no HTTP response was received at all (`isNetworkClassFailure`); any
- * HTTP status — 4xx included — resolves `networkFailure: false` (the server
- * answered, so the failure is server-class).
- *
- * @returns `{ data, contentType, networkFailure: false }` on success;
- *   `{ data: undefined, networkFailure }` on failure.
- */
-async function getImageFromStorage({ storageUrl, token }: {
-  storageUrl: string;
-  token?: string | null;
-}): Promise<StorageDownload> {
-  console.log('getImageFromStorage');
-  const config: AxiosRequestConfig = usesBackendStorage(storageUrl)
-    ? { headers: setStorageDownloadHeaders(token), timeout: 15000, responseType: 'arraybuffer' }
-    : { timeout: 15000, responseType: 'arraybuffer' };
-  const imageResult = await axios.get(storageUrl, config)
-  .then((response) => {
-    //console.log("imageData response, getImageFromStorage");
-    return { data: response.data, contentType: response.headers?.['content-type'] as string | undefined, networkFailure: false };
-  }).catch((error) => {
-    const reason = error?.response?.status ?? error?.code ?? error?.message ?? 'unknown';
-    console.warn('getImageFromStorage failed', storageUrl, reason);
-    // if "The specified key does not exist" -> send server image is not in aws -> error
-    return { data: undefined, networkFailure: isNetworkClassFailure(error) };
-  });
-  return imageResult;
-};
-
-async function ensureDirExists(): Promise<void> {
-  Paths.cache.create({ idempotent: true, intermediates: true });
-};
-
-/**
- * Decode a downloaded storage payload (raw bytes, legacy base64 data-URL
- * text, or legacy `data:image/` ASCII ArrayBuffer) and persist it to the
- * cache dir as a file. Writes `<filename>.<ext>` under `Paths.cache` and
- * returns its `file://` uri. The extension comes from the response
- * `Content-Type` header when it names a known image type, otherwise from the
- * sniffed magic bytes (legacy data-URL prefix as last resort). Returns
- * `false` when the payload does not decode (caller treats falsy as "skip
- * this image"). Does not throw.
- *
- * @param imageData    Downloaded payload from `getImageFromStorage`.
- * @param contentType  Response `Content-Type` header.
- * @param filename     Filename stem (no extension).
- * @returns The written file's `file://` uri, or `false`.
- */
-async function extractImageFile(
-  imageData: ArrayBuffer | string | undefined,
-  contentType: string | undefined,
-  filename: string
-): Promise<string | false> {
-  console.log('extract image file filename', filename);
-
-  const decoded: DecodedImagePayload | null = decodeImagePayload(imageData, contentType);
-  if (!decoded) {
-    console.log(`${filename}: imageData did not decode`);
-    // send server error
-    return false;
-  };
-
-  // Create a new file path
-  await ensureDirExists();
-  const imageFile = new File(Paths.cache, `${filename}.${decoded.extension}`);
-  imageFile.write(decoded.base64, { encoding: 'base64' });
-
-  return imageFile.uri;
-
-};
-
-/**
- * Fetch one image's bytes and decode to a cached `file://` path. Composes
- * `getImageFromStorage` → `extractImageFile`. Does not throw. Resolves
- * `{ filePath, networkFailure }`: `filePath` is the cached file uri on
- * success, or `false` when the image did not decode — either the fetch
- * failed, or HTTP 200 returned a non-decodable payload (`extractImageFile`
- * false), which stays server-class because the fetch itself succeeded
- * (success path carries `networkFailure: false`). `networkFailure` is
- * meaningful only when `filePath` is falsy.
+ * Download one image's bytes from its storage URL (backend or external)
+ * straight to a cached file via the native expo-file-system download
+ * transport — raw bytes go network → disk and never cross the JS thread.
+ * Auth headers are attached only when the URL is backend-hosted
+ * (`usesBackendStorage`). Writes `<name>.<ext>` under `Paths.cache`; the
+ * extension comes from the response `Content-Type` header, falling back to
+ * the URL path extension. Never throws. On failure it `console.warn`s the
+ * URL + reason and resolves `{ filePath: false, networkFailure }` where
+ * `networkFailure` is `true` only when no HTTP response was received at
+ * all; any HTTP status — 4xx included — is server-class.
  *
  * @param image Metadata row with at least `storage_url` and `name`.
- * @param token Auth token forwarded to `getImageFromStorage`.
+ * @param token Auth token forwarded to backend-hosted downloads.
+ * @returns `{ filePath, networkFailure }`: the cached file uri on success,
+ *   `false` on failure (`networkFailure` meaningful only then).
  */
 async function handleImagesDownload(image: ImageMetadataRow, token: string): Promise<{ filePath: string | false; networkFailure: boolean }> {
   console.log('handleImagesDownload');
   console.log('image location', image.storage_url);
-  const { data, contentType, networkFailure } = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
-  const filePath = await extractImageFile(data, contentType, image.name);
-  return { filePath, networkFailure };
+  try {
+    const { fileUri } = await downloadImageFile({
+      url: image.storage_url,
+      directory: Paths.cache,
+      name: image.name,
+      headers: usesBackendStorage(image.storage_url) ? setStorageDownloadHeaders(token) : undefined,
+    });
+    return { filePath: fileUri, networkFailure: false };
+  } catch (error) {
+    const downloadError = error instanceof ImageDownloadError ? error : null;
+    const reason = downloadError?.status ?? downloadError?.message ?? (error as { message?: string })?.message ?? 'unknown';
+    console.warn('getImageFromStorage failed', image.storage_url, reason);
+    // if "The specified key does not exist" -> send server image is not in aws -> error
+    return { filePath: false, networkFailure: isNetworkClassFailure(error) };
+  };
 };
 
 export function buildImageObject(image: ImageMetadataRow, filePath: string) {
@@ -499,8 +433,8 @@ async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: st
  *        the batch is unproven so the cursor stays put for the next attempt,
  *        and retrying through the same dead transport would hammer it;
  *        return `{ isError: true, reason: 'network' }`;
- *      - 0 downloaded, all failures server-class (HTTP 4xx/5xx received, or
- *        HTTP 200 non-base64 payload) → "broken batch": CURSOR ADVANCE so the
+ *      - 0 downloaded, all failures server-class (HTTP 4xx/5xx received) →
+ *        "broken batch": CURSOR ADVANCE so the
  *        cursor never freezes on permanently missing files,
  *        `skippedBrokenBatches += 1`, loop continues (bounded: at most
  *        `MAX_EMPTY_DOWNLOAD_BATCHES` = 3 skips, then terminal
