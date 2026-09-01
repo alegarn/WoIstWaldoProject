@@ -1,21 +1,116 @@
-import axios from "axios";
+import axios from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
-import Image from "../models/image";
-import { setHeaders, getBackendHeaders } from "./auth";
-import { decodeImagePayload } from "./imageFormats";
+import Image from '../models/image';
+import { setHeaders, getBackendHeaders } from './auth';
+import { decodeImagePayload } from './imageFormats';
+import type { DecodedImagePayload } from './imageFormats';
 
 export { getBackendHeaders };
-import { saveLastImageUuid } from "./storageDatum";
-import { fetchPrivateFeedPageForGame } from "../services/groups/groupFeedApi";
+import { saveLastImageUuid } from './storageDatum';
+import { fetchPrivateFeedPageForGame } from '../services/groups/groupFeedApi';
 
-function isPrivateScope(scope) {
-  return scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
+export type GetImagesErrorReason = 'empty' | 'network' | 'server';
+
+export type GetImagesResult = {
+  isError: boolean;
+  /** Tagged outcome so callers can distinguish transient failures
+   * ('network', 'server') from a genuine exhausted feed ('empty'). Absent on
+   * the 401 path: the global apiClient unauthorized handler owns
+   * logout/navigation out-of-band (plan §5.3), so no 'auth' reason is ever
+   * emitted here. */
+  reason?: GetImagesErrorReason;
+  title?: string;
+  message?: string;
+  images?: Image[];
+};
+
+export type GetImagesFilters = {
+  category_id?: string;
+  category_key?: string;
+  language?: string;
+  scope?: { kind?: string; groupId?: string } | null;
+};
+
+type PrivateScope = { kind: 'private'; groupId: string };
+
+export type UploadPlan = {
+  provider?: string | null;
+  method?: string | null;
+  url?: string | null;
+  headers?: Record<string, string> | null;
+  image_key?: string | null;
+};
+
+export type ImageCategoryRow = {
+  id?: string | number;
+  key?: string;
+  name?: string;
+  thumbnail_url?: string | null;
+  sort_order?: number | null;
+  [key: string]: unknown;
+};
+
+export type ImageMetadataRow = {
+  name: string;
+  storage_url: string;
+  description?: string | null;
+  image_height?: number | null;
+  image_width?: number | null;
+  is_portrait?: boolean | null;
+  x_location?: number | null;
+  y_location?: number | null;
+  screen_height?: number | null;
+  screen_width?: number | null;
+  ratings_average?: number | null;
+  ratings_count?: number | null;
+  creator_username?: string | null;
+  created_at?: string | null;
+  full_description?: string | null;
+  language?: string | null;
+  category?: ImageCategoryRow | null;
+  [key: string]: unknown;
+};
+
+type AxiosLikeError = {
+  response?: { status?: number; data?: unknown };
+  request?: { status?: number };
+  code?: string;
+  message?: string;
+};
+
+export type BackendRequestOutcome = {
+  status?: number;
+  title?: string;
+  message?: string;
+  data?: unknown;
+};
+
+export type ImageUploadOptions = {
+  plan: UploadPlan;
+  fileUrl: string;
+  fileExtension?: string | null;
+  contentLength?: number | null;
+  context?: unknown;
+};
+
+type ImagesInfosFailure = { data: null; errorReason: GetImagesErrorReason };
+type ImagesInfosResponse = AxiosResponse | { data: 401 } | ImagesInfosFailure;
+
+type StorageDownload = {
+  data: ArrayBuffer | string | undefined;
+  contentType?: string;
+  networkFailure: boolean;
+};
+
+function isPrivateScope(scope: GetImagesFilters['scope']): scope is PrivateScope {
+  return !!scope && typeof scope === 'object' && scope.kind === 'private' && !!scope.groupId;
 }
 
 const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
-const BINARY_UPLOAD_METHODS = ["POST", "PUT", "PATCH"];
+const BINARY_UPLOAD_METHODS: string[] = ['POST', 'PUT', 'PATCH'];
 
-function normalizeUploadHeaders(headers) {
+function normalizeUploadHeaders(headers: Record<string, string | number | null | undefined>): Record<string, string> {
   return Object.fromEntries(
     Object.entries(headers)
       .filter(([, value]) => value != null)
@@ -23,61 +118,53 @@ function normalizeUploadHeaders(headers) {
   );
 };
 
-function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
+function setUploadHeaders({ plan, fileExtension, contentLength, token }: {
+  plan?: UploadPlan | null;
+  fileExtension?: string | null;
+  contentLength?: number | null;
+  token?: string | null;
+}): Record<string, string> {
 
-  const headers = {
-    "Content-Type": "image/" + fileExtension,
-    "Content-Length": contentLength,
+  const headers: Record<string, string | number | null | undefined> = {
+    'Content-Type': 'image/' + fileExtension,
+    'Content-Length': contentLength,
     ...plan?.headers,
   };
 
-  if (plan?.provider === "local_disk") {
+  if (plan?.provider === 'local_disk') {
     headers.Authorization = token;
   };
 
   return normalizeUploadHeaders(headers);
 };
 
-export function setStorageDownloadHeaders(token) {
+export function setStorageDownloadHeaders(token: string | null | undefined) {
   return {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
   };
 };
 
-export function usesBackendStorage(storageUrl) {
+export function usesBackendStorage(storageUrl: string) {
   const backendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
 
   return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
 };
 
-function errorType(status) {
+function errorType(status: number | undefined) {
   switch (status) {
     case 401:
-      return "Unauthorized, please try to reconnect";
+      return 'Unauthorized, please try to reconnect';
     case 500:
-      return "Internal server error, please wait and try again";
+      return 'Internal server error, please wait and try again';
     default:
-      return "Something went wrong, please try again later";
+      return 'Something went wrong, please try again later';
   };
 };
 
-/**
- * @typedef {'empty' | 'network' | 'server'} GetImagesErrorReason
- *
- * @typedef {Object} GetImagesResult
- * @property {boolean} isError
- * @property {GetImagesErrorReason} [reason] Tagged outcome so callers can
- *   distinguish transient failures ('network', 'server') from a genuine
- *   exhausted feed ('empty'). Absent on the 401 path: the global apiClient
- *   unauthorized handler owns logout/navigation out-of-band (plan §5.3), so
- *   no 'auth' reason is ever emitted here.
- * @property {string} [title]
- * @property {string} [message]
- * @property {Array} [images]
- */
-function classifyImagesErrorReason(error) {
-  const status = error?.response?.status ?? error?.request?.status;
+function classifyImagesErrorReason(error: unknown): GetImagesErrorReason {
+  const status = (error as { response?: { status?: number }; request?: { status?: number } })?.response?.status
+    ?? (error as { request?: { status?: number } })?.request?.status;
   if (typeof status === 'number' && status >= 500 && status <= 599) {
     return 'server';
   }
@@ -93,19 +180,23 @@ function classifyImagesErrorReason(error) {
  * helper maps every 4xx to 'network' for the metadata path, semantics
  * consumed by `useResolveLifecycle.ts` and kept intact here.
  *
- * @param {*} error Axios-style error (or anything) from a download request.
- * @returns {boolean} Whether the failure is network-class.
+ * @param error Axios-style error (or anything) from a download request.
+ * @returns Whether the failure is network-class.
  */
-function isNetworkClassFailure(error) {
-  return error?.response == null && !(typeof error?.request?.status === 'number' && error.request.status > 0);
+function isNetworkClassFailure(error: unknown) {
+  const candidate = error as { response?: unknown; request?: { status?: unknown } } | null;
+  return candidate?.response == null && !(typeof candidate?.request?.status === 'number' && candidate.request.status > 0);
 };
 
 
-export async function getUploadUrl(context) {
+export async function getUploadUrl(context: unknown): Promise<BackendRequestOutcome> {
   return prepareImageUpload(context);
 };
 
-export async function prepareImageUpload(context, { contentType, contentLength } = {}) {
+export async function prepareImageUpload(
+  context: unknown,
+  { contentType, contentLength }: { contentType?: string; contentLength?: number } = {}
+): Promise<BackendRequestOutcome> {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/aws_requests/get_secure_upload_url`;
   const { token } = await getBackendHeaders(context);
   const headers = setHeaders({ token });
@@ -122,13 +213,13 @@ export async function prepareImageUpload(context, { contentType, contentLength }
     .then((response) => {
       return response;
     }).catch((error) => {
-      console.log("error getUploadUrl", error);
+      console.log('error getUploadUrl', error);
       return { status: error?.response?.status ?? error?.request?.status, message: error.message, data: error?.response?.data };
     });
 
-  const title = response.status === 200 ? "" : errorType(response.status);
+  const title = response.status === 200 ? '' : errorType(response.status);
 
-  return { status: response.status, title: title, message: response.message, data: response.data};
+  return { status: response.status, title: title, message: (response as { message?: string }).message, data: response.data };
 };
 
 
@@ -139,25 +230,27 @@ export async function prepareImageUpload(context, { contentType, contentLength }
  * `timeout: 15000` on every request. Returns `{ data: 401 }` on auth failure
  * or `{ data: null, errorReason }` on other failures — never throws.
  *
- * @param {Object}  params
- * @param {Object}  params.config  Axios config (headers) to merge with timeout.
- * @param {string|number} params.userId Target user id.
- * @param {Object}  [params.filters] Optional `category_id` (private UUID),
- *   `category_key` (public bundled key), and `language` filters.
- * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
+ * @param config    Axios config (headers) to merge with timeout.
+ * @param userId    Target user id.
+ * @param filters   Optional `category_id` (private UUID), `category_key`
+ *   (public bundled key), and `language` filters.
  */
-async function getImagesInfos({ config, userId, filters }) {
+async function getImagesInfos({ config, userId, filters }: {
+  config: AxiosRequestConfig;
+  userId: string | number;
+  filters?: GetImagesFilters;
+}): Promise<ImagesInfosResponse> {
   //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
   const requestConfig = { ...config, timeout: 15000 };
-  const params = {};
+  const params: Record<string, string> = {};
   if (filters?.category_id != null) params.category_id = filters.category_id;
   if (filters?.category_key != null) params.category_key = filters.category_key;
   if (filters?.language != null) params.language = filters.language;
   if (Object.keys(params).length > 0) {
     requestConfig.params = { ...requestConfig.params, ...params };
   }
-  const response = await axios.get(url, requestConfig).then((response) => {
+  const response: ImagesInfosResponse = await axios.get(url, requestConfig).then((response) => {
     //console.log("response getImagesInfos", response);
     return response;
   }).catch((error) => {
@@ -177,19 +270,22 @@ async function getImagesInfos({ config, userId, filters }) {
  * (15000) and same `{ data: 401 }` / `{ data: null, errorReason }` error
  * contract as `getImagesInfos` — never throws.
  *
- * @param {Object}  params
- * @param {Object}  params.config    Axios config (headers) to merge with timeout.
- * @param {string|number} params.userId Target user id.
- * @param {string}  params.pictureId Keyset cursor: the `name` of the last
- *   image of the previous batch.
- * @param {Object}  [params.filters] Optional `category_id` (private UUID),
- *   `category_key` (public bundled key), and `language` filters.
- * @returns {Promise<{data: 401} | {data: null, errorReason: GetImagesErrorReason} | import('axios').AxiosResponse>}
+ * @param config    Axios config (headers) to merge with timeout.
+ * @param userId    Target user id.
+ * @param pictureId Keyset cursor: the `name` of the last image of the
+ *   previous batch.
+ * @param filters   Optional `category_id` (private UUID), `category_key`
+ *   (public bundled key), and `language` filters.
  */
-async function getNextImagesInfos({ config, userId, pictureId, filters }){
+async function getNextImagesInfos({ config, userId, pictureId, filters }: {
+  config: AxiosRequestConfig;
+  userId: string | number;
+  pictureId: string;
+  filters?: GetImagesFilters;
+}): Promise<ImagesInfosResponse> {
   //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
-  const imageBody = {
+  const imageBody: { name: string; category_id?: string; category_key?: string; language?: string } = {
     name: pictureId
   };
   if (filters?.category_id != null) imageBody.category_id = filters.category_id;
@@ -198,12 +294,12 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
   const imageData = {
     image: imageBody
   };
-  const response = await axios.post(url, imageData, { ...config, timeout: 15000 })
+  const response: ImagesInfosResponse = await axios.post(url, imageData, { ...config, timeout: 15000 })
     .then((response) => {
       //console.log("response getNextImagesInfos", response);
       return response;
     }).catch((error) => {
-      console.log("error getNextImagesInfos", error.request);
+      console.log('error getNextImagesInfos', error.request);
       if (error?.request?.status === 401 || error?.response?.status === 401) {
         return { data: 401 };
       }
@@ -225,32 +321,31 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
  * HTTP status — 4xx included — resolves `networkFailure: false` (the server
  * answered, so the failure is server-class).
  *
- * @param {Object} params
- * @param {string} params.storageUrl Absolute URL to fetch.
- * @param {string} [params.token]    Auth token, attached only for backend URLs.
- * @returns {Promise<{data: *, contentType: string|undefined, networkFailure: boolean}>}
- *   `{ data, contentType, networkFailure: false }` on success;
+ * @returns `{ data, contentType, networkFailure: false }` on success;
  *   `{ data: undefined, networkFailure }` on failure.
  */
-async function getImageFromStorage({ storageUrl, token }) {
-  console.log("getImageFromStorage");
-  const config = usesBackendStorage(storageUrl)
+async function getImageFromStorage({ storageUrl, token }: {
+  storageUrl: string;
+  token?: string | null;
+}): Promise<StorageDownload> {
+  console.log('getImageFromStorage');
+  const config: AxiosRequestConfig = usesBackendStorage(storageUrl)
     ? { headers: setStorageDownloadHeaders(token), timeout: 15000, responseType: 'arraybuffer' }
     : { timeout: 15000, responseType: 'arraybuffer' };
   const imageResult = await axios.get(storageUrl, config)
   .then((response) => {
     //console.log("imageData response, getImageFromStorage");
-    return { data: response.data, contentType: response.headers?.['content-type'], networkFailure: false };
+    return { data: response.data, contentType: response.headers?.['content-type'] as string | undefined, networkFailure: false };
   }).catch((error) => {
     const reason = error?.response?.status ?? error?.code ?? error?.message ?? 'unknown';
-    console.warn("getImageFromStorage failed", storageUrl, reason);
+    console.warn('getImageFromStorage failed', storageUrl, reason);
     // if "The specified key does not exist" -> send server image is not in aws -> error
     return { data: undefined, networkFailure: isNetworkClassFailure(error) };
   });
   return imageResult;
 };
 
-async function ensureDirExists() {
+async function ensureDirExists(): Promise<void> {
   Paths.cache.create({ idempotent: true, intermediates: true });
 };
 
@@ -264,15 +359,19 @@ async function ensureDirExists() {
  * `false` when the payload does not decode (caller treats falsy as "skip
  * this image"). Does not throw.
  *
- * @param {*}        imageData    Downloaded payload from `getImageFromStorage`.
- * @param {string}   [contentType] Response `Content-Type` header.
- * @param {string}   filename     Filename stem (no extension).
- * @returns {Promise<string|false>} The written file's `file://` uri, or `false`.
+ * @param imageData    Downloaded payload from `getImageFromStorage`.
+ * @param contentType  Response `Content-Type` header.
+ * @param filename     Filename stem (no extension).
+ * @returns The written file's `file://` uri, or `false`.
  */
-async function extractImageFile(imageData, contentType, filename) {
-  console.log("extract image file filename", filename);
+async function extractImageFile(
+  imageData: ArrayBuffer | string | undefined,
+  contentType: string | undefined,
+  filename: string
+): Promise<string | false> {
+  console.log('extract image file filename', filename);
 
-  const decoded = decodeImagePayload(imageData, contentType);
+  const decoded: DecodedImagePayload | null = decodeImagePayload(imageData, contentType);
   if (!decoded) {
     console.log(`${filename}: imageData did not decode`);
     // send server error
@@ -298,19 +397,18 @@ async function extractImageFile(imageData, contentType, filename) {
  * (success path carries `networkFailure: false`). `networkFailure` is
  * meaningful only when `filePath` is falsy.
  *
- * @param {Object} image Metadata row with at least `storage_url` and `name`.
- * @param {string} token Auth token forwarded to `getImageFromStorage`.
- * @returns {Promise<{filePath: string|false, networkFailure: boolean}>}
+ * @param image Metadata row with at least `storage_url` and `name`.
+ * @param token Auth token forwarded to `getImageFromStorage`.
  */
-async function handleImagesDownload(image, token) {
-  console.log("handleImagesDownload");
-  console.log("image location", image.storage_url);
+async function handleImagesDownload(image: ImageMetadataRow, token: string): Promise<{ filePath: string | false; networkFailure: boolean }> {
+  console.log('handleImagesDownload');
+  console.log('image location', image.storage_url);
   const { data, contentType, networkFailure } = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
   const filePath = await extractImageFile(data, contentType, image.name);
   return { filePath, networkFailure };
 };
 
-export function buildImageObject(image, filePath) {
+export function buildImageObject(image: ImageMetadataRow, filePath: string) {
   const imageObject = new Image(
     filePath,
     image.name,
@@ -354,14 +452,13 @@ export function buildImageObject(image, filePath) {
  * `isNetworkClassFailure`), so the caller can distinguish a server-broken
  * batch from a dead transport.
  *
- * @param {Array<Object>} imagesInfosData Batch of metadata rows.
- * @param {string}        token           Auth token for `getImageFromStorage`.
- * @returns {Promise<{images: Array<Object>, sawNetworkFailure: boolean}>}
- *   `images` holds only the successfully built `Image` objects;
+ * @param imagesInfosData Batch of metadata rows.
+ * @param token           Auth token for `getImageFromStorage`.
+ * @returns `images` holds only the successfully built `Image` objects;
  *   `sawNetworkFailure` is `true` when at least one failed download received
  *   no HTTP response.
  */
-async function downloadImageBatch(imagesInfosData, token) {
+async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: string): Promise<{ images: Image[]; sawNetworkFailure: boolean }> {
   let sawNetworkFailure = false;
   const downloadedImages = await Promise.all(
     imagesInfosData.map(async (image) => {
@@ -378,8 +475,8 @@ async function downloadImageBatch(imagesInfosData, token) {
     })
   );
 
-  return { images: downloadedImages.filter(Boolean), sawNetworkFailure };
-}
+  return { images: downloadedImages.filter((image): image is Image => Boolean(image)), sawNetworkFailure };
+};
 
 
 /**
@@ -409,21 +506,25 @@ async function downloadImageBatch(imagesInfosData, token) {
  *        `MAX_EMPTY_DOWNLOAD_BATCHES` = 3 skips, then terminal
  *        `{ isError: true, reason: 'server' }`).
  *
- * @param {string|null} pictureId Cursor: `name` of the last image of the
- *   previous page, or `null` for the first page.
- * @param {Object}      context   Auth context (forwarded to `getBackendHeaders`).
- * @param {Object}      [filters] Optional `{ category_id, language, category_key, scope }`.
- * @param {Object}      [opts]    Optional `{ persistCursor }` — transport flag;
+ * @param pictureId Cursor: `name` of the last image of the previous page, or
+ *   `null` for the first page.
+ * @param context   Auth context (forwarded to `getBackendHeaders`).
+ * @param filters   Optional `{ category_id, language, category_key, scope }`.
+ * @param opts      Optional `{ persistCursor }` — transport flag;
  *   `false` suppresses every `saveLastImageUuid` cursor write (head-replay
  *   guard, Fix 2a). Defaults to `true` (cursor advances as before).
- * @returns {Promise<GetImagesResult>}
  */
 // SRP tradeoff (Fix 2a, plan §2.5): `persistCursor` is a transport-persistence
 // concern riding this request function. Splitting cursor persistence out of
 // getImages was reviewed and deferred — the flag stays until that refactor.
-export async function getImages(pictureId, context, filters = {}, opts = {}) {
-  console.log("getImages");
-  console.log("getImages pictureId", pictureId);
+export async function getImages(
+  pictureId: string | null,
+  context: unknown,
+  filters: GetImagesFilters = {},
+  opts: { persistCursor?: boolean } = {}
+): Promise<GetImagesResult> {
+  console.log('getImages');
+  console.log('getImages pictureId', pictureId);
   const { persistCursor = true } = opts;
 
   if (isPrivateScope(filters?.scope)) {
@@ -455,24 +556,24 @@ export async function getImages(pictureId, context, filters = {}, opts = {}) {
   let skippedBrokenBatches = 0;
 
   while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES) {
-    const imagesInfos = nextPictureId === null
+    const imagesInfos: ImagesInfosResponse = nextPictureId === null
       ? await getImagesInfos({ config, userId, filters })
       : await getNextImagesInfos({ config, userId, pictureId: nextPictureId, filters });
 
     if (imagesInfos?.data === null) {
       return {
         isError: true,
-        reason: imagesInfos?.errorReason ?? 'server',
+        reason: (imagesInfos as ImagesInfosFailure).errorReason ?? 'server',
         title: "There is an error downloading user's images.",
-        message: "Please retry later..."
+        message: 'Please retry later...'
       };
     };
 
     if (imagesInfos?.data === 401) {
-      return { isError: true, title: "There is an authentication error.", message: "Please reconnect" };
+      return { isError: true, title: 'There is an authentication error.', message: 'Please reconnect' };
     };
 
-    const imagesInfosData = imagesInfos?.data?.data ?? [];
+    const imagesInfosData: ImageMetadataRow[] = imagesInfos?.data?.data ?? [];
 
     if (imagesInfosData.length === 0) {
       return { isError: false, reason: 'empty', images: [] };
@@ -493,7 +594,7 @@ export async function getImages(pictureId, context, filters = {}, opts = {}) {
         isError: true,
         reason: 'network',
         title: "There is an error downloading user's images.",
-        message: "Please retry later..."
+        message: 'Please retry later...'
       };
     }
 
@@ -508,7 +609,7 @@ export async function getImages(pictureId, context, filters = {}, opts = {}) {
     isError: true,
     reason: 'server',
     title: "There is an error downloading user's images.",
-    message: "Please retry later..."
+    message: 'Please retry later...'
   };
 };
 
@@ -526,11 +627,11 @@ export async function getImages(pictureId, context, filters = {}, opts = {}) {
 https://www.youtube.com/watch?v=eM1-YTBUFj4 */
 
 
-export async function saveImageToAws({ plan, fileUrl, fileExtension, contentLength, context }) {
-  return performImageUpload({ plan, fileUrl, fileExtension, contentLength, context });
+export async function saveImageToAws(options: ImageUploadOptions): Promise<BackendRequestOutcome> {
+  return performImageUpload(options);
 };
 
-export async function performImageUpload({ plan, fileUrl, fileExtension, contentLength, context }) {
+export async function performImageUpload({ plan, fileUrl, fileExtension, contentLength, context }: ImageUploadOptions): Promise<BackendRequestOutcome> {
   const { token } = await getBackendHeaders(context);
   const requestMethod = (plan?.method || 'PUT').toUpperCase();
 
@@ -545,7 +646,7 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
   };
 
   const headers = setUploadHeaders({ plan, fileExtension, contentLength, token });
-  console.log("performImageUpload", plan?.image_key);
+  console.log('performImageUpload', plan?.image_key);
 
   try {
     const uploadFile = new File(fileUrl);
@@ -554,24 +655,28 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
       throw new Error('Selected image file is no longer available.');
     }
 
-    console.log("upload file bytes", plan?.image_key, uploadFile.size);
+    console.log('upload file bytes', plan?.image_key, uploadFile.size);
+
+    if (!plan.url) {
+      throw new Error('Upload plan is missing its target URL.');
+    }
 
     const response = await uploadFile.upload(plan.url, {
-      httpMethod: requestMethod,
-      uploadType: UploadType.BINARY_CONTENT,
-      headers: headers,
-    })
+        httpMethod: requestMethod as 'POST' | 'PUT' | 'PATCH',
+        uploadType: UploadType.BINARY_CONTENT,
+        headers: headers,
+      })
       .then((response) => {
         if (response.status === 200) {
-          console.log("binary img upload ok", plan?.image_key);
+          console.log('binary img upload ok', plan?.image_key);
         } else {
-          console.log("binary img upload non-200", plan?.image_key, response.status);
+          console.log('binary img upload non-200', plan?.image_key, response.status);
         };
         return response;
       })
       .catch((error) => {
-        console.log("error binary img upload", error);
-        console.log("message", error.message);
+        console.log('error binary img upload', error);
+        console.log('message', error.message);
           return {
             status: error?.response?.status ?? error?.request?.status,
             message: error.message,
@@ -579,22 +684,28 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
           };
       });
 
-        const title = response.status === 200 ? "" : errorType(response.status);
+        const outcome = response as { status?: number; message?: string; body?: string };
+        const title = outcome.status === 200 ? '' : errorType(outcome.status);
 
-    return { status: response.status, title: title, message: response.message ?? response.body };
+    return { status: outcome.status, title: title, message: outcome.message ?? outcome.body };
 
   } catch (error) {
-    const title = errorType(error?.request?.status);
+    const failure = error as AxiosLikeError;
+    const title = errorType(failure?.request?.status);
     return {
-      status: error?.request?.status,
+      status: failure?.request?.status,
       title: title,
-      message: `Your file might not exist anymore but should be uploaded. You can continue to play. \nError:  ${error?.message }` };
+      message: `Your file might not exist anymore but should be uploaded. You can continue to play. \nError:  ${failure?.message }` };
   };
 
 };
 
 
-export async function saveImageInfos({ userId, imagesInfos, context }) {
+export async function saveImageInfos({ userId, imagesInfos, context }: {
+  userId: string | number;
+  imagesInfos: unknown;
+  context?: unknown;
+}): Promise<BackendRequestOutcome> {
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/images`;
   const { token } = await getBackendHeaders(context);
   const headers = setHeaders({ token });
@@ -608,16 +719,16 @@ export async function saveImageInfos({ userId, imagesInfos, context }) {
   const response = await axios
   .post(url, requestData, config)
   .then((response) => {
-    console.log("post", response);
+    console.log('post', response);
     return { status: 200 };
   })
-  .catch((error) => {
-    console.log("saveImageInfos error", error);
+  .catch((error: AxiosLikeError) => {
+    console.log('saveImageInfos error', error);
     return {
       status: error?.response?.status ?? error?.request?.status,
       message: error.message
     };
   });
-  const title = response.status === 200 ? "" : errorType(response.status);
-return { status: response.status, title: title, message: response.message };
+  const title = response.status === 200 ? '' : errorType(response.status);
+return { status: response.status, title: title, message: (response as { message?: string }).message };
 };

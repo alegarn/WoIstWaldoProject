@@ -1,20 +1,28 @@
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import { File, Paths } from 'expo-file-system';
 import { decodeImagePayload } from '../../utils/imageFormats';
+import type { DecodedImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
   getBackendHeaders,
 } from '../../utils/imagesRequests';
 
+export type ThumbnailCategory = {
+  thumbnail_image_id?: string | number | null;
+  thumbnail_url?: string | null;
+  [key: string]: unknown;
+};
+
 const THUMB_PREFIX = 'private-thumb-';
 const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg', 'heic', 'heif', 'gif'];
 
-function localThumbUri(groupId, id, ext) {
+function localThumbUri(groupId: string | number | null | undefined, id: string | number | null | undefined, ext: string) {
   return new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${id}.${ext}`).uri;
 }
 
-function localThumbExists(groupId, id, ext) {
+function localThumbExists(groupId: string | number | null | undefined, id: string | number | null | undefined, ext: string) {
   try {
     return !!new File(localThumbUri(groupId, id, ext)).exists;
   } catch {
@@ -22,7 +30,7 @@ function localThumbExists(groupId, id, ext) {
   }
 }
 
-function deriveExtFromUrl(url) {
+function deriveExtFromUrl(url: string): string | null {
   try {
     const u = new URL(url);
     const parts = u.pathname.split('.');
@@ -34,9 +42,12 @@ function deriveExtFromUrl(url) {
   return null;
 }
 
-const inFlight = new Map();
+const inFlight = new Map<string, Promise<string | null>>();
 
-async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
+async function doResolveCategoryThumbnail(
+  context: unknown,
+  { groupId, category }: { groupId?: string | number | null; category?: ThumbnailCategory | null } = {}
+): Promise<string | null> {
   const imageId = category?.thumbnail_image_id;
   if (!imageId) return null;
 
@@ -55,8 +66,8 @@ async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
     // best-effort
   }
 
-  let response;
-  let decoded = null;
+  let response: AxiosResponse | undefined;
+  let decoded: DecodedImagePayload | null = null;
   try {
     if (usesBackendStorage(presignedUrl)) {
       const { token } = await getBackendHeaders(context);
@@ -71,7 +82,7 @@ async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
         timeout: 15000,
       });
     }
-    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
+    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
   } catch {
     return presignedUrl;
   }
@@ -89,7 +100,10 @@ async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
   }
 }
 
-export function resolveCategoryThumbnail(context, { groupId, category } = {}) {
+export function resolveCategoryThumbnail(
+  context: unknown,
+  { groupId, category }: { groupId?: string | number | null; category?: ThumbnailCategory | null } = {}
+): Promise<string | null> {
   const imageId = category?.thumbnail_image_id;
   if (!imageId) return Promise.resolve(null);
 
@@ -100,14 +114,14 @@ export function resolveCategoryThumbnail(context, { groupId, category } = {}) {
   const existing = inFlight.get(key);
   if (existing) return existing;
 
-  const promise = doResolveCategoryThumbnail(context, { groupId, category }).finally(() => {
+  const promise: Promise<string | null> = doResolveCategoryThumbnail(context, { groupId, category }).finally(() => {
     if (inFlight.get(key) === promise) inFlight.delete(key);
   });
   inFlight.set(key, promise);
   return promise;
 }
 
-export function deleteCategoryThumbnailFile(groupId, id) {
+export function deleteCategoryThumbnailFile(groupId: string | number | null | undefined, id: string | number | null | undefined) {
   try {
     for (const ext of DELETE_EXTENSIONS) {
       const file = new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${id}.${ext}`);
@@ -118,7 +132,7 @@ export function deleteCategoryThumbnailFile(groupId, id) {
   }
 }
 
-export function clearGroupThumbnails(groupId) {
+export function clearGroupThumbnails(groupId: string | number | null | undefined) {
   try {
     const cacheDir = Paths.cache;
     const entries = typeof cacheDir?.list === 'function' ? cacheDir.list() : [];
@@ -128,7 +142,7 @@ export function clearGroupThumbnails(groupId) {
     for (const entry of entries) {
       const uri = typeof entry === 'string' ? entry : entry?.uri;
       const name = typeof uri === 'string' ? uri.split('/').pop() : '';
-      if (!name.startsWith(prefix)) continue;
+      if (!name || !name.startsWith(prefix)) continue;
 
       try {
         const file = new File(Paths.cache, name);

@@ -1,22 +1,26 @@
 import axios from 'axios';
+import type { AxiosResponse } from 'axios';
 import { File, Directory, Paths } from 'expo-file-system';
 import { decodeImagePayload } from '../../utils/imageFormats';
+import type { DecodedImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
   getBackendHeaders,
 } from '../../utils/imagesRequests';
 
-export const SLOTS = ['hide', 'find', 'ranking'];
+export type HomeBackgroundSlot = 'hide' | 'find' | 'ranking';
+
+export const SLOTS: readonly HomeBackgroundSlot[] = ['hide', 'find', 'ranking'];
 
 const HOME_BG_DIR = 'private-home-bg';
 const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg', 'heic', 'heif', 'gif'];
 
-function groupDir(groupId) {
+function groupDir(groupId: string | number | null | undefined) {
   return new Directory(Paths.cache, HOME_BG_DIR, String(groupId));
 }
 
-function localHomeBgFile(groupId, slot, imageId, ext) {
+function localHomeBgFile(groupId: string | number | null | undefined, slot: string | null | undefined, imageId: string | number | null | undefined, ext: string) {
   return new File(
     Paths.cache,
     HOME_BG_DIR,
@@ -25,11 +29,11 @@ function localHomeBgFile(groupId, slot, imageId, ext) {
   );
 }
 
-function localHomeBgUri(groupId, slot, imageId, ext) {
+function localHomeBgUri(groupId: string | number | null | undefined, slot: string | null | undefined, imageId: string | number | null | undefined, ext: string) {
   return localHomeBgFile(groupId, slot, imageId, ext).uri;
 }
 
-function localHomeBgExists(groupId, slot, imageId, ext) {
+function localHomeBgExists(groupId: string | number | null | undefined, slot: string | null | undefined, imageId: string | number | null | undefined, ext: string) {
   try {
     return !!localHomeBgFile(groupId, slot, imageId, ext).exists;
   } catch {
@@ -37,7 +41,7 @@ function localHomeBgExists(groupId, slot, imageId, ext) {
   }
 }
 
-function ensureGroupDir(groupId) {
+function ensureGroupDir(groupId: string | number | null | undefined) {
   const dir = groupDir(groupId);
   try {
     dir.create({ idempotent: true, intermediates: true });
@@ -54,7 +58,7 @@ function ensureGroupDir(groupId) {
   }
 }
 
-function normalizeExt(ext) {
+function normalizeExt(ext: string | null | undefined): string | null {
   if (typeof ext !== 'string' || !ext) return null;
   const trimmed = ext.replace(/^\./, '').toLowerCase();
   return /^[a-zA-Z0-9]{2,5}$/.test(trimmed) ? trimmed : null;
@@ -67,8 +71,15 @@ export async function resolveHomeBackground({
   imageId,
   fileExtension,
   url,
-}) {
-  if (!imageId || !SLOTS.includes(slot)) return null;
+}: {
+  context?: unknown;
+  groupId?: string | number | null;
+  slot?: string;
+  imageId?: string | number | null;
+  fileExtension?: string | null;
+  url?: string | null;
+}): Promise<string | null> {
+  if (!imageId || !SLOTS.includes(slot as HomeBackgroundSlot)) return null;
 
   const ext = normalizeExt(fileExtension);
 
@@ -81,8 +92,8 @@ export async function resolveHomeBackground({
   ensureGroupDir(groupId);
 
   const isBackend = usesBackendStorage(url);
-  let response;
-  let decoded = null;
+  let response: AxiosResponse | undefined;
+  let decoded: DecodedImagePayload | null = null;
   try {
     if (isBackend) {
       const { token } = await getBackendHeaders(context);
@@ -97,7 +108,7 @@ export async function resolveHomeBackground({
         timeout: 15000,
       });
     }
-    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
+    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
   } catch (err) {
     return isBackend ? null : url;
   }
@@ -115,7 +126,7 @@ export async function resolveHomeBackground({
   }
 }
 
-export function deleteHomeBackgroundFile(groupId, slot, imageId) {
+export function deleteHomeBackgroundFile(groupId: string | number | null | undefined, slot: string | null | undefined, imageId: string | number | null | undefined) {
   try {
     for (const ext of DELETE_EXTENSIONS) {
       const file = localHomeBgFile(groupId, slot, imageId, ext);
@@ -126,7 +137,7 @@ export function deleteHomeBackgroundFile(groupId, slot, imageId) {
   }
 }
 
-export function clearGroupHomeBackgrounds(groupId) {
+export function clearGroupHomeBackgrounds(groupId: string | number | null | undefined) {
   try {
     const dir = groupDir(groupId);
     if (!dir?.exists) return;

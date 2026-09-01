@@ -1,4 +1,5 @@
 import axios from 'axios';
+import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { File, Paths } from 'expo-file-system';
 import { decodeImagePayload } from '../../utils/imageFormats';
 import Image from '../../models/image';
@@ -7,35 +8,85 @@ import { saveLastImageUuid } from '../../utils/storageDatum';
 
 export const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
 
-function imagesUrl(groupId) {
+export type PrivateImageCategoryRow = {
+  id?: string | number | null;
+  key?: string | null;
+  name?: string | null;
+  [key: string]: unknown;
+};
+
+export type PrivateImageRow = {
+  id?: string | number | null;
+  name?: string | null;
+  storage_url?: string | null;
+  description?: string | null;
+  full_description?: string | null;
+  image_height?: number | null;
+  image_width?: number | null;
+  is_portrait?: boolean | null;
+  x_location?: number | null;
+  y_location?: number | null;
+  screen_height?: number | null;
+  screen_width?: number | null;
+  ratings_average?: number | null;
+  ratings_count?: number | null;
+  creator_username?: string | null;
+  created_at?: string | null;
+  language?: string | null;
+  category?: PrivateImageCategoryRow | null;
+  [key: string]: unknown;
+};
+
+export type PrivateFeedImagesPage = {
+  images: PrivateImageRow[];
+  nextCursor: string | null;
+};
+
+export type PrivateFeedPageResult = {
+  status?: number;
+  data?: PrivateFeedImagesPage;
+};
+
+export type PrivateFeedOutcome = {
+  isError: boolean;
+  images?: Image[];
+  title?: string;
+  message?: string;
+};
+
+function imagesUrl(groupId: string | number | null | undefined) {
   return `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/${groupId}/images`;
 }
 
-function setStorageDownloadHeaders(token) {
+function setStorageDownloadHeaders(token: string | null | undefined) {
   return {
     Authorization: token,
     HTTP_AUTHORIZATION: token,
   };
 }
 
-function usesBackendStorage(storageUrl) {
+function usesBackendStorage(storageUrl: string) {
   const backendUrl = process.env.EXPO_PUBLIC_APP_BACKEND_URL;
 
   return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
 }
 
-async function ensureDirExists() {
+async function ensureDirExists(): Promise<void> {
   Paths.cache.create({ idempotent: true, intermediates: true });
 }
 
-async function downloadImageToFile(url, imageId, token) {
-  const downloadConfig = usesBackendStorage(url)
+async function downloadImageToFile(
+  url: string,
+  imageId: string | number | null | undefined,
+  token: string | null | undefined
+): Promise<string | null> {
+  const downloadConfig: AxiosRequestConfig = usesBackendStorage(url)
     ? { headers: setStorageDownloadHeaders(token), responseType: 'arraybuffer', timeout: 15000 }
     : { responseType: 'arraybuffer', timeout: 15000 };
 
   try {
-    const response = await axios.get(url, downloadConfig);
-    const decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
+    const response: AxiosResponse = await axios.get(url, downloadConfig);
+    const decoded = decodeImagePayload(response?.data, response?.headers?.['content-type'] as string | undefined);
     if (!decoded) {
       return null;
     }
@@ -50,7 +101,7 @@ async function downloadImageToFile(url, imageId, token) {
   }
 }
 
-function normalizePrivateImage(row, filePath) {
+function normalizePrivateImage(row: PrivateImageRow, filePath: string) {
   const safeRow = {
     ...row,
     id: row?.id ?? row?.name,
@@ -92,9 +143,17 @@ function normalizePrivateImage(row, filePath) {
   return image;
 }
 
-export async function fetchPrivateFeedPage(context, { groupId, cursor, categoryId, language } = {}) {
+export async function fetchPrivateFeedPage(
+  context: unknown,
+  { groupId, cursor, categoryId, language }: {
+    groupId?: string | number | null;
+    cursor?: string | null;
+    categoryId?: string;
+    language?: string;
+  } = {}
+): Promise<PrivateFeedPageResult> {
   const { token } = await getBackendHeaders(context);
-  const config = {
+  const config: AxiosRequestConfig = {
     headers: setHeaders({ token }),
     params: {},
   };
@@ -122,7 +181,10 @@ export async function fetchPrivateFeedPage(context, { groupId, cursor, categoryI
   return { status: response.status, data: { images, nextCursor } };
 }
 
-export async function downloadPrivateImage(context, { groupId, imageId }) {
+export async function downloadPrivateImage(
+  context: unknown,
+  { groupId, imageId }: { groupId?: string | number | null; imageId?: string | number | null | undefined }
+): Promise<string | null> {
   const { token } = await getBackendHeaders(context);
   const presignUrl = `${imagesUrl(groupId)}/${imageId}`;
   const presignConfig = { headers: setHeaders({ token }) };
@@ -146,7 +208,10 @@ export async function downloadPrivateImage(context, { groupId, imageId }) {
   return downloadImageToFile(presignedUrl, imageId, token);
 }
 
-export async function downloadPrivateImageFromRow(context, { groupId, row }) {
+export async function downloadPrivateImageFromRow(
+  context: unknown,
+  { groupId, row }: { groupId?: string | number | null; row?: PrivateImageRow | null }
+): Promise<string | null> {
   const imageId = row?.id ?? row?.name;
   const storageUrl = row?.storage_url;
 
@@ -163,7 +228,17 @@ export async function downloadPrivateImageFromRow(context, { groupId, row }) {
   return downloadPrivateImage(context, { groupId, imageId });
 }
 
-export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey, persistCursor = true } = {}) {
+export async function fetchPrivateFeedPageForGame(
+  pictureId: string | null,
+  context: unknown,
+  { groupId, categoryId, language, categoryKey, persistCursor = true }: {
+    groupId?: string | number | null;
+    categoryId?: string;
+    language?: string;
+    categoryKey?: string | null;
+    persistCursor?: boolean;
+  } = {}
+): Promise<PrivateFeedOutcome> {
   if (pictureId === PRIVATE_FEED_END_CURSOR) {
     return { isError: false, images: [] };
   }
@@ -214,5 +289,5 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
     }),
   );
 
-  return { isError: false, images: downloaded.filter(Boolean) };
+  return { isError: false, images: downloaded.filter((image): image is Image => Boolean(image)) };
 }

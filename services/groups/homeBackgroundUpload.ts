@@ -7,7 +7,32 @@ import { performImageUpload } from '../../utils/imagesRequests';
 
 const MAX_WIDTH = 1080;
 
-export async function uploadHomeBackground({ context, groupId }) {
+type HomeBackgroundUploadPlan = {
+  imageId: string | number;
+  url?: string | null;
+  method?: string | null;
+  headers?: Record<string, string> | null;
+};
+
+type HomeBackgroundPresignOptions = {
+  context?: unknown;
+  groupId?: string | number | null;
+  kind: string;
+  fileExtension: string;
+  contentType: string;
+  contentLength: number;
+  isHomeButtonBackground: boolean;
+};
+
+// preparePrivateUpload lives in untyped groupUploadApi.js; this cast narrows
+// it to the options this service actually sends (absent fields default to
+// undefined at runtime). A groupUploadApi.d.ts should replace it eventually.
+const presignUpload = preparePrivateUpload as (options: HomeBackgroundPresignOptions) => Promise<{ status?: number; data?: HomeBackgroundUploadPlan } | undefined>;
+
+export async function uploadHomeBackground({ context, groupId }: {
+  context?: unknown;
+  groupId?: string | number | null;
+}): Promise<{ imageId: string | number } | null> {
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: true,
     aspect: [4, 3],
@@ -30,7 +55,7 @@ export async function uploadHomeBackground({ context, groupId }) {
   });
   const fileExtension = 'jpeg';
 
-  let contentLength;
+  let contentLength: number | null;
   try {
     contentLength = new File(saved.uri).size;
   } catch {
@@ -40,7 +65,7 @@ export async function uploadHomeBackground({ context, groupId }) {
     throw new Error('Could not determine rendered image size.');
   }
 
-  const presignResponse = await preparePrivateUpload({
+  const presignResponse = await presignUpload({
     context,
     groupId,
     kind: 'home-button-background',
@@ -53,7 +78,7 @@ export async function uploadHomeBackground({ context, groupId }) {
     throw new Error('Could not prepare upload.');
   }
 
-  const uploadPlan = presignResponse.data;
+  const uploadPlan = presignResponse.data as HomeBackgroundUploadPlan;
   const uploadResponse = await performImageUpload({
     plan: uploadPlan,
     fileUrl: saved.uri,
