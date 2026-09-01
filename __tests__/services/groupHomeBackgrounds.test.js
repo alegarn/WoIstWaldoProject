@@ -108,6 +108,16 @@ import { usesBackendStorage } from '../../utils/imagesRequests';
 
 const CONTEXT = { token: 'Bearer t', userId: 'u-1' };
 
+const PNG_MAGIC = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+
+const legacyDataUrlBytes = (text) => {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    bytes[i] = text.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+};
+
 describe('services/groups/groupHomeBackgrounds', () => {
   beforeEach(() => {
     axios.get.mockReset();
@@ -138,11 +148,10 @@ describe('services/groups/groupHomeBackgrounds', () => {
     expect(File.__state.writtenUris).toHaveLength(0);
   });
 
-  it('ensures the nested dir, downloads, and writes the file when missing', async () => {
+  it('ensures the nested dir, downloads as arraybuffer, and writes the file when missing', async () => {
     File.__state.existsOverride = false;
-    const bytes = new Uint8Array([1, 2, 3, 4]);
     axios.get.mockResolvedValue({
-      data: bytes,
+      data: PNG_MAGIC,
       headers: { 'content-type': 'image/png' },
     });
 
@@ -159,7 +168,7 @@ describe('services/groups/groupHomeBackgrounds', () => {
       'https://presigned.example.com/home/img-2.png',
       { responseType: 'arraybuffer', timeout: 15000 }
     );
-    expect(fromByteArray).toHaveBeenCalledWith(bytes);
+    expect(fromByteArray).toHaveBeenCalledWith(PNG_MAGIC);
     expect(uri).toEqual(
       expect.stringContaining('private-home-bg/g-1/find-img-2.png')
     );
@@ -169,9 +178,29 @@ describe('services/groups/groupHomeBackgrounds', () => {
     expect(File.__state.writtenUris).toHaveLength(1);
     expect(File.__state.writtenUris[0]).toEqual({
       uri: expect.stringContaining('private-home-bg/g-1/find-img-2.png'),
-      data: 'b64:4',
+      data: 'b64:12',
       options: { encoding: 'base64' },
     });
+  });
+
+  it('derives the file extension from the response content-type when no fileExtension is given', async () => {
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: PNG_MAGIC,
+      headers: { 'content-type': 'image/webp' },
+    });
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-1',
+      slot: 'find',
+      imageId: 'img-ct',
+      url: 'https://presigned.example.com/home/img-ct',
+    });
+
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-1/find-img-ct.webp')
+    );
   });
 
   it('falls back to the remote url when the download fails', async () => {
@@ -191,12 +220,11 @@ describe('services/groups/groupHomeBackgrounds', () => {
     expect(File.__state.writtenUris).toHaveLength(0);
   });
 
-  it('downloads from backend storage with text + data-url prefix stripping and writes the cached file', async () => {
+  it('downloads from backend storage as arraybuffer with legacy ASCII-prefix decode and writes the cached file', async () => {
     usesBackendStorage.mockReturnValue(true);
     File.__state.existsOverride = false;
-    const dataUrl = 'data:image/jpeg;base64,ChQe';
     axios.get.mockResolvedValue({
-      data: dataUrl,
+      data: legacyDataUrlBytes('data:image/jpeg;base64,ChQe'),
       headers: { 'content-type': 'text/plain' },
     });
 
@@ -213,7 +241,7 @@ describe('services/groups/groupHomeBackgrounds', () => {
       'https://api.example.com/storage/home/img-be-1.jpeg',
       {
         headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
-        responseType: 'text',
+        responseType: 'arraybuffer',
         timeout: 15000,
       }
     );
@@ -225,6 +253,40 @@ describe('services/groups/groupHomeBackgrounds', () => {
     expect(File.__state.writtenUris[0]).toEqual({
       uri: expect.stringContaining('private-home-bg/g-2/hide-img-be-1.jpeg'),
       data: 'ChQe',
+      options: { encoding: 'base64' },
+    });
+  });
+
+  it('C5: decodes a legacy gif data-url byte payload from backend storage', async () => {
+    usesBackendStorage.mockReturnValue(true);
+    File.__state.existsOverride = false;
+    axios.get.mockResolvedValue({
+      data: legacyDataUrlBytes('data:image/gif;base64,R0lGODlh'),
+      headers: { 'content-type': 'text/plain' },
+    });
+
+    const uri = await resolveHomeBackground({
+      context: CONTEXT,
+      groupId: 'g-2',
+      slot: 'find',
+      imageId: 'img-be-gif',
+      url: 'https://api.example.com/storage/home/img-be-gif',
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://api.example.com/storage/home/img-be-gif',
+      {
+        headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
+        responseType: 'arraybuffer',
+        timeout: 15000,
+      }
+    );
+    expect(uri).toEqual(
+      expect.stringContaining('private-home-bg/g-2/find-img-be-gif.gif')
+    );
+    expect(File.__state.writtenUris[0]).toEqual({
+      uri: expect.stringContaining('private-home-bg/g-2/find-img-be-gif.gif'),
+      data: 'R0lGODlh',
       options: { encoding: 'base64' },
     });
   });

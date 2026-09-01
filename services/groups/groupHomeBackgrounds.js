@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { File, Directory, Paths } from 'expo-file-system';
-import { fromByteArray } from 'base64-js';
+import { decodeImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
@@ -10,7 +10,7 @@ import {
 export const SLOTS = ['hide', 'find', 'ranking'];
 
 const HOME_BG_DIR = 'private-home-bg';
-const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg'];
+const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg', 'heic', 'heif', 'gif'];
 
 function groupDir(groupId) {
   return new Directory(Paths.cache, HOME_BG_DIR, String(groupId));
@@ -54,28 +54,6 @@ function ensureGroupDir(groupId) {
   }
 }
 
-function bytesFromArrayBufferLike(data) {
-  if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  if (ArrayBuffer.isView(data)) {
-    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  }
-  return null;
-}
-
-function extractBase64FromDataUrl(value) {
-  if (typeof value !== 'string') return null;
-  const match = value.match(/^data:image\/(?:png|jpe?g|gif|webp|heic|heif);base64,([\s\S]*)$/);
-  return match ? match[1] : null;
-}
-
-function extFromContentType(contentType) {
-  if (!contentType) return 'png';
-  const ct = contentType.split(';')[0].toLowerCase();
-  if (ct.includes('jpeg') || ct.includes('jpg')) return 'jpeg';
-  if (ct.includes('webp')) return 'webp';
-  return 'png';
-}
-
 function normalizeExt(ext) {
   if (typeof ext !== 'string' || !ext) return null;
   const trimmed = ext.replace(/^\./, '').toLowerCase();
@@ -104,36 +82,33 @@ export async function resolveHomeBackground({
 
   const isBackend = usesBackendStorage(url);
   let response;
-  let base64ToWrite = null;
+  let decoded = null;
   try {
     if (isBackend) {
       const { token } = await getBackendHeaders(context);
       response = await axios.get(url, {
         headers: setStorageDownloadHeaders(token),
-        responseType: 'text',
+        responseType: 'arraybuffer',
         timeout: 15000,
       });
-      base64ToWrite = extractBase64FromDataUrl(response?.data);
     } else {
       response = await axios.get(url, {
         responseType: 'arraybuffer',
         timeout: 15000,
       });
-      const bytes = bytesFromArrayBufferLike(response?.data);
-      base64ToWrite = bytes ? fromByteArray(bytes) : null;
     }
+    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
   } catch (err) {
     return isBackend ? null : url;
   }
 
-  if (!base64ToWrite) return isBackend ? null : url;
+  if (!decoded) return isBackend ? null : url;
 
-  const finalExt = ext || extFromContentType(response?.headers?.['content-type']);
-  if (!finalExt) return isBackend ? null : url;
+  const finalExt = ext || decoded.extension;
 
   try {
     const file = localHomeBgFile(groupId, slot, imageId, finalExt);
-    file.write(base64ToWrite, { encoding: 'base64' });
+    file.write(decoded.base64, { encoding: 'base64' });
     return file.uri;
   } catch (err) {
     return isBackend ? null : url;

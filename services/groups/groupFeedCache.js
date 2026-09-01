@@ -144,7 +144,7 @@ export async function clearAllGroupFeedExhaustedMarkers() {
 }
 
 // Private group feed images are written under Paths.cache with a `private-`
-// basename prefix (see services/groups/groupFeedApi.js extractBase64) so the
+// basename prefix (see services/groups/groupFeedApi.js downloadImageToFile) so the
 // purge below can target them without touching public cache files written by
 // utils/imagesRequests.js. Pre-existing private entries written before the
 // prefix was introduced are intentionally left alone and will age out.

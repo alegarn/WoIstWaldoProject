@@ -1,7 +1,8 @@
 import axios from "axios";
-import { File, Paths } from 'expo-file-system';
+import { File, Paths, UploadType } from 'expo-file-system';
 import Image from "../models/image";
 import { setHeaders, getBackendHeaders } from "./auth";
+import { decodeImagePayload } from "./imageFormats";
 
 export { getBackendHeaders };
 import { saveLastImageUuid } from "./storageDatum";
@@ -12,6 +13,15 @@ function isPrivateScope(scope) {
 }
 
 const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
+const BINARY_UPLOAD_METHODS = ["POST", "PUT", "PATCH"];
+
+function normalizeUploadHeaders(headers) {
+  return Object.fromEntries(
+    Object.entries(headers)
+      .filter(([, value]) => value != null)
+      .map(([name, value]) => [name, String(value)])
+  );
+};
 
 function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
 
@@ -23,10 +33,9 @@ function setUploadHeaders({ plan, fileExtension, contentLength, token }) {
 
   if (plan?.provider === "local_disk") {
     headers.Authorization = token;
-    headers.HTTP_AUTHORIZATION = token;
   };
 
-  return headers;
+  return normalizeUploadHeaders(headers);
 };
 
 export function setStorageDownloadHeaders(token) {
@@ -205,9 +214,12 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
 
 /**
  * Download one image's bytes from its storage URL (backend or external).
- * GET with `timeout: 15000`; auth headers are attached only when the URL is
- * backend-hosted (`usesBackendStorage`). Never throws. On failure it
- * `console.warn`s the URL + reason and resolves
+ * Always `responseType: 'arraybuffer'` — the server serves raw bytes now;
+ * pre-backfill base64 text objects arrive as an ArrayBuffer of ASCII and are
+ * decoded downstream (magic-byte sniff first, legacy `data:image/` ASCII
+ * prefix second). GET with `timeout: 15000`; auth headers are attached only
+ * when the URL is backend-hosted (`usesBackendStorage`). Never throws. On
+ * failure it `console.warn`s the URL + reason and resolves
  * `{ data: undefined, networkFailure }` where `networkFailure` is `true` only
  * when no HTTP response was received at all (`isNetworkClassFailure`); any
  * HTTP status — 4xx included — resolves `networkFailure: false` (the server
@@ -216,16 +228,19 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }){
  * @param {Object} params
  * @param {string} params.storageUrl Absolute URL to fetch.
  * @param {string} [params.token]    Auth token, attached only for backend URLs.
- * @returns {Promise<{data: *, networkFailure: boolean}>} `{ data, networkFailure: false }`
- *   on success; `{ data: undefined, networkFailure }` on failure.
+ * @returns {Promise<{data: *, contentType: string|undefined, networkFailure: boolean}>}
+ *   `{ data, contentType, networkFailure: false }` on success;
+ *   `{ data: undefined, networkFailure }` on failure.
  */
 async function getImageFromStorage({ storageUrl, token }) {
   console.log("getImageFromStorage");
-  const config = usesBackendStorage(storageUrl) ? { headers: setStorageDownloadHeaders(token), timeout: 15000 } : { timeout: 15000 };
+  const config = usesBackendStorage(storageUrl)
+    ? { headers: setStorageDownloadHeaders(token), timeout: 15000, responseType: 'arraybuffer' }
+    : { timeout: 15000, responseType: 'arraybuffer' };
   const imageResult = await axios.get(storageUrl, config)
   .then((response) => {
     //console.log("imageData response, getImageFromStorage");
-    return { data: response.data, networkFailure: false };
+    return { data: response.data, contentType: response.headers?.['content-type'], networkFailure: false };
   }).catch((error) => {
     const reason = error?.response?.status ?? error?.code ?? error?.message ?? 'unknown';
     console.warn("getImageFromStorage failed", storageUrl, reason);
@@ -235,56 +250,39 @@ async function getImageFromStorage({ storageUrl, token }) {
   return imageResult;
 };
 
-function verifyItsBase64(imageData) {
-  if (typeof imageData !== 'string') {
-    return false;
-  }
-
-  const base64Regex = /^data:image\/(png|jpeg|jpg|gif);base64,/;
-
-  if (base64Regex.test(imageData)) {
-    // Extract the base64 data
-    const base64Data = imageData.replace(base64Regex, '');
-    return base64Data;
-  } else {
-    console.log('The string is not a base64 image.');
-    return false;
-  };
-};
-
 async function ensureDirExists() {
   Paths.cache.create({ idempotent: true, intermediates: true });
 };
 
 /**
- * Decode a base64 data-URL and persist it to the cache dir as a file.
- * Writes `<filename>.<ext>` under `Paths.cache` and returns its `file://` uri.
- * Returns `false` when `imageData` is not a base64 data-URL (caller treats
- * falsy as "skip this image"). Does not throw.
+ * Decode a downloaded storage payload (raw bytes, legacy base64 data-URL
+ * text, or legacy `data:image/` ASCII ArrayBuffer) and persist it to the
+ * cache dir as a file. Writes `<filename>.<ext>` under `Paths.cache` and
+ * returns its `file://` uri. The extension comes from the response
+ * `Content-Type` header when it names a known image type, otherwise from the
+ * sniffed magic bytes (legacy data-URL prefix as last resort). Returns
+ * `false` when the payload does not decode (caller treats falsy as "skip
+ * this image"). Does not throw.
  *
- * @param {string|*} imageData The raw base64 data-URL from storage.
- * @param {string}   filename  Filename stem (no extension); extension is
- *   parsed from the data-URL prefix.
+ * @param {*}        imageData    Downloaded payload from `getImageFromStorage`.
+ * @param {string}   [contentType] Response `Content-Type` header.
+ * @param {string}   filename     Filename stem (no extension).
  * @returns {Promise<string|false>} The written file's `file://` uri, or `false`.
  */
-async function extractBase64(imageData, filename) {
-  console.log("extract base64 filename", filename);
+async function extractImageFile(imageData, contentType, filename) {
+  console.log("extract image file filename", filename);
 
-  const base64Data = verifyItsBase64(imageData);
-  if (!base64Data) {
-    console.log(`${filename}: imageData is not base64`);
+  const decoded = decodeImagePayload(imageData, contentType);
+  if (!decoded) {
+    console.log(`${filename}: imageData did not decode`);
     // send server error
     return false;
   };
 
-  const extension_matche = imageData.match(/^data:image\/(\w+);base64,/);
-  const fileExtension = extension_matche[1];
-  //console.log("fileExtension", fileExtension);
-
   // Create a new file path
   await ensureDirExists();
-  const imageFile = new File(Paths.cache, `${filename}.${fileExtension}`);
-  imageFile.write(base64Data, { encoding: 'base64' });
+  const imageFile = new File(Paths.cache, `${filename}.${decoded.extension}`);
+  imageFile.write(decoded.base64, { encoding: 'base64' });
 
   return imageFile.uri;
 
@@ -292,13 +290,13 @@ async function extractBase64(imageData, filename) {
 
 /**
  * Fetch one image's bytes and decode to a cached `file://` path. Composes
- * `getImageFromStorage` → `extractBase64`. Does not throw. Resolves
+ * `getImageFromStorage` → `extractImageFile`. Does not throw. Resolves
  * `{ filePath, networkFailure }`: `filePath` is the cached file uri on
  * success, or `false` when the image did not decode — either the fetch
- * failed, or HTTP 200 returned a non-base64 payload (`extractBase64` false),
- * which stays server-class because the fetch itself succeeded (success path
- * carries `networkFailure: false`). `networkFailure` is meaningful only when
- * `filePath` is falsy.
+ * failed, or HTTP 200 returned a non-decodable payload (`extractImageFile`
+ * false), which stays server-class because the fetch itself succeeded
+ * (success path carries `networkFailure: false`). `networkFailure` is
+ * meaningful only when `filePath` is falsy.
  *
  * @param {Object} image Metadata row with at least `storage_url` and `name`.
  * @param {string} token Auth token forwarded to `getImageFromStorage`.
@@ -307,8 +305,8 @@ async function extractBase64(imageData, filename) {
 async function handleImagesDownload(image, token) {
   console.log("handleImagesDownload");
   console.log("image location", image.storage_url);
-  const { data, networkFailure } = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
-  const filePath = await extractBase64(data, image.name);
+  const { data, contentType, networkFailure } = await getImageFromStorage({ storageUrl: image.storage_url, token: token });
+  const filePath = await extractImageFile(data, contentType, image.name);
   return { filePath, networkFailure };
 };
 
@@ -534,10 +532,9 @@ export async function saveImageToAws({ plan, fileUrl, fileExtension, contentLeng
 
 export async function performImageUpload({ plan, fileUrl, fileExtension, contentLength, context }) {
   const { token } = await getBackendHeaders(context);
-  const requestMethod = (plan?.method || 'PUT').toLowerCase();
-  const requestWithMethod = axios[requestMethod];
+  const requestMethod = (plan?.method || 'PUT').toUpperCase();
 
-  if (typeof requestWithMethod !== 'function') {
+  if (!BINARY_UPLOAD_METHODS.includes(requestMethod)) {
     const title = errorType(500);
 
     return {
@@ -550,13 +547,6 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
   const headers = setUploadHeaders({ plan, fileExtension, contentLength, token });
   console.log("performImageUpload", plan?.image_key);
 
-
-  const config = {
-    headers: headers,
-  };
-
-  //console.log("fileUrl", fileUrl);
-
   try {
     const uploadFile = new File(fileUrl);
 
@@ -566,17 +556,21 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
 
     console.log("upload file bytes", plan?.image_key, uploadFile.size);
 
-    const base64 = await uploadFile.base64();
-    console.log("upload base64 length", plan?.image_key, base64.length);
-    const response = await requestWithMethod(plan.url, `data:image/${fileExtension};base64,` + base64, config)
+    const response = await uploadFile.upload(plan.url, {
+      httpMethod: requestMethod,
+      uploadType: UploadType.BINARY_CONTENT,
+      headers: headers,
+    })
       .then((response) => {
         if (response.status === 200) {
-          console.log("post img base64 ok", Object.keys(response).filter((key) => key !== 'data'));
+          console.log("binary img upload ok", plan?.image_key);
+        } else {
+          console.log("binary img upload non-200", plan?.image_key, response.status);
         };
         return response;
       })
       .catch((error) => {
-        console.log("error axios img base64 upload", error);
+        console.log("error binary img upload", error);
         console.log("message", error.message);
           return {
             status: error?.response?.status ?? error?.request?.status,
@@ -587,7 +581,7 @@ export async function performImageUpload({ plan, fileUrl, fileExtension, content
 
         const title = response.status === 200 ? "" : errorType(response.status);
 
-    return { status: response.status, title: title, message: response.message };
+    return { status: response.status, title: title, message: response.message ?? response.body };
 
   } catch (error) {
     const title = errorType(error?.request?.status);

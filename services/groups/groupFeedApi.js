@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { File, Paths } from 'expo-file-system';
-import { fromByteArray } from 'base64-js';
+import { decodeImagePayload } from '../../utils/imageFormats';
 import Image from '../../models/image';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
@@ -24,38 +24,30 @@ function usesBackendStorage(storageUrl) {
   return typeof storageUrl === 'string' && typeof backendUrl === 'string' && storageUrl.startsWith(backendUrl);
 }
 
-function verifyItsBase64(imageData) {
-  if (typeof imageData !== 'string') {
-    return false;
-  }
-
-  const base64Regex = /^data:image\/(png|jpeg|jpg|gif);base64,/;
-
-  if (base64Regex.test(imageData)) {
-    return imageData.replace(base64Regex, '');
-  }
-
-  return false;
-}
-
 async function ensureDirExists() {
   Paths.cache.create({ idempotent: true, intermediates: true });
 }
 
-async function extractBase64(imageData, filename) {
-  const base64Data = verifyItsBase64(imageData);
-  if (!base64Data) {
-    return false;
+async function downloadImageToFile(url, imageId, token) {
+  const downloadConfig = usesBackendStorage(url)
+    ? { headers: setStorageDownloadHeaders(token), responseType: 'arraybuffer', timeout: 15000 }
+    : { responseType: 'arraybuffer', timeout: 15000 };
+
+  try {
+    const response = await axios.get(url, downloadConfig);
+    const decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
+    if (!decoded) {
+      return null;
+    }
+
+    await ensureDirExists();
+    const imageFile = new File(Paths.cache, `private-${imageId}.${decoded.extension}`);
+    imageFile.write(decoded.base64, { encoding: 'base64' });
+
+    return imageFile.uri;
+  } catch {
+    return null;
   }
-
-  const extensionMatch = imageData.match(/^data:image\/(\w+);base64,/);
-  const fileExtension = extensionMatch ? extensionMatch[1] : 'png';
-
-  await ensureDirExists();
-  const imageFile = new File(Paths.cache, `private-${filename}.${fileExtension}`);
-  imageFile.write(base64Data, { encoding: 'base64' });
-
-  return imageFile.uri;
 }
 
 function normalizePrivateImage(row, filePath) {
@@ -151,36 +143,24 @@ export async function downloadPrivateImage(context, { groupId, imageId }) {
     return null;
   }
 
-  const downloadConfig = usesBackendStorage(presignedUrl)
-    ? { headers: setStorageDownloadHeaders(token) }
-    : { responseType: 'arraybuffer', timeout: 15000 };
-  const downloadResponse = await axios.get(presignedUrl, downloadConfig)
-    .then((response) => response)
-    .catch(() => null);
+  return downloadImageToFile(presignedUrl, imageId, token);
+}
 
-  const downloadedData = downloadResponse?.data;
-  if (!downloadedData) {
-    return null;
-  }
+export async function downloadPrivateImageFromRow(context, { groupId, row }) {
+  const imageId = row?.id ?? row?.name;
+  const storageUrl = row?.storage_url;
 
-  let dataUrl;
-  if (typeof downloadedData === 'string') {
-    dataUrl = downloadedData;
-  } else {
-    const bytes = downloadedData instanceof ArrayBuffer
-      ? new Uint8Array(downloadedData)
-      : ArrayBuffer.isView(downloadedData)
-        ? new Uint8Array(downloadedData.buffer, downloadedData.byteOffset, downloadedData.byteLength)
-        : null;
-    if (!bytes) {
-      return null;
+  if (typeof storageUrl === 'string' && storageUrl.length > 0) {
+    const { token } = await getBackendHeaders(context);
+    const filePath = await downloadImageToFile(storageUrl, imageId, token);
+    if (filePath) {
+      return filePath;
     }
-    const contentType = downloadResponse.headers?.['content-type']?.split(';')[0] || 'image/png';
-    dataUrl = `data:${contentType};base64,${fromByteArray(bytes)}`;
+    // C7: presigned storage_url can be expired (~120s) when a cached feed
+    // list replays stale rows — fall back to the per-image presign endpoint.
   }
 
-  const extracted = extractBase64(dataUrl, imageId);
-  return extracted || null;
+  return downloadPrivateImage(context, { groupId, imageId });
 }
 
 export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId, categoryId, language, categoryKey, persistCursor = true } = {}) {
@@ -221,9 +201,9 @@ export async function fetchPrivateFeedPageForGame(pictureId, context, { groupId,
 
   const downloaded = await Promise.all(
     rows.map(async (row) => {
-      const filePath = await downloadPrivateImage(context, {
+      const filePath = await downloadPrivateImageFromRow(context, {
         groupId,
-        imageId: row?.id ?? row?.name,
+        row,
       });
 
       if (!filePath) {

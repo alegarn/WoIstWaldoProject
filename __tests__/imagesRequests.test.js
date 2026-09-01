@@ -1,6 +1,7 @@
 const mockBase64 = jest.fn();
 const mockWrite = jest.fn();
 const mockCreateCacheDirectory = jest.fn();
+const mockUpload = jest.fn();
 let mockFileExists = true;
 
 jest.mock('axios', () => ({
@@ -24,8 +25,10 @@ jest.mock('expo-file-system', () => ({
 
     this.uri = secondArg ? `${baseUri}${secondArg}` : baseUri;
     this.exists = mockFileExists;
+    this.size = 4096;
     this.base64 = mockBase64;
     this.write = mockWrite;
+    this.upload = mockUpload;
   }),
   Paths: class MockPaths {
     static get cache() {
@@ -35,10 +38,14 @@ jest.mock('expo-file-system', () => ({
       };
     }
   },
+  UploadType: {
+    BINARY_CONTENT: 0,
+    MULTIPART: 1,
+  },
 }));
 
 import axios from 'axios';
-import { File, Paths } from 'expo-file-system';
+import { File, Paths, UploadType } from 'expo-file-system';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { getImages, performImageUpload, prepareImageUpload, saveImageInfos, buildImageObject } from '../utils/imagesRequests';
@@ -61,6 +68,14 @@ const SERVER_ERROR_RESULT = {
   title: "There is an error downloading user's images.",
   message: 'Please retry later...',
 };
+const asciiBytes = (text) => {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i++) {
+    bytes[i] = text.charCodeAt(i) & 0xff;
+  }
+  return bytes;
+};
+const JPEG_MAGIC = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
 
 describe('imagesRequests utilities', () => {
   beforeEach(() => {
@@ -68,6 +83,7 @@ describe('imagesRequests utilities', () => {
     mockBase64.mockReset();
     mockWrite.mockReset();
     mockCreateCacheDirectory.mockReset();
+    mockUpload.mockReset();
     mockFileExists = true;
     process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
     getBackendHeaders.mockResolvedValue({
@@ -108,9 +124,8 @@ describe('imagesRequests utilities', () => {
     });
   });
 
-  it('uploads through the local provider with auth headers from the current session', async () => {
-    mockBase64.mockResolvedValueOnce('abc123');
-    axios.put.mockResolvedValueOnce({ status: 200, message: 'ok' });
+  it('uploads binary through File.upload with auth headers for the local_disk provider (no base64 read)', async () => {
+    mockUpload.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
 
     const response = await performImageUpload({
       plan: {
@@ -126,24 +141,180 @@ describe('imagesRequests utilities', () => {
       context: { token: 'Bearer token' },
     });
 
-    expect(axios.put).toHaveBeenCalledWith(
+    expect(File).toHaveBeenCalledWith('file:///waldo.png');
+    expect(mockBase64).not.toHaveBeenCalled();
+    expect(axios.put).not.toHaveBeenCalled();
+    expect(mockUpload).toHaveBeenCalledWith(
       'https://backend.example/api/v1/local_image_storage/image-key',
-      'data:image/png;base64,abc123',
       {
+        httpMethod: 'PUT',
+        uploadType: UploadType.BINARY_CONTENT,
         headers: {
           'Content-Type': 'image/png',
-          'Content-Length': 4096,
+          'Content-Length': '4096',
           Authorization: 'Bearer token',
-          HTTP_AUTHORIZATION: 'Bearer token',
         },
       }
     );
+    const uploadHeaders = mockUpload.mock.calls[0][1].headers;
+    expect(Object.values(uploadHeaders).every((value) => typeof value === 'string')).toBe(true);
+    expect(uploadHeaders['Content-Length']).toBe('4096');
     expect(response).toEqual({
       status: 200,
       title: '',
-      message: 'ok',
+      message: '',
     });
-    expect(File).toHaveBeenCalledWith('file:///waldo.png');
+  });
+
+  it('sends only the presigned headers (no Authorization) for the S3 provider', async () => {
+    mockUpload.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+
+    await performImageUpload({
+      plan: {
+        provider: 's3',
+        method: 'PUT',
+        url: 'https://s3.amazonaws.com/bucket/image-key',
+        headers: { 'x-amz-server-side-encryption': 'AES256' },
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 4096,
+      context: { token: 'Bearer token' },
+    });
+
+    expect(mockUpload).toHaveBeenCalledWith(
+      'https://s3.amazonaws.com/bucket/image-key',
+      {
+        httpMethod: 'PUT',
+        uploadType: UploadType.BINARY_CONTENT,
+        headers: {
+          'Content-Type': 'image/png',
+          'Content-Length': '4096',
+          'x-amz-server-side-encryption': 'AES256',
+        },
+      }
+    );
+    const uploadHeaders = mockUpload.mock.calls[0][1].headers;
+    expect(Object.values(uploadHeaders).every((value) => typeof value === 'string')).toBe(true);
+    expect(uploadHeaders).not.toHaveProperty('Authorization');
+    expect(uploadHeaders).not.toHaveProperty('HTTP_AUTHORIZATION');
+  });
+
+  it('coerces numeric header values (client Content-Length and server plan headers) to strings', async () => {
+    mockUpload.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+
+    await performImageUpload({
+      plan: {
+        provider: 's3',
+        method: 'PUT',
+        url: 'https://s3.amazonaws.com/bucket/image-key',
+        headers: { 'Content-Length': 392318, 'x-amz-meta-size': 12345 },
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 392318,
+      context: { token: 'Bearer token' },
+    });
+
+    const uploadHeaders = mockUpload.mock.calls[0][1].headers;
+    expect(Object.values(uploadHeaders).every((value) => typeof value === 'string')).toBe(true);
+    expect(uploadHeaders['Content-Length']).toBe('392318');
+    expect(uploadHeaders['x-amz-meta-size']).toBe('12345');
+  });
+
+  it('surfaces a non-2xx File.upload response like the old axios failure path', async () => {
+    mockUpload.mockResolvedValueOnce({ status: 422, body: 'InvalidUpload', headers: {} });
+
+    const response = await performImageUpload({
+      plan: {
+        provider: 'local_disk',
+        method: 'PUT',
+        url: 'https://backend.example/api/v1/local_image_storage/image-key',
+        headers: {},
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 4096,
+      context: { token: 'Bearer token' },
+    });
+
+    expect(response).toEqual({
+      status: 422,
+      title: 'Something went wrong, please try again later',
+      message: 'InvalidUpload',
+    });
+  });
+
+  it('maps a File.upload transport rejection to the error envelope', async () => {
+    mockUpload.mockRejectedValueOnce(new Error('Network request failed'));
+
+    const response = await performImageUpload({
+      plan: {
+        provider: 'local_disk',
+        method: 'PUT',
+        url: 'https://backend.example/api/v1/local_image_storage/image-key',
+        headers: {},
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 4096,
+      context: { token: 'Bearer token' },
+    });
+
+    expect(response.status).toBeUndefined();
+    expect(response.title).toBe('Something went wrong, please try again later');
+    expect(response.message).toBe('Network request failed');
+  });
+
+  it('returns the missing-file envelope when the local file vanished before upload', async () => {
+    mockFileExists = false;
+
+    const response = await performImageUpload({
+      plan: {
+        provider: 'local_disk',
+        method: 'PUT',
+        url: 'https://backend.example/api/v1/local_image_storage/image-key',
+        headers: {},
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 4096,
+      context: { token: 'Bearer token' },
+    });
+
+    expect(mockUpload).not.toHaveBeenCalled();
+    expect(response.status).toBeUndefined();
+    expect(response.message).toEqual(
+      expect.stringContaining('Your file might not exist anymore but should be uploaded')
+    );
+  });
+
+  it('rejects upload plans whose method is not a binary upload method', async () => {
+    const response = await performImageUpload({
+      plan: {
+        provider: 'local_disk',
+        method: 'GET',
+        url: 'https://backend.example/api/v1/local_image_storage/image-key',
+        headers: {},
+        image_key: 'image-key',
+      },
+      fileUrl: 'file:///waldo.png',
+      fileExtension: 'png',
+      contentLength: 4096,
+      context: { token: 'Bearer token' },
+    });
+
+    expect(response).toEqual({
+      status: 500,
+      title: 'Internal server error, please wait and try again',
+      message: 'Unsupported upload method: GET',
+    });
+    expect(mockUpload).not.toHaveBeenCalled();
   });
 
   it('returns an auth error when image batch loading is rejected with 401', async () => {
@@ -255,6 +426,7 @@ describe('imagesRequests utilities', () => {
           HTTP_AUTHORIZATION: 'Bearer token',
         },
         timeout: 15000,
+        responseType: 'arraybuffer',
       }
     );
     expect(File).toHaveBeenCalledWith(
@@ -271,6 +443,102 @@ describe('imagesRequests utilities', () => {
     );
     expect(response.isError).toBe(false);
     expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined);
+  });
+
+  it('downloads raw image bytes as arraybuffer and derives the extension from the Content-Type header', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              name: 'img-webp',
+              storage_url: 'https://backend.example/api/v1/local_image_storage/img-webp',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: JPEG_MAGIC,
+        headers: { 'content-type': 'image/webp' },
+      });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(axios.get).toHaveBeenNthCalledWith(
+      2,
+      'https://backend.example/api/v1/local_image_storage/img-webp',
+      {
+        headers: {
+          Authorization: 'Bearer token',
+          HTTP_AUTHORIZATION: 'Bearer token',
+        },
+        timeout: 15000,
+        responseType: 'arraybuffer',
+      }
+    );
+    expect(File).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: 'file:///cache/' }),
+      'img-webp.webp'
+    );
+    expect(mockWrite).toHaveBeenCalledWith(
+      expect.any(String),
+      { encoding: 'base64' }
+    );
+    expect(response.isError).toBe(false);
+  });
+
+  it('C8: decodes a legacy ASCII data-URL ArrayBuffer from storage byte-level', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              name: 'legacy-img',
+              storage_url: 'https://backend.example/api/v1/local_image_storage/legacy-img',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: asciiBytes('data:image/png;base64,AAEC').buffer,
+        headers: { 'content-type': 'text/plain' },
+      });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(File).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: 'file:///cache/' }),
+      'legacy-img.png'
+    );
+    expect(mockWrite).toHaveBeenCalledWith('AAEC', { encoding: 'base64' });
+    expect(response.isError).toBe(false);
+  });
+
+  it('C5: legacy gif data-URL objects stay decodable on the read path', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        data: {
+          data: [
+            {
+              name: 'gif-img',
+              storage_url: 'https://backend.example/api/v1/local_image_storage/gif-img',
+            },
+          ],
+        },
+      })
+      .mockResolvedValueOnce({
+        data: asciiBytes('data:image/gif;base64,R0lGODlh').buffer,
+        headers: { 'content-type': 'image/gif' },
+      });
+
+    const response = await getImages(null, { token: 'Bearer token' });
+
+    expect(File).toHaveBeenCalledWith(
+      expect.objectContaining({ uri: 'file:///cache/' }),
+      'gif-img.gif'
+    );
+    expect(mockWrite).toHaveBeenCalledWith('R0lGODlh', { encoding: 'base64' });
+    expect(response.isError).toBe(false);
   });
 
   it('skips a fully broken batch and continues to the next batch of playable images', async () => {

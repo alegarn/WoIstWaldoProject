@@ -71,6 +71,14 @@ import {
 } from '../../services/groups/groupCategoryThumbnails';
 
 const CONTEXT = { token: 'Bearer t', userId: 'u-1' };
+const PNG_MAGIC = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d]);
+const JPEG_MAGIC = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01]);
+const WEBP_MAGIC = new Uint8Array([
+  0x52, 0x49, 0x46, 0x46, 0x24, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50,
+]);
+const GIF89A_MAGIC = new Uint8Array([
+  0x47, 0x49, 0x46, 0x38, 0x39, 0x61, 0x0a, 0x00, 0x0a, 0x00, 0x80, 0x00,
+]);
 
 describe('services/groups/groupCategoryThumbnails', () => {
   beforeEach(() => {
@@ -81,7 +89,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
   it('downloads the presigned thumbnail as arraybuffer and writes a private-thumb file when the local file is absent', async () => {
     File.__state.existsOverride = false;
-    const bytes = new Uint8Array([1, 2, 3, 4]);
+    const bytes = PNG_MAGIC;
     axios.get.mockResolvedValue({
       data: bytes,
       headers: { 'content-type': 'image/png' },
@@ -104,7 +112,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
     expect(File.__state.writtenUris).toHaveLength(1);
     expect(File.__state.writtenUris[0]).toEqual({
       uri: expect.stringContaining('private-thumb-g-1-t-1.png'),
-      data: 'b64:4',
+      data: 'b64:12',
       options: { encoding: 'base64' },
     });
   });
@@ -126,7 +134,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
   it('falls back to content-type for the file extension when the presigned URL path has none', async () => {
     File.__state.existsOverride = false;
-    const bytes = new Uint8Array([5, 6, 7]);
+    const bytes = WEBP_MAGIC;
     axios.get.mockResolvedValue({
       data: bytes,
       headers: { 'content-type': 'image/webp' },
@@ -144,6 +152,32 @@ describe('services/groups/groupCategoryThumbnails', () => {
     expect(File.__state.writtenUris[0].uri).toEqual(
       expect.stringContaining('private-thumb-g-1-t-2.webp')
     );
+  });
+
+  it('decodes a raw gif arraybuffer served with Content-Type image/gif to a local gif file', async () => {
+    File.__state.existsOverride = false;
+    const bytes = GIF89A_MAGIC;
+    axios.get.mockResolvedValue({
+      data: bytes.slice().buffer,
+      headers: { 'content-type': 'image/gif' },
+    });
+
+    const uri = await resolveCategoryThumbnail(CONTEXT, {
+      groupId: 'g-1',
+      category: {
+        thumbnail_image_id: 't-gif',
+        thumbnail_url: 'https://presigned.example.com/thumbs/t-gif?sig=abc',
+      },
+    });
+
+    expect(uri).toEqual(expect.stringContaining('private-thumb-g-1-t-gif.gif'));
+    expect(fromByteArray).toHaveBeenCalledWith(bytes);
+    expect(File.__state.writtenUris).toHaveLength(1);
+    expect(File.__state.writtenUris[0]).toEqual({
+      uri: expect.stringContaining('private-thumb-g-1-t-gif.gif'),
+      data: 'b64:12',
+      options: { encoding: 'base64' },
+    });
   });
 
   it('returns null and skips the network when thumbnail_image_id is null', async () => {
@@ -186,7 +220,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
     File.__state.existsOverride = false;
     File.__state.writeError = new Error('disk full');
     axios.get.mockResolvedValue({
-      data: new Uint8Array([8, 9]),
+      data: JPEG_MAGIC,
       headers: { 'content-type': 'image/jpeg' },
     });
 
@@ -262,6 +296,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
         'https://backend.example.com/api/v1/local_image_storage/thumbs/t-backend.png',
         {
           headers: { Authorization: 'Bearer t', HTTP_AUTHORIZATION: 'Bearer t' },
+          responseType: 'arraybuffer',
           timeout: 15000,
         }
       );
@@ -307,7 +342,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
 
   it('shares a single network fetch between concurrent calls for the same group and image', async () => {
     File.__state.existsOverride = false;
-    const bytes = new Uint8Array([10, 11, 12]);
+    const bytes = PNG_MAGIC;
     let deferredResolve;
     axios.get.mockImplementation(
       () =>
@@ -345,7 +380,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
   it('serves the local file on the next sequential call after a successful download', async () => {
     File.__state.existsOverride = false;
     axios.get.mockResolvedValue({
-      data: new Uint8Array([13]),
+      data: PNG_MAGIC,
       headers: { 'content-type': 'image/png' },
     });
 
@@ -397,7 +432,7 @@ describe('services/groups/groupCategoryThumbnails', () => {
   it('fetches separately for the same image id under different group ids', async () => {
     File.__state.existsOverride = false;
     axios.get.mockResolvedValue({
-      data: new Uint8Array([14, 15]),
+      data: PNG_MAGIC,
       headers: { 'content-type': 'image/png' },
     });
 

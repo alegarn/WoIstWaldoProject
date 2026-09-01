@@ -30,14 +30,14 @@ export async function uploadHomeBackground({ context, groupId }) {
   });
   const fileExtension = 'jpeg';
 
-  let contentLength = asset.fileSize ?? 0;
+  let contentLength;
   try {
-    const renderedSize = new File(saved.uri).size;
-    if (renderedSize) {
-      contentLength = renderedSize;
-    }
+    contentLength = new File(saved.uri).size;
   } catch {
-    // fall back to original asset size
+    contentLength = null;
+  }
+  if (!contentLength) {
+    throw new Error('Could not determine rendered image size.');
   }
 
   const presignResponse = await preparePrivateUpload({

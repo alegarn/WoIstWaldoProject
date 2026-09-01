@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { File, Paths } from 'expo-file-system';
-import { fromByteArray } from 'base64-js';
+import { decodeImagePayload } from '../../utils/imageFormats';
 import {
   usesBackendStorage,
   setStorageDownloadHeaders,
@@ -8,7 +8,7 @@ import {
 } from '../../utils/imagesRequests';
 
 const THUMB_PREFIX = 'private-thumb-';
-const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg'];
+const DELETE_EXTENSIONS = ['png', 'jpeg', 'webp', 'jpg', 'heic', 'heif', 'gif'];
 
 function localThumbUri(groupId, id, ext) {
   return new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${id}.${ext}`).uri;
@@ -34,28 +34,6 @@ function deriveExtFromUrl(url) {
   return null;
 }
 
-function extFromContentType(contentType) {
-  if (!contentType) return 'png';
-  const ct = contentType.split(';')[0].toLowerCase();
-  if (ct.includes('jpeg') || ct.includes('jpg')) return 'jpeg';
-  if (ct.includes('webp')) return 'webp';
-  return 'png';
-}
-
-function bytesFromArrayBufferLike(data) {
-  if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  if (ArrayBuffer.isView(data)) {
-    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  }
-  return null;
-}
-
-function extractBase64FromDataUrl(value) {
-  if (typeof value !== 'string') return null;
-  const match = value.match(/^data:image\/(?:png|jpe?g|gif|webp|heic|heif);base64,([\s\S]*)$/);
-  return match ? match[1] : null;
-}
-
 const inFlight = new Map();
 
 async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
@@ -78,34 +56,33 @@ async function doResolveCategoryThumbnail(context, { groupId, category } = {}) {
   }
 
   let response;
-  let base64ToWrite = null;
+  let decoded = null;
   try {
     if (usesBackendStorage(presignedUrl)) {
       const { token } = await getBackendHeaders(context);
       response = await axios.get(presignedUrl, {
         headers: setStorageDownloadHeaders(token),
+        responseType: 'arraybuffer',
         timeout: 15000,
       });
-      base64ToWrite = extractBase64FromDataUrl(response?.data);
     } else {
       response = await axios.get(presignedUrl, {
         responseType: 'arraybuffer',
         timeout: 15000,
       });
-      const bytes = bytesFromArrayBufferLike(response?.data);
-      base64ToWrite = bytes ? fromByteArray(bytes) : null;
     }
+    decoded = decodeImagePayload(response?.data, response?.headers?.['content-type']);
   } catch {
     return presignedUrl;
   }
 
-  if (!base64ToWrite) return presignedUrl;
+  if (!decoded) return presignedUrl;
 
-  const finalExt = ext || extFromContentType(response?.headers?.['content-type']);
+  const finalExt = ext || decoded.extension;
 
   try {
     const file = new File(Paths.cache, `${THUMB_PREFIX}${groupId}-${imageId}.${finalExt}`);
-    file.write(base64ToWrite, { encoding: 'base64' });
+    file.write(decoded.base64, { encoding: 'base64' });
     return file.uri;
   } catch {
     return presignedUrl;

@@ -1,0 +1,5 @@
+{
+  "source": "Mirrors Storage::UploadConstraints in WoIstWaldoProjectApi/app/services/storage/upload_constraints.rb (READ-ONLY). Update both sides together when the server allowlist changes.",
+  "uploadContentTypes": ["image/webp", "image/jpeg", "image/jpg", "image/heic", "image/heif", "image/png"],
+  "decodeContentTypes": ["image/webp", "image/jpeg", "image/jpg", "image/heic", "image/heif", "image/png", "image/gif"]
+}
