@@ -20,9 +20,9 @@ import { handleOrientation } from '../../utils/orientation';
 
 // Language namespace contract (I6): an unset filter means NO server filter.
 // GuessPathScreen navigates with NAVIGATION_ANY_LANGUAGE ('any') when no stored
-// pick exists, and resolveServerLanguage (cardDeck.js) strips 'any' at the
+// pick exists, and resolveServerLanguage (cardDeck.ts) strips 'any' at the
 // server boundary — mirroring getSessionLanguageFilter's "unset" sentinel
-// (storageDatum.js). A hard 'en' default here made every unset query hit
+// (storageDatum.ts). A hard 'en' default here made every unset query hit
 // `WHERE language = 'en'` against fr/null rows → empty feed until manual reload.
 const DEFAULT_LANGUAGE = 'any';
 

@@ -635,6 +635,67 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
+    it('Task 1b: Tier-2 played-out empty does NOT write markCategoryExhausted (contrast: genuine empty still does)', async () => {
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: false, reason: 'played-out', images: [] } as never);
+
+      const result = await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(result.reason).toBe('ok');
+      // A played-out batch is NOT server-empty: the stale marker would
+      // permanently block category top-ups.
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+
+      // Contrast: a genuine 'empty' under the same tier shape still writes it.
+      markExhaustedMock.mockClear();
+      resolveMock.mockReset();
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
+
+      await resolveNextCardWithServerFallback(BASE_ARGS);
+
+      expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', BASE_ARGS.scope);
+    });
+
+    it('Task 6d: Tier-2 private-scope played-out does NOT write the scope-keyed exhausted marker (contrast: genuine empty still does)', async () => {
+      const privateArgs = {
+        ...BASE_ARGS,
+        category: { id: 'cat-private-uuid', key: 'cat-private-uuid' },
+        scope: { kind: 'private', groupId: 'g-1' },
+      };
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: false, reason: 'played-out', images: [] } as never);
+
+      await resolveNextCardWithServerFallback(privateArgs);
+
+      expect(markExhaustedMock).not.toHaveBeenCalled();
+
+      markExhaustedMock.mockClear();
+      resolveMock.mockReset();
+      resolveMock
+        .mockResolvedValueOnce(null as never)   // Tier 1
+        .mockResolvedValueOnce(null as never)   // Tier 2 recheck
+        .mockResolvedValueOnce(A_CARD_RESULT as never); // Tier 3 warmed 'all'
+      fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
+
+      await resolveNextCardWithServerFallback(privateArgs);
+
+      expect(markExhaustedMock).toHaveBeenCalledWith(
+        'cat-private-uuid',
+        'fr',
+        { kind: 'private', groupId: 'g-1' },
+      );
+    });
+
     it('(j) CC4 defensive pin: 5xx (r.isError=true → reason="server") does NOT write the exhausted cache', async () => {
       // Only the genuine-empty branch writes. A 5xx blip must not poison the
       // cache — otherwise a transient server error permanently marks a
@@ -1021,6 +1082,23 @@ describe('resolveNextCardWithServerFallback', () => {
       expect(startCycleMock).not.toHaveBeenCalled();
       // No bounded head retry — the indeterminate verdict stops Tier 4.
       expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+
+    it('Task 1b: probe verdict indeterminate/played-out → NO startNewServingCycle (no played-set wipe)', async () => {
+      // A played-out feed is not pool-global exhaustion: later probes may find
+      // unplayed rows (cap eviction, new uploads). The cycle transition (and
+      // its played-set wipe) must never fire on it.
+      resolveMock.mockResolvedValue(null as never);
+      fetchMock
+        .mockResolvedValueOnce({ isError: false, reason: 'played-out', images: [] } as never)  // Tier 2 (cursor)
+        .mockResolvedValueOnce({ isError: false, images: [{ listId: 1 }] } as never);          // Tier 4 head
+      probeMock.mockResolvedValue({ status: 'indeterminate', reason: 'played-out' } as never);
+
+      const result = await resolveNextCardWithServerFallback({ ...BASE_ARGS, category: { key: 'all' } });
+
+      expect(result.next).toBeNull();
+      expect(startCycleMock).not.toHaveBeenCalled();
+      expect(probeMock).toHaveBeenCalledTimes(1);
     });
 
     it('(l) probe receives (language, scope, excludePictureId=currentPictureId)', async () => {

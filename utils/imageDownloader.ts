@@ -75,6 +75,65 @@ function deleteFileQuietly(file: File): void {
   }
 }
 
+/**
+ * name → file uri index of FINAL `<name>.<ext>` files in a directory, built
+ * from ONE listing. Temp `<name>.download` partials are never indexed (a
+ * stale partial must not be treated as a hit); entries without a usable
+ * `name.ext` shape (directories like `ImagePicker`) are skipped too.
+ * Best-effort: an unreadable directory yields an empty index, so callers
+ * fall through to a fresh download.
+ */
+export type CachedFilesIndex = Map<string, string>;
+
+export function indexCachedFinalFiles(directory: Directory): CachedFilesIndex {
+  const index: CachedFilesIndex = new Map();
+  try {
+    const entries = typeof directory?.list === 'function' ? directory.list() : [];
+    if (!Array.isArray(entries)) {
+      return index;
+    }
+    for (const entry of entries) {
+      const uri = typeof entry === 'string' ? entry : entry?.uri;
+      if (typeof uri !== 'string' || uri.length === 0) {
+        continue;
+      }
+      const fileName = uri.slice(uri.lastIndexOf('/') + 1);
+      const parts = splitFinalFileName(fileName);
+      if (!parts) {
+        continue;
+      }
+      if (!index.has(parts.name)) {
+        index.set(parts.name, uri.includes('/') ? uri : new File(directory, fileName).uri);
+      }
+    }
+  } catch {
+    // best-effort: unreadable directory → empty index → downloads proceed
+  }
+  return index;
+}
+
+function splitFinalFileName(fileName: string): { name: string; extension: string } | null {
+  if (fileName.endsWith(`.${TEMPORARY_DOWNLOAD_EXTENSION}`)) {
+    return null;
+  }
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex <= 0) {
+    return null;
+  }
+  return { name: fileName.slice(0, dotIndex), extension: fileName.slice(dotIndex + 1) };
+}
+
+function cachedFileUri(directory: Directory, name: string, cachedFiles?: CachedFilesIndex | null): string | null {
+  if (cachedFiles) {
+    return cachedFiles.get(name) ?? null;
+  }
+  return indexCachedFinalFiles(directory).get(name) ?? null;
+}
+
+function deleteStaleTempFile(directory: Directory, name: string): void {
+  deleteFileQuietly(new File(directory, `${name}.${TEMPORARY_DOWNLOAD_EXTENSION}`));
+}
+
 function errorMessage(error: unknown): string {
   return (error as { message?: string })?.message ?? 'Network request failed';
 }
@@ -92,14 +151,34 @@ function errorMessage(error: unknown): string {
  * (`extensionForContentType`), then the URL path extension, then a sane
  * default. Throws `ImageDownloadError` on non-2xx (status preserved) and on
  * transport failures (status undefined, `networkFailure` true).
+ *
+ * Byte-cache guard (feed played-batch waste fix, Task 2a): BEFORE creating
+ * the directory or touching the network, an existing FINAL `<name>.*` file
+ * short-circuits the download — the existing uri is returned as-is. The
+ * extension is unknown up front, so matching is on the name prefix across
+ * any extension. Pass a batch-wide `cachedFiles` index (one directory
+ * listing per batch, see `indexCachedFinalFiles`) to avoid a per-image
+ * `list()`; without one the guard lists the directory itself (single-image
+ * callers: thumbnails, backgrounds, the private feed transport). Stale
+ * `<name>.download` partials are never hits and are deleted so a crashed
+ * download cannot shadow the next attempt.
  */
-export async function downloadImageFile({ url, directory, name, preferredExtension, headers }: {
+export async function downloadImageFile({ url, directory, name, preferredExtension, headers, cachedFiles }: {
   url: string;
   directory: Directory;
   name: string;
   preferredExtension?: string | null;
   headers?: Record<string, string> | null;
+  cachedFiles?: CachedFilesIndex | null;
 }): Promise<DownloadedImageFile> {
+  const existingUri = cachedFileUri(directory, name, cachedFiles);
+  if (existingUri != null) {
+    deleteStaleTempFile(directory, name);
+    const fileName = existingUri.slice(existingUri.lastIndexOf('/') + 1);
+    const extension = splitFinalFileName(fileName)?.extension ?? DEFAULT_IMAGE_EXTENSION;
+    return { fileUri: existingUri, extension };
+  }
+
   directory.create({ idempotent: true, intermediates: true });
 
   const tempFile = new File(directory, `${name}.${TEMPORARY_DOWNLOAD_EXTENSION}`);

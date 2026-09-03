@@ -53,6 +53,7 @@ jest.mock('../../utils/auth', () => ({
   })),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { downloadAsync } from 'expo-file-system/legacy';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';
@@ -432,5 +433,295 @@ describe('services/groups/groupFeedApi', () => {
     );
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
+  });
+});
+
+describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () => {
+  const GROUP_ARGS = { groupId: 'g-3', categoryKey: 'all', language: 'fr' };
+  const SCOPE = { kind: 'private', groupId: 'g-3' };
+
+  const row = (id) => ({
+    id,
+    name: id,
+    storage_url: `https://s3.amazonaws.com/bucket/private/${id}.jpg`,
+  });
+
+  const page = (rows, nextCursor) => ({
+    status: 200,
+    data: { images: rows, next_cursor: nextCursor },
+  });
+
+  const setGroupPlayed = (ids) => {
+    AsyncStorage.getItem.mockImplementation(async (key) =>
+      key === 'playedPictureIds:group:g-3:fr' ? JSON.stringify(ids) : null);
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getBackendHeaders.mockResolvedValue({ token: TOKEN, userId: 'user-1', scoreId: 'score-1' });
+    setHeaders.mockReturnValue(AUTH_HEADERS);
+    AsyncStorage.getItem.mockReset();
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  it('6a: downloads only unplayed rows (2 unplayed / 3 played) and persists the FULL server-batch tail cursor', async () => {
+    setGroupPlayed(['img-3', 'img-4', 'img-5']);
+    axios.get.mockResolvedValueOnce(
+      page([row('img-1'), row('img-2'), row('img-3'), row('img-4'), row('img-5')], 'cursor-2'),
+    );
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.imageFile)).toEqual([
+      'file:///cache/private-img-1.jpeg',
+      'file:///cache/private-img-2.jpeg',
+    ]);
+    expect(downloadAsync).toHaveBeenCalledTimes(2);
+    expect(downloadAsync).toHaveBeenNthCalledWith(
+      1,
+      'https://s3.amazonaws.com/bucket/private/img-1.jpg',
+      'file:///cache/private-img-1.download',
+      undefined,
+    );
+    expect(downloadAsync).toHaveBeenNthCalledWith(
+      2,
+      'https://s3.amazonaws.com/bucket/private/img-2.jpg',
+      'file:///cache/private-img-2.download',
+      undefined,
+    );
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', SCOPE);
+  });
+
+  it('6a: a row without name matches the played set by its id (normalizePrivateImage identity fallback)', async () => {
+    setGroupPlayed(['img-1']);
+    axios.get.mockResolvedValueOnce(page([{ ...row('img-1'), name: null }, row('img-2')], null));
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
+    expect(downloadAsync).toHaveBeenCalledWith(
+      'https://s3.amazonaws.com/bucket/private/img-2.jpg',
+      'file:///cache/private-img-2.download',
+      undefined,
+    );
+    expect(response.images).toHaveLength(1);
+  });
+
+  it('6b: all-played batch with nextCursor loops to the next page (full-tail cursor per iteration, no sentinel write until terminal)', async () => {
+    setGroupPlayed(['img-1', 'img-2']);
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1'), row('img-2')], 'cursor-2'))
+      .mockResolvedValueOnce(page([row('img-3')], 'cursor-3'));
+    downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.imageFile)).toEqual(['file:///cache/private-img-3.jpeg']);
+    expect(downloadAsync).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(2);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'cursor-3', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+  });
+
+  it('6b: all-played at the end of the feed (no nextCursor) persists the end sentinel and returns reason played-out with zero downloads', async () => {
+    setGroupPlayed(['img-1', 'img-2']);
+    axios.get.mockResolvedValueOnce(page([row('img-1'), row('img-2')], null));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    expect(downloadAsync).not.toHaveBeenCalled();
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+  });
+
+  it('6b: an empty page after played skips is played-out, not genuine-empty (a first empty page keeps NO reason)', async () => {
+    setGroupPlayed(['img-1']);
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockResolvedValueOnce(page([], null));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    expect(downloadAsync).not.toHaveBeenCalled();
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenLastCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+  });
+
+  it('6b: bound hit after MAX_PLAYED_SKIPS consecutive all-played pages returns played-out with full-tail cursor writes and no sentinel', async () => {
+    setGroupPlayed(['img-1', 'img-2', 'img-3', 'img-4', 'img-5', 'img-6']);
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockResolvedValueOnce(page([row('img-2')], 'cursor-3'))
+      .mockResolvedValueOnce(page([row('img-3')], 'cursor-4'))
+      .mockResolvedValueOnce(page([row('img-4')], 'cursor-5'))
+      .mockResolvedValueOnce(page([row('img-5')], 'cursor-6'))
+      .mockResolvedValueOnce(page([row('img-6')], 'cursor-7'));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    expect(downloadAsync).not.toHaveBeenCalled();
+    expect(axios.get).toHaveBeenCalledTimes(6);
+    expect(saveLastImageUuid).toHaveBeenCalledTimes(6);
+    expect(saveLastImageUuid).toHaveBeenLastCalledWith('cursor-7', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+  });
+
+  it('6d: persistCursor:false suppresses every cursor write on the played-out loop, including the terminal sentinel', async () => {
+    setGroupPlayed(['img-1']);
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockResolvedValueOnce(page([row('img-1')], null));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, { ...GROUP_ARGS, persistCursor: false });
+
+    expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    expect(downloadAsync).not.toHaveBeenCalled();
+    expect(saveLastImageUuid).not.toHaveBeenCalled();
+  });
+
+  it('6a: an unreadable played set fails open (batch downloads unfiltered)', async () => {
+    AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage boom'));
+    axios.get.mockResolvedValueOnce(page([row('img-1')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images).toHaveLength(1);
+  });
+});
+
+describe('Task 7c: private feed exclude param from group played set', () => {
+  const GROUP_ARGS = { groupId: 'g-3', categoryKey: 'all', language: 'fr' };
+  const IMAGES_URL = 'https://backend.example/api/v1/private_groups/g-3/images/';
+
+  const row = (id) => ({
+    id,
+    name: id,
+    storage_url: `https://s3.amazonaws.com/bucket/private/${id}.jpg`,
+  });
+
+  const page = (rows, nextCursor) => ({
+    status: 200,
+    data: { images: rows, next_cursor: nextCursor },
+  });
+
+  const setGroupPlayed = (ids) => {
+    AsyncStorage.getItem.mockImplementation(async (key) =>
+      key === 'playedPictureIds:group:g-3:fr' ? JSON.stringify(ids) : null);
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getBackendHeaders.mockResolvedValue({ token: TOKEN, userId: 'user-1', scoreId: 'score-1' });
+    setHeaders.mockReturnValue(AUTH_HEADERS);
+    AsyncStorage.getItem.mockReset();
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  it('7c: fetchPrivateFeedPage attaches excludeNames as a csv query param', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [row('img-1')], next_cursor: 'cursor-2' },
+    });
+
+    await fetchPrivateFeedPage(CONTEXT, {
+      groupId: 'g-3',
+      cursor: 'cursor-1',
+      categoryId: 'cat-5',
+      language: 'fr',
+      excludeNames: ['img-8', 'img-9'],
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { after: 'cursor-1', category_id: 'cat-5', language: 'fr', exclude: 'img-8,img-9' },
+    });
+  });
+
+  it('7c: fetchPrivateFeedPageForGame sends exclude=<csv> from the group played set on the page fetch', async () => {
+    setGroupPlayed(['img-8', 'img-9']);
+    axios.get.mockResolvedValueOnce(page([row('img-1')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(axios.get).toHaveBeenCalledWith(IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { language: 'fr', exclude: 'img-8,img-9' },
+    });
+  });
+
+  it('7c: exclude csv keeps only the most recent 200 played ids (PLAYED_PICTURE_IDS_CAP)', async () => {
+    const all = Array.from({ length: 205 }, (_, i) => `id-${String(i + 1).padStart(3, '0')}`);
+    setGroupPlayed(all);
+    axios.get.mockResolvedValueOnce(page([row('img-1')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    const params = axios.get.mock.calls[0][1].params;
+    expect(params.exclude.split(',')).toHaveLength(200);
+    expect(params.exclude).toBe(all.slice(-200).join(','));
+    expect(params.exclude).not.toContain('id-005');
+    expect(params.exclude).toContain('id-006');
+  });
+
+  it('7c: empty played set omits the exclude param entirely', async () => {
+    setGroupPlayed([]);
+    axios.get.mockResolvedValueOnce(page([row('img-1')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(axios.get).toHaveBeenCalledWith(IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { language: 'fr' },
+    });
+  });
+
+  it('7c: exclude rides every page iteration of the played-skip loop', async () => {
+    setGroupPlayed(['img-1']);
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockResolvedValueOnce(page([row('img-2')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(axios.get).toHaveBeenNthCalledWith(1, IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { language: 'fr', exclude: 'img-1' },
+    });
+    expect(axios.get).toHaveBeenNthCalledWith(2, IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { after: 'cursor-2', language: 'fr', exclude: 'img-1' },
+    });
+  });
+
+  it('7c: unreadable played set fails open with no exclude param', async () => {
+    AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage boom'));
+    axios.get.mockResolvedValueOnce(page([row('img-1')], null));
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images).toHaveLength(1);
+    expect(axios.get).toHaveBeenCalledWith(IMAGES_URL, {
+      headers: AUTH_HEADERS,
+      params: { language: 'fr' },
+    });
   });
 });

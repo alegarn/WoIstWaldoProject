@@ -797,6 +797,29 @@ describe('fetchCardBatch', () => {
     expect(getImages.mock.calls[0]).toHaveLength(3);
   });
 
+  it('Task 1b: forwards the played-out terminal reason unchanged (Tier-2/probe must see it, not a bare empty)', async () => {
+    getImages.mockResolvedValueOnce({ isError: false, reason: 'played-out', images: [] });
+
+    await expect(fetchCardBatch({
+      categoryKey: 'nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    })).resolves.toEqual({ isError: false, reason: 'played-out', images: [] });
+  });
+
+  it('Task 6d: private scope also forwards the played-out terminal reason unchanged (scope-generic contract)', async () => {
+    getImages.mockResolvedValueOnce({ isError: false, reason: 'played-out', images: [] });
+
+    await expect(fetchCardBatch({
+      categoryKey: 'cat-private-uuid',
+      categoryId: 'cat-private-uuid',
+      language: 'fr',
+      scope: { kind: 'private', groupId: 'g-1' },
+      authContext: { token: 't' },
+    })).resolves.toEqual({ isError: false, reason: 'played-out', images: [] });
+  });
+
   it('B2: PUBLIC "all" pseudo-category sends neither category_key nor category_id', async () => {
     await fetchCardBatch({
       categoryKey: 'all',

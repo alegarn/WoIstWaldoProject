@@ -2,6 +2,7 @@ const mockBase64 = jest.fn();
 const mockWrite = jest.fn();
 const mockCreateCacheDirectory = jest.fn();
 const mockUpload = jest.fn();
+const mockCacheList = jest.fn();
 let mockFileExists = true;
 
 jest.mock('axios', () => ({
@@ -39,6 +40,7 @@ jest.mock('expo-file-system', () => ({
       return {
         uri: 'file:///cache/',
         create: mockCreateCacheDirectory,
+        list: mockCacheList,
       };
     }
   },
@@ -52,6 +54,7 @@ jest.mock('expo-file-system/legacy', () => ({
   downloadAsync: jest.fn(),
 }));
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
 import { downloadAsync } from 'expo-file-system/legacy';
@@ -91,6 +94,8 @@ describe('imagesRequests utilities', () => {
     mockCreateCacheDirectory.mockReset();
     mockUpload.mockReset();
     mockFileExists = true;
+    mockCacheList.mockReset();
+    mockCacheList.mockReturnValue([]);
     process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
     getBackendHeaders.mockResolvedValue({
       token: 'Bearer token',
@@ -863,6 +868,233 @@ describe('imagesRequests utilities', () => {
       'https://backend.example/api/v1/users/42/get_image_batch',
       { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
     );
+  });
+
+  describe('Task 1 (Option B): pre-download played filter on the public path', () => {
+    const setPublicPlayed = (ids) => {
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:public:any' ? JSON.stringify(ids) : null);
+    };
+
+    beforeEach(() => {
+      AsyncStorage.getItem.mockReset();
+    });
+
+    it('downloads only unplayed rows and advances the cursor with the FULL batch tail (2 unplayed / 3 played)', async () => {
+      setPublicPlayed(['played-1', 'played-2', 'played-3']);
+      axios.get.mockResolvedValueOnce(batchResponse(['played-1', 'fresh-1', 'played-2', 'fresh-2', 'played-3']));
+      downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['fresh-1', 'fresh-2']);
+      expect(downloadAsync).toHaveBeenCalledTimes(2);
+      expect(downloadAsync).toHaveBeenNthCalledWith(
+        1,
+        'https://backend.example/api/v1/local_image_storage/fresh-1',
+        'file:///cache/fresh-1.download',
+        expect.anything()
+      );
+      expect(downloadAsync).toHaveBeenNthCalledWith(
+        2,
+        'https://backend.example/api/v1/local_image_storage/fresh-2',
+        'file:///cache/fresh-2.download',
+        expect.anything()
+      );
+      expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
+      expect(saveLastImageUuid).toHaveBeenCalledWith('played-3', undefined, undefined);
+    });
+
+    it('fetches the played set once per getImages call, not once per batch', async () => {
+      setPublicPlayed(['played-1']);
+      axios.get.mockResolvedValueOnce(batchResponse(['played-1']));
+      downloadAsync.mockResolvedValue(downloadResult({ contentType: 'image/png' }));
+      axios.post.mockResolvedValueOnce(batchResponse(['fresh-1']));
+
+      await getImages(null, { token: 'Bearer token' });
+
+      expect(AsyncStorage.getItem).toHaveBeenCalledTimes(1);
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:public:any');
+    });
+
+    it('all-played batch: no download, cursor advanced with the full tail, loop continues, terminal played-out after MAX_PLAYED_SKIPS', async () => {
+      setPublicPlayed(['img-1', 'img-2', 'img-3', 'img-4', 'img-5', 'img-6']);
+      axios.get.mockResolvedValueOnce(batchResponse(['img-1', 'img-2']));
+      axios.post
+        .mockResolvedValueOnce(batchResponse(['img-3']))
+        .mockResolvedValueOnce(batchResponse(['img-4']))
+        .mockResolvedValueOnce(batchResponse(['img-5']))
+        .mockResolvedValueOnce(batchResponse(['img-6']))
+        .mockResolvedValueOnce(batchResponse(['img-1']));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+      expect(downloadAsync).not.toHaveBeenCalled();
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledTimes(5);
+      expect(saveLastImageUuid).toHaveBeenCalledTimes(6);
+      expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-2', undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-3', undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenLastCalledWith('img-1', undefined, undefined);
+    });
+
+    it('persistCursor:false still pages forward in-memory past a played batch but suppresses every cursor write', async () => {
+      setPublicPlayed(['played-1']);
+      axios.get.mockResolvedValueOnce(batchResponse(['played-1']));
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+      axios.post.mockResolvedValueOnce(batchResponse(['fresh-1']));
+
+      const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['fresh-1']);
+      expect(saveLastImageUuid).not.toHaveBeenCalled();
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/next_image_batch',
+        { image: { name: 'played-1' }, exclude: 'played-1' },
+        { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
+      );
+    });
+
+    it('persistCursor:false suppresses cursor writes on the terminal played-out path too', async () => {
+      setPublicPlayed(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1']));
+      axios.post.mockResolvedValue(batchResponse(['p2']));
+
+      const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+      expect(saveLastImageUuid).not.toHaveBeenCalled();
+    });
+
+    it('an unreadable played set fails open (batch downloads unfiltered)', async () => {
+      AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage boom'));
+      axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['img-1']);
+    });
+
+    it('private scope path filters by the group played set (Task 6 ports the pre-download filter to the private feed)', async () => {
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:group:g-3:fr' ? JSON.stringify(['img-1']) : null);
+      axios.get.mockResolvedValueOnce({
+        status: 200,
+        data: {
+          images: [
+            { id: 'img-1', name: 'img-1', storage_url: 'https://s3.amazonaws.com/bucket/private/img-1.jpg' },
+            { id: 'img-2', name: 'img-2', storage_url: 'https://s3.amazonaws.com/bucket/private/img-2.jpg' },
+          ],
+          next_cursor: 'cursor-9',
+        },
+      });
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+      const response = await getImages(null, { token: 'Bearer token' }, {
+        category_id: 'cat-private-uuid',
+        language: 'fr',
+        scope: { kind: 'private', groupId: 'g-3' },
+      });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['img-2']);
+      expect(downloadAsync).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Task 2a (Option C): byte-cache guard on the public batch download', () => {
+    it('rows whose final file already exists produce no fetch call (one listing per batch)', async () => {
+      mockCacheList.mockReturnValue(['file:///cache/exists-1.png']);
+      axios.get.mockResolvedValueOnce(batchResponse(['exists-1', 'fresh-1']));
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['exists-1', 'fresh-1']);
+      expect(response.images[0].imageFile).toBe('file:///cache/exists-1.png');
+      expect(response.images[1].imageFile).toBe('file:///cache/fresh-1.jpeg');
+      expect(downloadAsync).toHaveBeenCalledTimes(1);
+      expect(downloadAsync).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/local_image_storage/fresh-1',
+        'file:///cache/fresh-1.download',
+        expect.anything()
+      );
+      expect(mockCacheList).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Task 4 (Option A): exclude param on public batch requests', () => {
+    const setPublicPlayed = (ids) => {
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:public:fr' ? JSON.stringify(ids) : null);
+    };
+
+    beforeEach(() => {
+      AsyncStorage.getItem.mockReset();
+    });
+
+    it('head GET: sends the played set as an exclude CSV query param when non-empty', async () => {
+      setPublicPlayed(['played-1', 'played-2']);
+      axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+      await getImages(null, { token: 'Bearer token' }, { language: 'fr' });
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/get_image_batch',
+        {
+          headers: { Authorization: 'Bearer token' },
+          params: { language: 'fr', exclude: 'played-1,played-2' },
+          timeout: 15000,
+        }
+      );
+    });
+    it('cursor POST: sends the exclude CSV top-level in the body alongside image[name]', async () => {
+      setPublicPlayed(['played-9']);
+      axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+      await getImages('first-img', { token: 'Bearer token' }, { language: 'fr' });
+
+      expect(axios.post).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/users/42/next_image_batch',
+        { image: { name: 'first-img', language: 'fr' }, exclude: 'played-9' },
+        { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
+      );
+    });
+    it('omits exclude entirely when the played set is empty (head and cursor paths)', async () => {
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+      await getImages(null, { token: 'Bearer token' }, { language: 'fr' });
+
+      expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('exclude');
+
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+      await getImages('first-img', { token: 'Bearer token' }, { language: 'fr' });
+
+      expect(axios.post.mock.calls[0][1]).not.toHaveProperty('exclude');
+    });
+
+    it('caps the exclude list at PLAYED_PICTURE_IDS_CAP, evicting the oldest ids', async () => {
+      setPublicPlayed(Array.from({ length: 205 }, (_, i) => `p-${i}`));
+      axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+      await getImages(null, { token: 'Bearer token' }, { language: 'fr' });
+
+      const exclude = axios.get.mock.calls[0][1].params.exclude;
+      const names = exclude.split(',');
+      expect(names).toHaveLength(200);
+      expect(names[0]).toBe('p-5');
+      expect(names).not.toContain('p-0');
+      expect(names[names.length - 1]).toBe('p-204');
+    });
   });
 
   it('posts image metadata with backend headers and maps request failures', async () => {

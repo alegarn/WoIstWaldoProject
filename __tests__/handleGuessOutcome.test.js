@@ -1,6 +1,6 @@
 import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
 import { bufferScore, mintGuessId } from '../utils/sessionScoreStore';
-import { removeImageFromList, deleteImageFromStorage } from '../utils/storageDatum';
+import { removeImageFromList, deleteImageFromStorage, sweepPlayedOrphanCacheFiles } from '../utils/storageDatum';
 import { addPlayedPictureId } from '../utils/playedPictureIds';
 
 jest.mock('../utils/sessionScoreStore', () => ({
@@ -10,6 +10,7 @@ jest.mock('../utils/sessionScoreStore', () => ({
 jest.mock('../utils/storageDatum', () => ({
   removeImageFromList: jest.fn().mockResolvedValue(),
   deleteImageFromStorage: jest.fn().mockResolvedValue(),
+  sweepPlayedOrphanCacheFiles: jest.fn().mockResolvedValue(),
 }));
 jest.mock('../utils/playedPictureIds', () => ({
   addPlayedPictureId: jest.fn(() => Promise.resolve()),
@@ -95,6 +96,29 @@ describe('applySuccessSideEffects', () => {
 
     expect(addPlayedPictureId).toHaveBeenCalledWith('pic-1', 'en', { kind: 'public' });
     expect(removeImageFromList).toHaveBeenCalledWith('list-1', 'animals', 'en');
+    expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///img.png');
+  });
+
+  it('Task 2b: a public win runs the played-orphan sweep after the winner file is deleted', async () => {
+    await applySuccessSideEffects(baseArgs);
+
+    expect(sweepPlayedOrphanCacheFiles).toHaveBeenCalledTimes(1);
+    expect(sweepPlayedOrphanCacheFiles).toHaveBeenCalledWith('en');
+    expect(deleteImageFromStorage.mock.invocationCallOrder[0])
+      .toBeLessThan(sweepPlayedOrphanCacheFiles.mock.invocationCallOrder[0]);
+  });
+
+  it('Task 2b: a private win skips the public sweep (private-* files are swept by purgeAllPrivateCaches)', async () => {
+    await applySuccessSideEffects({ ...baseArgs, scope: { kind: 'private', groupId: 'g-3' } });
+
+    expect(sweepPlayedOrphanCacheFiles).not.toHaveBeenCalled();
+  });
+
+  it('Task 2b: a sweep failure is best-effort (score kept, win already applied)', async () => {
+    sweepPlayedOrphanCacheFiles.mockRejectedValueOnce(new Error('sweep boom'));
+
+    await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+
     expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///img.png');
   });
 });

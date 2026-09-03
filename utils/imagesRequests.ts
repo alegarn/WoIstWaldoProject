@@ -3,21 +3,23 @@ import type { AxiosRequestConfig, AxiosResponse } from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
 import Image from '../models/image';
 import { setHeaders, getBackendHeaders } from './auth';
-import { downloadImageFile, ImageDownloadError } from './imageDownloader';
+import { downloadImageFile, ImageDownloadError, indexCachedFinalFiles } from './imageDownloader';
+import type { CachedFilesIndex } from './imageDownloader';
 
 export { getBackendHeaders };
 import { saveLastImageUuid } from './storageDatum';
+import { getPlayedPictureIds, PLAYED_PICTURE_IDS_CAP } from './playedPictureIds';
 import { fetchPrivateFeedPageForGame } from '../services/groups/groupFeedApi';
 
-export type GetImagesErrorReason = 'empty' | 'network' | 'server';
+export type GetImagesErrorReason = 'empty' | 'played-out' | 'network' | 'server';
 
 export type GetImagesResult = {
   isError: boolean;
   /** Tagged outcome so callers can distinguish transient failures
-   * ('network', 'server') from a genuine exhausted feed ('empty'). Absent on
-   * the 401 path: the global apiClient unauthorized handler owns
-   * logout/navigation out-of-band (plan §5.3), so no 'auth' reason is ever
-   * emitted here. */
+   * ('network', 'server') from a genuine exhausted feed ('empty') and a
+   * fully-played feed ('played-out'). Absent on the 401 path: the global
+   * apiClient unauthorized handler owns logout/navigation out-of-band
+   * (plan §5.3), so no 'auth' reason is ever emitted here. */
   reason?: GetImagesErrorReason;
   title?: string;
   message?: string;
@@ -101,6 +103,7 @@ function isPrivateScope(scope: GetImagesFilters['scope']): scope is PrivateScope
 }
 
 const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
+const MAX_PLAYED_SKIPS = 5;
 const BINARY_UPLOAD_METHODS: string[] = ['POST', 'PUT', 'PATCH'];
 
 function normalizeUploadHeaders(headers: Record<string, string | number | null | undefined>): Record<string, string> {
@@ -232,10 +235,11 @@ export async function prepareImageUpload(
  * @param filters   Optional `category_id` (private UUID), `category_key`
  *   (public bundled key), and `language` filters.
  */
-async function getImagesInfos({ config, userId, filters }: {
+async function getImagesInfos({ config, userId, filters, excludeNames }: {
   config: AxiosRequestConfig;
   userId: string | number;
   filters?: GetImagesFilters;
+  excludeNames?: string[];
 }): Promise<ImagesInfosResponse> {
   //console.log("getImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/get_image_batch`;
@@ -244,6 +248,7 @@ async function getImagesInfos({ config, userId, filters }: {
   if (filters?.category_id != null) params.category_id = filters.category_id;
   if (filters?.category_key != null) params.category_key = filters.category_key;
   if (filters?.language != null) params.language = filters.language;
+  if (excludeNames != null && excludeNames.length > 0) params.exclude = excludeNames.join(',');
   if (Object.keys(params).length > 0) {
     requestConfig.params = { ...requestConfig.params, ...params };
   }
@@ -274,11 +279,12 @@ async function getImagesInfos({ config, userId, filters }: {
  * @param filters   Optional `category_id` (private UUID), `category_key`
  *   (public bundled key), and `language` filters.
  */
-async function getNextImagesInfos({ config, userId, pictureId, filters }: {
+async function getNextImagesInfos({ config, userId, pictureId, filters, excludeNames }: {
   config: AxiosRequestConfig;
   userId: string | number;
   pictureId: string;
   filters?: GetImagesFilters;
+  excludeNames?: string[];
 }): Promise<ImagesInfosResponse> {
   //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
@@ -288,9 +294,10 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }: {
   if (filters?.category_id != null) imageBody.category_id = filters.category_id;
   if (filters?.category_key != null) imageBody.category_key = filters.category_key;
   if (filters?.language != null) imageBody.language = filters.language;
-  const imageData = {
+  const imageData: { image: typeof imageBody; exclude?: string } = {
     image: imageBody
   };
+  if (excludeNames != null && excludeNames.length > 0) imageData.exclude = excludeNames.join(',');
   const response: ImagesInfosResponse = await axios.post(url, imageData, { ...config, timeout: 15000 })
     .then((response) => {
       //console.log("response getNextImagesInfos", response);
@@ -322,7 +329,7 @@ async function getNextImagesInfos({ config, userId, pictureId, filters }: {
  * @returns `{ filePath, networkFailure }`: the cached file uri on success,
  *   `false` on failure (`networkFailure` meaningful only then).
  */
-async function handleImagesDownload(image: ImageMetadataRow, token: string): Promise<{ filePath: string | false; networkFailure: boolean }> {
+async function handleImagesDownload(image: ImageMetadataRow, token: string, cachedFiles: CachedFilesIndex): Promise<{ filePath: string | false; networkFailure: boolean }> {
   console.log('handleImagesDownload');
   console.log('image location', image.storage_url);
   try {
@@ -331,6 +338,7 @@ async function handleImagesDownload(image: ImageMetadataRow, token: string): Pro
       directory: Paths.cache,
       name: image.name,
       headers: usesBackendStorage(image.storage_url) ? setStorageDownloadHeaders(token) : undefined,
+      cachedFiles,
     });
     return { filePath: fileUri, networkFailure: false };
   } catch (error) {
@@ -394,9 +402,13 @@ export function buildImageObject(image: ImageMetadataRow, filePath: string) {
  */
 async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: string): Promise<{ images: Image[]; sawNetworkFailure: boolean }> {
   let sawNetworkFailure = false;
+  // Task 2a: ONE cache listing per batch feeds the byte-cache guard inside
+  // downloadImageFile — existing final files skip the network without a
+  // per-image list().
+  const cachedFiles = indexCachedFinalFiles(Paths.cache);
   const downloadedImages = await Promise.all(
     imagesInfosData.map(async (image) => {
-      const { filePath, networkFailure } = await handleImagesDownload(image, token);
+      const { filePath, networkFailure } = await handleImagesDownload(image, token, cachedFiles);
 
       if (!filePath) {
         if (networkFailure) {
@@ -417,7 +429,9 @@ async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: st
  * Main feed entry. Resolves one playable batch of images for the public feed
  * (private scopes are delegated to `fetchPrivateFeedPageForGame`).
  *
- * Bounded retry loop over metadata batches. Each iteration:
+ * Bounded retry loop over metadata batches. The played set is read ONCE
+ * before the loop (public scope only — private scopes delegate above). Each
+ * iteration:
  *   1. fetch metadata (`getImagesInfos` for the head / `getNextImagesInfos`
  *      for an "after cursor" batch keyed by the previous tail `name`);
  *   2. early returns: `data === null` → `{ isError: true, reason }`;
@@ -425,7 +439,14 @@ async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: st
  *      unauthorized handler owns logout/nav out-of-band);
  *      empty `imagesInfosData.length === 0` → `{ isError: false, reason:'empty',
  *      images: [] }` BEFORE any cursor write;
- *   3. download the batch (`downloadImageBatch`), then a three-way contract:
+ *   3. PRE-DOWNLOAD played filter: drop rows whose `name` is in the played
+ *      set BEFORE `downloadImageBatch`. If ALL rows are played: cursor
+ *      advance (`saveLastImageUuid`) with the FULL server-batch tail,
+ *      `skippedPlayedBatches += 1`, loop continues (bounded: at most
+ *      `MAX_PLAYED_SKIPS` = 5 skips, then terminal
+ *      `{ isError: false, reason: 'played-out', images: [] }` — NOT 'empty',
+ *      which Tier-2/probe treat as genuine server-empty);
+ *   4. download the batch (`downloadImageBatch`), then a three-way contract:
  *      - ≥1 image downloaded → CURSOR ADVANCE (`saveLastImageUuid`) AFTER the
  *        download, then return `{ isError: false, images }`;
  *      - 0 downloaded AND ≥1 failure network-class (no HTTP response at all:
@@ -486,13 +507,25 @@ export async function getImages(
     headers: headers,
   };
 
+  let playedPictureIds = new Set<string>();
+  let excludeNames: string[] = [];
+  try {
+    const played = await getPlayedPictureIds(filters?.language, filters?.scope);
+    playedPictureIds = new Set(played);
+    excludeNames = played.slice(-PLAYED_PICTURE_IDS_CAP);
+  } catch {
+    // Fail open: an unreadable played set must not block the feed (same
+    // contract as filterPlayedCards' catch in utils/playedPictureIds.ts).
+  }
+
   let nextPictureId = pictureId;
   let skippedBrokenBatches = 0;
+  let skippedPlayedBatches = 0;
 
-  while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES) {
+  while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES && skippedPlayedBatches <= MAX_PLAYED_SKIPS) {
     const imagesInfos: ImagesInfosResponse = nextPictureId === null
-      ? await getImagesInfos({ config, userId, filters })
-      : await getNextImagesInfos({ config, userId, pictureId: nextPictureId, filters });
+      ? await getImagesInfos({ config, userId, filters, excludeNames })
+      : await getNextImagesInfos({ config, userId, pictureId: nextPictureId, filters, excludeNames });
 
     if (imagesInfos?.data === null) {
       return {
@@ -514,7 +547,18 @@ export async function getImages(
     };
 
     const lastBatchPictureId = imagesInfosData[imagesInfosData.length - 1].name;
-    const { images, sawNetworkFailure } = await downloadImageBatch(imagesInfosData, token);
+    const unplayedRows = imagesInfosData.filter((image) => !playedPictureIds.has(image.name));
+
+    if (unplayedRows.length === 0) {
+      if (persistCursor) {
+        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+      }
+      skippedPlayedBatches += 1;
+      nextPictureId = lastBatchPictureId;
+      continue;
+    }
+
+    const { images, sawNetworkFailure } = await downloadImageBatch(unplayedRows, token);
 
     if (images.length > 0) {
       if (persistCursor) {
@@ -537,6 +581,10 @@ export async function getImages(
     }
     skippedBrokenBatches += 1;
     nextPictureId = lastBatchPictureId;
+  }
+
+  if (skippedPlayedBatches > MAX_PLAYED_SKIPS) {
+    return { isError: false, reason: 'played-out', images: [] };
   }
 
   return {

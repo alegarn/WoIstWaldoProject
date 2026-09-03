@@ -211,6 +211,42 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.has('imageList:all:fr')).toBe(false);
   });
 
+  it('Task 1b: a played-out terminal batch maps to indeterminate (never exhausted → no cycle reset, no played-set wipe)', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr': b1[4].pictureId,
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(batch('played-', 5))),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(mockGetImages).toHaveBeenCalledTimes(1);
+    expect(store.get('lastImageUuid:all:fr')).toBe(b1[4].pictureId);
+    expect(store.has('imageList:all:fr')).toBe(false);
+  });
+
+  it('Task 6d: private scope played-out maps to indeterminate too (no startNewServingCycle, played set kept)', async () => {
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const playedGroup = batch('gplayed-', 5);
+    const store = mockStore({
+      'groupFeed:g-1:game:all:fr:cursor': 'g-cursor-5',
+      'playedPictureIds:group:g-1:fr': JSON.stringify(pictureIds(playedGroup)),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(mockGetImages).toHaveBeenCalledTimes(1);
+    expect(store.get('playedPictureIds:group:g-1:fr')).toBe(JSON.stringify(pictureIds(playedGroup)));
+    expect(
+      mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:')),
+    ).toHaveLength(0);
+    expect(writeGroupFeedCache).not.toHaveBeenCalled();
+  });
+
   it('excludePictureId is excluded from the unplayed check (probe keeps draining past it)', async () => {
     const justPlayed = { pictureId: 'just-played', imageFile: 'file:///cache/just.jpg' };
     const store = mockStore({

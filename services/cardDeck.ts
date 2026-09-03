@@ -1,11 +1,78 @@
 import { getImages } from '../utils/imagesRequests';
+import type { GetImagesFilters } from '../utils/imagesRequests';
 import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
+import type { DeckWriteLockScope } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
 import { withScopeLock } from '../utils/scopeMutex';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from './groups/groupFeedApi';
 
-function normalizeLanguage(language) {
+export interface CardImage {
+  listId?: number;
+  pictureId?: string;
+  imageFile?: string;
+  [key: string]: unknown;
+}
+
+export interface FetchCardBatchArgs {
+  categoryKey?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: unknown;
+  authContext?: unknown;
+  pictureIdOverride?: string | null;
+}
+
+// Error-side `reason` is runtime-narrowed to the values getImages actually
+// emits ('network' | 'server' | absent); the old .d.ts said `unknown`.
+export type FetchCardBatchResult =
+  | { isError: true; title?: string; message?: string; reason?: 'network' | 'server' }
+  | { isError: false; reason?: 'empty' | 'played-out'; images: CardImage[] };
+
+export interface AppendCardBatchArgs {
+  cards?: CardImage[];
+  categoryKey?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: unknown;
+}
+
+export interface PersistCardBatchArgs {
+  cards?: CardImage[];
+  categoryKey?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: unknown;
+}
+
+export interface RemoveCardFromGroupDeckArgs {
+  groupId?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  listId?: number;
+}
+
+export interface ProbeAllPoolForUnplayedArgs {
+  language?: string | null;
+  scope?: unknown;
+  authContext?: unknown;
+  excludePictureId?: string;
+}
+
+export type ProbeAllPoolForUnplayedResult =
+  | { status: 'unplayed' }
+  | { status: 'exhausted' }
+  | { status: 'indeterminate'; reason?: 'network' | 'server' | 'probe-cap' | 'played-out' };
+
+type PrivateScope = { kind: 'private'; groupId: string };
+
+function isPrivateScope(scope: unknown): scope is PrivateScope {
+  return !!scope && typeof scope === 'object' &&
+    (scope as { kind?: unknown }).kind === 'private' &&
+    !!(scope as { groupId?: unknown }).groupId;
+}
+
+function normalizeLanguage(language?: string | null): string {
   return language || 'any';
 }
 
@@ -17,16 +84,12 @@ function normalizeLanguage(language) {
  * the server boundary, or every card query under a no-filter session returns
  * empty. Real codes ('en', 'fr', …) pass through untouched.
  */
-function resolveServerLanguage(language) {
+function resolveServerLanguage(language?: string | null): string | undefined {
   return language && language !== 'any' ? language : undefined;
 }
 
-function resolveCategoryId(categoryId) {
+function resolveCategoryId(categoryId?: string | number | null): string | number | null | undefined {
   return categoryId === 'all' ? undefined : categoryId;
-}
-
-function isPrivateScope(scope) {
-  return !!scope && scope.kind === 'private' && !!scope.groupId;
 }
 
 /**
@@ -44,7 +107,7 @@ function isPrivateScope(scope) {
  * base64 decode still repeated. Collapsing the callers onto one promise
  * eliminates the duplicate network round-trip at the source.
  */
-const fetchInFlight = new Map();
+const fetchInFlight = new Map<string, Promise<FetchCardBatchResult>>();
 
 /**
  * Build the dedup key for an in-flight fetchCardBatch call.
@@ -59,17 +122,22 @@ const fetchInFlight = new Map();
  * Consequence: two concurrent cursor calls for the same scope collapse onto
  * one promise; a cursor call and a head call do NOT (different batches).
  *
- * @param {object} args - { categoryKey, categoryId, language, scope, pictureIdOverride }
- * @returns {string} dedup key used by fetchInFlight
+ * @returns dedup key used by fetchInFlight
  */
-function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride }) {
+function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride }: {
+  categoryKey?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: unknown;
+  pictureIdOverride?: string | null;
+}): string {
   const lang = normalizeLanguage(language);
   const mode = pictureIdOverride === undefined
     ? 'cursor'
     : pictureIdOverride === null
       ? 'head'
       : `uuid:${pictureIdOverride}`;
-  let scopePart;
+  let scopePart: string;
   if (isPrivateScope(scope)) {
     scopePart = `private:${scope.groupId}:${resolveCategoryId(categoryId) ?? 'all'}`;
   } else {
@@ -96,10 +164,9 @@ function fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureI
  * Eliminates the duplicate network round-trip + base64 decode that previously
  * occurred when prefetch/top-up/loadNewImages fired near-simultaneously.
  *
- * @param {object} opts - { categoryKey, categoryId, language, scope, authContext, pictureIdOverride }
- * @returns {Promise<object>} backend batch response from getImages
+ * @returns backend batch response from getImages
  */
-export function fetchCardBatch({ categoryKey, categoryId, language, scope, authContext, pictureIdOverride } = {}) {
+export function fetchCardBatch({ categoryKey, categoryId, language, scope, authContext, pictureIdOverride }: FetchCardBatchArgs = {}): Promise<FetchCardBatchResult> {
   const key = fetchBatchDedupKey({ categoryKey, categoryId, language, scope, pictureIdOverride });
   const existing = fetchInFlight.get(key);
   if (existing) {
@@ -130,14 +197,17 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
     // head; the next non-empty batch overwrites the stale key with a real uuid.
     const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
 
+    // getImages' declared result is a loose `isError: boolean` interface; the
+    // runtime shapes coincide with the tagged union above (success ⇒ images
+    // array present, error ⇒ reason 'network'|'server'|absent).
     return getImages(
       effectivePictureId,
       authContext,
       buildFeedFilters({
         categoryKey, categoryId, language, scope,
       }),
-      ...(isHeadReplay ? [{ persistCursor: false }] : []),
-    );
+      ...(isHeadReplay ? [{ persistCursor: false }] as [{ persistCursor: boolean }] : []),
+    ) as unknown as Promise<FetchCardBatchResult>;
   })();
 
   fetchInFlight.set(key, p);
@@ -156,16 +226,20 @@ export function fetchCardBatch({ categoryKey, categoryId, language, scope, authC
  * `category_key` (bundled string key) and stopped sending `category_id`. The
  * 'all' pseudo-category sends neither key nor id (backend returns all).
  *
- * @param {object} args - { categoryKey, categoryId, language, scope }
- * @returns {object} filters object forwarded to getImages
+ * @returns filters object forwarded to getImages
  */
-function buildFeedFilters({ categoryKey, categoryId, language, scope }) {
-  const filters = {
+function buildFeedFilters({ categoryKey, categoryId, language, scope }: {
+  categoryKey?: string;
+  categoryId?: string | number | null;
+  language?: string | null;
+  scope?: unknown;
+}): GetImagesFilters {
+  const filters: GetImagesFilters = {
     language: resolveServerLanguage(language),
-    scope,
+    scope: scope as GetImagesFilters['scope'],
   };
   if (isPrivateScope(scope)) {
-    filters.category_id = resolveCategoryId(categoryId);
+    filters.category_id = resolveCategoryId(categoryId) as string | undefined;
     return filters;
   }
   if (categoryKey && categoryKey !== 'all') {
@@ -185,7 +259,7 @@ function buildFeedFilters({ categoryKey, categoryId, language, scope }) {
  * server proved the category non-empty regardless of local duplicates).
  * Fire-and-forget: the clear is advisory and must never reject the write path.
  */
-function clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope) {
+function clearExhaustedMarkerIfLanded(cards: unknown, categoryKey?: string | null, lang?: string | null, scope?: unknown): void {
   if (!(Array.isArray(cards) && cards.length > 0 && categoryKey && categoryKey !== 'all')) {
     return;
   }
@@ -198,10 +272,9 @@ function clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope) {
  * Returns the merged deck's normalized cards; callers (SwipeImage.handleData)
  * use the RETURN as the numbering source of truth (Fix 3 single-writer).
  *
- * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<Array<object>>} The normalized persisted cards.
+ * @returns The normalized persisted cards.
  */
-export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
+export async function persistCardBatch({ cards, categoryKey, categoryId, language, scope }: PersistCardBatchArgs = {}): Promise<CardImage[]> {
   const lang = normalizeLanguage(language);
   const normalized = normalizeListIds(Array.isArray(cards) ? cards : []);
   clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
@@ -209,7 +282,7 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
   if (isPrivateScope(scope)) {
     await writeGroupFeedCache(
       scope.groupId,
-      { categoryId: resolveCategoryId(categoryId), language: lang },
+      { categoryId: resolveCategoryId(categoryId) as string | undefined, language: lang },
       { images: normalized, nextCursor: null },
     );
     return normalized;
@@ -224,16 +297,15 @@ export async function persistCardBatch({ cards, categoryKey, categoryId, languag
  * write lock. Re-reads the PERSISTED deck inside the lock so a stale in-memory
  * component list cannot erase concurrently prefetched cards.
  *
- * @param {object} args - { groupId, categoryId, language, listId }
  * @returns {Promise<void>}
  */
-export async function removeCardFromGroupDeck({ groupId, categoryId, language, listId } = {}) {
+export async function removeCardFromGroupDeck({ groupId, categoryId, language, listId }: RemoveCardFromGroupDeckArgs = {}): Promise<void> {
   if (!groupId) {
     return;
   }
 
   const lang = normalizeLanguage(language);
-  const cid = resolveCategoryId(categoryId);
+  const cid = resolveCategoryId(categoryId) as string | undefined;
 
   await withScopeLock(
     deckWriteLockKey({ categoryId: cid, language: lang, scope: { kind: 'private', groupId } }),
@@ -259,7 +331,7 @@ export async function removeCardFromGroupDeck({ groupId, categoryId, language, l
  * but appends instead of overwriting). Dedups incoming cards against the
  * existing deck via dedupByPictureId, then serializes the read-modify-write
  * per scope under withScopeLock(deckWriteLockKey(...)) — the SHARED deck-write
- * lock (see utils/storageDatum.js#deckWriteLockKey). Without the lock, two
+ * lock (see utils/storageDatum.ts#deckWriteLockKey). Without the lock, two
  * concurrent appendCardBatch calls for the same scope would both read the
  * prior deck, each concat its own batch, and the later write wins → the
  * earlier batch is orphaned on disk and the deck stays empty. The append lock
@@ -269,21 +341,20 @@ export async function removeCardFromGroupDeck({ groupId, categoryId, language, l
  * Returns the merged deck; callers use it as the numbering source of truth
  * (Fix 3: the storage boundary is the SINGLE listId writer).
  *
- * @param {object} args - { cards, categoryKey, categoryId, language, scope }
- * @returns {Promise<Array<object>>} The new persisted deck (post-dedup/normalize).
+ * @returns The new persisted deck (post-dedup/normalize).
  */
-export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope } = {}) {
+export async function appendCardBatch({ cards, categoryKey, categoryId, language, scope }: AppendCardBatchArgs = {}): Promise<CardImage[]> {
   const lang = normalizeLanguage(language);
 
   return withScopeLock(
-    deckWriteLockKey({ categoryKey, categoryId, language: lang, scope }),
+    deckWriteLockKey({ categoryKey, categoryId, language: lang, scope: scope as DeckWriteLockScope }),
     async () => {
       clearExhaustedMarkerIfLanded(cards, categoryKey, lang, scope);
-      const incoming = await filterPlayedCards(cards, lang, scope);
+      const incoming = Array.isArray(cards) ? await filterPlayedCards(cards, lang, scope) : [];
       if (isPrivateScope(scope)) {
-        const cid = resolveCategoryId(categoryId);
+        const cid = resolveCategoryId(categoryId) as string | undefined;
         const existing = await readGroupFeedCache(scope.groupId, { categoryId: cid, language: lang });
-        const prior = existing?.images ?? [];
+        const prior = (existing?.images ?? []) as CardImage[];
         const deduped = dedupByPictureId(prior, incoming);
         const merged = normalizeListIds([...prior, ...deduped]);
         await writeGroupFeedCache(
@@ -312,7 +383,7 @@ export async function appendCardBatch({ cards, categoryKey, categoryId, language
  * Cards with no `pictureId` (legacy server payloads) pass through — there is
  * no key to dedup against, so dropping them would lose data.
  */
-function dedupByPictureId(prior, incoming) {
+function dedupByPictureId(prior: CardImage[], incoming: CardImage[]): CardImage[] {
   if (!Array.isArray(incoming) || incoming.length === 0) return [];
   const priorIds = new Set(
     Array.isArray(prior) ? prior.map((c) => c?.pictureId).filter(Boolean) : [],
@@ -351,13 +422,11 @@ export const PROBE_MAX_BATCHES = 20;
  * path writes that sentinel unsoundly, and clearing a feed-end marker never
  * rewinds a real cursor (I5 intact).
  *
- * @param {object} args - { language, scope, authContext, excludePictureId }
- * @param {string} [args.excludePictureId] - Just-played card, not yet in the
+ * @param excludePictureId - Just-played card, not yet in the
  *   played-set at advance time — excluded from the unplayed CHECK only (the
  *   full batch is still appended through appendCardBatch on success).
- * @returns {Promise<{status:'unplayed'}|{status:'exhausted'}|{status:'indeterminate', reason:string}>}
  */
-export async function probeAllPoolForUnplayed({ language, scope, authContext, excludePictureId } = {}) {
+export async function probeAllPoolForUnplayed({ language, scope, authContext, excludePictureId }: ProbeAllPoolForUnplayedArgs = {}): Promise<ProbeAllPoolForUnplayedResult> {
   const lang = normalizeLanguage(language);
 
   const cursor = await getLastImageUuid('all', lang, scope);
@@ -374,6 +443,9 @@ export async function probeAllPoolForUnplayed({ language, scope, authContext, ex
 
     const batch = Array.isArray(result.images) ? result.images : [];
     if (batch.length === 0) {
+      if (result.reason === 'played-out') {
+        return { status: 'indeterminate', reason: 'played-out' };
+      }
       return { status: 'exhausted' };
     }
 

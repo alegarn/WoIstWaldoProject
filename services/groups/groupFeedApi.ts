@@ -5,8 +5,11 @@ import Image from '../../models/image';
 import { downloadImageFile } from '../../utils/imageDownloader';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { saveLastImageUuid } from '../../utils/storageDatum';
+import { getPlayedPictureIds, PLAYED_PICTURE_IDS_CAP } from '../../utils/playedPictureIds';
 
 export const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
+
+const MAX_PLAYED_SKIPS = 5;
 
 export type PrivateImageCategoryRow = {
   id?: string | number | null;
@@ -49,6 +52,7 @@ export type PrivateFeedPageResult = {
 
 export type PrivateFeedOutcome = {
   isError: boolean;
+  reason?: 'played-out';
   images?: Image[];
   title?: string;
   message?: string;
@@ -137,11 +141,12 @@ function normalizePrivateImage(row: PrivateImageRow, filePath: string) {
 
 export async function fetchPrivateFeedPage(
   context: unknown,
-  { groupId, cursor, categoryId, language }: {
+  { groupId, cursor, categoryId, language, excludeNames }: {
     groupId?: string | number | null;
     cursor?: string | null;
     categoryId?: string;
     language?: string;
+    excludeNames?: string[];
   } = {}
 ): Promise<PrivateFeedPageResult> {
   const { token } = await getBackendHeaders(context);
@@ -153,6 +158,7 @@ export async function fetchPrivateFeedPage(
   if (cursor) config.params.after = cursor;
   if (categoryId) config.params.category_id = categoryId;
   if (language) config.params.language = language;
+  if (excludeNames != null && excludeNames.length > 0) config.params.exclude = excludeNames.join(',');
 
   const response = await axios.get(`${imagesUrl(groupId)}/`, config)
     .then((response) => ({ status: response.status, data: response.data }))
@@ -241,45 +247,85 @@ export async function fetchPrivateFeedPageForGame(
   // `lastImageUuid:*` namespace. Legacy unscoped private keys are dead (one
   // head-probe degradation after update, then the scoped cursor takes over).
   const cursorScope = { kind: 'private', groupId };
-  const response = await fetchPrivateFeedPage(context, {
-    groupId,
-    cursor: pictureId || null,
-    categoryId,
-    language,
-  });
-
-  if (response.status !== 200) {
-    return { isError: true, title: 'Failed to load private images.', message: 'Please retry later...' };
+  let playedPictureIds = new Set<string | number>();
+  let excludeNames: string[] = [];
+  try {
+    const played = await getPlayedPictureIds(language, cursorScope);
+    playedPictureIds = new Set(played);
+    excludeNames = played.slice(-PLAYED_PICTURE_IDS_CAP);
+  } catch {
   }
 
-  const rows = response.data?.images ?? [];
-  const nextCursor = response.data?.nextCursor ?? null;
+  let cursor = pictureId || null;
+  let skippedPlayedBatches = 0;
 
-  if (rows.length === 0) {
-    if (persistCursor) {
-      await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+  for (;;) {
+    const response = await fetchPrivateFeedPage(context, {
+      groupId,
+      cursor,
+      categoryId,
+      language,
+      excludeNames,
+    });
+
+    if (response.status !== 200) {
+      return { isError: true, title: 'Failed to load private images.', message: 'Please retry later...' };
     }
-    return { isError: false, images: [] };
-  }
 
-  if (persistCursor) {
-    await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
-  }
+    const rows = response.data?.images ?? [];
+    const nextCursor = response.data?.nextCursor ?? null;
 
-  const downloaded = await Promise.all(
-    rows.map(async (row) => {
-      const filePath = await downloadPrivateImageFromRow(context, {
-        groupId,
-        row,
-      });
-
-      if (!filePath) {
-        return null;
+    if (rows.length === 0) {
+      if (persistCursor) {
+        await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
       }
+      return skippedPlayedBatches > 0
+        ? { isError: false, reason: 'played-out', images: [] }
+        : { isError: false, images: [] };
+    }
 
-      return normalizePrivateImage(row, filePath);
-    }),
-  );
+    const unplayedRows = rows.filter((row) => {
+      const identity = row?.name ?? row?.id;
+      return identity == null || !playedPictureIds.has(identity);
+    });
 
-  return { isError: false, images: downloaded.filter((image): image is Image => Boolean(image)) };
+    if (unplayedRows.length === 0) {
+      if (!nextCursor) {
+        if (persistCursor) {
+          await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+        }
+        return { isError: false, reason: 'played-out', images: [] };
+      }
+      if (persistCursor) {
+        await saveLastImageUuid(nextCursor, categoryKey, language, cursorScope);
+      }
+      skippedPlayedBatches += 1;
+      if (skippedPlayedBatches > MAX_PLAYED_SKIPS) {
+        return { isError: false, reason: 'played-out', images: [] };
+      }
+      cursor = nextCursor;
+      continue;
+    }
+
+    if (persistCursor) {
+      await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+    }
+
+    const downloaded = await Promise.all(
+      unplayedRows.map(async (row) => {
+        const filePath = await downloadPrivateImageFromRow(context, {
+          groupId,
+          row,
+        });
+
+        if (!filePath) {
+          return null;
+        }
+
+        return normalizePrivateImage(row, filePath);
+      }),
+    );
+
+    return { isError: false, images: downloaded.filter((image): image is Image => Boolean(image)) };
+  }
 }
