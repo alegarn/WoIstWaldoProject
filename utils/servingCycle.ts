@@ -53,7 +53,7 @@ export async function startNewServingCycle(
  * `exhaustedCategory:*:<lang>` markers; group parity clears this group's
  * `groupFeed:<gid>:*:<lang>:cursor` entries + `groupFeedExhausted:<gid>:*:<lang>`
  * markers. Key shapes mirror utils/storageDatum.ts and
- * services/groups/groupFeedCache.js (no import — module stays
+ * services/groups/groupFeedCache.ts (no import — module stays
  * AsyncStorage + scopeMutex + playedPictureIds).
  */
 async function clearStaleCycleCursorsAndMarkers(

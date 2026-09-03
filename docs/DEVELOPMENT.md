@@ -53,6 +53,6 @@ The play screen (where the user taps/drags to find the hidden spot) renders thro
 - **Closed state**: A grabber handle is pinned to the bottom edge; the overlay starts closed on the first card.
 - **Open**: An UP swipe (bottom→top) on the handle expands the panel.
 - **Close**: Via the down-arrow icon button (`IconButton` with `chevron-down`), a DOWN swipe on the panel, or a tap on the scrim.
-- **Auto-open on second card onward**: After a correct guess, `skipInstructions: true` is set in `utils/handleGuessOutcome.js` / `utils/guessNavigation.js`. `GuessPicture` passes it through as `defaultOpen={skipInstructions === true}` to `ShowPicture` → `EnigmaOverlay`, so the enigma auto-opens on the next card for direct reading.
+- **Auto-open on second card onward**: After a correct guess, `skipInstructions: true` is set in `utils/handleGuessOutcome.ts` / `utils/guessNavigation.js`. `GuessPicture` passes it through as `defaultOpen={skipInstructions === true}` to `ShowPicture` → `EnigmaOverlay`, so the enigma auto-opens on the next card for direct reading.
 - **Gesture isolation**: The overlay's swipe responders are scoped to its own handle/panel/scrim; they do not steal the draggable target marker (its own `PanResponder` on the target wrap) or the left-edge `GuessExitSwipeMenu` swipe.
 - **Test/e2e hooks**: `testIDs` — `guess.enigma.handle`, `guess.enigma.panel`, `guess.enigma.text`, `guess.enigma.close`, `guess.enigma.scrim`. Close button accessibility label: "Close enigma".
