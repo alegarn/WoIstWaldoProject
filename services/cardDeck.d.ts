@@ -23,7 +23,7 @@ export interface FetchCardBatchArgs {
 
 export type FetchCardBatchResult =
   | { isError: true; title?: string; message?: string; reason?: unknown }
-  | { isError: false; images: CardImage[] };
+  | { isError: false; reason?: 'empty' | 'played-out'; images: CardImage[] };
 
 export interface AppendCardBatchArgs {
   cards: CardImage[];
@@ -58,7 +58,7 @@ export interface ProbeAllPoolForUnplayedArgs {
 export type ProbeAllPoolForUnplayedResult =
   | { status: 'unplayed' }
   | { status: 'exhausted' }
-  | { status: 'indeterminate'; reason?: 'network' | 'server' | 'probe-cap' };
+  | { status: 'indeterminate'; reason?: 'network' | 'server' | 'probe-cap' | 'played-out' };
 
 export const PROBE_MAX_BATCHES: number;
 export function probeAllPoolForUnplayed(args?: ProbeAllPoolForUnplayedArgs): Promise<ProbeAllPoolForUnplayedResult>;

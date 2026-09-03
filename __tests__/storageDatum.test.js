@@ -25,6 +25,7 @@ jest.mock('../utils/imagesRequests', () => ({
 const mockDelete = jest.fn();
 let mockFileExists = true;
 let mockFileExistsByUri = null;
+const mockCacheList = jest.fn();
 
 jest.mock('expo-file-system', () => {
   const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
@@ -39,7 +40,7 @@ jest.mock('expo-file-system', () => {
     File,
     Paths: class MockPaths {
       static get cache() {
-        return { uri: 'file:///cache/' };
+        return { uri: 'file:///cache/', list: mockCacheList };
       }
     },
   };
@@ -81,6 +82,7 @@ import {
   saveUserTag,
   setOnboardingCompleted,
   storeImageList,
+  sweepPlayedOrphanCacheFiles,
   updateImageList,
   wipePublicGuessStorage,
 } from '../utils/storageDatum';
@@ -92,6 +94,8 @@ describe('storageDatum utilities', () => {
     mockDelete.mockReset();
     mockFileExists = true;
     mockFileExistsByUri = null;
+    mockCacheList.mockReset();
+    mockCacheList.mockReturnValue([]);
     AsyncStorage.setItem.mockResolvedValue(undefined);
     AsyncStorage.removeItem.mockResolvedValue(undefined);
     AsyncStorage.getAllKeys.mockResolvedValue([]);
@@ -436,6 +440,67 @@ describe('storageDatum utilities', () => {
     expect(File).toHaveBeenNthCalledWith(1, 'file:///cache/abc.jpg');
     expect(File).toHaveBeenNthCalledWith(2, expect.objectContaining({ uri: 'file:///cache/' }), 'ImagePicker/abc.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
+  });
+
+  describe('Task 2b: sweepPlayedOrphanCacheFiles (public orphan sweep)', () => {
+    const CACHE_DIR = expect.objectContaining({ uri: 'file:///cache/' });
+
+    const primeSweep = ({ played, decks = {} }) => {
+      AsyncStorage.getItem.mockImplementation(async (key) => {
+        if (key === 'playedPictureIds:public:en') return JSON.stringify(played);
+        if (decks[key] !== undefined) return JSON.stringify(decks[key]);
+        return null;
+      });
+    };
+
+    it('deletes exactly played-and-not-decked files, keeping winner, deck files, unplayed and private files', async () => {
+      primeSweep({
+        played: ['winner', 'orphan-1', 'deck-1'],
+        decks: {
+          'imageList:all:en': [{ listId: 1, pictureId: 'deck-1' }, { listId: 2, pictureId: 'winner' }],
+          'imageList:animals:en': [{ listId: 3, pictureId: 'deck-1' }],
+        },
+      });
+      AsyncStorage.getAllKeys.mockResolvedValueOnce(['imageList:all:en', 'imageList:animals:en']);
+      mockCacheList.mockReturnValue([
+        'file:///cache/winner.jpg',
+        'file:///cache/orphan-1.png',
+        'file:///cache/deck-1.webp',
+        'file:///cache/unplayed-1.jpg',
+        'file:///cache/private-9.jpg',
+        'file:///cache/orphan-1.download',
+        'file:///cache/ImagePicker',
+      ]);
+
+      await sweepPlayedOrphanCacheFiles('en');
+
+      expect(mockDelete).toHaveBeenCalledTimes(1);
+      expect(File).toHaveBeenCalledWith(CACHE_DIR, 'orphan-1.png');
+      expect(File).not.toHaveBeenCalledWith(CACHE_DIR, 'winner.jpg');
+      expect(File).not.toHaveBeenCalledWith(CACHE_DIR, 'deck-1.webp');
+      expect(File).not.toHaveBeenCalledWith(CACHE_DIR, 'unplayed-1.jpg');
+      expect(File).not.toHaveBeenCalledWith(CACHE_DIR, 'private-9.jpg');
+      expect(File).not.toHaveBeenCalledWith(CACHE_DIR, 'orphan-1.download');
+    });
+
+    it('does nothing when the played set is empty (no listing, no deletes)', async () => {
+      primeSweep({ played: [], decks: {} });
+      mockCacheList.mockReturnValue(['file:///cache/orphan-1.png']);
+
+      await sweepPlayedOrphanCacheFiles('en');
+
+      expect(mockCacheList).not.toHaveBeenCalled();
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
+
+    it('fails safe when the played set cannot be read (no deletes)', async () => {
+      AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage boom'));
+      mockCacheList.mockReturnValue(['file:///cache/orphan-1.png']);
+
+      await expect(sweepPlayedOrphanCacheFiles('en')).resolves.toBeUndefined();
+
+      expect(mockDelete).not.toHaveBeenCalled();
+    });
   });
 
   it('returns the first remaining image when the played card has already been removed', async () => {

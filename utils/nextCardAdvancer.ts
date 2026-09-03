@@ -159,14 +159,16 @@ async function foregroundTopUp(
       // F3a: cache the empty result so subsequent advances short-circuit at
       // Tier 2 with zero server round-trips. ONLY the genuine-empty branch
       // writes — the 5xx branch above MUST NOT poison the cache (a transient
-      // server blip must not permanently mark a category exhausted). 'all' and
+      // server blip must not permanently mark a category exhausted), and a
+      // 'played-out' batch (Task 1b) is NOT server-empty either: the stale
+      // marker would permanently block category top-ups. 'all' and
       // Tier-4 head-replay paths are excluded so newly-uploaded cards surface.
       // Paired-write note (CC1): services/cardPrefetcher.ts (B1) writes the
       // SAME cache with a DIFFERENT guard (categoryKey !== 'all' only — the
       // prefetcher has no pictureIdOverride context and never runs on the
       // Tier-4 head path). Both sites use the SAME helper; first-wins is
       // defense-in-depth. Keep this comment in sync with the prefetcher site.
-      if (!isHeadReplay && categoryKey !== 'all') {
+      if (r?.reason !== 'played-out' && !isHeadReplay && categoryKey !== 'all') {
         await markCategoryExhausted(categoryKey, args.language, args.scope).catch(() => {});
       }
       return { ok: false, reason: 'empty' };

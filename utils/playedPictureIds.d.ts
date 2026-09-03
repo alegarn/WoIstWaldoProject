@@ -10,6 +10,7 @@ import type { CardImage } from '../services/cardDeck';
 // Shared memory of recently played pictureIds so fall-through/replay paths
 // skip just-played cards. Cap-evicted (most recent 200 kept).
 export const PLAYED_PICTURE_IDS_PREFIX: string;
+export const PLAYED_PICTURE_IDS_CAP: number;
 export function playedPictureIdsKey(language: string | null | undefined, scope: unknown): string;
 export function getPlayedPictureIds(language: string | null | undefined, scope: unknown): Promise<string[]>;
 export function addPlayedPictureId(pictureId: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void>;

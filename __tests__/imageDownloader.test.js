@@ -3,6 +3,7 @@ jest.mock('expo-file-system', () => {
     moved: [],
     deletedUris: [],
     moveError: null,
+    cachedEntries: [],
   };
 
   const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
@@ -25,12 +26,14 @@ jest.mock('expo-file-system', () => {
     state.moved.length = 0;
     state.deletedUris.length = 0;
     state.moveError = null;
+    state.cachedEntries.length = 0;
     File.mockClear();
   };
 
   const cacheStore = {
     uri: 'file:///cache/',
     create: jest.fn(),
+    list: jest.fn(() => state.cachedEntries),
   };
 
   return {
@@ -47,7 +50,7 @@ jest.mock('expo-file-system/legacy', () => ({
   downloadAsync: jest.fn(),
 }));
 
-import { File } from 'expo-file-system';
+import { File, Paths } from 'expo-file-system';
 import { downloadAsync } from 'expo-file-system/legacy';
 import {
   downloadImageFile,
@@ -226,5 +229,93 @@ describe('utils/imageDownloader', () => {
     expect(error).toBeInstanceOf(Error);
     expect(error.status).toBe(500);
     expect(error.networkFailure).toBe(false);
+  });
+
+  describe('byte-cache guard (Task 2a)', () => {
+    it('returns the existing final file and skips the network entirely on a cache hit', async () => {
+      File.__state.cachedEntries.push('file:///cache/img-1.png');
+
+      const result = await downloadImageFile({
+        url: 'https://backend.example/api/v1/local_image_storage/img-1',
+        directory: Paths.cache,
+        name: 'img-1',
+      });
+
+      expect(result).toEqual({ fileUri: 'file:///cache/img-1.png', extension: 'png' });
+      expect(downloadAsync).not.toHaveBeenCalled();
+      expect(Paths.cache.create).not.toHaveBeenCalled();
+      expect(File.__state.moved).toEqual([]);
+    });
+
+    it('matches on the name prefix across extensions regardless of the preferred extension', async () => {
+      File.__state.cachedEntries.push('file:///cache/img-1.webp');
+
+      const result = await downloadImageFile({
+        url: 'https://s3.amazonaws.com/bucket/img-1.jpg',
+        directory: Paths.cache,
+        name: 'img-1',
+        preferredExtension: 'jpg',
+      });
+
+      expect(result).toEqual({ fileUri: 'file:///cache/img-1.webp', extension: 'webp' });
+      expect(downloadAsync).not.toHaveBeenCalled();
+    });
+
+    it('never treats a stale <name>.download temp as a hit (download proceeds) and cleans it up on a hit', async () => {
+      File.__state.cachedEntries.push('file:///cache/img-1.download');
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+      const result = await downloadImageFile({
+        url: 'https://backend.example/api/v1/local_image_storage/img-1',
+        directory: Paths.cache,
+        name: 'img-1',
+      });
+
+      expect(result).toEqual({ fileUri: 'file:///cache/img-1.png', extension: 'png' });
+      expect(downloadAsync).toHaveBeenCalledTimes(1);
+
+      File.__reset();
+      File.__state.cachedEntries.push('file:///cache/img-1.png', 'file:///cache/img-1.download');
+
+      const hit = await downloadImageFile({
+        url: 'https://backend.example/api/v1/local_image_storage/img-1',
+        directory: Paths.cache,
+        name: 'img-1',
+      });
+
+      expect(hit).toEqual({ fileUri: 'file:///cache/img-1.png', extension: 'png' });
+      expect(downloadAsync).toHaveBeenCalledTimes(1);
+      expect(File.__state.deletedUris).toEqual(['file:///cache/img-1.download']);
+    });
+
+    it('honors a caller-provided cachedFiles index without listing the directory (hit and authoritative miss)', async () => {
+      const cachedFiles = new Map([['img-1', 'file:///cache/img-1.jpeg']]);
+      File.__state.cachedEntries.push('file:///cache/other.png');
+
+      const hit = await downloadImageFile({
+        url: 'https://backend.example/api/v1/local_image_storage/img-1',
+        directory: Paths.cache,
+        name: 'img-1',
+        cachedFiles,
+      });
+
+      expect(hit).toEqual({ fileUri: 'file:///cache/img-1.jpeg', extension: 'jpeg' });
+      expect(Paths.cache.list).not.toHaveBeenCalled();
+      expect(downloadAsync).not.toHaveBeenCalled();
+
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+      File.__state.cachedEntries.push('file:///cache/img-2.png');
+
+      const miss = await downloadImageFile({
+        url: 'https://backend.example/api/v1/local_image_storage/img-2',
+        directory: Paths.cache,
+        name: 'img-2',
+        cachedFiles,
+      });
+
+      expect(miss).toEqual({ fileUri: 'file:///cache/img-2.png', extension: 'png' });
+      expect(Paths.cache.list).not.toHaveBeenCalled();
+      expect(downloadAsync).toHaveBeenCalledTimes(1);
+    });
   });
 });

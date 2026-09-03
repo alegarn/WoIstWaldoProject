@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { withScopeLock } from './scopeMutex';
 
-const PLAYED_PICTURE_IDS_CAP = 200;
+export const PLAYED_PICTURE_IDS_CAP = 200;
 export const PLAYED_PICTURE_IDS_PREFIX = 'playedPictureIds';
 
 function isPrivateScope(scope) {

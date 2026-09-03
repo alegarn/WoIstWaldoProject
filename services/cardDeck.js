@@ -374,6 +374,9 @@ export async function probeAllPoolForUnplayed({ language, scope, authContext, ex
 
     const batch = Array.isArray(result.images) ? result.images : [];
     if (batch.length === 0) {
+      if (result.reason === 'played-out') {
+        return { status: 'indeterminate', reason: 'played-out' };
+      }
       return { status: 'exhausted' };
     }
 

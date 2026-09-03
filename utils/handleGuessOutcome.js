@@ -1,5 +1,5 @@
 import { bufferScore, mintGuessId } from './sessionScoreStore';
-import { removeImageFromList, deleteImageFromStorage } from './storageDatum';
+import { removeImageFromList, deleteImageFromStorage, sweepPlayedOrphanCacheFiles } from './storageDatum';
 import { addPlayedPictureId } from './playedPictureIds';
 import { resolveNextCard } from './nextCardResolver';
 import { SPEED_MULTIPLIER_BASE } from './speedMultiplier';
@@ -33,6 +33,11 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
     addPlayedPictureId(pictureId, language, scope).catch(() => {});
     await removeImageFromList(listId, categoryKey, language);
     await deleteImageFromStorage(imageFile);
+    // Task 2b: public-only played-orphan sweep (private-* cache files are
+    // owned by purgeAllPrivateCaches).
+    if (!(scope?.kind === 'private' && scope?.groupId)) {
+      await sweepPlayedOrphanCacheFiles(language);
+    }
   } catch (e) {
     console.warn('applySuccessSideEffects: storage cleanup failed (best-effort, score kept buffered)', e);
   }

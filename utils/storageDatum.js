@@ -8,7 +8,7 @@ import {
   clearGroupCategoryExhausted,
   groupGameCursorKey,
 } from "../services/groups/groupFeedCache";
-import { filterPlayedCards, playedPictureIdsKey, PLAYED_PICTURE_IDS_PREFIX } from "./playedPictureIds";
+import { filterPlayedCards, getPlayedPictureIds, playedPictureIdsKey, PLAYED_PICTURE_IDS_PREFIX } from "./playedPictureIds";
 import { SERVING_CYCLE_PREFIX } from "./servingCycle";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
@@ -790,5 +790,105 @@ export async function deleteImageFromStorage(imageFilePath) {
   deleteFileIfPresent(new File(imageFilePath));
   const fileName = imageFilePath.substring(imageFilePath.lastIndexOf("/") + 1);
   deleteFileIfPresent(new File(Paths.cache, `ImagePicker/${fileName}`));
+  return null;
+};
+
+// Task 2b: private-* cache files (private feed, thumbnails, home
+// backgrounds) are swept by purgeAllPrivateCaches in
+// services/groups/groupFeedCache.ts — the public sweep below must never
+// touch them.
+const PRIVATE_CACHE_FILE_PREFIX = 'private-';
+const PLAYED_ORPHAN_SWEEP_NAME_CAP = 200;
+
+function baseNameFromFileName(fileName) {
+  const dotIndex = fileName.lastIndexOf('.');
+  if (dotIndex <= 0) {
+    return null;
+  }
+  return fileName.slice(0, dotIndex);
+};
+
+async function collectDeckedPictureIds() {
+  const keys = await AsyncStorage.getAllKeys();
+  const deckKeys = keys.filter((key) => typeof key === 'string' && key.startsWith(IMAGE_LIST_KEY_PREFIX));
+  const deckedNames = new Set();
+  for (const listKey of deckKeys) {
+    const stored = await AsyncStorage.getItem(listKey);
+    if (!stored) {
+      continue;
+    }
+    try {
+      const parsed = JSON.parse(stored);
+      if (!Array.isArray(parsed)) {
+        continue;
+      }
+      for (const card of parsed) {
+        if (typeof card?.pictureId === 'string' && card.pictureId.length > 0) {
+          deckedNames.add(card.pictureId);
+        }
+      }
+    } catch {
+      // skip corrupt decks — a bad deck must not abort the sweep
+    }
+  }
+  return deckedNames;
+};
+
+/**
+ * Task 2b (Option C) public orphan sweep: after a win, delete cache files
+ * whose name is in the public played set but NOT in any persisted deck —
+ * bytes that were downloaded before the played filter (Task 1) existed, or
+ * that lost their deck entry. Single pass, bounded by the played-set cap
+ * (200 names). Safe: Task 1 filters played rows before download, so a swept
+ * file is never re-fetched unless cap-eviction resurrects its id (then it
+ * re-downloads on demand). Best-effort — never throws.
+ * @param {string} language - Language code ('any' when unset).
+ * @returns {Promise<void>}
+ */
+export async function sweepPlayedOrphanCacheFiles(language) {
+  let played = [];
+  try {
+    played = await getPlayedPictureIds(language, null);
+  } catch {
+    return;
+  }
+  if (!Array.isArray(played) || played.length === 0) {
+    return;
+  }
+  const playedNames = new Set(played.slice(-PLAYED_ORPHAN_SWEEP_NAME_CAP));
+
+  let deckedNames;
+  try {
+    deckedNames = await collectDeckedPictureIds();
+  } catch {
+    return;
+  }
+
+  try {
+    const entries = typeof Paths.cache?.list === 'function' ? Paths.cache.list() : [];
+    if (!Array.isArray(entries)) {
+      return;
+    }
+    for (const entry of entries) {
+      const uri = typeof entry === 'string' ? entry : entry?.uri;
+      if (typeof uri !== 'string' || uri.length === 0) {
+        continue;
+      }
+      const fileName = uri.substring(uri.lastIndexOf('/') + 1);
+      if (fileName.length === 0 || fileName.endsWith('.download')) {
+        continue;
+      }
+      if (fileName.startsWith(PRIVATE_CACHE_FILE_PREFIX)) {
+        continue;
+      }
+      const baseName = baseNameFromFileName(fileName);
+      if (baseName === null || !playedNames.has(baseName) || deckedNames.has(baseName)) {
+        continue;
+      }
+      deleteFileIfPresent(new File(Paths.cache, fileName));
+    }
+  } catch {
+    // best-effort
+  }
   return null;
 };
