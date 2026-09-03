@@ -515,7 +515,7 @@ export async function getImages(
     excludeNames = played.slice(-PLAYED_PICTURE_IDS_CAP);
   } catch {
     // Fail open: an unreadable played set must not block the feed (same
-    // contract as filterPlayedCards' catch in utils/playedPictureIds.js).
+    // contract as filterPlayedCards' catch in utils/playedPictureIds.ts).
   }
 
   let nextPictureId = pictureId;

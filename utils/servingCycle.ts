@@ -36,7 +36,7 @@ export async function startNewServingCycle(
     const current = await getServingCycleEpoch(language, scope);
     const next = current + 1;
     await AsyncStorage.setItem(key, String(next));
-    // Lock order: servingCycle→played only; playedPictureIds.js never imports
+    // Lock order: servingCycle→played only; playedPictureIds.ts never imports
     // servingCycle → no inverse order, no deadlock.
     await resetPlayedPictureIdsForScope(language, scope);
     await clearStaleCycleCursorsAndMarkers(language, scope);
@@ -46,13 +46,13 @@ export async function startNewServingCycle(
 
 /**
  * A2: a stale cursor parked at the old feed-end makes every cursor-mode fetch
- * miss forever (head replays persist nothing, cardDeck.js:117), and an
+ * miss forever (head replays persist nothing, cardDeck.ts), and an
  * `exhaustedCategory:all` marker never auto-clears (clearExhaustedMarkerIfLanded
  * excludes 'all'). Both must go under the SAME epoch lock/transition, scoped to
  * (scope, language): public clears `lastImageUuid:*:<lang>` cursors +
  * `exhaustedCategory:*:<lang>` markers; group parity clears this group's
  * `groupFeed:<gid>:*:<lang>:cursor` entries + `groupFeedExhausted:<gid>:*:<lang>`
- * markers. Key shapes mirror utils/storageDatum.js and
+ * markers. Key shapes mirror utils/storageDatum.ts and
  * services/groups/groupFeedCache.js (no import — module stays
  * AsyncStorage + scopeMutex + playedPictureIds).
  */
