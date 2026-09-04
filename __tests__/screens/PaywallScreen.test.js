@@ -111,6 +111,26 @@ describe('PaywallScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
   });
 
+  it('routes back to GroupSettingsScreen after a purchase with intent personalize-group', async () => {
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({ authContext, navigation, route: { params: { intent: 'personalize-group' } } });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith('GroupSettingsScreen');
+  });
+
   it('invokes Purchases.restorePurchases when the restore button is pressed', async () => {
     const renderer = await renderScreen({ authContext: { setEntitlement: jest.fn() } });
 

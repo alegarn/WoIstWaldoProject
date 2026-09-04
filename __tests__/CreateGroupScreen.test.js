@@ -97,20 +97,16 @@ describe('CreateGroupScreen store entry point (TIER-0)', () => {
     return { renderer, navigation };
   }
 
-  it('renders the unlock CTA (not a loading overlay) and routes to the paywall with intent=create-group', async () => {
+  it('renders the create form for a tier-0 viewer (no paywall redirect)', async () => {
     const { renderer, navigation } = await renderScreen({ paidTier: 0 });
 
     expect(mockLoadingOverlay).not.toHaveBeenCalled();
 
-    const unlockProps = getBigButtonProps('create-group.button.unlock');
-    expect(unlockProps).toBeTruthy();
-    expect(unlockProps.testID).toBe('create-group.button.unlock');
+    expect(renderer.root.findByProps({ testID: 'create-group.input.name' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
 
-    await act(async () => {
-      unlockProps.onPress();
-    });
-
-    expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
+    expect(getBigButtonProps('create-group.button.unlock')).toBeFalsy();
+    expect(navigation.replace).not.toHaveBeenCalledWith('PaywallScreen', expect.anything());
   });
 
   it('shows the already-owns message and not the unlock CTA when the viewer already owns a group', async () => {

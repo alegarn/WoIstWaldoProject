@@ -4,12 +4,10 @@ import { SaveFormat } from 'expo-image-manipulator';
 import { preparePrivateUpload } from './groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
 import { resizeImage } from '../../utils/resizeImage';
+import type { AuthContextLike } from '../billing/entitlements';
 
 const MAX_LONGEST_SIDE = 600;
 const WEBP_COMPRESS_QUALITY = 0.85;
-
-// Minimal slice of the AuthContext value from store/auth-context.js that this service reads.
-type AuthContextLike = { token: string | null };
 
 export type CategoryThumbnailUploadOptions = {
   context: AuthContextLike;
@@ -91,7 +89,9 @@ export async function uploadCategoryThumbnail({
     isCategoryThumbnail: true,
   });
   if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
-    throw new Error('Could not prepare upload.');
+    const error = new Error('Could not prepare upload.') as Error & { status?: number };
+    error.status = presignResponse?.status;
+    throw error;
   }
 
   const uploadPlan = presignResponse.data;

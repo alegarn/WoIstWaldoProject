@@ -1,13 +1,16 @@
 import { useCallback, useContext, useEffect, useState } from 'react';
 import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import BigButton from '../../components/UI/BigButton';
+import _BigButton from '../../components/UI/BigButton';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import TierCard from '../../components/UI/TierCard';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { BILLING_TIERS } from '../../services/billing/offerings';
+import type { BillingTier } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   getPurchasesModule,
@@ -16,11 +19,47 @@ import {
   restoreAndSync,
 } from '../../utils/purchases';
 
-export default function PaywallScreen({ navigation, route }) {
+import type {
+  PurchasesOffering,
+  PurchasesOfferings,
+  PurchasesPackage,
+} from 'react-native-purchases';
+
+// BigButton.js is unmigrated; its destructured props (buttonStyle /
+// accessibilityLabel) are inferred as required by TS. Permissive cast mirrors
+// the App.tsx convention.
+const BigButton = _BigButton as React.ComponentType<any>;
+
+// Purchase packages come from react-native-purchases offerings via
+// utils/purchases.js; pkg is the SDK's own PurchasesPackage shape.
+type PaywallPackage = { pkg: PurchasesPackage; tier: BillingTier };
+
+type PaywallIntent = 'create-group' | 'personalize-group' | 'store';
+
+type PaywallRouteParams = {
+  intent?: PaywallIntent;
+  [key: string]: unknown;
+};
+
+type PaywallParamList = {
+  PaywallScreen: PaywallRouteParams;
+  CreateGroupScreen: undefined;
+  GroupSettingsScreen: undefined;
+  SubscriptionManagementScreen: undefined;
+};
+
+type PaywallScreenProps = {
+  navigation: NativeStackNavigationProp<PaywallParamList, 'PaywallScreen'>;
+  route: RouteProp<PaywallParamList, 'PaywallScreen'>;
+};
+
+export default function PaywallScreen({ navigation, route }: PaywallScreenProps) {
   const { t } = useTranslation();
-  const authContext = useContext(AuthContext);
+  // auth-context.js infers its provider callbacks as zero-arg; this screen is
+  // the one caller that hands setEntitlement a payload.
+  const authContext = useContext(AuthContext) as { setEntitlement: (payload: unknown) => void };
   const intent = route?.params?.intent;
-  const [packages, setPackages] = useState([]);
+  const [packages, setPackages] = useState<PaywallPackage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPurchasing, setIsPurchasing] = useState(false);
   const [restoreError, setRestoreError] = useState(false);
@@ -32,15 +71,19 @@ export default function PaywallScreen({ navigation, route }) {
       return;
     }
     try {
-      const result = await Purchases.getOfferings();
+      // Boundary view of the typed Purchases SDK result: this screen reaches
+      // offerings through both the `all` map and the legacy getOffering lookup.
+      const result = (await Purchases.getOfferings()) as PurchasesOfferings & {
+        getOffering?: (offeringId: string) => PurchasesOffering | undefined;
+      };
       const all = result?.all ?? {};
       const resolved = BILLING_TIERS.map((tier) => {
         const offering = all[tier.offeringId] ?? result?.getOffering?.(tier.offeringId);
         const pkg = offering?.availablePackages?.[0];
         return pkg ? { pkg, tier } : null;
-      }).filter(Boolean);
+      }).filter(Boolean) as PaywallPackage[];
       setPackages(resolved);
-    } catch (error) {
+    } catch (error: any) {
       Alert.alert(t('billing.paywall.loadFailed'), error?.message ?? '');
     } finally {
       setIsLoading(false);
@@ -66,12 +109,14 @@ export default function PaywallScreen({ navigation, route }) {
     }
     if (intent === 'create-group') {
       navigation.replace('CreateGroupScreen');
+    } else if (intent === 'personalize-group') {
+      navigation.replace('GroupSettingsScreen');
     } else {
       navigation.replace('SubscriptionManagementScreen');
     }
   }, [authContext, intent, navigation, t]);
 
-  const handlePurchase = async (pkg) => {
+  const handlePurchase = async (pkg: PurchasesPackage) => {
     const Purchases = getPurchasesModule();
     if (!Purchases || !pkg) {
       return;
@@ -80,7 +125,7 @@ export default function PaywallScreen({ navigation, route }) {
     try {
       await Purchases.purchasePackage(pkg);
       await applySyncAndRoute();
-    } catch (error) {
+    } catch (error: any) {
       if (error?.userCancelled) {
         return;
       }
@@ -103,7 +148,7 @@ export default function PaywallScreen({ navigation, route }) {
         return;
       }
       applyEntitlementToContext(authContext, result.entitlement);
-    } catch (error) {
+    } catch (error: any) {
       setRestoreError(true);
       Alert.alert(t('billing.paywall.restoreFailed'), error?.message ?? '');
     }
@@ -124,9 +169,9 @@ export default function PaywallScreen({ navigation, route }) {
     </Text>
   );
 
-  const renderItem = ({ item }) => {
+  const renderItem = ({ item }: { item: PaywallPackage }) => {
     const { pkg, tier } = item;
-    const price = pkg?.product?.priceString ?? pkg?.priceString ?? '';
+    const price = pkg?.product?.priceString ?? '';
     return (
       <TierCard
         testID={tier.testId}

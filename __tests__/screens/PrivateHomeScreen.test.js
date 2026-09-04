@@ -105,6 +105,7 @@ import { act, create } from 'react-test-renderer';
 import { Share, Alert, StyleSheet, View } from 'react-native';
 
 import PrivateHomeScreen from '../../screens/Groups/PrivateHomeScreen';
+import { AuthContext } from '../../store/auth-context';
 import { handleOrientation } from '../../utils/orientation';
 import { updateGroupSettings, deletePrivateImage } from '../../services/groups/groupApi';
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
@@ -125,6 +126,7 @@ describe('PrivateHomeScreen', () => {
   async function renderScreen({
     scope = { kind: 'private', groupId: 'g-7' },
     groupsData = { owned: [], joined: [] },
+    authContext = { paidTier: 2 },
   } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope, clear: jest.fn() });
     mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
@@ -134,10 +136,12 @@ describe('PrivateHomeScreen', () => {
     let renderer;
     await act(async () => {
       renderer = create(
-        <PrivateHomeScreen
-          navigation={navigation}
-          route={{ params: { scope } }}
-        />
+        <AuthContext.Provider value={{ setPrivateMode: jest.fn(), ...authContext }}>
+          <PrivateHomeScreen
+            navigation={navigation}
+            route={{ params: { scope } }}
+          />
+        </AuthContext.Provider>
       );
       await Promise.resolve();
     });
@@ -318,6 +322,36 @@ describe('PrivateHomeScreen', () => {
 
       const lastModalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
       expect(lastModalProps.isModalVisible).toBe(false);
+    });
+
+    it('locks the background upload chips but keeps colors editable for a free owner', async () => {
+      const { renderer, navigation } = await renderScreen({
+        groupsData: ownerData,
+        authContext: { paidTier: 0 },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      expect(renderer.root.findByProps({ testID: 'private-home.button-bg.hide.locked' })).toBeTruthy();
+      expect(renderer.root.findByProps({ testID: 'private-home.button-bg.find.locked' })).toBeTruthy();
+      expect(renderer.root.findByProps({ testID: 'private-home.button-bg.ranking.locked' })).toBeTruthy();
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.button-bg.hide.choose' })).toThrow();
+
+      expect(renderer.root.findByProps({ testID: 'private-home.input.name' })).toBeTruthy();
+      const colorCalls = mockColorPalettePicker.mock.calls;
+      expect(colorCalls.length).toBeGreaterThanOrEqual(2);
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'private-home.button-bg.hide.locked' }).props.onPress();
+      });
+
+      expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+      expect(uploadHomeBackground).not.toHaveBeenCalled();
     });
 
   });
@@ -785,10 +819,12 @@ describe('PrivateHomeScreen', () => {
       let renderer;
       await act(async () => {
         renderer = create(
-          <PrivateHomeScreen
-            navigation={navigation}
-            route={{ params: { scope: { kind: 'private', groupId: 'g-7' } } }}
-          />
+          <AuthContext.Provider value={{ setPrivateMode: jest.fn(), paidTier: 2 }}>
+            <PrivateHomeScreen
+              navigation={navigation}
+              route={{ params: { scope: { kind: 'private', groupId: 'g-7' } } }}
+            />
+          </AuthContext.Provider>
         );
         await Promise.resolve();
       });

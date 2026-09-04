@@ -404,8 +404,6 @@
       "loading": "読み込み中...",
       "onlyOne": "作成できるグループは1つだけです。",
       "goToGroup": "自分のグループへ",
-      "privateFeature": "グループ作成はプライベートグループ機能です。",
-      "unlock": "グループ作成をアンロック",
       "nameRequiredTitle": "名前が必要です",
       "nameRequiredMessage": "グループ名を入力してください。",
       "createFailed": "グループを作成できませんでした。再試行してください。",
@@ -442,9 +440,10 @@
       "transferConfirm": "所有権を{{name}}に譲渡しますか？",
       "removeFailed": "メンバーを削除できませんでした。",
       "transferFailedTitle": "所有権を譲渡できません",
-      "transferNotCreator": "このメンバーがグループを所有するには、譲渡前に「グループ作成者」プランを保持している必要があります。",
       "transferNotMember": "このメンバーはグループにいません。",
-      "transferFailed": "所有権を譲渡できませんでした。再試行してください。"
+      "transferFailed": "所有権を譲渡できませんでした。再試行してください。",
+      "memberCap": "{{current}}/{{cap}}人のメンバー",
+      "upgradeFor30": "30人にアップグレード"
     },
     "settings": {
       "checkingOwnership": "所有権を確認中...",
@@ -485,7 +484,8 @@
       "deleteFailed": "カテゴリを削除できませんでした。",
       "uploadedTitle": "アップロード済み",
       "thumbnailUpdated": "カテゴリのサムネイルを更新しました。",
-      "updateThumbnailFailed": "サムネイルを更新できませんでした。"
+      "updateThumbnailFailed": "サムネイルを更新できませんでした。",
+      "personalizationLocked": "パーソナライズはクリエイター機能です"
     },
     "locked": {
       "ownerTitle": "プライベートグループの利用期間が終了しました",
@@ -517,7 +517,8 @@
       "saving": "保存中…",
       "choose": "選択",
       "removeBackgroundLabel": "{{name}}の背景を削除",
-      "remove": "削除"
+      "remove": "削除",
+      "bgUploadLocked": "画像アップロードはロック中"
     },
     "menu": {
       "groups": "グループ",
@@ -545,7 +546,9 @@
       "loadingOfferings": "オファリングを読み込み中...",
       "empty": "現在利用できるオファリングはありません。",
       "noSubscription": "有効なサブスクリプションが見つかりません。",
-      "restorePurchases": "購入を復元"
+      "restorePurchases": "購入を復元",
+      "personalizeTitle": "パーソナライズはクリエイター機能です",
+      "personalizeMessage": "クリエイタープランにアップグレードすると、グループをパーソナライズ（画像、カテゴリ）し、最大30人のメンバーを招待できます。"
     },
     "subscription": {
       "restoring": "復元中...",

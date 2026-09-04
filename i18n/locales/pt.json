@@ -405,8 +405,6 @@
       "loading": "Carregando...",
       "onlyOne": "Você só pode criar 1 grupo.",
       "goToGroup": "Ir para meu grupo",
-      "privateFeature": "A criação de grupos é um recurso de Grupo Privado.",
-      "unlock": "Desbloquear criação de grupos",
       "nameRequiredTitle": "Nome obrigatório",
       "nameRequiredMessage": "Digite um nome para o grupo.",
       "createFailed": "Não foi possível criar o grupo. Tente novamente.",
@@ -443,9 +441,10 @@
       "transferConfirm": "Transferir a propriedade para {{name}}?",
       "removeFailed": "Não foi possível remover o membro.",
       "transferFailedTitle": "Não é possível transferir a propriedade",
-      "transferNotCreator": "Este membro precisa ter o plano \"Criador de Grupo\" antes da transferência para ser dono do grupo.",
       "transferNotMember": "Este membro não está mais no grupo.",
-      "transferFailed": "Não foi possível transferir a propriedade. Tente novamente."
+      "transferFailed": "Não foi possível transferir a propriedade. Tente novamente.",
+      "memberCap": "{{current}}/{{cap}} membros",
+      "upgradeFor30": "Atualizar para 30"
     },
     "settings": {
       "checkingOwnership": "Verificando propriedade...",
@@ -486,7 +485,8 @@
       "deleteFailed": "Não foi possível excluir a categoria.",
       "uploadedTitle": "Enviada",
       "thumbnailUpdated": "Miniatura da categoria atualizada.",
-      "updateThumbnailFailed": "Não foi possível atualizar a miniatura."
+      "updateThumbnailFailed": "Não foi possível atualizar a miniatura.",
+      "personalizationLocked": "A personalização é um recurso de criador"
     },
     "locked": {
       "ownerTitle": "Seu acesso a grupos privados terminou",
@@ -518,7 +518,8 @@
       "saving": "Salvando…",
       "choose": "Escolher",
       "removeBackgroundLabel": "Remover plano de fundo de {{name}}",
-      "remove": "Remover"
+      "remove": "Remover",
+      "bgUploadLocked": "Envio de imagens bloqueado"
     },
     "menu": {
       "groups": "Grupos",
@@ -546,7 +547,9 @@
       "loadingOfferings": "Carregando ofertas...",
       "empty": "Nenhuma oferta disponível no momento.",
       "noSubscription": "Nenhuma assinatura ativa encontrada.",
-      "restorePurchases": "Restaurar compras"
+      "restorePurchases": "Restaurar compras",
+      "personalizeTitle": "A personalização é um recurso de criador",
+      "personalizeMessage": "Faça upgrade para um plano Criador para personalizar seu grupo (imagens, categorias) e ter até 30 membros."
     },
     "subscription": {
       "restoring": "Restaurando...",

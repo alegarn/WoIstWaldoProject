@@ -1,4 +1,20 @@
-export const BILLING_TIERS = [
+export type BillingTier = {
+  key: string;
+  offeringId: string;
+  productId: string;
+  tier: number;
+  testId: string;
+  label: string;
+  eyebrow: string;
+  image: number;
+  features: string[];
+  priceSuffix: string;
+  isSubscription: boolean;
+  ctaText: string;
+  featured: boolean;
+};
+
+export const BILLING_TIERS: BillingTier[] = [
   {
     key: 'premium',
     offeringId: 'premium',
@@ -8,7 +24,7 @@ export const BILLING_TIERS = [
     label: 'Premium',
     eyebrow: 'BUNDLE',
     image: require('../../assets/categories/all-image-cat.webp'),
-    features: ['Create and own private groups', 'Remove mandatory ads', 'All core game modes'],
+    features: ['Personalize your group (images, categories) + 30 members', 'Remove mandatory ads', 'All core game modes'],
     priceSuffix: '/month',
     isSubscription: true,
     ctaText: 'Subscribe',
@@ -23,7 +39,7 @@ export const BILLING_TIERS = [
     label: 'Private Group',
     eyebrow: 'PRIVATE',
     image: require('../../assets/home/WoIstWaldo-character-hide.webp'),
-    features: ['Create and own private groups', 'Invite-only private rooms', 'Up to 30 members per group'],
+    features: ['Personalize your group home screen', 'Add new categories to guess', 'Max 30 members'],
     priceSuffix: '/month',
     isSubscription: true,
     ctaText: 'Subscribe',

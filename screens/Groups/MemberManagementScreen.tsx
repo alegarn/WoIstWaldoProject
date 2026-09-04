@@ -3,25 +3,43 @@ import { View, Text, FlatList, StyleSheet, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import Button from '../../components/UI/Button';
+import _Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
+import MemberCapBanner from '../../components/Groups/Settings/MemberCapBanner';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
+import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
 import {
   listMembers,
   removeMember,
   transferOwnership,
 } from '../../services/groups/groupMembershipApi';
+import type { GroupMember, GroupScope, GroupsHubData } from '../../types/groups';
 
-export function transferErrorMessageFor(response) {
+// Button.js is unmigrated; its destructured props (mode / thin / cancel /
+// accessibilityLabel) are inferred as required by TS. Permissive cast mirrors
+// the App.tsx convention.
+const Button = _Button as React.ComponentType<any>;
+
+// Transfer responses flow through untyped groupMembershipApi.js (axios JSON or
+// mapped errors); only `data.error` / `data.message` are read here.
+type TransferResponse = { data?: { error?: string; message?: string } } | null | undefined;
+
+type MemberManagementNavigation = {
+  navigate?(name: string, params?: Record<string, unknown>): void;
+  setOptions?(options: Record<string, unknown>): void;
+};
+
+type MemberManagementScreenProps = {
+  navigation?: MemberManagementNavigation;
+};
+
+export function transferErrorMessageFor(response: TransferResponse): string {
   const reason = response?.data?.error;
-  if (reason === 'recipient_not_creator') {
-    return 'This member needs to hold a "Group Creator" tier before transfer to own the group.';
-  }
   if (reason === 'recipient_not_member') {
     return 'This member is no longer in the group.';
   }
@@ -31,33 +49,38 @@ export function transferErrorMessageFor(response) {
 // Transfer-error payloads are transport-level English strings (either the
 // reason-mapped literals above or a server message). Same boundary mapping
 // pattern as SwipeImage's guess.feedErrors.*: lookup + defaultValue passthrough.
-const TRANSFER_ERROR_KEYS = {
-  'This member needs to hold a "Group Creator" tier before transfer to own the group.': 'groups.members.transferNotCreator',
+const TRANSFER_ERROR_KEYS: Record<string, string> = {
   'This member is no longer in the group.': 'groups.members.transferNotMember',
   'Could not transfer ownership. Please try again.': 'groups.members.transferFailed',
 };
 
-export default function MemberManagementScreen({ navigation }) {
+export default function MemberManagementScreen({ navigation }: MemberManagementScreenProps) {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
 
-  const translateTransferError = (raw) => t(TRANSFER_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
-  const { scope } = useActiveGroup();
-  const { data, refresh } = useGroupsHub();
+  const translateTransferError = (raw: string) => t(TRANSFER_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
+  const { scope } = useActiveGroup() as { scope: GroupScope };
+  const { data, refresh } = useGroupsHub() as {
+    data: GroupsHubData | null;
+    refresh: () => Promise<void>;
+  };
 
   const groupId = scope?.kind === 'private' ? scope.groupId : null;
   const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
   const group = groups.find((g) => g.id === groupId) ?? null;
   const isOwner = group?.role === 'owner';
+  const paidTier = authContext?.paidTier ?? 0;
+  const canPersonalize = canPersonalizeGroup(paidTier);
+  const memberCap = memberCapFor(paidTier);
   const theme = getPrivateGroupTheme({
     primaryColor: group?.primary_color,
     secondaryColor: group?.secondary_color,
   });
 
-  const [members, setMembers] = useState([]);
+  const [members, setMembers] = useState<GroupMember[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [removeTarget, setRemoveTarget] = useState(null);
-  const [transferTarget, setTransferTarget] = useState(null);
+  const [removeTarget, setRemoveTarget] = useState<GroupMember | null>(null);
+  const [transferTarget, setTransferTarget] = useState<GroupMember | null>(null);
   const [isWorking, setIsWorking] = useState(false);
 
   const loadMembers = useCallback(async () => {
@@ -139,6 +162,18 @@ export default function MemberManagementScreen({ navigation }) {
       <FlatList
         data={members}
         keyExtractor={(item) => String(item.id)}
+        ListHeaderComponent={isOwner ? (
+          <MemberCapBanner
+            memberCount={group?.member_count ?? members.length}
+            memberCap={memberCap}
+            canPersonalize={canPersonalize}
+            onUpgrade={() => navigation?.navigate?.('PaywallScreen', { intent: 'personalize-group' })}
+            testIDPrefix="member-mgmt.members"
+            textColor={theme.text}
+            mutedColor={theme.muted}
+            accentColor={theme.warning}
+          />
+        ) : null}
         ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>{t('groups.members.empty')}</Text>}
         renderItem={({ item }) => (
           <View

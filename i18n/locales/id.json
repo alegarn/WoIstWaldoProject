@@ -404,8 +404,6 @@
       "loading": "Memuat...",
       "onlyOne": "Anda hanya dapat membuat 1 grup.",
       "goToGroup": "Buka grup saya",
-      "privateFeature": "Pembuatan grup adalah fitur Grup Privat.",
-      "unlock": "Buka kunci pembuatan grup",
       "nameRequiredTitle": "Nama wajib diisi",
       "nameRequiredMessage": "Silakan masukkan nama grup.",
       "createFailed": "Gagal membuat grup. Silakan coba lagi.",
@@ -442,9 +440,10 @@
       "transferConfirm": "Transfer kepemilikan ke {{name}}?",
       "removeFailed": "Gagal mengeluarkan anggota.",
       "transferFailedTitle": "Tidak dapat mentransfer kepemilikan",
-      "transferNotCreator": "Anggota ini harus memegang paket \"Pembuat Grup\" sebelum transfer untuk memiliki grup.",
       "transferNotMember": "Anggota ini sudah tidak ada di grup.",
-      "transferFailed": "Gagal mentransfer kepemilikan. Silakan coba lagi."
+      "transferFailed": "Gagal mentransfer kepemilikan. Silakan coba lagi.",
+      "memberCap": "{{current}}/{{cap}} anggota",
+      "upgradeFor30": "Upgrade untuk 30"
     },
     "settings": {
       "checkingOwnership": "Memeriksa kepemilikan...",
@@ -485,7 +484,8 @@
       "deleteFailed": "Gagal menghapus kategori.",
       "uploadedTitle": "Diunggah",
       "thumbnailUpdated": "Gambar mini kategori diperbarui.",
-      "updateThumbnailFailed": "Gagal memperbarui gambar mini."
+      "updateThumbnailFailed": "Gagal memperbarui gambar mini.",
+      "personalizationLocked": "Personalisasi adalah fitur pembuat grup"
     },
     "locked": {
       "ownerTitle": "Akses grup privat Anda telah berakhir",
@@ -517,7 +517,8 @@
       "saving": "Menyimpan…",
       "choose": "Pilih",
       "removeBackgroundLabel": "Hapus latar {{name}}",
-      "remove": "Hapus"
+      "remove": "Hapus",
+      "bgUploadLocked": "Unggah gambar terkunci"
     },
     "menu": {
       "groups": "Grup",
@@ -545,7 +546,9 @@
       "loadingOfferings": "Memuat penawaran...",
       "empty": "Tidak ada penawaran tersedia saat ini.",
       "noSubscription": "Tidak ada langganan aktif ditemukan.",
-      "restorePurchases": "Pulihkan pembelian"
+      "restorePurchases": "Pulihkan pembelian",
+      "personalizeTitle": "Personalisasi adalah fitur pembuat grup",
+      "personalizeMessage": "Upgrade ke paket Pembuat Grup untuk mempersonalisasi grup Anda (gambar, kategori) dan menampung hingga 30 anggota."
     },
     "subscription": {
       "restoring": "Memulihkan...",

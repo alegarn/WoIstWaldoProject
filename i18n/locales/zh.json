@@ -404,8 +404,6 @@
       "loading": "加载中...",
       "onlyOne": "你只能创建 1 个群组。",
       "goToGroup": "前往我的群组",
-      "privateFeature": "创建群组是私人群组功能。",
-      "unlock": "解锁群组创建",
       "nameRequiredTitle": "需要名称",
       "nameRequiredMessage": "请输入群组名称。",
       "createFailed": "无法创建群组。请重试。",
@@ -442,9 +440,10 @@
       "transferConfirm": "将所有权转让给 {{name}}？",
       "removeFailed": "无法移除成员。",
       "transferFailedTitle": "无法转让所有权",
-      "transferNotCreator": "该成员须先持有“群组创建者”套餐才能在转让后拥有群组。",
       "transferNotMember": "该成员已不在群组中。",
-      "transferFailed": "无法转让所有权。请重试。"
+      "transferFailed": "无法转让所有权。请重试。",
+      "memberCap": "{{current}}/{{cap}} 名成员",
+      "upgradeFor30": "升级到 30 人"
     },
     "settings": {
       "checkingOwnership": "正在检查所有权...",
@@ -485,7 +484,8 @@
       "deleteFailed": "无法删除分类。",
       "uploadedTitle": "已上传",
       "thumbnailUpdated": "分类缩略图已更新。",
-      "updateThumbnailFailed": "无法更新缩略图。"
+      "updateThumbnailFailed": "无法更新缩略图。",
+      "personalizationLocked": "个性化是创建者功能"
     },
     "locked": {
       "ownerTitle": "你的私人群组访问已到期",
@@ -517,7 +517,8 @@
       "saving": "保存中…",
       "choose": "选择",
       "removeBackgroundLabel": "移除 {{name}} 背景",
-      "remove": "移除"
+      "remove": "移除",
+      "bgUploadLocked": "图片上传已锁定"
     },
     "menu": {
       "groups": "群组",
@@ -545,7 +546,9 @@
       "loadingOfferings": "正在加载套餐...",
       "empty": "目前没有可用套餐。",
       "noSubscription": "未找到有效订阅。",
-      "restorePurchases": "恢复购买"
+      "restorePurchases": "恢复购买",
+      "personalizeTitle": "个性化是创建者功能",
+      "personalizeMessage": "升级到创建者套餐即可个性化你的群组（图片、分类）并容纳最多 30 名成员。"
     },
     "subscription": {
       "restoring": "正在恢复...",

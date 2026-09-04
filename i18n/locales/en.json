@@ -405,8 +405,6 @@
       "loading": "Loading...",
       "onlyOne": "You can only create 1 group.",
       "goToGroup": "Go to my group",
-      "privateFeature": "Group creation is a Private Group feature.",
-      "unlock": "Unlock group creation",
       "nameRequiredTitle": "Name required",
       "nameRequiredMessage": "Please enter a group name.",
       "createFailed": "Could not create the group. Please try again.",
@@ -443,9 +441,10 @@
       "transferConfirm": "Transfer ownership to {{name}}?",
       "removeFailed": "Could not remove member.",
       "transferFailedTitle": "Cannot transfer ownership",
-      "transferNotCreator": "This member needs to hold a \"Group Creator\" tier before transfer to own the group.",
       "transferNotMember": "This member is no longer in the group.",
-      "transferFailed": "Could not transfer ownership. Please try again."
+      "transferFailed": "Could not transfer ownership. Please try again.",
+      "memberCap": "{{current}}/{{cap}} members",
+      "upgradeFor30": "Upgrade for 30"
     },
     "settings": {
       "checkingOwnership": "Checking ownership...",
@@ -486,7 +485,8 @@
       "deleteFailed": "Could not delete category.",
       "uploadedTitle": "Uploaded",
       "thumbnailUpdated": "Category thumbnail updated.",
-      "updateThumbnailFailed": "Could not update thumbnail."
+      "updateThumbnailFailed": "Could not update thumbnail.",
+      "personalizationLocked": "Personalization is a creator feature"
     },
     "locked": {
       "ownerTitle": "Your private-group access ended",
@@ -518,7 +518,8 @@
       "saving": "Saving…",
       "choose": "Choose",
       "removeBackgroundLabel": "Remove {{name}} background",
-      "remove": "Remove"
+      "remove": "Remove",
+      "bgUploadLocked": "Image upload locked"
     },
     "menu": {
       "groups": "Groups",
@@ -546,7 +547,9 @@
       "loadingOfferings": "Loading offerings...",
       "empty": "No offerings available right now.",
       "noSubscription": "No active subscription found.",
-      "restorePurchases": "Restore purchases"
+      "restorePurchases": "Restore purchases",
+      "personalizeTitle": "Personalization is a creator feature",
+      "personalizeMessage": "Upgrade to a Creator plan to personalize your group (images, categories) and host up to 30 members."
     },
     "subscription": {
       "restoring": "Restoring...",

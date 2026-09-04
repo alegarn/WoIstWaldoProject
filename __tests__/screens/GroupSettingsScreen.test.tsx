@@ -138,11 +138,12 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import type { ReactTestRenderer } from 'react-test-renderer';
+import type { ReactTestInstance, ReactTestRenderer } from 'react-test-renderer';
 import { Alert, StyleSheet } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 
 import GroupSettingsScreen from '../../screens/Groups/GroupSettingsScreen';
+import { AuthContext } from '../../store/auth-context';
 import {
   listGroupCategories,
   updateGroupCategory,
@@ -193,11 +194,13 @@ describe('GroupSettingsScreen', () => {
   async function renderScreen({
     scope = { kind: 'private', groupId: 'g-3' },
     groupsData,
-    navigation = { replace: jest.fn() },
+    navigation = { replace: jest.fn(), navigate: jest.fn() },
+    authContext = { paidTier: 2 },
   }: {
     scope?: ScopeMock;
     groupsData?: GroupsHubDataMock | null;
     navigation?: NavigationMock;
+    authContext?: Record<string, unknown>;
   } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope });
     mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading: false, refresh: jest.fn() });
@@ -205,7 +208,9 @@ describe('GroupSettingsScreen', () => {
     let renderer!: ReactTestRenderer;
     await act(async () => {
       renderer = create(
-        <GroupSettingsScreen navigation={navigation} />
+        <AuthContext.Provider value={authContext as any}>
+          <GroupSettingsScreen navigation={navigation} />
+        </AuthContext.Provider>
       );
       await flushEffects();
     });
@@ -377,7 +382,7 @@ describe('GroupSettingsScreen', () => {
 
     const uploadArgs = mockedPreparePrivateUpload.mock.calls[0][0];
     expect(uploadArgs).toMatchObject({
-      context: {},
+      context: { paidTier: 2 },
       groupId: 'g-3',
       kind: 'category-thumbnail',
       fileExtension: 'webp',
@@ -411,7 +416,7 @@ describe('GroupSettingsScreen', () => {
       await flushEffects();
     });
 
-    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({ paidTier: 2 }, 'g-3', 'cat-1', {
       thumbnailImageId: 'img-9',
     });
     expect(mockedListGroupCategories).toHaveBeenCalledTimes(2);
@@ -444,8 +449,52 @@ describe('GroupSettingsScreen', () => {
     expect(mockedDeleteCategoryThumbnailFile.mock.invocationCallOrder[0]).toBeLessThan(
       mockedUpdateGroupCategory.mock.invocationCallOrder[0],
     );
-    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({}, 'g-3', 'cat-1', {
+    expect(mockedUpdateGroupCategory).toHaveBeenCalledWith({ paidTier: 2 }, 'g-3', 'cat-1', {
       thumbnailImageId: 'img-new',
     });
+  });
+
+  it('shows the locked categories row and no composer for a free owner, routing the tap to the paywall', async () => {
+    const navigation: NavigationMock = { replace: jest.fn(), navigate: jest.fn() };
+
+    const { renderer } = await renderScreen({
+      navigation,
+      authContext: { paidTier: 0 },
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine', member_count: 3 }],
+        joined: [],
+      },
+    });
+
+    expect(renderer.root.findByProps({ testID: 'group-settings.category.locked' })).toBeTruthy();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'group-settings.category.add-composer' })
+    ).toThrow();
+    expect(() =>
+      renderer.root.findByProps({ testID: 'group-settings.uploader.category-thumbnail' })
+    ).toThrow();
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.category.locked' }).props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+  });
+
+  it('shows the member cap banner with the free cap for a free owner', async () => {
+    const { renderer } = await renderScreen({
+      authContext: { paidTier: 0 },
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine', member_count: 3 }],
+        joined: [],
+      },
+    });
+
+    const banner = renderer.root.findByProps({ testID: 'group-settings.members.cap-banner' });
+    const bannerText = banner
+      .findAllByProps({ testID: 'group-settings.members.cap-count' })
+      .map((node: ReactTestInstance) => node.props.children)
+      .join(' ');
+    expect(bannerText).toContain('3/10 members');
   });
 });

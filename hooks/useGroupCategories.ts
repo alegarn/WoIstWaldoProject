@@ -3,6 +3,7 @@ import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { AuthContext } from '../store/auth-context';
+import type { PrivateGroupCategory } from '../types/groups';
 import {
   createGroupCategory,
   updateGroupCategory,
@@ -18,6 +19,36 @@ import {
 } from '../services/groups/groupCategoryThumbnails';
 import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
 
+type UseGroupCategoriesOptions = {
+  groupId: string;
+  onRefresh?: () => void | Promise<void>;
+};
+
+export type UseGroupCategoriesResult = {
+  categories: PrivateGroupCategory[];
+  drafts: Record<string, string>;
+  setDraft: (categoryId: string, value: string) => void;
+  thumbnailUris: Record<string, string | null>;
+  loading: boolean;
+  // Load failures are swallowed by the store; this stays null today and is
+  // kept in the contract so the view can branch without a shape change.
+  error: null;
+  newCategoryName: string;
+  setNewCategoryName: (value: string) => void;
+  isSwappingThumbnail: boolean;
+  add: () => Promise<void>;
+  save: (category: PrivateGroupCategory) => Promise<void>;
+  remove: (category: PrivateGroupCategory) => void;
+  swapThumbnail: (category: PrivateGroupCategory) => Promise<void>;
+  reload: () => Promise<void>;
+};
+
+// Mutation responses flow through untyped .js services (axios JSON or mapped
+// errors); only `status` is branched on here.
+type MutationResponse = { status?: number } | null | undefined;
+
+type MutationError = (Error & { status?: number; response?: { status?: number } }) | null | undefined;
+
 /**
  * Owns category CRUD + thumbnail management for a private group.
  *
@@ -31,17 +62,17 @@ import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpl
  * payload differs. Mutations write-through to the cache via the store. The store
  * already swallows network errors, so this hook never throws on load.
  *
- * @param {string} groupId - active private group id
- * @param {() => void} onRefresh - refresh the group hub after mutations that
+ * @param groupId - active private group id
+ * @param onRefresh - refresh the group hub after mutations that
  *   affect group-level data (e.g. a thumbnail swap).
  */
-export function useGroupCategories({ groupId, onRefresh }) {
+export function useGroupCategories({ groupId, onRefresh }: UseGroupCategoriesOptions): UseGroupCategoriesResult {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
 
-  const [categories, setCategories] = useState([]);
-  const [drafts, setDrafts] = useState({});
-  const [thumbnailUris, setThumbnailUris] = useState({});
+  const [categories, setCategories] = useState<PrivateGroupCategory[]>([]);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [thumbnailUris, setThumbnailUris] = useState<Record<string, string | null>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -50,14 +81,14 @@ export function useGroupCategories({ groupId, onRefresh }) {
   const hasInitialLoad = useRef(true);
 
   const applyCategories = useCallback(
-    (nextCategories) => {
-      const list = Array.isArray(nextCategories) ? nextCategories : [];
+    (nextCategories: unknown) => {
+      const list = (Array.isArray(nextCategories) ? nextCategories : []) as PrivateGroupCategory[];
       setCategories(list);
       setDrafts(
         list.reduce((accumulator, category) => {
           accumulator[category.id] = category.name ?? '';
           return accumulator;
-        }, {}),
+        }, {} as Record<string, string>),
       );
       // Resolve display URIs the same way GuessPathScreen does: local cache hit
       // when available, otherwise fetch + cache (handles backend-storage auth and
@@ -76,7 +107,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
           list.reduce((accumulator, category, index) => {
             accumulator[category.id] = resolved[index];
             return accumulator;
-          }, {}),
+          }, {} as Record<string, string | null>),
         );
       });
     },
@@ -93,7 +124,7 @@ export function useGroupCategories({ groupId, onRefresh }) {
       await loadGroupCategoriesOptimistic({
         context: authContext,
         groupId,
-        onCategories: (nextCategories) => {
+        onCategories: (nextCategories: unknown) => {
           applyCategories(nextCategories);
           hasInitialLoad.current = false;
         },
@@ -120,9 +151,26 @@ export function useGroupCategories({ groupId, onRefresh }) {
     return result;
   }, [authContext, groupId, applyCategories]);
 
-  const setDraft = useCallback((categoryId, value) => {
+  const setDraft = useCallback((categoryId: string, value: string) => {
     setDrafts((current) => ({ ...current, [categoryId]: value }));
   }, []);
+
+  const alertMutationFailure = useCallback((response: MutationResponse, messageKey: string) => {
+    if (response?.status === 403) {
+      Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+      return;
+    }
+    Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t(messageKey));
+  }, [t]);
+
+  const alertMutationError = useCallback((err: unknown, messageKey: string) => {
+    const error = err as MutationError;
+    if (error?.response?.status === 403 || error?.status === 403) {
+      Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+      return;
+    }
+    Alert.alert(t('common.error'), error?.message ?? t(messageKey));
+  }, [t]);
 
   const addCategory = useCallback(async () => {
     const trimmed = newCategoryName.trim();
@@ -132,12 +180,12 @@ export function useGroupCategories({ groupId, onRefresh }) {
       setNewCategoryName('');
       await writeThrough();
     } else {
-      Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.addFailed'));
+      alertMutationFailure(response, 'groups.settings.addFailed');
     }
-  }, [authContext, groupId, newCategoryName, writeThrough, t]);
+  }, [alertMutationFailure, authContext, groupId, newCategoryName, writeThrough]);
 
   const saveCategory = useCallback(
-    async (category) => {
+    async (category: PrivateGroupCategory) => {
       const nextName = drafts[category.id]?.trim();
       if (!nextName || nextName === category.name) return;
       const response = await updateGroupCategory(authContext, groupId, category.id, {
@@ -146,14 +194,14 @@ export function useGroupCategories({ groupId, onRefresh }) {
       if (response?.status === 200 || response?.status === 204) {
         await writeThrough();
       } else {
-        Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.updateFailed'));
+        alertMutationFailure(response, 'groups.settings.updateFailed');
       }
     },
-    [authContext, groupId, drafts, writeThrough, t],
+    [alertMutationFailure, authContext, groupId, drafts, writeThrough],
   );
 
   const removeCategory = useCallback(
-    (category) => {
+    (category: PrivateGroupCategory) => {
       Alert.alert(
         t('groups.settings.deleteTitle'),
         t('groups.settings.deleteMessage', { name: category.name }),
@@ -167,21 +215,21 @@ export function useGroupCategories({ groupId, onRefresh }) {
               if (response?.status === 200 || response?.status === 204) {
                 await writeThrough();
               } else {
-                Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.deleteFailed'));
+                alertMutationFailure(response, 'groups.settings.deleteFailed');
               }
             },
           },
         ],
       );
     },
-    [authContext, groupId, writeThrough, t],
+    [alertMutationFailure, authContext, groupId, writeThrough, t],
   );
 
   // Category thumbnail swap via the shared helper (same flow used by
   // GuessPathScreen). Old local cache file purged before the PATCH so a failed
   // update does not leave stale bytes for the new imageId.
   const swapThumbnail = useCallback(
-    async (category) => {
+    async (category: PrivateGroupCategory) => {
       if (!category?.id) return;
       setIsSwappingThumbnail(true);
       try {
@@ -198,15 +246,15 @@ export function useGroupCategories({ groupId, onRefresh }) {
           Alert.alert(t('groups.settings.uploadedTitle'), t('groups.settings.thumbnailUpdated'));
           onRefresh?.();
         } else {
-          Alert.alert(`${t('common.error')} ${updateResponse?.status ?? ''}`, t('groups.settings.updateFailed'));
+          alertMutationFailure(updateResponse, 'groups.settings.updateFailed');
         }
       } catch (err) {
-        Alert.alert(t('common.error'), err?.message ?? t('groups.settings.updateThumbnailFailed'));
+        alertMutationError(err, 'groups.settings.updateThumbnailFailed');
       } finally {
         setIsSwappingThumbnail(false);
       }
     },
-    [authContext, groupId, writeThrough, onRefresh, t],
+    [alertMutationError, alertMutationFailure, authContext, groupId, writeThrough, onRefresh, t],
   );
 
   return {

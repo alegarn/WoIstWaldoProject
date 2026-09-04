@@ -405,8 +405,6 @@
       "loading": "Caricamento...",
       "onlyOne": "Puoi creare solo 1 gruppo.",
       "goToGroup": "Vai al mio gruppo",
-      "privateFeature": "La creazione di gruppi è una funzione Gruppo Privato.",
-      "unlock": "Sblocca la creazione di gruppi",
       "nameRequiredTitle": "Nome obbligatorio",
       "nameRequiredMessage": "Inserisci un nome per il gruppo.",
       "createFailed": "Impossibile creare il gruppo. Riprova.",
@@ -443,9 +441,10 @@
       "transferConfirm": "Trasferire la proprietà a {{name}}?",
       "removeFailed": "Impossibile rimuovere il membro.",
       "transferFailedTitle": "Impossibile trasferire la proprietà",
-      "transferNotCreator": "Questo membro deve possedere un piano \"Creatore di gruppo\" prima del trasferimento per possedere il gruppo.",
       "transferNotMember": "Questo membro non è più nel gruppo.",
-      "transferFailed": "Impossibile trasferire la proprietà. Riprova."
+      "transferFailed": "Impossibile trasferire la proprietà. Riprova.",
+      "memberCap": "{{current}}/{{cap}} membri",
+      "upgradeFor30": "Passa a 30"
     },
     "settings": {
       "checkingOwnership": "Verifica proprietà...",
@@ -486,7 +485,8 @@
       "deleteFailed": "Impossibile eliminare la categoria.",
       "uploadedTitle": "Caricata",
       "thumbnailUpdated": "Miniatura della categoria aggiornata.",
-      "updateThumbnailFailed": "Impossibile aggiornare la miniatura."
+      "updateThumbnailFailed": "Impossibile aggiornare la miniatura.",
+      "personalizationLocked": "La personalizzazione è una funzione da creatore"
     },
     "locked": {
       "ownerTitle": "Il tuo accesso ai gruppi privati è terminato",
@@ -518,7 +518,8 @@
       "saving": "Salvataggio…",
       "choose": "Scegli",
       "removeBackgroundLabel": "Rimuovi sfondo di {{name}}",
-      "remove": "Rimuovi"
+      "remove": "Rimuovi",
+      "bgUploadLocked": "Caricamento immagini bloccato"
     },
     "menu": {
       "groups": "Gruppi",
@@ -546,7 +547,9 @@
       "loadingOfferings": "Caricamento offerte...",
       "empty": "Nessuna offerta disponibile al momento.",
       "noSubscription": "Nessun abbonamento attivo trovato.",
-      "restorePurchases": "Ripristina acquisti"
+      "restorePurchases": "Ripristina acquisti",
+      "personalizeTitle": "La personalizzazione è una funzione da creatore",
+      "personalizeMessage": "Passa a un piano Creatore per personalizzare il tuo gruppo (immagini, categorie) e ospitare fino a 30 membri."
     },
     "subscription": {
       "restoring": "Ripristino...",
