@@ -9,6 +9,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import CenteredModal from '../../components/UI/CenteredModal';
 import _HomeCard from '../../components/UI/HomeCard';
 import _IconButton from '../../components/UI/IconButton';
+import _BigButton from '../../components/UI/BigButton';
+import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import GroupIdentitySection from '../../components/Groups/Settings/GroupIdentitySection';
 import LockedGroupOwnerModal from '../../components/Groups/LockedGroupOwnerModal';
 import LockedGroupMemberBanner from '../../components/Groups/LockedGroupMemberBanner';
@@ -25,11 +27,13 @@ import { canPersonalizeGroup } from '../../services/billing/groupPersonalization
 import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
 import type { GroupHomeBackgroundSlotData, GroupScope, GroupsHubData } from '../../types/groups';
 
-// HomeCard.js and IconButton.js are unmigrated; their destructured props
-// (accessibilityState / pointerEvents / disabled) are inferred as required by
-// TS. Permissive casts mirror the App.tsx convention.
+// HomeCard.js, IconButton.js and BigButton.js are unmigrated; their
+// destructured props (accessibilityState / pointerEvents / disabled /
+// buttonStyle / accessibilityLabel) are inferred as required by TS.
+// Permissive casts mirror the App.tsx convention.
 const HomeCard = _HomeCard as React.ComponentType<any>;
 const IconButton = _IconButton as React.ComponentType<any>;
+const BigButton = _BigButton as React.ComponentType<any>;
 
 const HideImage = require('../../assets/home/WoIstWaldo-character-hide.webp');
 const FindImage = require('../../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -85,8 +89,10 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   };
   const { setPrivateMode } = authContext;
   const activeScope = routeScope ?? scope;
-  const { data, refresh } = useGroupsHub() as {
+  const { data, isLoading, error, refresh } = useGroupsHub() as {
     data: GroupsHubData | null;
+    isLoading: boolean;
+    error: unknown;
     refresh: () => Promise<void>;
   };
   const group = activeScope?.kind === 'private'
@@ -317,13 +323,8 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     }, [])
   );
 
-  const goScoped = (target: 'HidingPathScreen' | 'GuessPathScreen' | 'RankingScreen') =>
-    navigation.navigate(target, {
-      // Degenerate public-mode entry can flow a null groupId; scope consumers
-      // only read it behind a `kind === 'private'` check.
-      scope: { kind: 'private', groupId } as GroupScope,
-    });
-
+  // Kept above the loading/error early returns so the hook order stays
+  // identical between a loading-only render and a data render.
   const renewSubscription = useCallback(() => {
     navigation.navigate('PaywallScreen', { intent: 'store' });
   }, [navigation]);
@@ -335,6 +336,30 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   const dismissLockedOwnerModal = useCallback(() => {
     setDismissedGroupId(groupId);
   }, [groupId]);
+
+  if (isLoading && !data) {
+    return <LoadingOverlay message={t('groups.list.loading')} />;
+  }
+
+  if (error && !data) {
+    return (
+      <View style={styles.errorContainer} testID="private-home.error">
+        <Text style={styles.errorText}>{t('groups.list.loadFailed')}</Text>
+        <BigButton
+          text={t('common.retry')}
+          onPress={() => refresh()}
+          testID="private-home.button.retry"
+        />
+      </View>
+    );
+  }
+
+  const goScoped = (target: 'HidingPathScreen' | 'GuessPathScreen' | 'RankingScreen') =>
+    navigation.navigate(target, {
+      // Degenerate public-mode entry can flow a null groupId; scope consumers
+      // only read it behind a `kind === 'private'` check.
+      scope: { kind: 'private', groupId } as GroupScope,
+    });
 
   return (
     <View
@@ -519,6 +544,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
   lockBadge: { fontSize: 14, color: '#ffd700', textAlign: 'center' },
   pressed: { opacity: 0.7 },
+  errorContainer: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 12, gap: 10 },
+  errorText: { color: '#fff', fontSize: 18, textAlign: 'center', marginVertical: 20 },
 
   // Button backgrounds (inside the white customize modal)
   bgSectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 4 },

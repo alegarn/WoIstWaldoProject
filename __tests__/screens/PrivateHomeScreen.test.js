@@ -4,6 +4,8 @@ const mockCenteredModal = jest.fn();
 const mockColorPalettePicker = jest.fn();
 const mockLockedGroupOwnerModal = jest.fn(() => null);
 const mockLockedGroupMemberBanner = jest.fn(() => null);
+const mockLoadingOverlay = jest.fn(() => null);
+const mockBigButton = jest.fn(() => null);
 const mockUseActiveGroup = jest.fn();
 const mockUseGroupsHub = jest.fn();
 const mockFocusEffects = new Set();
@@ -77,6 +79,20 @@ jest.mock('../../components/Groups/LockedGroupMemberBanner', () => {
   };
 });
 
+jest.mock('../../components/UI/LoadingOverlay', () => {
+  return function MockLoadingOverlay(props) {
+    mockLoadingOverlay(props);
+    return null;
+  };
+});
+
+jest.mock('../../components/UI/BigButton', () => {
+  return function MockBigButton(props) {
+    mockBigButton(props);
+    return null;
+  };
+});
+
 jest.mock('../../services/groups/groupApi', () => ({
   updateGroupSettings: jest.fn(),
   deletePrivateImage: jest.fn(),
@@ -127,9 +143,12 @@ describe('PrivateHomeScreen', () => {
     scope = { kind: 'private', groupId: 'g-7' },
     groupsData = { owned: [], joined: [] },
     authContext = { paidTier: 2 },
+    isLoading = false,
+    error = null,
   } = {}) {
     mockUseActiveGroup.mockReturnValue({ scope, clear: jest.fn() });
-    mockUseGroupsHub.mockReturnValue({ data: groupsData, refresh: jest.fn() });
+    const refresh = jest.fn();
+    mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading, error, refresh });
 
     const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
 
@@ -146,7 +165,7 @@ describe('PrivateHomeScreen', () => {
       await Promise.resolve();
     });
 
-    return { renderer, navigation };
+    return { renderer, navigation, refresh };
   }
 
   function lastSetOptions(navigation) {
@@ -812,6 +831,8 @@ describe('PrivateHomeScreen', () => {
             home_button_backgrounds: { hide: hideSlot },
           }],
         },
+        isLoading: false,
+        error: null,
         refresh,
       });
 
@@ -856,6 +877,88 @@ describe('PrivateHomeScreen', () => {
       const fileDeleteOrder = deleteHomeBackgroundFile.mock.invocationCallOrder[0];
       expect(updateOrder).toBeLessThan(deleteOrder);
       expect(deleteOrder).toBeLessThan(fileDeleteOrder);
+    });
+  });
+
+  describe('hub loading and error states', () => {
+    it('shows LoadingOverlay while the first hub fetch is loading', async () => {
+      await renderScreen({ groupsData: null, isLoading: true });
+
+      const calls = mockLoadingOverlay.mock.calls.map(([props]) => props);
+      expect(calls.length).toBeGreaterThanOrEqual(1);
+      expect(calls[calls.length - 1].message).toBe('Loading groups...');
+    });
+
+    it('shows the error UI with retry (and no owner header buttons) when the hub fetch fails', async () => {
+      const { renderer, navigation, refresh } = await renderScreen({
+        groupsData: null,
+        error: { status: 500 },
+      });
+
+      expect(renderer.root.findByProps({ testID: 'private-home.error' })).toBeTruthy();
+      expect(renderer.root.findByProps({ testID: 'private-home.button.retry' })).toBeTruthy();
+
+      const headerRoot = await renderHeader(navigation);
+      expect(() => headerRoot.root.findByProps({ testID: 'private-home.button.settings' })).toThrow();
+
+      const callsBefore = refresh.mock.calls.length;
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'private-home.button.retry' }).props.onPress();
+      });
+
+      expect(refresh.mock.calls.length).toBe(callsBefore + 1);
+    });
+
+    it('renders the normal screen once hub data is present', async () => {
+      const { renderer } = await renderScreen({
+        groupsData: { owned: [{ id: 'g-7', name: 'Waldos', role: 'owner' }], joined: [] },
+      });
+
+      expect(mockLoadingOverlay).not.toHaveBeenCalled();
+      expect(() => renderer.root.findByProps({ testID: 'private-home.error' })).toThrow();
+      expect(mockHomeCard.mock.calls.some(([props]) => props?.testID === 'private-home.button.hide')).toBe(true);
+    });
+
+    it('survives a loading-to-data transition on the same renderer without a hook-order crash', async () => {
+      mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-7' }, clear: jest.fn() });
+      const refresh = jest.fn();
+      mockUseGroupsHub.mockReturnValue({ data: null, isLoading: true, error: null, refresh });
+
+      const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+      const route = { params: { scope: { kind: 'private', groupId: 'g-7' } } };
+      const providerValue = { setPrivateMode: jest.fn(), paidTier: 2 };
+
+      let renderer;
+      await act(async () => {
+        renderer = create(
+          <AuthContext.Provider value={providerValue}>
+            <PrivateHomeScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await Promise.resolve();
+      });
+
+      expect(mockLoadingOverlay.mock.calls.length).toBeGreaterThanOrEqual(1);
+
+      mockUseGroupsHub.mockReturnValue({
+        data: { owned: [{ id: 'g-7', name: 'Waldos', role: 'owner' }], joined: [] },
+        isLoading: false,
+        error: null,
+        refresh,
+      });
+
+      await act(async () => {
+        renderer.update(
+          <AuthContext.Provider value={providerValue}>
+            <PrivateHomeScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await Promise.resolve();
+      });
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.error' })).toThrow();
+      expect(mockHomeCard.mock.calls.some(([props]) => props?.testID === 'private-home.button.hide')).toBe(true);
     });
   });
 });
