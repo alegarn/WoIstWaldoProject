@@ -1,5 +1,5 @@
 // Shared runtime shapes for private groups. Fields mirror what the group
-// services and hooks actually produce/consume (groupApi.js
+// services and hooks actually produce/consume (groupApi.ts
 // normalizeGroupsPayload, groupCategoriesStore.js normalizePrivateCategory,
 // groupMembershipApi.js listMembers, hooks/useActiveGroup.js). Rows come from
 // axios JSON, so optional fields + index signatures keep the boundary honest.

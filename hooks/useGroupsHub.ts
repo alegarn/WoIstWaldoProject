@@ -1,34 +1,60 @@
 import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { fetchGroups } from '../services/groups/groupApi';
+import type { GroupsResponse, RequestResult } from '../services/groups/groupApi';
 import { readGroupHubCache, writeGroupHubCache } from '../services/groups/groupHubCache';
 import { getSnapshot, publish, subscribe } from '../services/groups/groupHubStore';
 import { AuthContext } from '../store/auth-context';
+import type { GroupsHubData } from '../types/groups';
+
+type HubSnapshot = {
+  identityKey: string;
+  data: GroupsHubData | null;
+  updatedAt?: number;
+};
+
+type HubResponse = GroupsResponse | RequestResult;
+
+type UseGroupsHubOptions = {
+  enabled?: boolean;
+};
+
+type UseGroupsHubResult = {
+  data: GroupsHubData | null;
+  isLoading: boolean;
+  error: unknown;
+  isFresh: boolean;
+  refresh: () => Promise<void>;
+};
 
 const MAX_TRANSPORT_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [0, 1500];
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
-function hasHubRows(hub) {
+function hasHubRows(hub: GroupsHubData | null | undefined): boolean {
   return Boolean(hub?.owned?.length || hub?.joined?.length);
 }
 
 // Strict identityKey compare: returns the store payload only when it belongs
 // to this identity, preserving the data=null semantics for wrong-identity
 // data.
-function snapshotDataFor(snapshot, identityKey) {
+function snapshotDataFor(snapshot: HubSnapshot | null | undefined, identityKey: string): GroupsHubData | null {
   return snapshot && snapshot.identityKey === identityKey && snapshot.data
     ? snapshot.data
     : null;
 }
 
 // Never logs token/userId values — only whether an identityKey was present.
-function warnFetchFailed(errorOrResponse, attempts, hasIdentity) {
+function warnFetchFailed(errorOrResponse: unknown, attempts: number, hasIdentity: boolean) {
+  const candidate = (errorOrResponse ?? {}) as HubResponse & {
+    message?: string;
+    data?: { message?: string } | null;
+  };
   console.warn('[useGroupsHub] groups fetch failed', {
-    status: errorOrResponse?.status ?? null,
+    status: candidate.status ?? null,
     message: (
-      errorOrResponse?.data?.message
-      ?? errorOrResponse?.message
+      candidate.data?.message
+      ?? candidate.message
       ?? String(errorOrResponse ?? 'unknown')
     ).slice(0, 200),
     attempts,
@@ -36,18 +62,18 @@ function warnFetchFailed(errorOrResponse, attempts, hasIdentity) {
   });
 }
 
-export function useGroupsHub({ enabled = true } = {}) {
+export function useGroupsHub({ enabled = true }: UseGroupsHubOptions = {}): UseGroupsHubResult {
   const { token, userId } = useContext(AuthContext);
   const identityKey = `${token ?? ''}|${userId ?? ''}`;
-  const [data, setData] = useState(() => snapshotDataFor(getSnapshot(), identityKey));
+  const [data, setData] = useState<GroupsHubData | null>(() => snapshotDataFor(getSnapshot(), identityKey));
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<unknown>(null);
   const [isFresh, setIsFresh] = useState(false);
 
   const mounted = useRef(false);
-  const identityRef = useRef(null);
+  const identityRef = useRef<string | null>(null);
   const seqRef = useRef(0);
-  const inFlightRef = useRef(null);
+  const inFlightRef = useRef<{ identityKey: string; promise: Promise<void> } | null>(null);
   const dataRef = useRef(data);
 
   useEffect(() => {
@@ -85,7 +111,7 @@ export function useGroupsHub({ enabled = true } = {}) {
   // path falls back to the store snapshot — and the AsyncStorage cache covers
   // cold start.
   useEffect(() => {
-    const unsubscribe = subscribe((snapshot) => {
+    const unsubscribe = subscribe((snapshot: HubSnapshot) => {
       if (!mounted.current || !snapshot?.data) return;
       if (snapshot.identityKey !== identityKey || identityRef.current !== identityKey) return;
 
@@ -105,7 +131,7 @@ export function useGroupsHub({ enabled = true } = {}) {
     return unsubscribe;
   }, [identityKey]);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (): Promise<void> => {
     // Without credentials/disabled the hub has "no data yet", not "loaded
     // empty": stay in the pending loading state so consumers keep showing
     // their loading UI instead of a degraded body.
@@ -129,7 +155,7 @@ export function useGroupsHub({ enabled = true } = {}) {
     // published a 200 for this identity in this instance's render-to-effect
     // window or while this flight was retrying. Surface the store data
     // instead of the error; the warns above keep the failure visible in logs.
-    const healOrSurfaceError = (failure) => {
+    const healOrSurfaceError = (failure: unknown) => {
       const healed = snapshotDataFor(getSnapshot(), flightIdentity);
       if (healed) {
         dataRef.current = healed;
@@ -137,20 +163,20 @@ export function useGroupsHub({ enabled = true } = {}) {
         setIsFresh(true);
         setError(null);
       } else {
-        setError(failure?.data ?? failure);
+        setError((failure as HubResponse)?.data ?? failure);
         setIsFresh(false);
       }
       if (mounted.current) setIsLoading(false);
     };
 
-    const runFlight = async (flightSeq) => {
+    const runFlight = async (flightSeq: number): Promise<void> => {
       const seq = flightSeq;
       if (mounted.current) {
         setIsLoading(true);
         setError(null);
       }
 
-      let cached = null;
+      let cached: GroupsHubData | null = null;
       try {
         cached = await readGroupHubCache(userId);
         if (mounted.current && cached && seq === seqRef.current) {
@@ -160,8 +186,8 @@ export function useGroupsHub({ enabled = true } = {}) {
         // best-effort: unreadable cache behaves like no cache
       }
 
-      let response = null;
-      let transportFailure = null;
+      let response: HubResponse | null = null;
+      let transportFailure: unknown = null;
       let attempts = 0;
 
       // Transport failures (rejection or no HTTP status) retry with backoff;
@@ -191,12 +217,15 @@ export function useGroupsHub({ enabled = true } = {}) {
       if (!mounted.current || seq !== seqRef.current) return;
 
       if (response) {
+        // Anything reaching this block carries the full hub envelope shape;
+        // narrow once so payloadInvalid/data/raw* reads stay typed.
+        const hubResponse = response as GroupsResponse;
         // fetchGroups flags any 200 whose body is not a valid groups payload
         // (proxy error bodies, HTML garbage) with `payloadInvalid`. Route it
         // through the error branch below — an error body is never "zero
         // groups" and must not reach the empty-200 branch or be published.
-        if (!response.payloadInvalid && response.status === 200) {
-          const isEmpty = response.data?.owned?.length === 0 && response.data?.joined?.length === 0;
+        if (!hubResponse.payloadInvalid && hubResponse.status === 200) {
+          const isEmpty = hubResponse.data?.owned?.length === 0 && hubResponse.data?.joined?.length === 0;
 
           if (isEmpty) {
             // Payload validation already rejected error/garbage bodies, so a
@@ -206,18 +235,18 @@ export function useGroupsHub({ enabled = true } = {}) {
               hadCachedData: hasHubRows(dataRef.current)
                 || hasHubRows(snapshotDataFor(getSnapshot(), flightIdentity))
                 || hasHubRows(cached),
-              ...(response.rawBodyType != null ? { rawType: response.rawBodyType } : {}),
-              ...(response.rawBodySample != null ? { bodySample: response.rawBodySample } : {}),
+              ...(hubResponse.rawBodyType != null ? { rawType: hubResponse.rawBodyType } : {}),
+              ...(hubResponse.rawBodySample != null ? { bodySample: hubResponse.rawBodySample } : {}),
             });
           }
 
-          publish(flightIdentity, response.data);
-          dataRef.current = response.data;
-          setData(response.data);
+          publish(flightIdentity, hubResponse.data);
+          dataRef.current = hubResponse.data;
+          setData(hubResponse.data);
           setIsFresh(true);
 
           try {
-            await writeGroupHubCache(userId, response.data);
+            await writeGroupHubCache(userId, hubResponse.data);
           } catch {
             // best-effort: cache write failure must not fail the refresh
           }
@@ -226,17 +255,17 @@ export function useGroupsHub({ enabled = true } = {}) {
           return;
         }
 
-        if (response.payloadInvalid) {
+        if (hubResponse.payloadInvalid) {
           console.warn('[useGroupsHub] groups payload rejected', {
-            bodySample: String(response.rawBodySample ?? response.data ?? 'unknown').slice(0, 200),
-            rawType: response.rawBodyType ?? null,
-            bodyStatus: response.status ?? null,
+            bodySample: String(hubResponse.rawBodySample ?? hubResponse.data ?? 'unknown').slice(0, 200),
+            rawType: hubResponse.rawBodyType ?? null,
+            bodyStatus: hubResponse.status ?? null,
           });
         } else {
-          warnFetchFailed(response, attempts, Boolean(flightIdentity));
+          warnFetchFailed(hubResponse, attempts, Boolean(flightIdentity));
         }
 
-        healOrSurfaceError(response);
+        healOrSurfaceError(hubResponse);
         return;
       }
 

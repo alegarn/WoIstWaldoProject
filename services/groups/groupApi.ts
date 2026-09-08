@@ -1,36 +1,76 @@
 import axios from 'axios';
+import type { AxiosRequestConfig } from 'axios';
 import { getBackendHeaders, setHeaders, mapRequestError } from '../../utils/auth';
 import { clearGroupFeedCache, purgeAllPrivateCaches } from './groupFeedCache';
 import { clearGroupThumbnails } from './groupCategoryThumbnails';
 import { clearGroupHomeBackgrounds } from './groupHomeBackgrounds';
+import type { Group, GroupRole, GroupsHubData } from '../../types/groups';
+
+export type BackendRequestContext = {
+  token?: string | null;
+  userId?: string | null;
+  [key: string]: unknown;
+};
+
+export type GroupsResponse = {
+  status: number;
+  data: GroupsHubData;
+  payloadInvalid?: boolean;
+  rawBodyType?: string;
+  rawBodySample?: string;
+};
+
+export type RequestResult = {
+  status?: number | undefined;
+  data?: any;
+};
+
+type GroupWriteAttributes = {
+  name?: string;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+};
+
+type GroupSettingsPatch = {
+  name?: string;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  hideBgImageId?: string | number | null;
+  findBgImageId?: string | number | null;
+  rankingBgImageId?: string | number | null;
+  [key: string]: unknown;
+};
 
 const BASE_URL = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups`;
 
-async function clearDeletedGroupCaches(groupId) {
+async function clearDeletedGroupCaches(groupId: string | null | undefined): Promise<void> {
   await Promise.allSettled([
-    clearGroupFeedCache(groupId),
+    clearGroupFeedCache(groupId as string),
     clearGroupThumbnails(groupId),
     clearGroupHomeBackgrounds(groupId),
     purgeAllPrivateCaches(),
   ]);
 }
 
-function normalizeGroupRow(row, userId) {
+function normalizeGroupRow(row: Group, userId: string | number | null | undefined): Group {
   if (!row || typeof row !== 'object') {
     return row;
   }
 
+  const role: GroupRole = String(row.owner_id) === String(userId) ? 'owner' : 'member';
+
   return {
     ...row,
-    role: String(row.owner_id) === String(userId) ? 'owner' : 'member',
+    role,
   };
 }
 
-function normalizeGroupsPayload(payload, userId) {
-  const rows = Array.isArray(payload?.data)
-    ? payload.data
+function normalizeGroupsPayload(payload: unknown, userId: string | number | null | undefined): GroupsHubData {
+  const envelope = payload as { data?: Group[] } | null | undefined;
+  const rows: Group[] = Array.isArray(envelope?.data)
+    ? envelope.data
     : Array.isArray(payload)
-      ? payload
+      ? (payload as Group[])
       : [];
 
   const normalized = rows.map((row) => normalizeGroupRow(row, userId));
@@ -42,7 +82,7 @@ function normalizeGroupsPayload(payload, userId) {
   };
 }
 
-function rawBodySample(rawBody) {
+function rawBodySample(rawBody: unknown): string {
   if (rawBody == null) {
     return String(rawBody);
   }
@@ -59,25 +99,32 @@ function rawBodySample(rawBody) {
 // Detects proxy/carrier error bodies smuggled inside a 200 response (e.g. a
 // stale Rails 404 JSON served by an intermediary cache). An error body is
 // never "zero groups".
-export function looksLikeErrorPayload(payload) {
+export function looksLikeErrorPayload(payload: unknown): boolean {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     return false;
   }
-  if (Array.isArray(payload.data)) {
+  const body = payload as {
+    data?: unknown;
+    error?: unknown;
+    exception?: unknown;
+    status?: unknown;
+  };
+  if (Array.isArray(body.data)) {
     return false;
   }
-  return typeof payload.error === 'string'
-    || payload.exception != null
-    || (typeof payload.status === 'number' && payload.status >= 400);
+  return typeof body.error === 'string'
+    || body.exception != null
+    || (typeof body.status === 'number' && body.status >= 400);
 }
 
-function unwrapData(payload) {
-  return payload?.data ?? payload;
+function unwrapData(payload: unknown): unknown {
+  const envelope = payload as { data?: unknown } | null | undefined;
+  return envelope?.data ?? payload;
 }
 
-export async function fetchGroups(context) {
+export async function fetchGroups(context: BackendRequestContext): Promise<GroupsResponse | RequestResult> {
   const { token, userId } = await getBackendHeaders(context);
-  const config = { headers: setHeaders({ token }) };
+  const config: AxiosRequestConfig = { headers: setHeaders({ token }) };
 
   // Carrier transparent proxies can serve a poisoned cached body for this
   // static GET URL (HTTP 200 wrapping a stale Rails 404 JSON). The
@@ -116,7 +163,11 @@ export async function fetchGroups(context) {
     .catch(mapRequestError);
 }
 
-export async function createGroup(context, { name, primaryColor, secondaryColor } = {}) {
+export async function createGroup(context: BackendRequestContext, {
+  name,
+  primaryColor,
+  secondaryColor,
+}: GroupWriteAttributes = {}): Promise<RequestResult> {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
   const body = {
@@ -132,17 +183,17 @@ export async function createGroup(context, { name, primaryColor, secondaryColor 
     .catch(mapRequestError);
 }
 
-export async function updateGroupSettings(context, groupId, {
+export async function updateGroupSettings(context: BackendRequestContext, groupId: string | null | undefined, {
   name,
   primaryColor,
   secondaryColor,
   hideBgImageId,
   findBgImageId,
   rankingBgImageId,
-} = {}) {
+}: GroupSettingsPatch = {}): Promise<RequestResult> {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
-  const private_group = {};
+  const private_group: Record<string, unknown> = {};
   if (name !== undefined) private_group.name = name;
   if (primaryColor !== undefined) private_group.primary_color = primaryColor;
   if (secondaryColor !== undefined) private_group.secondary_color = secondaryColor;
@@ -156,7 +207,7 @@ export async function updateGroupSettings(context, groupId, {
     .catch(mapRequestError);
 }
 
-export async function deletePrivateImage(context, groupId, imageId) {
+export async function deletePrivateImage(context: BackendRequestContext, groupId: string | null | undefined, imageId: string | number): Promise<RequestResult> {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
 
@@ -165,7 +216,7 @@ export async function deletePrivateImage(context, groupId, imageId) {
     .catch(mapRequestError);
 }
 
-export async function deleteGroup(context, groupId) {
+export async function deleteGroup(context: BackendRequestContext, groupId: string | null | undefined): Promise<RequestResult> {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
 
@@ -180,7 +231,7 @@ export async function deleteGroup(context, groupId) {
     .catch(mapRequestError);
 }
 
-export async function setActiveGroup(context, groupId) {
+export async function setActiveGroup(context: BackendRequestContext, groupId: string | null | undefined): Promise<RequestResult> {
   const { token, userId } = await getBackendHeaders(context);
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/active_group`;
   const config = { headers: setHeaders({ token }) };

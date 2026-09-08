@@ -1,20 +1,22 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
+import type { Group, GroupsHubData } from '../../types/groups';
+
 const PREFIX = 'groupsHub';
 
-function groupHubKey(userId) {
+function groupHubKey(userId: string | null | undefined): string {
   return `${PREFIX}:${userId}`;
 }
 
 
-function isValidHubPayload(payload) {
+function isValidHubPayload(payload: unknown): payload is GroupsHubData & { owned: Group[]; joined: Group[] } {
   return !!payload
     && typeof payload === 'object'
-    && Array.isArray(payload.owned)
-    && Array.isArray(payload.joined);
+    && Array.isArray((payload as GroupsHubData).owned)
+    && Array.isArray((payload as GroupsHubData).joined);
 }
 
-export async function readGroupHubCache(userId) {
+export async function readGroupHubCache(userId: string | null | undefined): Promise<GroupsHubData | null> {
   if (userId === null || userId === undefined || userId === '') {
     return null;
   }
@@ -46,7 +48,7 @@ export async function readGroupHubCache(userId) {
   return hub;
 }
 
-export async function writeGroupHubCache(userId, hub) {
+export async function writeGroupHubCache(userId: string | null | undefined, hub: GroupsHubData): Promise<void> {
   // Writing an accepted legit empty is harmless: reads ignore empty entries,
   // so a written empty never hydrates a degraded render.
   if (userId === null || userId === undefined || userId === '' || !isValidHubPayload(hub)) {
@@ -56,11 +58,11 @@ export async function writeGroupHubCache(userId, hub) {
   await AsyncStorage.setItem(groupHubKey(userId), JSON.stringify(hub));
 }
 
-export async function clearGroupHubCache(userId) {
+export async function clearGroupHubCache(userId: string | null | undefined): Promise<void> {
   await AsyncStorage.removeItem(groupHubKey(userId));
 }
 
-export async function clearAllGroupHubCaches() {
+export async function clearAllGroupHubCaches(): Promise<void> {
   const keys = await AsyncStorage.getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:`));
 

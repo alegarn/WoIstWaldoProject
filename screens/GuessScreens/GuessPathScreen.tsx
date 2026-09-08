@@ -213,7 +213,7 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const { scope: activeScope } = useActiveGroup() as { scope: GuessPathScope };
   const scope: GuessPathScope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
-  // useGroupsHub.js is untyped JS; data is the groups hub payload or null.
+  // hooks/useGroupsHub.ts is typed TS; data is GroupsHubData | null from the groups hub.
   const { data: groupsHubData, refresh: refreshGroupsHub } = useGroupsHub({ enabled: isPrivateScope }) as {
     data: GroupsHubData | null;
     refresh: () => Promise<void>;

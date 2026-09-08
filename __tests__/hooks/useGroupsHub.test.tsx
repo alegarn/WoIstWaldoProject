@@ -1,24 +1,28 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
-import React from 'react';
+import React, { ContextType } from 'react';
+
+declare module '@react-native-async-storage/async-storage' {
+  export const __store: Map<string, string>;
+}
 
 jest.mock('@react-native-async-storage/async-storage', () => {
-  const store = new Map();
+  const store = new Map<string, string>();
 
   return {
     __esModule: true,
     __store: store,
     default: {
-      getItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
-      setItem: jest.fn((key, value) => {
+      getItem: jest.fn((key: string) => Promise.resolve(store.has(key) ? store.get(key) : null)),
+      setItem: jest.fn((key: string, value: string) => {
         store.set(key, value);
         return Promise.resolve();
       }),
-      removeItem: jest.fn((key) => {
+      removeItem: jest.fn((key: string) => {
         store.delete(key);
         return Promise.resolve();
       }),
       getAllKeys: jest.fn(() => Promise.resolve(Array.from(store.keys()))),
-      multiRemove: jest.fn((keys) => {
+      multiRemove: jest.fn((keys: string[]) => {
         for (const key of keys) store.delete(key);
         return Promise.resolve();
       }),
@@ -36,21 +40,27 @@ jest.mock('../../services/groups/groupApi', () => ({
 }));
 
 import { fetchGroups } from '../../services/groups/groupApi';
+import type { GroupsResponse, RequestResult } from '../../services/groups/groupApi';
+import type { GroupsHubData } from '../../types/groups';
+
+type FetchGroupsResult = GroupsResponse | RequestResult;
+
+const mockedFetchGroups = jest.mocked(fetchGroups);
 
 const TOKEN = 'Bearer token-1';
 const USER_ID = 'user-1';
 
-const HUB = {
+const HUB: GroupsHubData = {
   owned: [{ id: 'g-1', role: 'owner' }],
   joined: [{ id: 'g-2', role: 'member' }],
   pendingInvites: [],
 };
 
 // Mutable auth value: mutate then rerender() to simulate credentials arriving.
-function makeWrapper(auth) {
-  return function Wrapper({ children }) {
+function makeWrapper(auth: { token: string | null; userId: string | null }) {
+  return function Wrapper({ children }: { children: React.ReactNode }) {
     return (
-      <AuthContext.Provider value={{ ...auth }}>
+      <AuthContext.Provider value={{ ...auth } as ContextType<typeof AuthContext>}>
         {children}
       </AuthContext.Provider>
     );
@@ -85,7 +95,7 @@ describe('useGroupsHub', () => {
   });
 
   it('populates data.owned and data.joined and flips isLoading to false once fetchGroups resolves', async () => {
-    fetchGroups.mockResolvedValue({
+    mockedFetchGroups.mockResolvedValue({
       status: 200,
       data: {
         owned: [{ id: 'g-1', role: 'owner' }],
@@ -103,13 +113,13 @@ describe('useGroupsHub', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(fetchGroups).toHaveBeenCalledWith({ token: TOKEN, userId: USER_ID });
-    expect(result.current.data.owned).toEqual([{ id: 'g-1', role: 'owner' }]);
-    expect(result.current.data.joined).toEqual([{ id: 'g-2', role: 'member' }]);
+    expect(result.current.data!.owned).toEqual([{ id: 'g-1', role: 'owner' }]);
+    expect(result.current.data!.joined).toEqual([{ id: 'g-2', role: 'member' }]);
     expect(result.current.error).toBeNull();
   });
 
   it('exposes the API error payload and keeps isLoading false when fetchGroups fails', async () => {
-    fetchGroups.mockResolvedValue({
+    mockedFetchGroups.mockResolvedValue({
       status: 500,
       data: { error: 'boom' },
     });
@@ -140,10 +150,10 @@ describe('useGroupsHub', () => {
   });
 
   it('fetches and writes the hub cache once credentials arrive', async () => {
-    fetchGroups.mockResolvedValue({ status: 200, data: HUB });
+    mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
 
-    const auth = { token: null, userId: USER_ID };
-    const { result, rerender } = renderHook(() => useGroupsHub(), {
+    const auth: { token: string | null; userId: string | null } = { token: null, userId: USER_ID };
+    const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
       wrapper: makeWrapper(auth),
     });
 
@@ -168,8 +178,8 @@ describe('useGroupsHub', () => {
   it('hydrates cached hub data before the network resolves (stale-while-revalidate)', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    let resolveFetch;
-    fetchGroups.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    let resolveFetch!: (value: FetchGroupsResult) => void;
+    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -195,7 +205,7 @@ describe('useGroupsHub', () => {
   it('sets the error but retains cached data when the fetch fails', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    fetchGroups.mockResolvedValue({ status: 500, data: { error: 'boom' } });
+    mockedFetchGroups.mockResolvedValue({ status: 500, data: { error: 'boom' } });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -213,7 +223,7 @@ describe('useGroupsHub', () => {
 
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    fetchGroups.mockRejectedValue(new Error('non-axios crash'));
+    mockedFetchGroups.mockRejectedValue(new Error('non-axios crash'));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -234,7 +244,7 @@ describe('useGroupsHub', () => {
   it('drops the previous user hub and hydrates the next user cache when identity changes', async () => {
     await AsyncStorage.setItem('groupsHub:user-2', JSON.stringify({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] }));
 
-    fetchGroups
+    mockedFetchGroups
       .mockResolvedValueOnce({ status: 200, data: HUB })
       .mockResolvedValue({
         status: 200,
@@ -242,7 +252,7 @@ describe('useGroupsHub', () => {
       });
 
     const auth = { token: TOKEN, userId: USER_ID };
-    const { result, rerender } = renderHook(() => useGroupsHub(), {
+    const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
       wrapper: makeWrapper(auth),
     });
 
@@ -259,8 +269,8 @@ describe('useGroupsHub', () => {
   });
 
   it('single-flights concurrent mount and focus refresh calls into one fetch per identity', async () => {
-    let resolveFetch;
-    fetchGroups.mockImplementation(() => new Promise((resolve) => { resolveFetch = resolve; }));
+    let resolveFetch!: (value: FetchGroupsResult) => void;
+    mockedFetchGroups.mockImplementation(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -289,14 +299,14 @@ describe('useGroupsHub', () => {
   });
 
   it('ignores a stale flight failure that resolves after a newer identity flight succeeded', async () => {
-    let resolveStale;
-    let resolveFresh;
-    fetchGroups
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveStale = resolve; }))
-      .mockImplementationOnce(() => new Promise((resolve) => { resolveFresh = resolve; }));
+    let resolveStale!: (value: FetchGroupsResult) => void;
+    let resolveFresh!: (value: FetchGroupsResult) => void;
+    mockedFetchGroups
+      .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveStale = resolve; }))
+      .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFresh = resolve; }));
 
     const auth = { token: TOKEN, userId: USER_ID };
-    const { result, rerender } = renderHook(() => useGroupsHub(), {
+    const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
       wrapper: makeWrapper(auth),
     });
 
@@ -332,7 +342,7 @@ describe('useGroupsHub', () => {
   });
 
   it('retries a transport-level failure (no status) within the 3-attempt budget and surfaces the success', async () => {
-    fetchGroups
+    mockedFetchGroups
       .mockResolvedValueOnce({ data: { message: 'Network Error' } })
       .mockResolvedValueOnce({ status: 200, data: HUB });
 
@@ -351,7 +361,7 @@ describe('useGroupsHub', () => {
   it('retries transport failures up to 3 attempts with backoff and surfaces the error only after the last attempt', async () => {
     jest.useFakeTimers();
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    fetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
+    mockedFetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -386,7 +396,7 @@ describe('useGroupsHub', () => {
 
   it('succeeds on the second transport attempt without surfacing an error', async () => {
     jest.useFakeTimers();
-    fetchGroups
+    mockedFetchGroups
       .mockResolvedValueOnce({ data: { message: 'Network Error' } })
       .mockResolvedValueOnce({ status: 200, data: HUB });
 
@@ -408,7 +418,7 @@ describe('useGroupsHub', () => {
   it('surfaces the error after all transport attempts fail and still allows manual retry', async () => {
     jest.useFakeTimers();
     const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    fetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
+    mockedFetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -424,7 +434,7 @@ describe('useGroupsHub', () => {
 
     warn.mockRestore();
 
-    fetchGroups.mockResolvedValue({ status: 200, data: HUB });
+    mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
 
     await act(async () => {
       await result.current.refresh();
@@ -437,8 +447,8 @@ describe('useGroupsHub', () => {
   it('marks isFresh false while cache-hydrated and true only after the 200 applies', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    let resolveFetch;
-    fetchGroups.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+    let resolveFetch!: (value: FetchGroupsResult) => void;
+    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -463,8 +473,8 @@ describe('useGroupsHub', () => {
   });
 
   it('does not emit a React state-update warning when refresh resolves after unmount', async () => {
-    let resolveRefresh;
-    fetchGroups.mockReturnValueOnce(new Promise((resolve) => {
+    let resolveRefresh!: (value: FetchGroupsResult) => void;
+    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => {
       resolveRefresh = resolve;
     }));
 
@@ -511,7 +521,7 @@ describe('useGroupsHub', () => {
 
     it('surfaces the error state, not empty data, when a 200 wraps an error body', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -539,7 +549,7 @@ describe('useGroupsHub', () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       publish(`${TOKEN}|${USER_ID}`, HUB);
-      fetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -565,7 +575,7 @@ describe('useGroupsHub', () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-      fetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
 
       renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -587,7 +597,7 @@ describe('useGroupsHub', () => {
     it('applies a well-formed empty 200 immediately with no confirmation refetch or pending timers', async () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
+      mockedFetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -626,7 +636,7 @@ describe('useGroupsHub', () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
       await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
-      fetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
+      mockedFetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -651,7 +661,7 @@ describe('useGroupsHub', () => {
     it('emits the raw-body diagnostic warn on an empty 200', async () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fetchGroups.mockResolvedValue({
+      mockedFetchGroups.mockResolvedValue({
         status: 200,
         data: EMPTY,
         rawBodyType: 'string',
@@ -680,7 +690,7 @@ describe('useGroupsHub', () => {
     it('heals an instance whose fetch rejects at transport level from a sibling instance 200', async () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fetchGroups
+      mockedFetchGroups
         .mockResolvedValueOnce({ status: 200, data: HUB })
         .mockRejectedValue(new Error('network down'));
 
@@ -708,11 +718,11 @@ describe('useGroupsHub', () => {
 
     it('heals a non-200 flight from a sibling 200 published between mount and the flight resolution', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      let resolveSibling;
-      let resolveOwn;
-      fetchGroups
-        .mockImplementationOnce(() => new Promise((resolve) => { resolveSibling = resolve; }))
-        .mockImplementationOnce(() => new Promise((resolve) => { resolveOwn = resolve; }));
+      let resolveSibling!: (value: FetchGroupsResult) => void;
+      let resolveOwn!: (value: FetchGroupsResult) => void;
+      mockedFetchGroups
+        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveSibling = resolve; }))
+        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveOwn = resolve; }));
 
       const wrapper = makeWrapper({ token: TOKEN, userId: USER_ID });
       const instanceA = renderHook(() => useGroupsHub(), { wrapper });
@@ -743,7 +753,7 @@ describe('useGroupsHub', () => {
 
     it('still sets the error on a 4xx when the store has no matching snapshot', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-      fetchGroups.mockResolvedValue({ status: 401, data: { error: 'unauthorized' } });
+      mockedFetchGroups.mockResolvedValue({ status: 401, data: { error: 'unauthorized' } });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -761,8 +771,8 @@ describe('useGroupsHub', () => {
     it('hydrates from the store snapshot synchronously on mount, before the cache and network', async () => {
       publish(`${TOKEN}|${USER_ID}`, HUB);
 
-      let resolveFetch;
-      fetchGroups.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (value: FetchGroupsResult) => void;
+      mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -787,8 +797,8 @@ describe('useGroupsHub', () => {
     });
 
     it('ignores a publish for a different identity and adopts the matching one', async () => {
-      let resolveFetch;
-      fetchGroups.mockReturnValueOnce(new Promise((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (value: FetchGroupsResult) => void;
+      mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -821,13 +831,13 @@ describe('useGroupsHub', () => {
       jest.useFakeTimers();
       publish('Bearer token-2|user-2', { owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
 
-      let resolveFetch;
-      fetchGroups
-        .mockImplementationOnce(() => new Promise((resolve) => { resolveFetch = resolve; }))
+      let resolveFetch!: (value: FetchGroupsResult) => void;
+      mockedFetchGroups
+        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }))
         .mockResolvedValueOnce({ status: 200, data: { owned: [{ id: 'g-2b-fresh' }], joined: [], pendingInvites: [] } });
 
       const auth = { token: TOKEN, userId: USER_ID };
-      const { result, rerender } = renderHook(() => useGroupsHub(), {
+      const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
         wrapper: makeWrapper(auth),
       });
 
