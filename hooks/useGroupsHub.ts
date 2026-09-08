@@ -2,7 +2,7 @@ import { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { fetchGroups } from '../services/groups/groupApi';
 import type { GroupsResponse, RequestResult } from '../services/groups/groupApi';
 import { readGroupHubCache, writeGroupHubCache } from '../services/groups/groupHubCache';
-import { getSnapshot, publish, subscribe } from '../services/groups/groupHubStore';
+import { getSnapshot, getSharedFlight, beginSharedFlight, publish, subscribe } from '../services/groups/groupHubStore';
 import { AuthContext } from '../store/auth-context';
 import type { GroupsHubData } from '../types/groups';
 
@@ -24,6 +24,15 @@ type UseGroupsHubResult = {
   error: unknown;
   isFresh: boolean;
   refresh: () => Promise<void>;
+};
+
+// Outcome of the SHARED network flight: the raw fetchGroups resolution after
+// transport retries, with zero instance state applied. Every joined instance
+// applies this outcome itself under its own mounted/seq guards.
+type SharedFlightOutcome = {
+  response: HubResponse | null;
+  transportFailure: unknown;
+  attempts: number;
 };
 
 const MAX_TRANSPORT_ATTEMPTS = 3;
@@ -169,52 +178,14 @@ export function useGroupsHub({ enabled = true }: UseGroupsHubOptions = {}): UseG
       if (mounted.current) setIsLoading(false);
     };
 
-    const runFlight = async (flightSeq: number): Promise<void> => {
-      const seq = flightSeq;
-      if (mounted.current) {
-        setIsLoading(true);
-        setError(null);
-      }
+    // Per-instance application of the shared flight outcome. Runs under this
+    // instance's own mounted/latest-seq guards, so a joiner whose identity
+    // changed mid-flight (or an unmounted starter) can never apply a stale
+    // outcome.
+    const applyOutcome = async (flightSeq: number, outcome: SharedFlightOutcome, cached: GroupsHubData | null): Promise<void> => {
+      if (!mounted.current || flightSeq !== seqRef.current) return;
 
-      let cached: GroupsHubData | null = null;
-      try {
-        cached = await readGroupHubCache(userId);
-        if (mounted.current && cached && seq === seqRef.current) {
-          setData((prev) => prev ?? cached);
-        }
-      } catch {
-        // best-effort: unreadable cache behaves like no cache
-      }
-
-      let response: HubResponse | null = null;
-      let transportFailure: unknown = null;
-      let attempts = 0;
-
-      // Transport failures (rejection or no HTTP status) retry with backoff;
-      // any real HTTP response (including 4xx/5xx) settles the loop without
-      // retry. All attempts stay inside one flight: the latest-seq guard
-      // below still rules.
-      for (let attempt = 1; attempt <= MAX_TRANSPORT_ATTEMPTS; attempt++) {
-        attempts = attempt;
-        try {
-          const result = await fetchGroups({ token, userId });
-          if (result != null && result.status != null) {
-            response = result;
-            transportFailure = null;
-            break;
-          }
-          transportFailure = result ?? new Error('groups fetch returned no response');
-        } catch (requestError) {
-          transportFailure = requestError;
-        }
-
-        if (attempt < MAX_TRANSPORT_ATTEMPTS) {
-          await sleep(RETRY_DELAYS_MS[attempt - 1] ?? 0);
-          if (!mounted.current || seq !== seqRef.current) return;
-        }
-      }
-
-      if (!mounted.current || seq !== seqRef.current) return;
+      const { response, transportFailure } = outcome;
 
       if (response) {
         // Anything reaching this block carries the full hub envelope shape;
@@ -246,7 +217,14 @@ export function useGroupsHub({ enabled = true }: UseGroupsHubOptions = {}): UseG
           setIsFresh(true);
 
           try {
-            await writeGroupHubCache(userId, hubResponse.data);
+            // Write-diff: skip the AsyncStorage write when the accepted
+            // payload is deep-equal to what this flight already read from the
+            // cache (no cache read → always write). Kills the redundant
+            // setItem churn on repeated identical 200s.
+            const serialized = JSON.stringify(hubResponse.data);
+            if (cached === null || JSON.stringify(cached) !== serialized) {
+              await writeGroupHubCache(userId, hubResponse.data);
+            }
           } catch {
             // best-effort: cache write failure must not fail the refresh
           }
@@ -262,15 +240,74 @@ export function useGroupsHub({ enabled = true }: UseGroupsHubOptions = {}): UseG
             bodyStatus: hubResponse.status ?? null,
           });
         } else {
-          warnFetchFailed(hubResponse, attempts, Boolean(flightIdentity));
+          warnFetchFailed(hubResponse, outcome.attempts, Boolean(flightIdentity));
         }
 
         healOrSurfaceError(hubResponse);
         return;
       }
 
-      warnFetchFailed(transportFailure, attempts, Boolean(flightIdentity));
+      warnFetchFailed(transportFailure, outcome.attempts, Boolean(flightIdentity));
       healOrSurfaceError(transportFailure);
+    };
+
+    // The SHARED network flight: fetchGroups + transport backoff/retry only.
+    // Module-owned once registered in the store, so the starting instance
+    // unmounting never aborts or voids it for joined callers; joined callers
+    // get the retried outcome. No instance seq/mounted checks in here on
+    // purpose — only the per-instance applyOutcome applies those.
+    const runSharedNetworkFetch = async (): Promise<SharedFlightOutcome> => {
+      let response: HubResponse | null = null;
+      let transportFailure: unknown = null;
+      let attempts = 0;
+
+      // Transport failures (rejection or no HTTP status) retry with backoff;
+      // any real HTTP response (including 4xx/5xx) settles the loop without
+      // retry. All attempts stay inside one flight.
+      for (let attempt = 1; attempt <= MAX_TRANSPORT_ATTEMPTS; attempt++) {
+        attempts = attempt;
+        try {
+          const result = await fetchGroups({ token, userId });
+          if (result != null && result.status != null) {
+            response = result;
+            transportFailure = null;
+            break;
+          }
+          transportFailure = result ?? new Error('groups fetch returned no response');
+        } catch (requestError) {
+          transportFailure = requestError;
+        }
+
+        if (attempt < MAX_TRANSPORT_ATTEMPTS) {
+          await sleep(RETRY_DELAYS_MS[attempt - 1] ?? 0);
+        }
+      }
+
+      return { response, transportFailure, attempts };
+    };
+
+    const runFlight = async (flightSeq: number): Promise<void> => {
+      if (mounted.current) {
+        setIsLoading(true);
+        setError(null);
+      }
+
+      let cached: GroupsHubData | null = null;
+      try {
+        cached = await readGroupHubCache(userId);
+        if (mounted.current && cached && flightSeq === seqRef.current) {
+          setData((prev) => prev ?? cached);
+        }
+      } catch {
+        // best-effort: unreadable cache behaves like no cache
+      }
+
+      const shared = getSharedFlight(flightIdentity);
+      const outcome = shared
+        ? await shared.promise
+        : await beginSharedFlight(flightIdentity, runSharedNetworkFetch());
+
+      await applyOutcome(flightSeq, outcome, cached);
     };
 
     const promise = runFlight(seq);

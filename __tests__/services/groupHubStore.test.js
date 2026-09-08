@@ -1,4 +1,6 @@
 import {
+  beginSharedFlight,
+  getSharedFlight,
   getSnapshot,
   publish,
   resetGroupHubStore,
@@ -80,5 +82,49 @@ describe('groupHubStore', () => {
     expect(listener).toHaveBeenCalledTimes(1);
 
     unsubscribe();
+  });
+
+  it('exposes the shared flight only to callers with the matching identityKey', () => {
+    const promise = Promise.resolve('outcome');
+    beginSharedFlight('token-a|user-a', promise);
+
+    expect(getSharedFlight('token-a|user-a')?.promise).toBe(promise);
+    expect(getSharedFlight('token-b|user-b')).toBeNull();
+  });
+
+  it('clears the shared flight once it settles so the next caller starts fresh', async () => {
+    beginSharedFlight('token-a|user-a', Promise.resolve('outcome'));
+
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getSharedFlight('token-a|user-a')).toBeNull();
+  });
+
+  it('keeps only the latest registered flight: a new identity overwrites, and only the registered flight clears itself', async () => {
+    let resolveA;
+    const promiseA = new Promise((resolve) => { resolveA = resolve; });
+    beginSharedFlight('token-a|user-a', promiseA);
+    expect(getSharedFlight('token-a|user-a')?.promise).toBe(promiseA);
+
+    const promiseB = Promise.resolve('b');
+    beginSharedFlight('token-b|user-b', promiseB);
+    expect(getSharedFlight('token-a|user-a')).toBeNull();
+    expect(getSharedFlight('token-b|user-b')?.promise).toBe(promiseB);
+
+    await promiseB;
+    expect(getSharedFlight('token-b|user-b')).toBeNull();
+
+    resolveA('a');
+    await promiseA;
+    expect(getSharedFlight('token-a|user-a')).toBeNull();
+  });
+
+  it('resetGroupHubStore also drops the shared flight registration', () => {
+    beginSharedFlight('token-a|user-a', Promise.resolve('outcome'));
+
+    resetGroupHubStore();
+
+    expect(getSharedFlight('token-a|user-a')).toBeNull();
   });
 });

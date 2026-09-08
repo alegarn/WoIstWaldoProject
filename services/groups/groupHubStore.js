@@ -5,6 +5,30 @@
 let latest = null;
 const listeners = new Set();
 
+// Module-level registry of the currently-running SHARED network flight
+// (fetchGroups + retry/backoff only, no per-instance state application).
+// Concurrent useGroupsHub instances with the same identityKey join this
+// promise instead of issuing their own GET; it clears itself on completion
+// so a later refresh() always starts a fresh flight. A flight started for a
+// different identityKey overwrites the registration but never clobbers the
+// previous promise (cleared only when still the registered one), and it is
+// module-owned so the starting instance unmounting cannot void it.
+let sharedFlight = null;
+
+export function getSharedFlight(identityKey) {
+  return sharedFlight && sharedFlight.identityKey === identityKey ? sharedFlight : null;
+}
+
+export function beginSharedFlight(identityKey, promise) {
+  sharedFlight = { identityKey, promise };
+  promise.finally(() => {
+    if (sharedFlight && sharedFlight.promise === promise) {
+      sharedFlight = null;
+    }
+  });
+  return promise;
+}
+
 export function getSnapshot() {
   return latest;
 }
@@ -23,5 +47,6 @@ export function subscribe(listener) {
 
 export function resetGroupHubStore() {
   latest = null;
+  sharedFlight = null;
   listeners.clear();
 }

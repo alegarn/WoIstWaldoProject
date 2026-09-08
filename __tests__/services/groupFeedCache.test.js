@@ -1,26 +1,6 @@
-jest.mock('@react-native-async-storage/async-storage', () => {
-  const store = new Map();
-
-  return {
-    __esModule: true,
-    default: {
-      getItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
-      setItem: jest.fn((key, value) => {
-        store.set(key, value);
-        return Promise.resolve();
-      }),
-      removeItem: jest.fn((key) => {
-        store.delete(key);
-        return Promise.resolve();
-      }),
-      getAllKeys: jest.fn(() => Promise.resolve(Array.from(store.keys()))),
-      multiRemove: jest.fn((keys) => {
-        for (const key of keys) store.delete(key);
-        return Promise.resolve();
-      }),
-    },
-  };
-});
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('../helpers/statefulAsyncStorageMock')()
+);
 
 jest.mock('expo-file-system', () => {
   const cacheStore = {
