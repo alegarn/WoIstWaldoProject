@@ -12,11 +12,11 @@ import {
 
 describe('services/groups/groupCategoryCache', () => {
   beforeEach(() => {
-    AsyncStorage.setItem.mockClear();
-    AsyncStorage.removeItem.mockClear();
-    AsyncStorage.multiRemove.mockClear();
-    AsyncStorage.getItem.mockClear();
-    AsyncStorage.getAllKeys.mockClear();
+    jest.mocked(AsyncStorage.setItem).mockClear();
+    jest.mocked(AsyncStorage.removeItem).mockClear();
+    jest.mocked(AsyncStorage.multiRemove).mockClear();
+    jest.mocked(AsyncStorage.getItem).mockClear();
+    jest.mocked(AsyncStorage.getAllKeys).mockClear();
   });
 
   it('writeGroupCategoryCache round-trips so readGroupCategoryCache returns the same array', async () => {

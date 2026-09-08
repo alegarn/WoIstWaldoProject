@@ -26,7 +26,7 @@ describe('groupHubStore', () => {
 
     publish('token-a|user-a', data);
 
-    const snapshot = getSnapshot();
+    const snapshot = getSnapshot()!;
     expect(snapshot.identityKey).toBe('token-a|user-a');
     expect(snapshot.data).toEqual(data);
     expect(snapshot.updatedAt).toBeGreaterThanOrEqual(before);
@@ -38,7 +38,7 @@ describe('groupHubStore', () => {
 
     publish('token-a|user-a', second);
 
-    expect(getSnapshot().data).toEqual(second);
+    expect(getSnapshot()!.data).toEqual(second);
   });
 
   it('notifies subscribers with the published snapshot and stops after unsubscribe', () => {
@@ -60,13 +60,13 @@ describe('groupHubStore', () => {
     publish('token-a|user-a', { owned: [{ id: 'g-a' }], joined: [] });
     publish('token-b|user-b', { owned: [{ id: 'g-b' }], joined: [] });
 
-    const snapshot = getSnapshot();
+    const snapshot = getSnapshot()!;
     expect(snapshot.identityKey).toBe('token-b|user-b');
     expect(snapshot.data).toEqual({ owned: [{ id: 'g-b' }], joined: [] });
 
     publish('token-a|user-a', { owned: [{ id: 'g-a2' }], joined: [] });
-    expect(getSnapshot().identityKey).toBe('token-a|user-a');
-    expect(getSnapshot().data).toEqual({ owned: [{ id: 'g-a2' }], joined: [] });
+    expect(getSnapshot()!.identityKey).toBe('token-a|user-a');
+    expect(getSnapshot()!.data).toEqual({ owned: [{ id: 'g-a2' }], joined: [] });
   });
 
   it('resetGroupHubStore clears the snapshot and detaches all listeners', () => {
@@ -102,7 +102,7 @@ describe('groupHubStore', () => {
   });
 
   it('keeps only the latest registered flight: a new identity overwrites, and only the registered flight clears itself', async () => {
-    let resolveA;
+    let resolveA!: (value: string) => void;
     const promiseA = new Promise((resolve) => { resolveA = resolve; });
     beginSharedFlight('token-a|user-a', promiseA);
     expect(getSharedFlight('token-a|user-a')?.promise).toBe(promiseA);

@@ -9,8 +9,9 @@ import {
   clearGroupHubCache,
   clearAllGroupHubCaches,
 } from '../../services/groups/groupHubCache';
+import type { GroupsHubData } from '../../types/groups';
 
-const HUB = {
+const HUB: GroupsHubData = {
   owned: [{ id: 'g-1', role: 'owner' }],
   joined: [{ id: 'g-2', role: 'member' }],
   pendingInvites: [],
@@ -19,11 +20,11 @@ const HUB = {
 describe('services/groups/groupHubCache', () => {
   beforeEach(() => {
     asyncStorageStore.clear();
-    AsyncStorage.setItem.mockClear();
-    AsyncStorage.removeItem.mockClear();
-    AsyncStorage.multiRemove.mockClear();
-    AsyncStorage.getItem.mockClear();
-    AsyncStorage.getAllKeys.mockClear();
+    jest.mocked(AsyncStorage.setItem).mockClear();
+    jest.mocked(AsyncStorage.removeItem).mockClear();
+    jest.mocked(AsyncStorage.multiRemove).mockClear();
+    jest.mocked(AsyncStorage.getItem).mockClear();
+    jest.mocked(AsyncStorage.getAllKeys).mockClear();
   });
 
   it('writeGroupHubCache round-trips so readGroupHubCache returns the same payload', async () => {
@@ -35,8 +36,8 @@ describe('services/groups/groupHubCache', () => {
   });
 
   it('writeGroupHubCache is best-effort: malformed payloads are not stored and do not throw', async () => {
-    await expect(writeGroupHubCache('user-1', null)).resolves.toBeUndefined();
-    await expect(writeGroupHubCache('user-1', { owned: 'nope' })).resolves.toBeUndefined();
+    await expect(writeGroupHubCache('user-1', null as unknown as GroupsHubData)).resolves.toBeUndefined();
+    await expect(writeGroupHubCache('user-1', { owned: 'nope' } as unknown as GroupsHubData)).resolves.toBeUndefined();
 
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
 
