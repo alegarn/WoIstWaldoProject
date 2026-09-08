@@ -3,10 +3,14 @@ import { View, Text, StyleSheet, Share, Alert, ScrollView, Image, Pressable } fr
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
+import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
 import CenteredModal from '../../components/UI/CenteredModal';
-import HomeCard from '../../components/UI/HomeCard';
-import IconButton from '../../components/UI/IconButton';
+import _HomeCard from '../../components/UI/HomeCard';
+import _IconButton from '../../components/UI/IconButton';
+import _BigButton from '../../components/UI/BigButton';
+import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import GroupIdentitySection from '../../components/Groups/Settings/GroupIdentitySection';
 import LockedGroupOwnerModal from '../../components/Groups/LockedGroupOwnerModal';
 import LockedGroupMemberBanner from '../../components/Groups/LockedGroupMemberBanner';
@@ -19,7 +23,18 @@ import { updateGroupSettings, deletePrivateImage } from '../../services/groups/g
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
+import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
+import { showPersonalizationUpsellAlert } from '../../services/billing/personalizationUpsell';
 import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
+import type { GroupHomeBackgroundSlotData, GroupScope, GroupsHubData } from '../../types/groups';
+
+// HomeCard.js, IconButton.js and BigButton.js are unmigrated; their
+// destructured props (accessibilityState / pointerEvents / disabled /
+// buttonStyle / accessibilityLabel) are inferred as required by TS.
+// Permissive casts mirror the App.tsx convention.
+const HomeCard = _HomeCard as React.ComponentType<any>;
+const IconButton = _IconButton as React.ComponentType<any>;
+const BigButton = _BigButton as React.ComponentType<any>;
 
 const HideImage = require('../../assets/home/WoIstWaldo-character-hide.webp');
 const FindImage = require('../../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -37,19 +52,62 @@ const SLOT_SETTINGS_KEY = {
   ranking: 'rankingBgImageId',
 };
 
-export default function PrivateHomeScreen({ navigation, route }) {
+type BackgroundSlot = keyof typeof BACKGROUND_SLOT_LABEL_KEYS;
+
+type PrivateHomeRouteParams = {
+  scope?: GroupScope;
+  [key: string]: unknown;
+};
+
+type PrivateHomeParamList = {
+  PrivateHomeScreen: PrivateHomeRouteParams;
+  HomeScreen: undefined;
+  GroupsListScreen: undefined;
+  GroupSettingsScreen: undefined;
+  MemberManagementScreen: undefined;
+  PaywallScreen: { intent?: string };
+  HidingPathScreen: { scope?: GroupScope };
+  GuessPathScreen: { scope?: GroupScope };
+  RankingScreen: { scope?: GroupScope };
+};
+
+type PrivateHomeScreenProps = {
+  navigation: NativeStackNavigationProp<PrivateHomeParamList, 'PrivateHomeScreen'>;
+  route: RouteProp<PrivateHomeParamList, 'PrivateHomeScreen'>;
+};
+
+export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScreenProps) {
   const { t } = useTranslation();
   const routeScope = route?.params?.scope;
-  const { scope, clear } = useActiveGroup();
-  const authContext = useContext(AuthContext);
+  const { scope, clear } = useActiveGroup() as {
+    scope: GroupScope;
+    clear: () => void | Promise<void>;
+  };
+  // auth-context.js infers its provider callbacks as zero-arg; this screen
+  // calls setPrivateMode with a boolean.
+  const authContext = useContext(AuthContext) as {
+    paidTier?: number;
+    setPrivateMode?: (isPrivate: boolean) => void | Promise<void>;
+  };
   const { setPrivateMode } = authContext;
   const activeScope = routeScope ?? scope;
-  const { data, refresh } = useGroupsHub();
+  const { data, isLoading, error, isFresh = true, refresh } = useGroupsHub() as {
+    data: GroupsHubData | null;
+    isLoading: boolean;
+    error: unknown;
+    isFresh?: boolean;
+    refresh: () => Promise<void>;
+  };
   const group = activeScope?.kind === 'private'
-    ? [...(data?.owned ?? []), ...(data?.joined ?? [])].find((g) => g.id === activeScope.groupId)
+    ? [...(data?.owned ?? []), ...(data?.joined ?? [])]
+      .find((g) => g?.id != null && String(g.id) === String(activeScope.groupId))
     : null;
   const isLocked = group?.locked === true;
   const isOwner = group?.role === 'owner';
+  const canPersonalize = canPersonalizeGroup(authContext?.paidTier ?? 0);
+  const openPersonalizationUpsell = useCallback(() => {
+    navigation.navigate('PaywallScreen', { intent: 'personalize-group' });
+  }, [navigation]);
   const groupId = activeScope?.kind === 'private' ? activeScope.groupId : null;
   const groupTheme = getPrivateGroupTheme({
     primaryColor: group?.primary_color,
@@ -57,12 +115,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
   });
 
   const [isColorEditorVisible, setIsColorEditorVisible] = useState(false);
-  const [dismissedGroupId, setDismissedGroupId] = useState(null);
-  const [bgUris, setBgUris] = useState({});
-  const [savingSlot, setSavingSlot] = useState({});
-  const savingSlotRef = useRef({});
+  const [dismissedGroupId, setDismissedGroupId] = useState<string | null>(null);
+  const [bgUris, setBgUris] = useState<Record<string, string>>({});
+  const [savingSlot, setSavingSlot] = useState<Record<string, boolean>>({});
+  const savingSlotRef = useRef<Record<string, boolean>>({});
+  const lastNotFoundWarnRef = useRef<string | null>(null);
 
-  const setSaving = useCallback((slot, value) => {
+  const setSaving = useCallback((slot: BackgroundSlot, value: boolean) => {
     savingSlotRef.current = { ...savingSlotRef.current, [slot]: value };
     setSavingSlot((prev) => ({ ...prev, [slot]: value }));
   }, []);
@@ -73,14 +132,14 @@ export default function PrivateHomeScreen({ navigation, route }) {
       setBgUris({});
       return;
     }
-    const snapshots = {
+    const snapshots: Record<BackgroundSlot, GroupHomeBackgroundSlotData | null | undefined> = {
       hide: group?.home_button_backgrounds?.hide,
       find: group?.home_button_backgrounds?.find,
       ranking: group?.home_button_backgrounds?.ranking,
     };
     setBgUris({});
     Object.keys(snapshots).forEach(async (slot) => {
-      const slotData = snapshots[slot];
+      const slotData = snapshots[slot as BackgroundSlot];
       if (!slotData?.image_id) return;
       const imageIdAtCall = slotData.image_id;
       const uri = await resolveHomeBackground({
@@ -102,19 +161,37 @@ export default function PrivateHomeScreen({ navigation, route }) {
     groupId,
   ]);
 
-  const shareCode = useCallback(async () => {
-    const code = group?.joining_code;
-    if (!code) {
-      Alert.alert(t('groups.home.noInviteCode'));
-      return;
-    }
+  const shareInvitation = useCallback(async (code: string) => {
     const message = t('groups.home.shareMessage', { code });
     try {
       await Share.share({ message });
     } catch (_) {
       Alert.alert(t('groups.home.inviteCodeTitle'), message);
     }
-  }, [group?.joining_code, t]);
+  }, [t]);
+
+  const shareCode = useCallback(async () => {
+    const code = group?.joining_code;
+    if (!code) {
+      Alert.alert(t('groups.home.noInviteCode'));
+      return;
+    }
+    // Owner-side invite at the free cap: upsell first, but never block sharing.
+    const cap = memberCapFor(authContext?.paidTier ?? 0);
+    const isFreeOwnerAtCap = isOwner && !canPersonalize && (group?.member_count ?? 0) >= cap;
+    if (isFreeOwnerAtCap) {
+      Alert.alert(
+        t('groups.home.shareCapTitle'),
+        t('groups.home.shareCapReached', { cap }),
+        [
+          { text: t('settings.viewPlans'), onPress: openPersonalizationUpsell },
+          { text: t('groups.home.shareAnyway'), onPress: () => { shareInvitation(code); } },
+        ],
+      );
+      return;
+    }
+    await shareInvitation(code);
+  }, [group?.joining_code, group?.member_count, isOwner, canPersonalize, authContext?.paidTier, openPersonalizationUpsell, shareInvitation, t]);
 
   const openColorEditor = useCallback(() => {
     setIsColorEditorVisible(true);
@@ -124,18 +201,34 @@ export default function PrivateHomeScreen({ navigation, route }) {
     setIsColorEditorVisible(false);
   }, []);
 
-  const chooseSlotBackground = useCallback(async (slot) => {
+  const alertFailure = useCallback((err: unknown, fallbackKey: string) => {
+    const error = err as (Error & { status?: number; response?: { status?: number } }) | null | undefined;
+    if (error?.status === 403 || error?.response?.status === 403) {
+      showPersonalizationUpsellAlert(t, openPersonalizationUpsell);
+      return;
+    }
+    Alert.alert(t('common.error'), error?.message ?? t(fallbackKey));
+  }, [t, openPersonalizationUpsell]);
+
+  const chooseSlotBackground = useCallback(async (slot: BackgroundSlot) => {
     if (!groupId) return;
+    if (!canPersonalize) {
+      openPersonalizationUpsell();
+      return;
+    }
     if (savingSlotRef.current[slot]) return;
     const settingsKey = SLOT_SETTINGS_KEY[slot];
     const prevImageId = group?.home_button_backgrounds?.[slot]?.image_id;
     setSaving(slot, true);
     try {
-      const { imageId } = await uploadHomeBackground({ context: authContext, groupId });
+      const uploaded = await uploadHomeBackground({ context: authContext, groupId });
+      const { imageId } = uploaded as { imageId: string | number };
       if (!imageId) return;
       const response = await updateGroupSettings(authContext, groupId, { [settingsKey]: imageId });
       if (response?.status !== 200 && response?.status !== 204) {
-        throw new Error(`PATCH failed with status ${response?.status}`);
+        const error = new Error(`PATCH failed with status ${response?.status}`) as Error & { status?: number };
+        error.status = response?.status;
+        throw error;
       }
       if (prevImageId) {
         await deletePrivateImage(authContext, groupId, prevImageId);
@@ -143,13 +236,13 @@ export default function PrivateHomeScreen({ navigation, route }) {
       }
       await refresh();
     } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('groups.home.updateBackgroundFailed'));
+      alertFailure(err, 'groups.home.updateBackgroundFailed');
     } finally {
       setSaving(slot, false);
     }
-  }, [authContext, groupId, group, refresh, setSaving, t]);
+  }, [alertFailure, authContext, canPersonalize, groupId, group, openPersonalizationUpsell, refresh, setSaving]);
 
-  const removeSlotBackground = useCallback(async (slot) => {
+  const removeSlotBackground = useCallback(async (slot: BackgroundSlot) => {
     if (!groupId) return;
     if (savingSlotRef.current[slot]) return;
     const settingsKey = SLOT_SETTINGS_KEY[slot];
@@ -164,7 +257,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
       await deletePrivateImage(authContext, groupId, prevImageId);
       deleteHomeBackgroundFile(groupId, slot, prevImageId);
       await refresh();
-    } catch (err) {
+    } catch (err: any) {
       Alert.alert(t('common.error'), err?.message ?? t('groups.home.removeBackgroundFailed'));
     } finally {
       setSaving(slot, false);
@@ -253,11 +346,8 @@ export default function PrivateHomeScreen({ navigation, route }) {
     }, [])
   );
 
-  const goScoped = (target) =>
-    navigation.navigate(target, {
-      scope: { kind: 'private', groupId },
-    });
-
+  // Kept above the loading/error early returns so the hook order stays
+  // identical between a loading-only render and a data render.
   const renewSubscription = useCallback(() => {
     navigation.navigate('PaywallScreen', { intent: 'store' });
   }, [navigation]);
@@ -269,6 +359,61 @@ export default function PrivateHomeScreen({ navigation, route }) {
   const dismissLockedOwnerModal = useCallback(() => {
     setDismissedGroupId(groupId);
   }, [groupId]);
+
+  if (isLoading && !data) {
+    return <LoadingOverlay message={t('groups.list.loading')} />;
+  }
+
+  if (error && !data) {
+    return (
+      <View style={styles.errorContainer} testID="private-home.error">
+        <Text style={styles.errorText}>{t('groups.list.loadFailed')}</Text>
+        <BigButton
+          text={t('common.retry')}
+          onPress={() => refresh()}
+          testID="private-home.button.retry"
+        />
+      </View>
+    );
+  }
+
+  // Hub settled but the active private group is not in the payload (e.g. the
+  // group vanished server-side): fail loudly instead of a degraded ungated body.
+  // isFresh gates this on a completed 200 for the current credentials, so a
+  // stale cache-only payload cannot masquerade as a server-side not-found.
+  if (!isLoading && !error && data && isFresh && activeScope?.kind === 'private' && !group) {
+    const dataGroupIds = [...(data?.owned ?? []), ...(data?.joined ?? [])].map((g) => g?.id);
+    const warnSignature = `${groupId}|${dataGroupIds.join(',')}`;
+    if (lastNotFoundWarnRef.current !== warnSignature) {
+      lastNotFoundWarnRef.current = warnSignature;
+      console.warn('[PrivateHomeScreen] group not found', { scopeGroupId: groupId, dataGroupIds });
+    }
+    return (
+      <View style={styles.errorContainer} testID="private-home.not-found">
+        <Text style={styles.errorText}>{t('groups.home.groupUnavailable')}</Text>
+        <BigButton
+          text={t('common.retry')}
+          onPress={() => refresh()}
+          testID="private-home.button.retry-group"
+        />
+        <BigButton
+          text={t('groups.menu.groups')}
+          onPress={() => {
+            clear();
+            navigation.navigate('GroupsListScreen');
+          }}
+          testID="private-home.button.back-to-groups"
+        />
+      </View>
+    );
+  }
+
+  const goScoped = (target: 'HidingPathScreen' | 'GuessPathScreen' | 'RankingScreen') =>
+    navigation.navigate(target, {
+      // Degenerate public-mode entry can flow a null groupId; scope consumers
+      // only read it behind a `kind === 'private'` check.
+      scope: { kind: 'private', groupId } as GroupScope,
+    });
 
   return (
     <View
@@ -335,6 +480,7 @@ export default function PrivateHomeScreen({ navigation, route }) {
             appearance="light"
             onRefresh={refresh}
             onSaved={closeColorEditor}
+            onUpsell={openPersonalizationUpsell}
             testIDPrefix="private-home"
           />
           <Text style={[styles.bgSectionTitle, { color: groupTheme.lightText }]}>{t('groups.home.buttonBackgrounds')}</Text>
@@ -342,8 +488,9 @@ export default function PrivateHomeScreen({ navigation, route }) {
             {t('groups.home.buttonBackgroundsCaption')}
           </Text>
           {Object.keys(BACKGROUND_SLOT_LABEL_KEYS).map((slot) => {
-            const label = t(BACKGROUND_SLOT_LABEL_KEYS[slot]);
-            const slotData = group?.home_button_backgrounds?.[slot];
+            const typedSlot = slot as BackgroundSlot;
+            const label = t(BACKGROUND_SLOT_LABEL_KEYS[typedSlot]);
+            const slotData = group?.home_button_backgrounds?.[typedSlot];
             const uri = bgUris[slot];
             const isSaving = !!savingSlot[slot];
             return (
@@ -378,10 +525,29 @@ export default function PrivateHomeScreen({ navigation, route }) {
                   </Text>
                 </View>
                 <View style={styles.bgSlotActions}>
+                  {!canPersonalize ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('groups.home.bgUploadLocked')}
+                      onPress={openPersonalizationUpsell}
+                      testID={`private-home.button-bg.${slot}.locked`}
+                      style={({ pressed }) => [
+                        styles.bgChooseChip,
+                        styles.bgChooseLocked,
+                        { backgroundColor: groupTheme.lightAccentWash, borderColor: groupTheme.lightHairlineStrong },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Ionicons name="lock-closed-outline" size={15} color={groupTheme.lightMuted} />
+                      <Text style={[styles.bgChooseChipText, { color: groupTheme.lightText }]}>
+                        {t('groups.home.bgUploadLocked')}
+                      </Text>
+                    </Pressable>
+                  ) : (
                   <Pressable
                     accessibilityRole="button"
                     accessibilityLabel={t('groups.home.chooseBackgroundLabel', { name: label })}
-                    onPress={() => chooseSlotBackground(slot)}
+                    onPress={() => chooseSlotBackground(typedSlot)}
                     disabled={isSaving}
                     testID={`private-home.button-bg.${slot}.choose`}
                     style={({ pressed }) => [
@@ -394,11 +560,12 @@ export default function PrivateHomeScreen({ navigation, route }) {
                     <Ionicons name="cloud-upload-outline" size={15} color={groupTheme.accentText} />
                     <Text style={[styles.bgChooseChipText, { color: groupTheme.accentText }]}>{isSaving ? t('groups.home.saving') : t('groups.home.choose')}</Text>
                   </Pressable>
+                  )}
                   {slotData && (
                     <Pressable
                       accessibilityRole="button"
                       accessibilityLabel={t('groups.home.removeBackgroundLabel', { name: label })}
-                      onPress={() => removeSlotBackground(slot)}
+                      onPress={() => removeSlotBackground(typedSlot)}
                       testID={`private-home.button-bg.${slot}.remove`}
                       style={({ pressed }) => [styles.bgRemoveChip, pressed && styles.pressed]}
                     >
@@ -432,6 +599,8 @@ const styles = StyleSheet.create({
   title: { fontSize: 22, fontWeight: '700', textAlign: 'center' },
   lockBadge: { fontSize: 14, color: '#ffd700', textAlign: 'center' },
   pressed: { opacity: 0.7 },
+  errorContainer: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 12, gap: 10 },
+  errorText: { color: '#fff', fontSize: 18, textAlign: 'center', marginVertical: 20 },
 
   // Button backgrounds (inside the white customize modal)
   bgSectionTitle: { fontSize: 16, fontWeight: '700', marginTop: 16, marginBottom: 4 },
@@ -454,6 +623,7 @@ const styles = StyleSheet.create({
   },
   bgChooseChipText: { fontSize: 13, fontWeight: '700' },
   bgChooseBusy: { opacity: 0.6 },
+  bgChooseLocked: { borderWidth: 1 },
   bgRemoveChip: {
     flexDirection: 'row', alignItems: 'center', gap: 5,
     backgroundColor: 'rgba(224,58,58,0.08)', borderRadius: 8,

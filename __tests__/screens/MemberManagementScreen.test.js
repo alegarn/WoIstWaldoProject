@@ -55,7 +55,7 @@ jest.mock('../../store/auth-context', () => {
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { Alert, StyleSheet } from 'react-native';
+import { Alert, StyleSheet, Text } from 'react-native';
 
 import MemberManagementScreen from '../../screens/Groups/MemberManagementScreen';
 import { listMembers, removeMember, transferOwnership } from '../../services/groups/groupMembershipApi';
@@ -233,10 +233,50 @@ describe('MemberManagementScreen', () => {
     expect(removeMember).toHaveBeenCalledTimes(1);
   });
 
-  it('surfaces a private-group-access explanation when transfer fails with recipient_not_creator', async () => {
+  it('shows the member cap banner with the upgrade CTA for a free owner at the cap', async () => {
+    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+    const members = Array.from({ length: 10 }, (_, i) => ({
+      id: `m-${i}`,
+      user_id: `u-${i}`,
+      username: `member-${i}`,
+      role: i === 0 ? 'owner' : 'member',
+    }));
+
+    mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-3' } });
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine', member_count: 10 }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    listMembers.mockResolvedValue({ status: 200, data: members });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <MemberManagementScreen navigation={navigation} />
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const banner = renderer.root.findByProps({ testID: 'member-mgmt.members.cap-banner' });
+    const bannerText = banner.findAllByType(Text).map((node) => node.props.children).join(' ');
+    expect(bannerText).toContain('10/10 members');
+
+    const upgrade = renderer.root.findByProps({ testID: 'member-mgmt.members.upgrade' });
+    await act(async () => {
+      upgrade.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+  });
+
+  it('surfaces the not-a-member explanation when transfer fails with recipient_not_member', async () => {
     transferOwnership.mockResolvedValue({
       status: 422,
-      data: { error: 'recipient_not_creator', message: 'Recipient does not have private-group access' },
+      data: { error: 'recipient_not_member', message: 'This member is no longer in the group.' },
     });
     const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -271,7 +311,7 @@ describe('MemberManagementScreen', () => {
     }));
     expect(alertSpy).toHaveBeenCalledWith(
       'Cannot transfer ownership',
-      'This member needs to hold a "Group Creator" tier before transfer to own the group.',
+      'This member is no longer in the group.',
     );
     alertSpy.mockRestore();
   });

@@ -75,7 +75,9 @@ export async function uploadHomeBackground({ context, groupId }: {
     isHomeButtonBackground: true,
   });
   if (presignResponse?.status !== 200 && presignResponse?.status !== 201) {
-    throw new Error('Could not prepare upload.');
+    const error = new Error('Could not prepare upload.') as Error & { status?: number };
+    error.status = presignResponse?.status;
+    throw error;
   }
 
   const uploadPlan = presignResponse.data as HomeBackgroundUploadPlan;

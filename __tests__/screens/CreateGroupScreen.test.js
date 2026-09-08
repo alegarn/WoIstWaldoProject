@@ -103,26 +103,26 @@ describe('CreateGroupScreen', () => {
     return { renderer, navigation };
   }
 
-  it('renders the unlock CTA when the user paid tier is below 2 and routes to PaywallScreen on tap', async () => {
+  it('renders the create form (no paywall redirect) when the user paid tier is below 2', async () => {
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
     const { renderer } = await renderScreen({ authContext: { paidTier: 1 }, navigation });
 
-    expect(renderer.root.findByProps({ testID: 'create-group.button.unlock' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'create-group.input.name' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'create-group.button.submit' })).toBeTruthy();
 
-    await act(async () => {
-      renderer.root.findByProps({ testID: 'create-group.button.unlock' }).props.onPress();
-    });
-
-    expect(navigation.replace).toHaveBeenCalledWith('PaywallScreen', { intent: 'create-group' });
+    expect(() =>
+      renderer.root.findByProps({ testID: 'create-group.button.unlock' })
+    ).toThrow();
+    expect(navigation.replace).not.toHaveBeenCalledWith('PaywallScreen', expect.anything());
   });
 
-  it('keeps the user on the create form when paid tier >= 2 and submit calls createGroup with the entered payload', async () => {
+  it('submits createGroup from the create form for a tier-0 viewer (no paywall redirect)', async () => {
     createGroup.mockResolvedValue({ status: 201, data: { id: 'g-new' } });
     const setActive = jest.fn().mockResolvedValue(undefined);
     mockUseActiveGroup.mockReturnValue({ setActive });
 
     const navigation = { replace: jest.fn(), navigate: jest.fn() };
-    const { renderer } = await renderScreen({ authContext: { paidTier: 2 }, navigation });
+    const { renderer } = await renderScreen({ authContext: { paidTier: 0 }, navigation });
 
     expect(navigation.replace).not.toHaveBeenCalledWith('PaywallScreen', expect.anything());
 
@@ -146,7 +146,7 @@ describe('CreateGroupScreen', () => {
     });
 
     expect(createGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ paidTier: 2 }),
+      expect.objectContaining({ paidTier: 0 }),
       { name: 'Waldos', primaryColor: PRIMARY_SHADE, secondaryColor: SECONDARY_SHADE }
     );
     expect(setActive).toHaveBeenCalledWith('g-new');

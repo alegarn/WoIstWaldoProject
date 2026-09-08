@@ -404,8 +404,6 @@
       "loading": "Memuat...",
       "onlyOne": "Anda hanya dapat membuat 1 grup.",
       "goToGroup": "Buka grup saya",
-      "privateFeature": "Pembuatan grup adalah fitur Grup Privat.",
-      "unlock": "Buka kunci pembuatan grup",
       "nameRequiredTitle": "Nama wajib diisi",
       "nameRequiredMessage": "Silakan masukkan nama grup.",
       "createFailed": "Gagal membuat grup. Silakan coba lagi.",
@@ -426,7 +424,7 @@
       "locked": "Grup terkunci.",
       "unknownCode": "Kode tidak dikenal.",
       "alreadyMember": "Anda sudah bergabung dalam grup ini.",
-      "full": "Grup sudah penuh.",
+      "full": "Grup ini sudah penuh. Pemilik dapat upgrade ke paket Creator untuk hingga 30 anggota.",
       "failed": "Gagal bergabung. Silakan coba lagi."
     },
     "members": {
@@ -442,9 +440,10 @@
       "transferConfirm": "Transfer kepemilikan ke {{name}}?",
       "removeFailed": "Gagal mengeluarkan anggota.",
       "transferFailedTitle": "Tidak dapat mentransfer kepemilikan",
-      "transferNotCreator": "Anggota ini harus memegang paket \"Pembuat Grup\" sebelum transfer untuk memiliki grup.",
       "transferNotMember": "Anggota ini sudah tidak ada di grup.",
-      "transferFailed": "Gagal mentransfer kepemilikan. Silakan coba lagi."
+      "transferFailed": "Gagal mentransfer kepemilikan. Silakan coba lagi.",
+      "memberCap": "{{current}}/{{cap}} anggota",
+      "upgradeFor30": "Upgrade untuk 30"
     },
     "settings": {
       "checkingOwnership": "Memeriksa kepemilikan...",
@@ -485,7 +484,8 @@
       "deleteFailed": "Gagal menghapus kategori.",
       "uploadedTitle": "Diunggah",
       "thumbnailUpdated": "Gambar mini kategori diperbarui.",
-      "updateThumbnailFailed": "Gagal memperbarui gambar mini."
+      "updateThumbnailFailed": "Gagal memperbarui gambar mini.",
+      "personalizationLocked": "Menpersonalisasi kategori adalah fitur Creator. Grup gratis Anda tetap dengan 9 kategori bawaan."
     },
     "locked": {
       "ownerTitle": "Akses grup privat Anda telah berakhir",
@@ -517,7 +517,12 @@
       "saving": "Menyimpan…",
       "choose": "Pilih",
       "removeBackgroundLabel": "Hapus latar {{name}}",
-      "remove": "Hapus"
+      "remove": "Hapus",
+      "bgUploadLocked": "Gambar beranda adalah fitur Creator",
+      "shareCapTitle": "Grup Anda penuh",
+      "shareCapReached": "Grup Anda penuh ({{cap}} anggota). Creator menaikkan batas menjadi 30.",
+      "shareAnyway": "Tetap bagikan",
+      "groupUnavailable": "Grup ini tidak tersedia di akun ini untuk saat ini."
     },
     "menu": {
       "groups": "Grup",
@@ -545,13 +550,15 @@
       "loadingOfferings": "Memuat penawaran...",
       "empty": "Tidak ada penawaran tersedia saat ini.",
       "noSubscription": "Tidak ada langganan aktif ditemukan.",
-      "restorePurchases": "Pulihkan pembelian"
+      "restorePurchases": "Pulihkan pembelian",
+      "personalizeTitle": "Personalisasi adalah fitur Creator",
+      "personalizeMessage": "Upgrade ke paket Creator untuk mempersonalisasi grup Anda (gambar, kategori) dan menampung hingga 30 anggota."
     },
     "subscription": {
       "restoring": "Memulihkan...",
       "currentPlan": "Paket saat ini",
       "tierPremium": "Premium",
-      "tierPrivateGroup": "Grup Privat",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "Tanpa iklan",
       "tierFree": "Gratis",
       "refreshing": "Menyegarkan paket…",
@@ -560,6 +567,38 @@
       "upgrade": "Tingkatkan",
       "manage": "Kelola langganan",
       "openSettingsFailed": "Gagal membuka pengaturan langganan"
+    },
+    "tiers": {
+      "premium": {
+        "label": "Premium",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "Personalisasi grup Anda (gambar, kategori) + 30 anggota",
+          "Hapus iklan wajib",
+          "Semua mode permainan inti"
+        ],
+        "cta": "Berlangganan"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "Personalisasi layar beranda grup Anda",
+          "Tambahkan kategori tebak baru",
+          "Maks 30 anggota"
+        ],
+        "cta": "Berlangganan"
+      },
+      "no_ads": {
+        "label": "Tanpa Iklan",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "Hapus semua iklan",
+          "Bermain tanpa gangguan",
+          "Ronde lebih cepat"
+        ],
+        "cta": "Berlangganan"
+      }
     }
   }
 }

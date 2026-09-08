@@ -2,9 +2,25 @@ import { View, Text, TextInput, Image, Pressable, StyleSheet } from 'react-nativ
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import SettingsSection from './SettingsSection';
-import { getSettingsTokens, settingsTokens } from './settingsTokens';
+import _SettingsSection from './SettingsSection';
+import { getSettingsTokens as _getSettingsTokens, settingsTokens } from './settingsTokens';
 import { useGroupCategories } from '../../../hooks/useGroupCategories';
+
+// SettingsSection.js is unmigrated; its destructured props (headerRight) are
+// inferred as required by TS. settingsTokens.js infers `options = 'dark'` as a
+// string parameter. Permissive casts mirror the App.tsx convention.
+const SettingsSection = _SettingsSection as React.ComponentType<any>;
+const getSettingsTokens = _getSettingsTokens as (options?: unknown) => any;
+
+type GroupCategoriesSectionProps = {
+  groupId: string;
+  onRefresh?: () => void | Promise<void>;
+  appearance?: 'dark' | 'light';
+  primaryColor?: string;
+  secondaryColor?: string;
+  canPersonalize?: boolean;
+  onUpsell?: () => void;
+};
 
 /**
  * Categories panel — add, rename, re-thumbnail, remove.
@@ -18,7 +34,9 @@ export default function GroupCategoriesSection({
   appearance = 'dark',
   primaryColor,
   secondaryColor,
-}) {
+  canPersonalize = true,
+  onUpsell,
+}: GroupCategoriesSectionProps) {
   const { t } = useTranslation();
   const tokens = getSettingsTokens({ appearance, primaryColor, secondaryColor });
   const {
@@ -36,7 +54,7 @@ export default function GroupCategoriesSection({
     remove,
     swapThumbnail,
     reload,
-  } = useGroupCategories({ groupId, onRefresh });
+  } = useGroupCategories({ groupId, onRefresh, onUpsell });
 
   return (
     <SettingsSection
@@ -48,6 +66,29 @@ export default function GroupCategoriesSection({
       caption={t('groups.settings.categoriesCaption')}
       count={categories.length}
     >
+      {!canPersonalize && (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('groups.settings.personalizationLocked')}
+          onPress={onUpsell}
+          testID="group-settings.category.locked"
+          style={({ pressed }) => [
+            styles.lockedRow,
+            { backgroundColor: tokens.inset, borderColor: tokens.hairline },
+            pressed && styles.pressed,
+          ]}
+        >
+          <View style={[styles.lockedGlyph, { backgroundColor: tokens.accentWash }]}>
+            <Ionicons name="lock-closed-outline" size={16} color={tokens.accentSoft} />
+          </View>
+          <Text style={[styles.lockedText, { color: tokens.text }]}>
+            {t('groups.settings.personalizationLocked')}
+          </Text>
+          <Ionicons name="chevron-forward" size={16} color={tokens.muted} />
+        </Pressable>
+      )}
+
+      {canPersonalize && (
       <View
         style={[styles.addComposer, { backgroundColor: tokens.inset, borderColor: tokens.hairlineInput }]}
         testID="group-settings.category.add-composer"
@@ -79,6 +120,7 @@ export default function GroupCategoriesSection({
           <Text style={[styles.addChipText, { color: tokens.accentText }]}>{t('groups.settings.add')}</Text>
         </Pressable>
       </View>
+      )}
 
       {loading && <Text style={[styles.muted, { color: tokens.muted }]}>{t('groups.settings.loadingCategories')}</Text>}
 
@@ -139,36 +181,49 @@ export default function GroupCategoriesSection({
                     <Text style={[styles.thumbInitial, { color: tokens.accentSoft }]}>{initial}</Text>
                   </View>
                 )}
-                <TextInput
-                  accessibilityLabel={t('groups.settings.categoryLabel', { name: item.name })}
-                  value={draft}
-                  onChangeText={(value) => setDraft(item.id, value)}
-                  style={[
-                    styles.categoryNameInput,
-                    {
-                      color: tokens.text,
-                      backgroundColor: tokens.inputSurface,
-                    },
-                  ]}
-                  testID={`group-settings.category.row.${item.id}.name`}
-                  placeholder={t('groups.settings.untitled')}
-                  placeholderTextColor={tokens.mutedSoft}
-                />
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={t('groups.settings.deleteCategoryLabel', { name: item.name })}
-                  onPress={() => remove(item)}
-                  testID={`group-settings.category.row.${item.id}.delete`}
-                  style={({ pressed }) => [
-                    styles.iconButton,
-                    { backgroundColor: tokens.dangerSoft },
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <Ionicons name="trash-outline" size={18} color={tokens.danger} />
-                </Pressable>
+                {canPersonalize ? (
+                  <>
+                    <TextInput
+                      accessibilityLabel={t('groups.settings.categoryLabel', { name: item.name })}
+                      value={draft}
+                      onChangeText={(value) => setDraft(item.id, value)}
+                      style={[
+                        styles.categoryNameInput,
+                        {
+                          color: tokens.text,
+                          backgroundColor: tokens.inputSurface,
+                        },
+                      ]}
+                      testID={`group-settings.category.row.${item.id}.name`}
+                      placeholder={t('groups.settings.untitled')}
+                      placeholderTextColor={tokens.mutedSoft}
+                    />
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={t('groups.settings.deleteCategoryLabel', { name: item.name })}
+                      onPress={() => remove(item)}
+                      testID={`group-settings.category.row.${item.id}.delete`}
+                      style={({ pressed }) => [
+                        styles.iconButton,
+                        { backgroundColor: tokens.dangerSoft },
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <Ionicons name="trash-outline" size={18} color={tokens.danger} />
+                    </Pressable>
+                  </>
+                ) : (
+                  <Text
+                    style={[styles.categoryName, { color: tokens.text }]}
+                    testID={`group-settings.category.row.${item.id}.name`}
+                  >
+                    {draft.trim() || savedName || t('groups.settings.untitled')}
+                  </Text>
+                )}
               </View>
 
+              {canPersonalize && (
+              <>
               <View style={[styles.categoryDivider, { backgroundColor: tokens.hairline }]} />
 
               <View style={styles.categoryActions}>
@@ -213,6 +268,8 @@ export default function GroupCategoriesSection({
                   </Text>
                 </Pressable>
               </View>
+              </>
+              )}
             </View>
           );
         })}
@@ -223,6 +280,17 @@ export default function GroupCategoriesSection({
 
 const styles = StyleSheet.create({
   pressed: { opacity: 0.7 },
+
+  lockedRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12,
+    borderRadius: 10, paddingHorizontal: 10, paddingVertical: 12,
+    borderWidth: 1,
+  },
+  lockedGlyph: {
+    width: 28, height: 28, borderRadius: 14,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  lockedText: { flex: 1, fontSize: 14, fontWeight: '600' },
 
   addComposer: {
     flexDirection: 'row', alignItems: 'center', marginTop: 12, gap: 8,
@@ -272,6 +340,7 @@ const styles = StyleSheet.create({
     flex: 1, fontSize: 16, fontWeight: '600',
     paddingVertical: 6, paddingHorizontal: 8, borderRadius: settingsTokens.radiusInput,
   },
+  categoryName: { flex: 1, fontSize: 16, fontWeight: '600' },
   iconButton: {
     width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
   },

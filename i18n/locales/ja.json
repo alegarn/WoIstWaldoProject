@@ -404,8 +404,6 @@
       "loading": "読み込み中...",
       "onlyOne": "作成できるグループは1つだけです。",
       "goToGroup": "自分のグループへ",
-      "privateFeature": "グループ作成はプライベートグループ機能です。",
-      "unlock": "グループ作成をアンロック",
       "nameRequiredTitle": "名前が必要です",
       "nameRequiredMessage": "グループ名を入力してください。",
       "createFailed": "グループを作成できませんでした。再試行してください。",
@@ -426,7 +424,7 @@
       "locked": "グループはロックされています。",
       "unknownCode": "不明なコードです。",
       "alreadyMember": "すでにこのグループに参加しています。",
-      "full": "グループが満員です。",
+      "full": "このグループは満員です。オーナーがクリエイタープランにアップグレードすると最大30人が参加できます。",
       "failed": "参加できませんでした。再試行してください。"
     },
     "members": {
@@ -442,9 +440,10 @@
       "transferConfirm": "所有権を{{name}}に譲渡しますか？",
       "removeFailed": "メンバーを削除できませんでした。",
       "transferFailedTitle": "所有権を譲渡できません",
-      "transferNotCreator": "このメンバーがグループを所有するには、譲渡前に「グループ作成者」プランを保持している必要があります。",
       "transferNotMember": "このメンバーはグループにいません。",
-      "transferFailed": "所有権を譲渡できませんでした。再試行してください。"
+      "transferFailed": "所有権を譲渡できませんでした。再試行してください。",
+      "memberCap": "{{current}}/{{cap}}人のメンバー",
+      "upgradeFor30": "30人にアップグレード"
     },
     "settings": {
       "checkingOwnership": "所有権を確認中...",
@@ -485,7 +484,8 @@
       "deleteFailed": "カテゴリを削除できませんでした。",
       "uploadedTitle": "アップロード済み",
       "thumbnailUpdated": "カテゴリのサムネイルを更新しました。",
-      "updateThumbnailFailed": "サムネイルを更新できませんでした。"
+      "updateThumbnailFailed": "サムネイルを更新できませんでした。",
+      "personalizationLocked": "カテゴリのパーソナライズはクリエイター機能です。無料のグループでは9つのデフォルトカテゴリのままです。"
     },
     "locked": {
       "ownerTitle": "プライベートグループの利用期間が終了しました",
@@ -517,7 +517,12 @@
       "saving": "保存中…",
       "choose": "選択",
       "removeBackgroundLabel": "{{name}}の背景を削除",
-      "remove": "削除"
+      "remove": "削除",
+      "bgUploadLocked": "ホーム画像はクリエイター機能です",
+      "shareCapTitle": "グループが満員です",
+      "shareCapReached": "グループが満員です（{{cap}}人）。クリエイタープランなら上限は30人になります。",
+      "shareAnyway": "共有する",
+      "groupUnavailable": "このグループは現在、このアカウントでは利用できません。"
     },
     "menu": {
       "groups": "グループ",
@@ -545,13 +550,15 @@
       "loadingOfferings": "オファリングを読み込み中...",
       "empty": "現在利用できるオファリングはありません。",
       "noSubscription": "有効なサブスクリプションが見つかりません。",
-      "restorePurchases": "購入を復元"
+      "restorePurchases": "購入を復元",
+      "personalizeTitle": "パーソナライズはクリエイター機能です",
+      "personalizeMessage": "クリエイタープランにアップグレードすると、グループをパーソナライズ（画像、カテゴリ）し、最大30人のメンバーを招待できます。"
     },
     "subscription": {
       "restoring": "復元中...",
       "currentPlan": "現在のプラン",
       "tierPremium": "プレミアム",
-      "tierPrivateGroup": "プライベートグループ",
+      "tierPrivateGroup": "クリエイター",
       "tierNoAds": "広告なし",
       "tierFree": "無料",
       "refreshing": "プランを更新中…",
@@ -560,6 +567,38 @@
       "upgrade": "アップグレード",
       "manage": "サブスクリプションを管理",
       "openSettingsFailed": "サブスクリプション設定を開けませんでした"
+    },
+    "tiers": {
+      "premium": {
+        "label": "プレミアム",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "グループをパーソナライズ（画像・カテゴリ）+ 30人",
+          "強制広告を削除",
+          "すべてのコアゲームモード"
+        ],
+        "cta": "登録する"
+      },
+      "private_group_creator": {
+        "label": "クリエイター",
+        "eyebrow": "CREATOR",
+        "features": [
+          "グループのホーム画面をパーソナライズ",
+          "新しい当てるカテゴリを追加",
+          "最大30人"
+        ],
+        "cta": "登録する"
+      },
+      "no_ads": {
+        "label": "広告なし",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "すべての広告を削除",
+          "中断なしでプレイ",
+          "より速いラウンド"
+        ],
+        "cta": "登録する"
+      }
     }
   }
 }

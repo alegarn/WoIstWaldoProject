@@ -3,12 +3,33 @@ import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-nativ
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import ColorPalettePicker from '../../UI/ColorPalettePicker';
-import SettingsSection from './SettingsSection';
-import { getSettingsTokens, settingsTokens } from './settingsTokens';
+import _ColorPalettePicker from '../../UI/ColorPalettePicker';
+import _SettingsSection from './SettingsSection';
+import { getSettingsTokens as _getSettingsTokens, settingsTokens } from './settingsTokens';
 import { GlobalStyle } from '../../../constants/theme';
 import { AuthContext } from '../../../store/auth-context';
 import { updateGroupSettings } from '../../../services/groups/groupApi';
+import { showPersonalizationUpsellAlert } from '../../../services/billing/personalizationUpsell';
+
+// SettingsSection.js and ColorPalettePicker.js are unmigrated; their
+// destructured props (headerRight / accessibilityLabel / themeColors) are
+// inferred as required by TS. settingsTokens.js infers `options = 'dark'` as a
+// string parameter. Permissive casts mirror the App.tsx convention.
+const ColorPalettePicker = _ColorPalettePicker as React.ComponentType<any>;
+const SettingsSection = _SettingsSection as React.ComponentType<any>;
+const getSettingsTokens = _getSettingsTokens as (options?: unknown) => any;
+
+type GroupIdentitySectionProps = {
+  groupId?: string | null;
+  initialName?: string | null;
+  initialPrimaryColor?: string | null;
+  initialSecondaryColor?: string | null;
+  onRefresh?: () => void | Promise<void>;
+  onSaved?: () => void;
+  onUpsell?: () => void;
+  testIDPrefix?: string;
+  appearance?: 'dark' | 'light';
+};
 
 /**
  * Group identity editor — name + primary/secondary colors + save.
@@ -24,9 +45,10 @@ export default function GroupIdentitySection({
   initialSecondaryColor,
   onRefresh,
   onSaved,
+  onUpsell,
   testIDPrefix = 'group-settings',
   appearance = 'dark',
-}) {
+}: GroupIdentitySectionProps) {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const [name, setName] = useState(initialName ?? '');
@@ -64,11 +86,17 @@ export default function GroupIdentitySection({
         Alert.alert(t('groups.settings.savedTitle'), t('groups.settings.savedMessage'));
         onRefresh?.();
         onSaved?.();
+      } else if (response?.status === 403) {
+        showPersonalizationUpsellAlert(t, onUpsell);
       } else {
         Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.saveFailed'));
       }
-    } catch (err) {
-      Alert.alert(t('common.error'), err?.message ?? t('groups.settings.saveFailed'));
+    } catch (err: any) {
+      if (err?.response?.status === 403 || err?.status === 403) {
+        showPersonalizationUpsellAlert(t, onUpsell);
+      } else {
+        Alert.alert(t('common.error'), err?.message ?? t('groups.settings.saveFailed'));
+      }
     } finally {
       setIsSaving(false);
     }

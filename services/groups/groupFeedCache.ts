@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
+import { clearAllGroupHubCaches } from './groupHubCache';
 
 export type CachedFeedImage = {
   imageFile?: string | null;
@@ -179,6 +180,7 @@ export async function purgeAllPrivateCaches() {
   await clearAllGroupFeedCaches();
   await clearAllGroupFeedExhaustedMarkers();
   await clearAllPrivatePlayedPictureIds();
+  await clearAllGroupHubCaches();
 
   try {
     Paths.cache.create({ idempotent: true, intermediates: true });

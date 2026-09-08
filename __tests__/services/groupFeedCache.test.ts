@@ -1,26 +1,6 @@
-jest.mock('@react-native-async-storage/async-storage', () => {
-  const store = new Map();
-
-  return {
-    __esModule: true,
-    default: {
-      getItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
-      setItem: jest.fn((key, value) => {
-        store.set(key, value);
-        return Promise.resolve();
-      }),
-      removeItem: jest.fn((key) => {
-        store.delete(key);
-        return Promise.resolve();
-      }),
-      getAllKeys: jest.fn(() => Promise.resolve(Array.from(store.keys()))),
-      multiRemove: jest.fn((keys) => {
-        for (const key of keys) store.delete(key);
-        return Promise.resolve();
-      }),
-    },
-  };
-});
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('../helpers/statefulAsyncStorageMock')()
+);
 
 jest.mock('expo-file-system', () => {
   const cacheStore = {
@@ -30,7 +10,7 @@ jest.mock('expo-file-system', () => {
   };
 
   return {
-    File: jest.fn().mockImplementation(function MockFile(uri) {
+    File: jest.fn().mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, uri: string | { uri?: string }) {
       this.uri = typeof uri === 'string' ? uri : uri?.uri;
       this.exists = true;
       this.delete = jest.fn();
@@ -53,13 +33,22 @@ import {
   purgeAllPrivateCaches,
 } from '../../services/groups/groupFeedCache';
 
+const mockAsyncStorage = AsyncStorage as unknown as {
+  getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
+  setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
+  removeItem: jest.MockedFunction<(key: string) => Promise<void>>;
+  getAllKeys: jest.MockedFunction<() => Promise<string[]>>;
+  multiRemove: jest.MockedFunction<(keys: string[]) => Promise<void>>;
+};
+const mockFile = File as unknown as jest.Mock;
+
 describe('services/groups/groupFeedCache — purge behavior', () => {
   beforeEach(() => {
-    AsyncStorage.setItem.mockClear();
-    AsyncStorage.removeItem.mockClear();
-    AsyncStorage.multiRemove.mockClear();
-    AsyncStorage.getItem.mockClear();
-    AsyncStorage.getAllKeys.mockClear();
+    mockAsyncStorage.setItem.mockClear();
+    mockAsyncStorage.removeItem.mockClear();
+    mockAsyncStorage.multiRemove.mockClear();
+    mockAsyncStorage.getItem.mockClear();
+    mockAsyncStorage.getAllKeys.mockClear();
   });
 
   it('writeGroupFeedCache round-trips list+cursor so readGroupFeedCache returns the same payload', async () => {
@@ -69,7 +58,7 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
       { images: [{ id: 'img-1' }], nextCursor: 'cursor-1' }
     );
 
-    const result = await readGroupFeedCache('g-3', { categoryId: 'all', language: 'any' });
+    const result = (await readGroupFeedCache('g-3', { categoryId: 'all', language: 'any' }))!;
 
     expect(result.images).toEqual([{ id: 'img-1' }]);
     expect(result.nextCursor).toBe('cursor-1');
@@ -124,11 +113,11 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
       'file:///cache/private-img-3.jpg',
     ];
 
-    const cacheDir = Paths.cache;
+    const cacheDir = Paths.cache as unknown as { uri: string; list: () => string[] };
     const originalList = cacheDir.list;
-    const deletedUris = [];
+    const deletedUris: Array<string | undefined> = [];
 
-    File.mockImplementation(function MockFile(uri) {
+    mockFile.mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, uri: string | { uri?: string }) {
       this.uri = typeof uri === 'string' ? uri : uri?.uri;
       this.exists = true;
       this.delete = jest.fn(() => { deletedUris.push(this.uri); });
@@ -139,7 +128,7 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
       await purgeAllPrivateCaches();
     } finally {
       cacheDir.list = originalList;
-      File.mockImplementation(function MockFile(uri) {
+      mockFile.mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, uri: string | { uri?: string }) {
         this.uri = typeof uri === 'string' ? uri : uri?.uri;
         this.exists = true;
         this.delete = jest.fn();
@@ -159,11 +148,11 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
       'file:///cache/public-thumb-group-7-image-9.webp',
     ];
 
-    const cacheDir = Paths.cache;
+    const cacheDir = Paths.cache as unknown as { uri: string; list: () => string[] };
     const originalList = cacheDir.list;
-    const deletedUris = [];
+    const deletedUris: Array<string | undefined> = [];
 
-    File.mockImplementation(function MockFile(uri) {
+    mockFile.mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, uri: string | { uri?: string }) {
       this.uri = typeof uri === 'string' ? uri : uri?.uri;
       this.exists = true;
       this.delete = jest.fn(() => { deletedUris.push(this.uri); });
@@ -174,7 +163,7 @@ describe('services/groups/groupFeedCache — purge behavior', () => {
       await purgeAllPrivateCaches();
     } finally {
       cacheDir.list = originalList;
-      File.mockImplementation(function MockFile(uri) {
+      mockFile.mockImplementation(function MockFile(this: { uri: string | undefined; exists: boolean; delete: jest.Mock }, uri: string | { uri?: string }) {
         this.uri = typeof uri === 'string' ? uri : uri?.uri;
         this.exists = true;
         this.delete = jest.fn();

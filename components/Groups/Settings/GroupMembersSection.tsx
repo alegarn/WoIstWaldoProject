@@ -2,8 +2,27 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
-import SettingsSection from './SettingsSection';
-import { getSettingsTokens } from './settingsTokens';
+import _SettingsSection from './SettingsSection';
+import MemberCapBanner from './MemberCapBanner';
+import { getSettingsTokens as _getSettingsTokens } from './settingsTokens';
+
+// SettingsSection.js is unmigrated; its destructured props (title / caption /
+// count / headerRight) are inferred as required by TS. settingsTokens.js
+// infers `options = 'dark'` as a string parameter. Permissive casts mirror
+// the App.tsx convention.
+const SettingsSection = _SettingsSection as React.ComponentType<any>;
+const getSettingsTokens = _getSettingsTokens as (options?: unknown) => any;
+
+type GroupMembersSectionProps = {
+  onManageMembers?: () => void;
+  memberCount?: number | null;
+  memberCap?: number | null;
+  canPersonalize?: boolean;
+  onUpgrade?: () => void;
+  appearance?: 'dark' | 'light';
+  primaryColor?: string;
+  secondaryColor?: string;
+};
 
 /**
  * Members entry — navigates to MemberManagementScreen.
@@ -14,10 +33,14 @@ import { getSettingsTokens } from './settingsTokens';
  */
 export default function GroupMembersSection({
   onManageMembers,
+  memberCount,
+  memberCap,
+  canPersonalize = true,
+  onUpgrade,
   appearance = 'dark',
   primaryColor,
   secondaryColor,
-}) {
+}: GroupMembersSectionProps) {
   const { t } = useTranslation();
   const tokens = getSettingsTokens({ appearance, primaryColor, secondaryColor });
 
@@ -28,6 +51,15 @@ export default function GroupMembersSection({
       primaryColor={primaryColor}
       secondaryColor={secondaryColor}
     >
+      <MemberCapBanner
+        memberCount={memberCount}
+        memberCap={memberCap}
+        canPersonalize={canPersonalize}
+        onUpgrade={onUpgrade}
+        textColor={tokens.text}
+        mutedColor={tokens.muted}
+        accentColor={tokens.accentSoft}
+      />
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={t('groups.settings.manageMembers')}

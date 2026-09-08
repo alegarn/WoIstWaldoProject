@@ -1,26 +1,6 @@
-jest.mock('@react-native-async-storage/async-storage', () => {
-  const store = new Map();
-
-  return {
-    __esModule: true,
-    default: {
-      getItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
-      setItem: jest.fn((key, value) => {
-        store.set(key, value);
-        return Promise.resolve();
-      }),
-      removeItem: jest.fn((key) => {
-        store.delete(key);
-        return Promise.resolve();
-      }),
-      getAllKeys: jest.fn(() => Promise.resolve(Array.from(store.keys()))),
-      multiRemove: jest.fn((keys) => {
-        for (const key of keys) store.delete(key);
-        return Promise.resolve();
-      }),
-    },
-  };
-});
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('../helpers/statefulAsyncStorageMock')()
+);
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -32,11 +12,11 @@ import {
 
 describe('services/groups/groupCategoryCache', () => {
   beforeEach(() => {
-    AsyncStorage.setItem.mockClear();
-    AsyncStorage.removeItem.mockClear();
-    AsyncStorage.multiRemove.mockClear();
-    AsyncStorage.getItem.mockClear();
-    AsyncStorage.getAllKeys.mockClear();
+    jest.mocked(AsyncStorage.setItem).mockClear();
+    jest.mocked(AsyncStorage.removeItem).mockClear();
+    jest.mocked(AsyncStorage.multiRemove).mockClear();
+    jest.mocked(AsyncStorage.getItem).mockClear();
+    jest.mocked(AsyncStorage.getAllKeys).mockClear();
   });
 
   it('writeGroupCategoryCache round-trips so readGroupCategoryCache returns the same array', async () => {

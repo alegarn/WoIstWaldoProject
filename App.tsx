@@ -40,7 +40,11 @@ import SettingsScreen from './screens/SettingsScreen';
 
 // Private group screens
 import GroupsListScreen from './screens/Groups/GroupsListScreen';
-import PrivateHomeScreen from './screens/Groups/PrivateHomeScreen';
+import _PrivateHomeScreen from './screens/Groups/PrivateHomeScreen';
+// PrivateHomeScreen.tsx declares PrivateHomeScreenProps structurally narrower
+// than this untyped Stack's generic ScreenComponent. Same permissive cast as
+// the GuessScreen convention below.
+const PrivateHomeScreen = _PrivateHomeScreen as React.ComponentType<any>;
 import CreateGroupScreen from './screens/Groups/CreateGroupScreen';
 import GroupSettingsScreen from './screens/Groups/GroupSettingsScreen';
 import JoinByCodeScreen from './screens/Groups/JoinByCodeScreen';
@@ -48,7 +52,11 @@ import MemberManagementScreen from './screens/Groups/MemberManagementScreen';
 import { HomeHeaderRight } from './screens/Groups/HomeHeaderRight';
 
 // Billing screens
-import PaywallScreen from './screens/Billing/PaywallScreen';
+import _PaywallScreen from './screens/Billing/PaywallScreen';
+// PaywallScreen.tsx declares PaywallScreenProps structurally narrower than
+// this untyped Stack's generic ScreenComponent. Same permissive cast as the
+// GuessScreen convention below.
+const PaywallScreen = _PaywallScreen as React.ComponentType<any>;
 import SubscriptionManagementScreen from './screens/Billing/SubscriptionManagementScreen';
 
 import AuthContextProvider from './store/auth-context';

@@ -111,6 +111,26 @@ describe('PaywallScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
   });
 
+  it('routes back to GroupSettingsScreen after a purchase with intent personalize-group', async () => {
+    const navigation = { replace: jest.fn() };
+    const authContext = { setEntitlement: jest.fn() };
+    const renderer = await renderScreen({ authContext, navigation, route: { params: { intent: 'personalize-group' } } });
+
+    await act(async () => {
+      const subscribeButtons = renderer.root.findAll((node) =>
+        typeof node.props.testID === 'string' && node.props.testID.endsWith('.subscribe')
+      );
+      subscribeButtons[0].props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
+    expect(syncEntitlement).toHaveBeenCalledTimes(1);
+    expect(navigation.replace).toHaveBeenCalledWith('GroupSettingsScreen');
+  });
+
   it('invokes Purchases.restorePurchases when the restore button is pressed', async () => {
     const renderer = await renderScreen({ authContext: { setEntitlement: jest.fn() } });
 
@@ -268,5 +288,64 @@ describe('PaywallScreen', () => {
     expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
 
     alertSpy.mockRestore();
+  });
+
+  function tierOrder(renderer) {
+    const seen = [];
+    renderer.root.findAll((node) => {
+      const testID = node.props.testID;
+      if (typeof testID === 'string' && /^paywall\.tier\.[a-z-]+$/.test(testID) && !seen.includes(testID)) {
+        seen.push(testID);
+      }
+      return false;
+    });
+    return seen;
+  }
+
+  function flattenText(value) {
+    if (typeof value === 'string') return value;
+    if (Array.isArray(value)) return value.map(flattenText).join('');
+    return '';
+  }
+
+  function textsUnder(renderer, rootTestID) {
+    const root = renderer.root.findAllByProps({ testID: rootTestID })[0];
+    return root.findAll((node) => node.props.children !== undefined)
+      .map((node) => flattenText(node.props.children));
+  }
+
+  it('features and orders the Creator card first for the personalize-group intent, with i18n-resolved copy', async () => {
+    const renderer = await renderScreen({ route: { params: { intent: 'personalize-group' } } });
+
+    expect(tierOrder(renderer)).toEqual([
+      'paywall.tier.private-group-creator',
+      'paywall.tier.premium',
+      'paywall.tier.no-ads',
+    ]);
+
+    const creatorTexts = textsUnder(renderer, 'paywall.tier.private-group-creator').join('\n');
+    expect(creatorTexts).toContain('Creator');
+    expect(creatorTexts).toContain('Popular');
+    expect(creatorTexts).toContain('Personalize your group home screen');
+    expect(creatorTexts).toContain('Subscribe');
+
+    const premiumTexts = textsUnder(renderer, 'paywall.tier.premium').join('\n');
+    expect(premiumTexts).not.toContain('Popular');
+  });
+
+  it('keeps the default store ordering and premium featured flag without the personalize intent', async () => {
+    const renderer = await renderScreen({ route: { params: {} } });
+
+    expect(tierOrder(renderer)).toEqual([
+      'paywall.tier.premium',
+      'paywall.tier.private-group-creator',
+      'paywall.tier.no-ads',
+    ]);
+
+    const premiumTexts = textsUnder(renderer, 'paywall.tier.premium').join('\n');
+    expect(premiumTexts).toContain('Popular');
+
+    const creatorTexts = textsUnder(renderer, 'paywall.tier.private-group-creator').join('\n');
+    expect(creatorTexts).not.toContain('Popular');
   });
 });

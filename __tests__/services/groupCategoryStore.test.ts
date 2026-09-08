@@ -1,26 +1,6 @@
-jest.mock('@react-native-async-storage/async-storage', () => {
-  const store = new Map();
-
-  return {
-    __esModule: true,
-    default: {
-      getItem: jest.fn((key) => Promise.resolve(store.has(key) ? store.get(key) : null)),
-      setItem: jest.fn((key, value) => {
-        store.set(key, value);
-        return Promise.resolve();
-      }),
-      removeItem: jest.fn((key) => {
-        store.delete(key);
-        return Promise.resolve();
-      }),
-      getAllKeys: jest.fn(() => Promise.resolve(Array.from(store.keys()))),
-      multiRemove: jest.fn((keys) => {
-        for (const key of keys) store.delete(key);
-        return Promise.resolve();
-      }),
-    },
-  };
-});
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('../helpers/statefulAsyncStorageMock')()
+);
 
 jest.mock('../../services/groups/groupCategoriesApi', () => ({
   __esModule: true,
@@ -113,13 +93,13 @@ describe('services/groups/groupCategoriesStore', () => {
         { id: 1, name: 'a-renamed', sort_order: 0, thumbnail_image_id: 11 },
         { id: 2, name: 'b', sort_order: 1, thumbnail_image_id: 22 },
       ];
-      listGroupCategories.mockResolvedValue({ status: 200, data: fresh });
+      jest.mocked(listGroupCategories).mockResolvedValue({ status: 200, data: fresh });
 
-      const calls = [];
+      const calls: unknown[] = [];
       await loadGroupCategoriesOptimistic({
         context: { token: 't' },
         groupId: 'g-7',
-        onCategories: (value) => calls.push(value),
+        onCategories: (value: unknown) => calls.push(value),
       });
 
       expect(calls).toHaveLength(2);
@@ -127,7 +107,7 @@ describe('services/groups/groupCategoriesStore', () => {
       expect(calls[1]).toEqual(fresh.map(normalizePrivateCategory));
 
       const stored = await AsyncStorage.getItem('groupCategories:g-7');
-      expect(JSON.parse(stored)).toEqual(fresh.map(normalizePrivateCategory));
+      expect(JSON.parse(stored ?? 'null')).toEqual(fresh.map(normalizePrivateCategory));
     });
 
     it('renders cache once and does NOT call onCategories again when fresh === cache', async () => {
@@ -139,20 +119,20 @@ describe('services/groups/groupCategoriesStore', () => {
       const fresh = [
         { id: 1, name: 'a', sort_order: 0, thumbnail_image_id: 11, thumbnail_url: 'https://y/a.png' },
       ];
-      listGroupCategories.mockResolvedValue({ status: 200, data: fresh });
+      jest.mocked(listGroupCategories).mockResolvedValue({ status: 200, data: fresh });
 
-      const calls = [];
+      const calls: unknown[] = [];
       await loadGroupCategoriesOptimistic({
         context: { token: 't' },
         groupId: 'g-7',
-        onCategories: (value) => calls.push(value),
+        onCategories: (value: unknown) => calls.push(value),
       });
 
       expect(calls).toHaveLength(1);
       expect(calls[0]).toEqual(cached);
 
       const stored = await AsyncStorage.getItem('groupCategories:g-7');
-      expect(JSON.parse(stored)).toEqual(cached);
+      expect(JSON.parse(stored ?? 'null')).toEqual(cached);
     });
 
     it('calls onCategories once with cache and does not throw when the network rejects', async () => {
@@ -161,14 +141,14 @@ describe('services/groups/groupCategoriesStore', () => {
       ];
       await AsyncStorage.setItem('groupCategories:g-7', JSON.stringify(cached));
 
-      listGroupCategories.mockRejectedValue(new Error('network down'));
+      jest.mocked(listGroupCategories).mockRejectedValue(new Error('network down'));
 
-      const calls = [];
+      const calls: unknown[] = [];
       await expect(
         loadGroupCategoriesOptimistic({
           context: { token: 't' },
           groupId: 'g-7',
-          onCategories: (value) => calls.push(value),
+          onCategories: (value: unknown) => calls.push(value),
         }),
       ).resolves.toBeUndefined();
 
@@ -176,35 +156,35 @@ describe('services/groups/groupCategoriesStore', () => {
       expect(calls[0]).toEqual(cached);
 
       const stored = await AsyncStorage.getItem('groupCategories:g-7');
-      expect(JSON.parse(stored)).toEqual(cached);
+      expect(JSON.parse(stored ?? 'null')).toEqual(cached);
     });
 
     it('does not call onCategories when there is no cache and the request fails', async () => {
-      listGroupCategories.mockRejectedValue(new Error('offline'));
+      jest.mocked(listGroupCategories).mockRejectedValue(new Error('offline'));
 
-      const calls = [];
+      const calls: unknown[] = [];
       await loadGroupCategoriesOptimistic({
         context: { token: 't' },
         groupId: 'g-empty',
-        onCategories: (value) => calls.push(value),
+        onCategories: (value: unknown) => calls.push(value),
       });
 
       expect(calls).toHaveLength(0);
     });
 
     it('resolves and still fetches from the network when the cache read rejects', async () => {
-      AsyncStorage.getItem.mockRejectedValueOnce(new Error('storage unavailable'));
+      jest.mocked(AsyncStorage.getItem).mockRejectedValueOnce(new Error('storage unavailable'));
       const fresh = [
         { id: 1, name: 'a', sort_order: 0, thumbnail_image_id: 11 },
       ];
-      listGroupCategories.mockResolvedValue({ status: 200, data: fresh });
+      jest.mocked(listGroupCategories).mockResolvedValue({ status: 200, data: fresh });
 
-      const calls = [];
+      const calls: unknown[] = [];
       await expect(
         loadGroupCategoriesOptimistic({
           context: { token: 't' },
           groupId: 'g-7',
-          onCategories: (value) => calls.push(value),
+          onCategories: (value: unknown) => calls.push(value),
         }),
       ).resolves.toBeUndefined();
 
@@ -220,18 +200,18 @@ describe('services/groups/groupCategoriesStore', () => {
         { id: 1, name: 'a', sort_order: 0, thumbnail_image_id: 11 },
         { id: 2, name: 'b', sort_order: 1, thumbnail_image_id: 22 },
       ];
-      listGroupCategories.mockResolvedValue({ status: 200, data: fresh });
+      jest.mocked(listGroupCategories).mockResolvedValue({ status: 200, data: fresh });
 
       const result = await refreshGroupCategories({ context: { token: 't' }, groupId: 'g-7' });
 
       expect(result).toEqual({ data: fresh.map(normalizePrivateCategory) });
 
       const stored = await AsyncStorage.getItem('groupCategories:g-7');
-      expect(JSON.parse(stored)).toEqual(fresh.map(normalizePrivateCategory));
+      expect(JSON.parse(stored ?? 'null')).toEqual(fresh.map(normalizePrivateCategory));
     });
 
     it('returns { isError } and does not write cache when the network rejects', async () => {
-      listGroupCategories.mockRejectedValue(new Error('offline'));
+      jest.mocked(listGroupCategories).mockRejectedValue(new Error('offline'));
 
       const result = await refreshGroupCategories({ context: { token: 't' }, groupId: 'g-7' });
 

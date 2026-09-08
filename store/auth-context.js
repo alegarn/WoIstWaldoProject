@@ -45,9 +45,60 @@ export function useAuthContext() {
 
 let customerInfoListener = null;
 let syncEntitlementTimer = null;
+let syncEntitlementInFlight = false;
+let syncEntitlementQueued = false;
 const SYNC_ENTITLEMENT_DEBOUNCE_MS = 1000;
 
-function configureCreatorBilling({ userId, authContextRef }) {
+async function runEntitlementSync({ authContextRef, entitlementVersionRef }) {
+  const context = authContextRef?.current;
+  if (!context || !context.isAuthenticated) {
+    return;
+  }
+
+  const versionAtStart = entitlementVersionRef?.current ?? 0;
+
+  try {
+    const { syncEntitlement } = require('../services/billing/billingApi');
+    const { entitlementToContextPayload } = require('../utils/purchases');
+    const response = await syncEntitlement(context);
+    const entitlement = response?.data;
+
+    if (entitlement && entitlementVersionRef?.current === versionAtStart) {
+      await context.setEntitlement(entitlementToContextPayload(entitlement));
+    }
+  } catch (error) {
+    console.warn('entitlement sync failed', error?.message ?? error);
+  }
+}
+
+function scheduleEntitlementSync({ authContextRef, entitlementVersionRef }) {
+  if (syncEntitlementInFlight) {
+    syncEntitlementQueued = true;
+    return;
+  }
+
+  if (syncEntitlementTimer) {
+    clearTimeout(syncEntitlementTimer);
+  }
+
+  syncEntitlementTimer = setTimeout(async () => {
+    syncEntitlementTimer = null;
+    syncEntitlementInFlight = true;
+
+    try {
+      await runEntitlementSync({ authContextRef, entitlementVersionRef });
+    } finally {
+      syncEntitlementInFlight = false;
+
+      if (syncEntitlementQueued) {
+        syncEntitlementQueued = false;
+        scheduleEntitlementSync({ authContextRef, entitlementVersionRef });
+      }
+    }
+  }, SYNC_ENTITLEMENT_DEBOUNCE_MS);
+}
+
+function configureCreatorBilling({ userId, authContextRef, entitlementVersionRef }) {
   if (!userId) {
     return;
   }
@@ -77,31 +128,7 @@ function configureCreatorBilling({ userId, authContextRef }) {
 
     if (typeof Purchases.addCustomerInfoUpdateListener === 'function') {
       const handleCustomerInfoUpdate = () => {
-        if (syncEntitlementTimer) {
-          clearTimeout(syncEntitlementTimer);
-        }
-
-        syncEntitlementTimer = setTimeout(async () => {
-          syncEntitlementTimer = null;
-
-          try {
-            const context = authContextRef?.current;
-            if (!context) {
-              return;
-            }
-
-            const { syncEntitlement } = require('../services/billing/billingApi');
-            const { entitlementToContextPayload } = require('../utils/purchases');
-            const response = await syncEntitlement(context);
-            const entitlement = response?.data;
-
-            if (entitlement) {
-              context.setEntitlement(entitlementToContextPayload(entitlement));
-            }
-          } catch (error) {
-            console.warn('customerInfo listener sync failed', error?.message ?? error);
-          }
-        }, SYNC_ENTITLEMENT_DEBOUNCE_MS);
+        scheduleEntitlementSync({ authContextRef, entitlementVersionRef });
       };
 
       customerInfoListener = handleCustomerInfoUpdate;
@@ -120,6 +147,8 @@ async function teardownCreatorBilling() {
       clearTimeout(syncEntitlementTimer);
       syncEntitlementTimer = null;
     }
+
+    syncEntitlementQueued = false;
 
     if (customerInfoListener && typeof Purchases?.removeCustomerInfoUpdateListener === 'function') {
       try {
@@ -158,6 +187,7 @@ export default function AuthContextProvider({ children }) {
   const logoutRef = useRef(logout);
   const isLoggingOutRef = useRef(false);
   const authContextRef = useRef(null);
+  const entitlementVersionRef = useRef(0);
 
   useEffect(() => {
     logoutRef.current = logout;
@@ -203,7 +233,11 @@ export default function AuthContextProvider({ children }) {
       setIsTutorialFinished(isTutorialFinished);
     };
 
-    configureCreatorBilling({ userId, authContextRef });
+    configureCreatorBilling({ userId, authContextRef, entitlementVersionRef });
+
+    if (token) {
+      scheduleEntitlementSync({ authContextRef, entitlementVersionRef });
+    }
 
     setIsAuthenticated(!!token);
   };
@@ -248,7 +282,11 @@ export default function AuthContextProvider({ children }) {
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(false);
 
-    configureCreatorBilling({ userId, authContextRef });
+    configureCreatorBilling({ userId, authContextRef, entitlementVersionRef });
+
+    if (token) {
+      scheduleEntitlementSync({ authContextRef, entitlementVersionRef });
+    }
 
     await saveIsTutorialFinished(isTutorialFinished);    
 
@@ -266,6 +304,10 @@ export default function AuthContextProvider({ children }) {
       await flush({ authContext: authContextRef.current });
     } catch {
     }
+
+    // Invalidate any in-flight entitlement sync so a stale response that
+    // resolves after logout cannot re-apply entitlement state.
+    entitlementVersionRef.current += 1;
 
     setAuthToken(null);
     setUserId('');
@@ -327,6 +369,8 @@ export default function AuthContextProvider({ children }) {
   };
 
   async function setEntitlement({ isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId } = {}) {
+    entitlementVersionRef.current += 1;
+
     if (isPaid !== undefined) {
       setIsPaid(!!isPaid);
       await SecureStore.setItemAsync('isPaid', JSON.stringify(!!isPaid));

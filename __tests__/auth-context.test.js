@@ -73,6 +73,12 @@ describe('AuthContextProvider', () => {
     return renderer;
   }
 
+  async function flushMicrotasks(times = 10) {
+    for (let i = 0; i < times; i += 1) {
+      await Promise.resolve();
+    }
+  }
+
   it('authenticates, persists the session, and marks tutorial progress from the backend flag', async () => {
     await renderProvider();
 
@@ -326,5 +332,151 @@ describe('AuthContextProvider', () => {
 
     expect(Purchases.removeCustomerInfoUpdateListener).toHaveBeenCalledTimes(1);
     expect(Purchases.removeCustomerInfoUpdateListener.mock.calls[0][0]).toBe(registeredListener);
+  });
+
+  it('fires a single fire-and-forget syncEntitlement after authenticate and applies the payload', async () => {
+    await renderProvider();
+    syncEntitlement.mockClear();
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        await latestContext.authenticate({
+          token: 'Bearer token-123',
+          userId: 'user-1',
+          email: 'waldo@example.com',
+          username: 'waldo',
+          scoreId: 'score-9',
+          isTutorialFinished: false,
+        });
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+      });
+
+      expect(syncEntitlement).toHaveBeenCalledTimes(1);
+      expect(latestContext.isPaid).toBe(true);
+      expect(latestContext.paidTier).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('fires a single fire-and-forget syncEntitlement after restoreSession', async () => {
+    await renderProvider();
+    syncEntitlement.mockClear();
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        latestContext.restoreSession({
+          token: 'Bearer restored-token',
+          userId: 'user-2',
+        });
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+      });
+
+      expect(syncEntitlement).toHaveBeenCalledTimes(1);
+      expect(latestContext.paidTier).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('ignores a stale syncEntitlement response that resolves after a newer setEntitlement', async () => {
+    await renderProvider();
+
+    let resolveSync;
+    syncEntitlement.mockImplementation(
+      () => new Promise((resolve) => { resolveSync = resolve; })
+    );
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        await latestContext.authenticate({
+          token: 'Bearer token-123',
+          userId: 'user-1',
+          email: 'waldo@example.com',
+          username: 'waldo',
+          scoreId: 'score-9',
+          isTutorialFinished: false,
+        });
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+      });
+
+      expect(syncEntitlement).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        await latestContext.setEntitlement({ isPaid: true, paidTier: 3, paidExpiresAt: null });
+        resolveSync({ status: 200, data: { is_paid: false, paid_tier: 0 } });
+        await flushMicrotasks();
+      });
+
+      expect(latestContext.isPaid).toBe(true);
+      expect(latestContext.paidTier).toBe(3);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('does not apply an in-flight syncEntitlement response that resolves after logout', async () => {
+    await renderProvider();
+
+    let resolveSync;
+    syncEntitlement.mockImplementation(
+      () => new Promise((resolve) => { resolveSync = resolve; })
+    );
+
+    jest.useFakeTimers();
+
+    try {
+      await act(async () => {
+        await latestContext.authenticate({
+          token: 'Bearer token-123',
+          userId: 'user-1',
+          email: 'waldo@example.com',
+          username: 'waldo',
+          scoreId: 'score-9',
+          isTutorialFinished: false,
+        });
+      });
+
+      await act(async () => {
+        jest.advanceTimersByTime(1000);
+        await flushMicrotasks();
+      });
+
+      expect(syncEntitlement).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        const logoutPromise = latestContext.logout();
+        await flushMicrotasks();
+        resolveSync({ status: 200, data: { is_paid: true, paid_tier: 3, paid_expires_at: null } });
+        await logoutPromise;
+        await flushMicrotasks();
+      });
+
+      expect(latestContext.isAuthenticated).toBe(false);
+      expect(latestContext.isPaid).toBe(false);
+      expect(latestContext.paidTier).toBe(0);
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith('isPaid', JSON.stringify(true));
+      expect(SecureStore.setItemAsync).not.toHaveBeenCalledWith('paidTier', JSON.stringify(3));
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

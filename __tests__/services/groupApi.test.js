@@ -36,6 +36,7 @@ import { clearGroupHomeBackgrounds } from '../../services/groups/groupHomeBackgr
 
 import {
   fetchGroups,
+  looksLikeErrorPayload,
   createGroup,
   updateGroupSettings,
   deleteGroup,
@@ -86,7 +87,7 @@ describe('services/groups', () => {
 
       expect(axios.get).toHaveBeenCalledWith(
         'https://backend.example/api/v1/private_groups/',
-        { headers: AUTH_HEADERS }
+        { headers: AUTH_HEADERS, params: { _ts: expect.any(Number) } }
       );
       expect(response.status).toBe(200);
       expect(response.data.owned).toEqual([
@@ -95,6 +96,103 @@ describe('services/groups', () => {
       expect(response.data.joined).toEqual([
         expect.objectContaining({ id: 'g-2', role: 'member' }),
       ]);
+      expect(response.rawBodyType).toBe('object');
+      expect(response.rawBodySample).toContain('"name":"Mine"');
+    });
+
+    it('fetchGroups cache-busts every request with a fresh _ts param so a carrier proxy cannot serve a stale cached body', async () => {
+      axios.get.mockResolvedValue({ status: 200, data: [] });
+      const nowSpy = jest.spyOn(Date, 'now');
+      try {
+        nowSpy.mockReturnValue(1000);
+        await fetchGroups(CONTEXT);
+
+        nowSpy.mockReturnValue(2000);
+        await fetchGroups(CONTEXT);
+      } finally {
+        nowSpy.mockRestore();
+      }
+
+      expect(axios.get).toHaveBeenNthCalledWith(
+        1,
+        'https://backend.example/api/v1/private_groups/',
+        { headers: AUTH_HEADERS, params: { _ts: 1000 } }
+      );
+      expect(axios.get).toHaveBeenNthCalledWith(
+        2,
+        'https://backend.example/api/v1/private_groups/',
+        { headers: AUTH_HEADERS, params: { _ts: 2000 } }
+      );
+    });
+
+    it('fetchGroups exposes raw body diagnostics when the body is not the expected payload', async () => {
+      axios.get.mockResolvedValue({ status: 200, data: '<html>gateway error</html>' });
+
+      const response = await fetchGroups(CONTEXT);
+
+      expect(response.status).toBe(200);
+      expect(response.payloadInvalid).toBe(true);
+      expect(response.data).toBe('<html>gateway error</html>');
+      expect(response.rawBodyType).toBe('string');
+      expect(response.rawBodySample).toBe('<html>gateway error</html>');
+    });
+
+    it('fetchGroups morphs the status to the body-claimed status when a 200 carries a JSON error body', async () => {
+      const errorBody = {
+        status: 404,
+        error: 'Not Found',
+        exception: '#<ActionController::RoutingError: No route matches>',
+      };
+      axios.get.mockResolvedValue({ status: 200, data: errorBody });
+
+      const response = await fetchGroups(CONTEXT);
+
+      expect(response.status).toBe(404);
+      expect(response.payloadInvalid).toBe(true);
+      expect(response.data).toEqual(errorBody);
+      expect(response.rawBodyType).toBe('object');
+      expect(response.rawBodySample).toContain('Not Found');
+    });
+
+    it('fetchGroups normalizes a valid {data: [...]} envelope payload with diagnostics and no rejection flag', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [{ id: 'g-1', owner_id: 'user-1', name: 'Mine' }] },
+      });
+
+      const response = await fetchGroups(CONTEXT);
+
+      expect(response.status).toBe(200);
+      expect(response.payloadInvalid).toBeUndefined();
+      expect(response.data.owned).toEqual([
+        expect.objectContaining({ id: 'g-1', role: 'owner' }),
+      ]);
+      expect(response.data.joined).toEqual([]);
+      expect(response.rawBodyType).toBe('object');
+      expect(response.rawBodySample).toContain('"name":"Mine"');
+    });
+
+    it('fetchGroups treats {data: []} as a valid empty payload, not a rejected one', async () => {
+      axios.get.mockResolvedValue({ status: 200, data: { data: [] } });
+
+      const response = await fetchGroups(CONTEXT);
+
+      expect(response.status).toBe(200);
+      expect(response.payloadInvalid).toBeUndefined();
+      expect(response.data).toEqual({ owned: [], joined: [], pendingInvites: [] });
+    });
+
+    it('looksLikeErrorPayload rejects error-shaped bodies and accepts groups payloads', () => {
+      expect(looksLikeErrorPayload({ status: 404, error: 'Not Found', exception: 'x' })).toBe(true);
+      expect(looksLikeErrorPayload({ error: 'boom' })).toBe(true);
+      expect(looksLikeErrorPayload({ exception: '#<RoutingError>' })).toBe(true);
+      expect(looksLikeErrorPayload({ status: 500 })).toBe(true);
+      expect(looksLikeErrorPayload({ status: 200 })).toBe(false);
+      expect(looksLikeErrorPayload({ data: [] })).toBe(false);
+      expect(looksLikeErrorPayload({ data: [{ id: 'g-1' }] })).toBe(false);
+      expect(looksLikeErrorPayload([{ id: 'g-1' }])).toBe(false);
+      expect(looksLikeErrorPayload('<html>err</html>')).toBe(false);
+      expect(looksLikeErrorPayload(null)).toBe(false);
     });
 
     it('createGroup POSTs the serialized private_group payload', async () => {

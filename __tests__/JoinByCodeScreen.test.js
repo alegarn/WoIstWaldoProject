@@ -124,6 +124,23 @@ describe('JoinByCodeScreen', () => {
     expect(navigation.replace).not.toHaveBeenCalled();
   });
 
+  it('maps a 422 response without a known reason to the owner-upgrade full-group message', async () => {
+    joinByCode.mockResolvedValue({
+      status: 422,
+      data: {},
+    });
+
+    const { renderer, navigation } = await renderScreen();
+
+    await submitCode(renderer, 'GROUP42');
+
+    expect(renderer.root.findByProps({ testID: 'join-code.error' }).props.children).toBe(
+      'This group is full. The owner can upgrade to Creator for up to 30 members.'
+    );
+    expect(setActive).not.toHaveBeenCalled();
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
   it('activates the group and replaces navigation with private scope on success', async () => {
     joinByCode.mockResolvedValue({
       status: 201,

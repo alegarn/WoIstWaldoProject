@@ -48,7 +48,6 @@ import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnail
 import { fetchGroups } from '../../services/groups/groupApi';
 
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
-export { RECENT_ALL_CATEGORY };
 
 const DEFAULT_LANGUAGE = 'en';
 const NAVIGATION_ANY_LANGUAGE = 'any';
@@ -156,7 +155,9 @@ function buildActiveGroupSnapshot(
     ...(groupsHubData?.owned ?? []),
     ...(groupsHubData?.joined ?? []),
   ];
-  const activeGroup = groups.find((group) => group?.id === groupId);
+  const activeGroup = groups.find(
+    (group) => group?.id != null && String(group.id) === String(groupId)
+  );
 
   if (!activeGroup) {
     return null;
@@ -212,8 +213,11 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const { scope: activeScope } = useActiveGroup() as { scope: GuessPathScope };
   const scope: GuessPathScope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
-  // useGroupsHub.js is untyped JS; data is the groups hub payload or null.
-  const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope }) as { data: GroupsHubData | null };
+  // hooks/useGroupsHub.ts is typed TS; data is GroupsHubData | null from the groups hub.
+  const { data: groupsHubData, refresh: refreshGroupsHub } = useGroupsHub({ enabled: isPrivateScope }) as {
+    data: GroupsHubData | null;
+    refresh: () => Promise<void>;
+  };
   const activeGroup = isPrivateScope ? buildActiveGroupSnapshot(groupsHubData, scope.groupId) : null;
   const isOwner = activeGroup?.isOwnedByViewer === true;
   // useScopedPrivateGroupTheme.js is untyped JS; narrow to the local structural shapes.
@@ -268,7 +272,8 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
     useCallback(() => {
       setManageMode(null);
       reloadCategories();
-    }, [reloadCategories])
+      refreshGroupsHub();
+    }, [reloadCategories, refreshGroupsHub])
   );
 
   useEffect(() => {

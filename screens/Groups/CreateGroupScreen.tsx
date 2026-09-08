@@ -1,23 +1,41 @@
 import { useContext, useState } from 'react';
 import { View, Text, TextInput, StyleSheet, Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import BigButton from '../../components/UI/BigButton';
-import Button from '../../components/UI/Button';
+import _BigButton from '../../components/UI/BigButton';
+import _Button from '../../components/UI/Button';
 import CenteredModal from '../../components/UI/CenteredModal';
-import ColorPalettePicker from '../../components/UI/ColorPalettePicker';
+import _ColorPalettePicker from '../../components/UI/ColorPalettePicker';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { createGroup } from '../../services/groups/groupApi';
+import type { GroupScope, GroupsHubData } from '../../types/groups';
 
-export default function CreateGroupScreen({ navigation }) {
+// BigButton.js, Button.js and ColorPalettePicker.js are unmigrated; their
+// destructured props are inferred as required by TS. Permissive casts mirror
+// the App.tsx convention.
+const BigButton = _BigButton as React.ComponentType<any>;
+const Button = _Button as React.ComponentType<any>;
+const ColorPalettePicker = _ColorPalettePicker as React.ComponentType<any>;
+
+type CreateGroupParamList = {
+  CreateGroupScreen: Record<string, unknown>;
+  PrivateHomeScreen: { scope?: GroupScope };
+};
+
+type CreateGroupScreenProps = {
+  navigation: NativeStackNavigationProp<CreateGroupParamList, 'CreateGroupScreen'>;
+};
+
+export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps) {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
-  const { data, isLoading } = useGroupsHub();
-  const { setActive } = useActiveGroup();
+  const { data, isLoading } = useGroupsHub() as { data: GroupsHubData | null; isLoading: boolean };
+  const { setActive } = useActiveGroup() as { setActive: (groupId: string | null) => Promise<unknown> };
 
   const [name, setName] = useState('');
   const [primaryColor, setPrimaryColor] = useState(GlobalStyle.color.primaryColor);
@@ -26,7 +44,6 @@ export default function CreateGroupScreen({ navigation }) {
   const [isConfirmVisible, setIsConfirmVisible] = useState(false);
 
   const owned = data?.owned ?? [];
-  const isPaidCreator = (authContext?.paidTier ?? 0) >= 2;
   const alreadyOwns = owned.length > 0;
 
   if (isLoading && !data) {
@@ -56,22 +73,6 @@ export default function CreateGroupScreen({ navigation }) {
           onPress={goToGroup}
           testID="create-group.button.go-to-group"
           accessibilityLabel={t('groups.create.goToGroup')}
-        />
-      </View>
-    );
-  }
-
-  if (!isPaidCreator) {
-    return (
-      <View style={styles.lockedContainer}>
-        <Text style={styles.lockedMessage}>
-          {t('groups.create.privateFeature')}
-        </Text>
-        <BigButton
-          text={t('groups.create.unlock')}
-          onPress={() => navigation.replace('PaywallScreen', { intent: 'create-group' })}
-          testID="create-group.button.unlock"
-          accessibilityLabel={t('groups.create.unlock')}
         />
       </View>
     );
@@ -109,7 +110,7 @@ export default function CreateGroupScreen({ navigation }) {
       }
 
       Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.create.createFailed'));
-    } catch (err) {
+    } catch (err: any) {
       Alert.alert(t('common.error'), err?.message ?? t('groups.create.createFailed'));
     } finally {
       setIsSubmitting(false);

@@ -405,8 +405,6 @@
       "loading": "Loading...",
       "onlyOne": "You can only create 1 group.",
       "goToGroup": "Go to my group",
-      "privateFeature": "Group creation is a Private Group feature.",
-      "unlock": "Unlock group creation",
       "nameRequiredTitle": "Name required",
       "nameRequiredMessage": "Please enter a group name.",
       "createFailed": "Could not create the group. Please try again.",
@@ -427,7 +425,7 @@
       "locked": "Group is locked.",
       "unknownCode": "Unknown code.",
       "alreadyMember": "You are already in this group.",
-      "full": "Group is full.",
+      "full": "This group is full. The owner can upgrade to Creator for up to 30 members.",
       "failed": "Could not join. Please try again."
     },
     "members": {
@@ -443,9 +441,10 @@
       "transferConfirm": "Transfer ownership to {{name}}?",
       "removeFailed": "Could not remove member.",
       "transferFailedTitle": "Cannot transfer ownership",
-      "transferNotCreator": "This member needs to hold a \"Group Creator\" tier before transfer to own the group.",
       "transferNotMember": "This member is no longer in the group.",
-      "transferFailed": "Could not transfer ownership. Please try again."
+      "transferFailed": "Could not transfer ownership. Please try again.",
+      "memberCap": "{{current}}/{{cap}} members",
+      "upgradeFor30": "Upgrade for 30"
     },
     "settings": {
       "checkingOwnership": "Checking ownership...",
@@ -486,7 +485,8 @@
       "deleteFailed": "Could not delete category.",
       "uploadedTitle": "Uploaded",
       "thumbnailUpdated": "Category thumbnail updated.",
-      "updateThumbnailFailed": "Could not update thumbnail."
+      "updateThumbnailFailed": "Could not update thumbnail.",
+      "personalizationLocked": "Personalizing categories is a Creator feature. Your free group stays at the 9 defaults."
     },
     "locked": {
       "ownerTitle": "Your private-group access ended",
@@ -518,7 +518,12 @@
       "saving": "Saving…",
       "choose": "Choose",
       "removeBackgroundLabel": "Remove {{name}} background",
-      "remove": "Remove"
+      "remove": "Remove",
+      "bgUploadLocked": "Home images are a Creator feature",
+      "shareCapTitle": "Your group is full",
+      "shareCapReached": "Your group is full ({{cap}} members). Creator raises the cap to 30.",
+      "shareAnyway": "Share anyway",
+      "groupUnavailable": "This group isn't available on this account right now."
     },
     "menu": {
       "groups": "Groups",
@@ -546,13 +551,15 @@
       "loadingOfferings": "Loading offerings...",
       "empty": "No offerings available right now.",
       "noSubscription": "No active subscription found.",
-      "restorePurchases": "Restore purchases"
+      "restorePurchases": "Restore purchases",
+      "personalizeTitle": "Personalization is a Creator feature",
+      "personalizeMessage": "Upgrade to a Creator plan to personalize your group (images, categories) and host up to 30 members."
     },
     "subscription": {
       "restoring": "Restoring...",
       "currentPlan": "Current plan",
       "tierPremium": "Premium",
-      "tierPrivateGroup": "Private Group",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "No-ads",
       "tierFree": "Free",
       "refreshing": "Refreshing plan…",
@@ -561,6 +568,38 @@
       "upgrade": "Upgrade",
       "manage": "Manage subscription",
       "openSettingsFailed": "Could not open subscription settings"
+    },
+    "tiers": {
+      "premium": {
+        "label": "Premium",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "Personalize your group (images, categories) + 30 members",
+          "Remove mandatory ads",
+          "All core game modes"
+        ],
+        "cta": "Subscribe"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "Personalize your group home screen",
+          "Add new categories to guess",
+          "Max 30 members"
+        ],
+        "cta": "Subscribe"
+      },
+      "no_ads": {
+        "label": "No Ads",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "Remove all ads",
+          "Uninterrupted play",
+          "Faster rounds"
+        ],
+        "cta": "Subscribe"
+      }
     }
   }
 }
