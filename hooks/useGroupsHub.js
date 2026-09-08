@@ -6,7 +6,6 @@ import { AuthContext } from '../store/auth-context';
 
 const MAX_TRANSPORT_ATTEMPTS = 3;
 const RETRY_DELAYS_MS = [0, 1500];
-const EMPTY_CONFIRMATION_DELAY_MS = 2000;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -126,7 +125,25 @@ export function useGroupsHub({ enabled = true } = {}) {
 
     const seq = ++seqRef.current;
 
-    const runFlight = async ({ seq: flightSeq, isConfirmation = false }) => {
+    // Shared tail for both failure arms: a sibling instance may have
+    // published a 200 for this identity in this instance's render-to-effect
+    // window or while this flight was retrying. Surface the store data
+    // instead of the error; the warns above keep the failure visible in logs.
+    const healOrSurfaceError = (failure) => {
+      const healed = snapshotDataFor(getSnapshot(), flightIdentity);
+      if (healed) {
+        dataRef.current = healed;
+        setData(healed);
+        setIsFresh(true);
+        setError(null);
+      } else {
+        setError(failure?.data ?? failure);
+        setIsFresh(false);
+      }
+      if (mounted.current) setIsLoading(false);
+    };
+
+    const runFlight = async (flightSeq) => {
       const seq = flightSeq;
       if (mounted.current) {
         setIsLoading(true);
@@ -177,27 +194,21 @@ export function useGroupsHub({ enabled = true } = {}) {
         // fetchGroups flags any 200 whose body is not a valid groups payload
         // (proxy error bodies, HTML garbage) with `payloadInvalid`. Route it
         // through the error branch below — an error body is never "zero
-        // groups" and must not reach the empty-200 guard or be published.
+        // groups" and must not reach the empty-200 branch or be published.
         if (!response.payloadInvalid && response.status === 200) {
           const isEmpty = response.data?.owned?.length === 0 && response.data?.joined?.length === 0;
 
           if (isEmpty) {
-            const hadPriorRows = hasHubRows(dataRef.current)
-              || hasHubRows(snapshotDataFor(getSnapshot(), flightIdentity))
-              || hasHubRows(cached);
-
+            // Payload validation already rejected error/garbage bodies, so a
+            // well-formed empty 200 is server truth and applies immediately;
+            // the warn keeps the diagnostic trail when the empty replaces rows.
             console.warn('[useGroupsHub] 200 with empty groups payload', {
-              hadCachedData: hadPriorRows,
+              hadCachedData: hasHubRows(dataRef.current)
+                || hasHubRows(snapshotDataFor(getSnapshot(), flightIdentity))
+                || hasHubRows(cached),
               ...(response.rawBodyType != null ? { rawType: response.rawBodyType } : {}),
               ...(response.rawBodySample != null ? { bodySample: response.rawBodySample } : {}),
             });
-
-            if (hadPriorRows && !isConfirmation) {
-              setIsFresh(true);
-              if (mounted.current) setIsLoading(false);
-              scheduleEmptyConfirmation(seq);
-              return;
-            }
           }
 
           publish(flightIdentity, response.data);
@@ -210,74 +221,30 @@ export function useGroupsHub({ enabled = true } = {}) {
           } catch {
             // best-effort: cache write failure must not fail the refresh
           }
-        } else {
-          if (response.payloadInvalid) {
-            console.warn('[useGroupsHub] groups payload rejected', {
-              bodySample: String(response.rawBodySample ?? response.data ?? 'unknown').slice(0, 200),
-              rawType: response.rawBodyType ?? null,
-              bodyStatus: response.status ?? null,
-            });
-          } else {
-            warnFetchFailed(response, attempts, Boolean(flightIdentity));
-          }
 
-          // Same heal as the transport-failure path below: a sibling
-          // instance may have published a 200 for this identity in this
-          // instance's render-to-effect window (initializer ran on an older
-          // snapshot, subscriber not yet attached). Surface the store data
-          // instead of the error; the warn above keeps the HTTP failure
-          // visible in logs.
-          const healed = snapshotDataFor(getSnapshot(), flightIdentity);
-          if (healed) {
-            dataRef.current = healed;
-            setData(healed);
-            setIsFresh(true);
-            setError(null);
-          } else {
-            setError(response?.data ?? response);
-            setIsFresh(false);
-          }
+          if (mounted.current) setIsLoading(false);
+          return;
         }
 
-        if (mounted.current) setIsLoading(false);
+        if (response.payloadInvalid) {
+          console.warn('[useGroupsHub] groups payload rejected', {
+            bodySample: String(response.rawBodySample ?? response.data ?? 'unknown').slice(0, 200),
+            rawType: response.rawBodyType ?? null,
+            bodyStatus: response.status ?? null,
+          });
+        } else {
+          warnFetchFailed(response, attempts, Boolean(flightIdentity));
+        }
+
+        healOrSurfaceError(response);
         return;
       }
 
       warnFetchFailed(transportFailure, attempts, Boolean(flightIdentity));
-
-      // A sibling instance may have published a 200 while this flight was
-      // retrying: heal from the store instead of degrading to the empty or
-      // error state.
-      const healed = snapshotDataFor(getSnapshot(), flightIdentity);
-      if (healed) {
-        dataRef.current = healed;
-        setData(healed);
-        setIsFresh(true);
-        setError(null);
-      } else {
-        setError(transportFailure?.data ?? transportFailure);
-        setIsFresh(false);
-      }
-      if (mounted.current) setIsLoading(false);
+      healOrSurfaceError(transportFailure);
     };
 
-    const scheduleEmptyConfirmation = (baseSeq) => {
-      setTimeout(() => {
-        if (!mounted.current || baseSeq !== seqRef.current) return;
-        if (inFlightRef.current) return;
-
-        const seq = ++seqRef.current;
-        const promise = runFlight({ seq, isConfirmation: true });
-        inFlightRef.current = { identityKey: flightIdentity, promise };
-        promise.finally(() => {
-          if (inFlightRef.current?.promise === promise) {
-            inFlightRef.current = null;
-          }
-        });
-      }, EMPTY_CONFIRMATION_DELAY_MS);
-    };
-
-    const promise = runFlight({ seq });
+    const promise = runFlight(seq);
     inFlightRef.current = { identityKey: flightIdentity, promise };
     promise.finally(() => {
       if (inFlightRef.current?.promise === promise) {
@@ -285,7 +252,7 @@ export function useGroupsHub({ enabled = true } = {}) {
       }
     });
     return promise;
-  }, [enabled, token, userId, identityKey]);
+  }, [enabled, token, userId]);
 
   useEffect(() => {
     refresh();

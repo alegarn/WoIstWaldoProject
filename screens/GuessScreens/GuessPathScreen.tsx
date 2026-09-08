@@ -48,7 +48,6 @@ import { uploadCategoryThumbnail } from '../../services/groups/categoryThumbnail
 import { fetchGroups } from '../../services/groups/groupApi';
 
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
-export { RECENT_ALL_CATEGORY };
 
 const DEFAULT_LANGUAGE = 'en';
 const NAVIGATION_ANY_LANGUAGE = 'any';

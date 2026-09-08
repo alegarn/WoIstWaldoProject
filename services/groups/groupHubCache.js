@@ -6,7 +6,6 @@ function groupHubKey(userId) {
   return `${PREFIX}:${userId}`;
 }
 
-export { groupHubKey };
 
 function isValidHubPayload(payload) {
   return !!payload

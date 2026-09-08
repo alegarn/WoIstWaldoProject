@@ -102,7 +102,7 @@ export async function fetchGroups(context) {
           data: response.data,
           payloadInvalid: true,
           rawBodyType: typeof response.data,
-          rawBodySample: rawBodySample(response.data),
+          ...(__DEV__ ? { rawBodySample: rawBodySample(response.data) } : {}),
         };
       }
 
@@ -110,7 +110,7 @@ export async function fetchGroups(context) {
         status: response.status,
         data: normalizeGroupsPayload(response.data, userId),
         rawBodyType: typeof response.data,
-        rawBodySample: rawBodySample(response.data),
+        ...(__DEV__ ? { rawBodySample: rawBodySample(response.data) } : {}),
       };
     })
     .catch(mapRequestError);

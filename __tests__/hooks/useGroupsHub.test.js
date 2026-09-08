@@ -331,7 +331,7 @@ describe('useGroupsHub', () => {
     expect(result.current.data).toEqual({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
   });
 
-  it('retries once automatically after a transport-level failure (no status) and surfaces the success', async () => {
+  it('retries a transport-level failure (no status) within the 3-attempt budget and surfaces the success', async () => {
     fetchGroups
       .mockResolvedValueOnce({ data: { message: 'Network Error' } })
       .mockResolvedValueOnce({ status: 200, data: HUB });
@@ -581,100 +581,10 @@ describe('useGroupsHub', () => {
     });
   });
 
-  describe('suspect empty-200 guard', () => {
+  describe('empty-200 guard', () => {
     const EMPTY = { owned: [], joined: [], pendingInvites: [] };
 
-    it('withholds a suspect empty 200 when rows exist, then applies the non-empty confirmation', async () => {
-      jest.useFakeTimers();
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      fetchGroups
-        .mockResolvedValueOnce({ status: 200, data: HUB })
-        .mockResolvedValueOnce({
-          status: 200,
-          data: EMPTY,
-          rawBodyType: 'object',
-          rawBodySample: '{"data":[]}',
-        })
-        .mockResolvedValueOnce({ status: 200, data: { owned: [{ id: 'g-new' }], joined: [], pendingInvites: [] } });
-
-      const { result } = renderHook(() => useGroupsHub(), {
-        wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
-      });
-
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(0);
-      });
-      expect(result.current.data).toEqual(HUB);
-
-      await act(async () => {
-        await result.current.refresh();
-      });
-
-      expect(result.current.data).toEqual(HUB);
-      expect(result.current.isFresh).toBe(true);
-      expect(result.current.isLoading).toBe(false);
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
-
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(2000);
-      });
-
-      expect(fetchGroups).toHaveBeenCalledTimes(3);
-      expect(result.current.data).toEqual({ owned: [{ id: 'g-new' }], joined: [], pendingInvites: [] });
-      expect(result.current.error).toBeNull();
-
-      expect(warn).toHaveBeenCalledWith('[useGroupsHub] 200 with empty groups payload', expect.objectContaining({
-        hadCachedData: true,
-        rawType: 'object',
-        bodySample: '{"data":[]}',
-      }));
-
-      warn.mockRestore();
-    });
-
-    it('accepts the empty payload when the confirmation refetch is also empty', async () => {
-      jest.useFakeTimers();
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      fetchGroups
-        .mockResolvedValueOnce({ status: 200, data: HUB })
-        .mockResolvedValueOnce({ status: 200, data: EMPTY })
-        .mockResolvedValue({ status: 200, data: EMPTY });
-
-      const { result } = renderHook(() => useGroupsHub(), {
-        wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
-      });
-
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(0);
-      });
-      expect(result.current.data).toEqual(HUB);
-
-      await act(async () => {
-        await result.current.refresh();
-      });
-      expect(result.current.data).toEqual(HUB);
-
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(2000);
-      });
-
-      expect(fetchGroups).toHaveBeenCalledTimes(3);
-      expect(result.current.data).toEqual(EMPTY);
-      expect(result.current.isFresh).toBe(true);
-      expect(result.current.error).toBeNull();
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsHub:user-1', JSON.stringify(EMPTY));
-
-      await act(async () => {
-        await jest.advanceTimersByTimeAsync(3000);
-      });
-      expect(fetchGroups).toHaveBeenCalledTimes(3);
-
-      warn.mockRestore();
-    });
-
-    it('applies a first-ever empty 200 immediately without scheduling a confirmation', async () => {
+    it('applies a well-formed empty 200 immediately with no confirmation refetch or pending timers', async () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
       fetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
@@ -687,15 +597,22 @@ describe('useGroupsHub', () => {
         await jest.advanceTimersByTimeAsync(0);
       });
 
-      expect(result.current.data).toEqual(EMPTY);
-      expect(result.current.isLoading).toBe(false);
-      expect(result.current.isFresh).toBe(true);
       expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(result.current.data).toEqual(EMPTY);
+      expect(result.current.isFresh).toBe(true);
+      expect(result.current.isLoading).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(getSnapshot()).toEqual(expect.objectContaining({
+        identityKey: `${TOKEN}|${USER_ID}`,
+        data: EMPTY,
+      }));
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsHub:user-1', JSON.stringify(EMPTY));
 
       await act(async () => {
         await jest.advanceTimersByTimeAsync(3000);
       });
       expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(jest.getTimerCount()).toBe(0);
 
       expect(warn).toHaveBeenCalledWith('[useGroupsHub] 200 with empty groups payload', expect.objectContaining({
         hadCachedData: false,
@@ -704,7 +621,7 @@ describe('useGroupsHub', () => {
       warn.mockRestore();
     });
 
-    it('does not write a withheld empty payload to the AsyncStorage hub cache', async () => {
+    it('logs hadCachedData true and still applies the empty 200 immediately when prior rows existed', async () => {
       jest.useFakeTimers();
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
@@ -719,9 +636,14 @@ describe('useGroupsHub', () => {
         await jest.advanceTimersByTimeAsync(0);
       });
 
-      expect(result.current.data).toEqual(HUB);
-      expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('groupsHub:user-1', JSON.stringify(EMPTY));
-      expect(asyncStorageStore.get('groupsHub:user-1')).toBe(JSON.stringify(HUB));
+      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(result.current.data).toEqual(EMPTY);
+      expect(result.current.isFresh).toBe(true);
+      expect(result.current.isLoading).toBe(false);
+
+      expect(warn).toHaveBeenCalledWith('[useGroupsHub] 200 with empty groups payload', expect.objectContaining({
+        hadCachedData: true,
+      }));
 
       warn.mockRestore();
     });
