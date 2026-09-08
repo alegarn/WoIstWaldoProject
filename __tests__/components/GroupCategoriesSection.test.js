@@ -6,7 +6,7 @@ jest.mock('@react-native-vector-icons/ionicons', () => ({
 }));
 
 jest.mock('../../hooks/useGroupCategories', () => ({
-  useGroupCategories: () => mockUseGroupCategories(),
+  useGroupCategories: (...args) => mockUseGroupCategories(...args),
 }));
 
 import React from 'react';
@@ -84,6 +84,20 @@ describe('GroupCategoriesSection', () => {
     });
 
     expect(onUpsell).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the explicit Creator locked-row copy and forwards onUpsell into the hook', () => {
+    const onUpsell = jest.fn();
+    const renderer = render({ canPersonalize: false, onUpsell });
+
+    const lockedText = renderer.root
+      .findByProps({ testID: 'group-settings.category.locked' })
+      .findByProps({ testID: undefined, children: 'Personalizing categories is a Creator feature. Your free group stays at the 9 defaults.' });
+    expect(lockedText).toBeTruthy();
+
+    expect(mockUseGroupCategories).toHaveBeenLastCalledWith(
+      expect.objectContaining({ groupId: 'g-3', onUpsell })
+    );
   });
 
   it('shows no locked row and renders the add composer for a tier-2 owner', () => {

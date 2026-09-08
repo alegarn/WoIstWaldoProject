@@ -108,6 +108,7 @@ export default function GroupSettingsScreen({ navigation }: GroupSettingsScreenP
             initialPrimaryColor={group.primary_color ?? GlobalStyle.color.primaryColor}
             initialSecondaryColor={group.secondary_color ?? GlobalStyle.color.secondaryColor}
             onRefresh={refresh}
+            onUpsell={openPersonalizationUpsell}
           />
         </View>
       )}

@@ -9,6 +9,7 @@ import { getSettingsTokens as _getSettingsTokens, settingsTokens } from './setti
 import { GlobalStyle } from '../../../constants/theme';
 import { AuthContext } from '../../../store/auth-context';
 import { updateGroupSettings } from '../../../services/groups/groupApi';
+import { showPersonalizationUpsellAlert } from '../../../services/billing/personalizationUpsell';
 
 // SettingsSection.js and ColorPalettePicker.js are unmigrated; their
 // destructured props (headerRight / accessibilityLabel / themeColors) are
@@ -25,6 +26,7 @@ type GroupIdentitySectionProps = {
   initialSecondaryColor?: string | null;
   onRefresh?: () => void | Promise<void>;
   onSaved?: () => void;
+  onUpsell?: () => void;
   testIDPrefix?: string;
   appearance?: 'dark' | 'light';
 };
@@ -43,6 +45,7 @@ export default function GroupIdentitySection({
   initialSecondaryColor,
   onRefresh,
   onSaved,
+  onUpsell,
   testIDPrefix = 'group-settings',
   appearance = 'dark',
 }: GroupIdentitySectionProps) {
@@ -84,13 +87,13 @@ export default function GroupIdentitySection({
         onRefresh?.();
         onSaved?.();
       } else if (response?.status === 403) {
-        Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+        showPersonalizationUpsellAlert(t, onUpsell);
       } else {
         Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.saveFailed'));
       }
     } catch (err: any) {
       if (err?.response?.status === 403 || err?.status === 403) {
-        Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+        showPersonalizationUpsellAlert(t, onUpsell);
       } else {
         Alert.alert(t('common.error'), err?.message ?? t('groups.settings.saveFailed'));
       }

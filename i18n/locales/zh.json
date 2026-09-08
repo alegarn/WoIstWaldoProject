@@ -424,7 +424,7 @@
       "locked": "群组已锁定。",
       "unknownCode": "未知码。",
       "alreadyMember": "你已在该群组中。",
-      "full": "群组已满。",
+      "full": "该群组已满。群主可升级到 Creator 套餐，容纳最多 30 名成员。",
       "failed": "无法加入。请重试。"
     },
     "members": {
@@ -485,7 +485,7 @@
       "uploadedTitle": "已上传",
       "thumbnailUpdated": "分类缩略图已更新。",
       "updateThumbnailFailed": "无法更新缩略图。",
-      "personalizationLocked": "个性化是创建者功能"
+      "personalizationLocked": "自定义分类是 Creator 功能。免费群组将保留 9 个默认分类。"
     },
     "locked": {
       "ownerTitle": "你的私人群组访问已到期",
@@ -518,7 +518,11 @@
       "choose": "选择",
       "removeBackgroundLabel": "移除 {{name}} 背景",
       "remove": "移除",
-      "bgUploadLocked": "图片上传已锁定"
+      "bgUploadLocked": "主页图片是 Creator 功能",
+      "shareCapTitle": "你的群组已满",
+      "shareCapReached": "你的群组已满（{{cap}} 名成员）。Creator 可将上限提升到 30。",
+      "shareAnyway": "仍要分享",
+      "groupUnavailable": "该群组当前在此账户上不可用。"
     },
     "menu": {
       "groups": "群组",
@@ -547,14 +551,14 @@
       "empty": "目前没有可用套餐。",
       "noSubscription": "未找到有效订阅。",
       "restorePurchases": "恢复购买",
-      "personalizeTitle": "个性化是创建者功能",
-      "personalizeMessage": "升级到创建者套餐即可个性化你的群组（图片、分类）并容纳最多 30 名成员。"
+      "personalizeTitle": "个性化是 Creator 功能",
+      "personalizeMessage": "升级到 Creator 套餐即可个性化你的群组（图片、分类）并容纳最多 30 名成员。"
     },
     "subscription": {
       "restoring": "正在恢复...",
       "currentPlan": "当前套餐",
       "tierPremium": "高级版",
-      "tierPrivateGroup": "私人群组",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "无广告",
       "tierFree": "免费",
       "refreshing": "正在刷新套餐…",
@@ -563,6 +567,38 @@
       "upgrade": "升级",
       "manage": "管理订阅",
       "openSettingsFailed": "无法打开订阅设置"
+    },
+    "tiers": {
+      "premium": {
+        "label": "高级版",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "个性化你的群组（图片、分类）+ 30 名成员",
+          "移除强制广告",
+          "全部核心游戏模式"
+        ],
+        "cta": "订阅"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "个性化群组主页",
+          "添加新的猜图分类",
+          "最多 30 名成员"
+        ],
+        "cta": "订阅"
+      },
+      "no_ads": {
+        "label": "无广告",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "移除所有广告",
+          "无干扰游戏",
+          "更快的回合"
+        ],
+        "cta": "订阅"
+      }
     }
   }
 }

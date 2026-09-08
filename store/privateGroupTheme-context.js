@@ -45,7 +45,7 @@ export function useScopedPrivateGroupTheme(routeScopeOverride) {
   const group = useMemo(() => {
     if (!isPrivate) return null;
     const all = [...(data?.owned ?? []), ...(data?.joined ?? [])];
-    return all.find((g) => g.id === scope.groupId) ?? null;
+    return all.find((g) => g?.id != null && String(g.id) === String(scope.groupId)) ?? null;
   }, [isPrivate, scope?.groupId, data]);
   const theme = useMemo(
     () => group

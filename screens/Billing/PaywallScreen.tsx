@@ -9,7 +9,7 @@ import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import TierCard from '../../components/UI/TierCard';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
-import { BILLING_TIERS } from '../../services/billing/offerings';
+import { BILLING_TIERS, CREATOR_TIER_KEY } from '../../services/billing/offerings';
 import type { BillingTier } from '../../services/billing/offerings';
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
@@ -154,6 +154,16 @@ export default function PaywallScreen({ navigation, route }: PaywallScreenProps)
     }
   };
 
+  // Intent-aware emphasis: arriving from a group-personalization upsell makes
+  // the Creator tier the featured (highlighted) card, ordered first. The
+  // default store view keeps the catalog's own ordering and featured flag.
+  const isPersonalizeIntent = intent === 'personalize-group';
+  const orderedPackages = isPersonalizeIntent
+    ? [...packages].sort(
+        (a, b) => Number(b.tier.key === CREATOR_TIER_KEY) - Number(a.tier.key === CREATOR_TIER_KEY),
+      )
+    : packages;
+
   const renderHeader = () => (
     <View style={styles.header}>
       <Text style={styles.eyebrow}>{t('billing.paywall.eyebrow')}</Text>
@@ -172,19 +182,22 @@ export default function PaywallScreen({ navigation, route }: PaywallScreenProps)
   const renderItem = ({ item }: { item: PaywallPackage }) => {
     const { pkg, tier } = item;
     const price = pkg?.product?.priceString ?? '';
+    const label = t(tier.label);
+    const featuresRaw = t(tier.features, { returnObjects: true });
+    const features = Array.isArray(featuresRaw) ? (featuresRaw as string[]) : [];
     return (
       <TierCard
         testID={tier.testId}
         image={tier.image}
-        eyebrow={tier.eyebrow}
-        title={tier.label}
+        eyebrow={t(tier.eyebrow)}
+        title={label}
         price={price}
         priceSuffix={tier.priceSuffix}
         isSubscription={tier.isSubscription}
-        features={tier.features}
-        ctaText={tier.ctaText}
-        featured={tier.featured}
-        accessibilityLabel={t('billing.paywall.subscribeLabel', { tier: tier.label })}
+        features={features}
+        ctaText={t(tier.ctaText)}
+        featured={isPersonalizeIntent ? tier.key === CREATOR_TIER_KEY : tier.featured}
+        accessibilityLabel={t('billing.paywall.subscribeLabel', { tier: label })}
         onCta={() => handlePurchase(pkg)}
       />
     );
@@ -197,7 +210,7 @@ export default function PaywallScreen({ navigation, route }: PaywallScreenProps)
   return (
     <View style={styles.container}>
       <FlatList
-        data={packages}
+        data={orderedPackages}
         keyExtractor={(item, index) => item?.tier?.key ?? `tier-${index}`}
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={<Text style={styles.empty}>{t('billing.paywall.empty')}</Text>}

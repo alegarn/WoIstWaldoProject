@@ -79,7 +79,7 @@ describe('SubscriptionManagementScreen', () => {
 
     expect(renderer.root.findByProps({ testID: 'subscription-manage.button.manage' })).toBeTruthy();
     expect(renderer.root.findByProps({ testID: 'subscription-manage.button.restore' })).toBeTruthy();
-    expect(renderer.root.findByProps({ children: 'Private Group' })).toBeTruthy();
+    expect(renderer.root.findByProps({ children: 'Creator' })).toBeTruthy();
   });
 
   it('shows the Premium label for tier 3', async () => {

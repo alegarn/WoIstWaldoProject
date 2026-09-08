@@ -42,6 +42,35 @@ function normalizeGroupsPayload(payload, userId) {
   };
 }
 
+function rawBodySample(rawBody) {
+  if (rawBody == null) {
+    return String(rawBody);
+  }
+  if (typeof rawBody === 'string') {
+    return rawBody.slice(0, 200);
+  }
+  try {
+    return JSON.stringify(rawBody).slice(0, 200);
+  } catch {
+    return String(rawBody);
+  }
+}
+
+// Detects proxy/carrier error bodies smuggled inside a 200 response (e.g. a
+// stale Rails 404 JSON served by an intermediary cache). An error body is
+// never "zero groups".
+export function looksLikeErrorPayload(payload) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return false;
+  }
+  if (Array.isArray(payload.data)) {
+    return false;
+  }
+  return typeof payload.error === 'string'
+    || payload.exception != null
+    || (typeof payload.status === 'number' && payload.status >= 400);
+}
+
 function unwrapData(payload) {
   return payload?.data ?? payload;
 }
@@ -50,11 +79,40 @@ export async function fetchGroups(context) {
   const { token, userId } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
 
-  return axios.get(`${BASE_URL}/`, config)
-    .then((response) => ({
-      status: response.status,
-      data: normalizeGroupsPayload(response.data, userId),
-    }))
+  // Carrier transparent proxies can serve a poisoned cached body for this
+  // static GET URL (HTTP 200 wrapping a stale Rails 404 JSON). The
+  // per-request timestamp param busts any intermediary cache so every hub
+  // fetch reaches the origin instead of the proxy cache entry.
+  return axios.get(`${BASE_URL}/`, {
+    ...config,
+    params: { ...(config.params ?? {}), _ts: Date.now() },
+  })
+    .then((response) => {
+      const hasValidPayload = Array.isArray(response.data?.data) || Array.isArray(response.data);
+
+      // Invalid-payload contract: any 200 whose body is not a groups payload is
+      // returned with `payloadInvalid: true` for the hub to route through its
+      // error branch (never normalized into an empty groups list). Bodies that
+      // look like a JSON error object also morph `status` to the body-claimed
+      // status so the surfaced error reflects the real HTTP outcome (e.g. 404).
+      if (!hasValidPayload) {
+        const errorShaped = looksLikeErrorPayload(response.data);
+        return {
+          status: errorShaped ? (response.data.status ?? response.status) : response.status,
+          data: response.data,
+          payloadInvalid: true,
+          rawBodyType: typeof response.data,
+          rawBodySample: rawBodySample(response.data),
+        };
+      }
+
+      return {
+        status: response.status,
+        data: normalizeGroupsPayload(response.data, userId),
+        rawBodyType: typeof response.data,
+        rawBodySample: rawBodySample(response.data),
+      };
+    })
     .catch(mapRequestError);
 }
 

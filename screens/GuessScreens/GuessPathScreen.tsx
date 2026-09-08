@@ -156,7 +156,9 @@ function buildActiveGroupSnapshot(
     ...(groupsHubData?.owned ?? []),
     ...(groupsHubData?.joined ?? []),
   ];
-  const activeGroup = groups.find((group) => group?.id === groupId);
+  const activeGroup = groups.find(
+    (group) => group?.id != null && String(group.id) === String(groupId)
+  );
 
   if (!activeGroup) {
     return null;
@@ -213,7 +215,10 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const scope: GuessPathScope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
   // useGroupsHub.js is untyped JS; data is the groups hub payload or null.
-  const { data: groupsHubData } = useGroupsHub({ enabled: isPrivateScope }) as { data: GroupsHubData | null };
+  const { data: groupsHubData, refresh: refreshGroupsHub } = useGroupsHub({ enabled: isPrivateScope }) as {
+    data: GroupsHubData | null;
+    refresh: () => Promise<void>;
+  };
   const activeGroup = isPrivateScope ? buildActiveGroupSnapshot(groupsHubData, scope.groupId) : null;
   const isOwner = activeGroup?.isOwnedByViewer === true;
   // useScopedPrivateGroupTheme.js is untyped JS; narrow to the local structural shapes.
@@ -268,7 +273,8 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
     useCallback(() => {
       setManageMode(null);
       reloadCategories();
-    }, [reloadCategories])
+      refreshGroupsHub();
+    }, [reloadCategories, refreshGroupsHub])
   );
 
   useEffect(() => {

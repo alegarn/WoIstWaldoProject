@@ -54,7 +54,7 @@ export default function GroupCategoriesSection({
     remove,
     swapThumbnail,
     reload,
-  } = useGroupCategories({ groupId, onRefresh });
+  } = useGroupCategories({ groupId, onRefresh, onUpsell });
 
   return (
     <SettingsSection

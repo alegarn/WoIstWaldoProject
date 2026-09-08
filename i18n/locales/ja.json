@@ -424,7 +424,7 @@
       "locked": "グループはロックされています。",
       "unknownCode": "不明なコードです。",
       "alreadyMember": "すでにこのグループに参加しています。",
-      "full": "グループが満員です。",
+      "full": "このグループは満員です。オーナーがクリエイタープランにアップグレードすると最大30人が参加できます。",
       "failed": "参加できませんでした。再試行してください。"
     },
     "members": {
@@ -485,7 +485,7 @@
       "uploadedTitle": "アップロード済み",
       "thumbnailUpdated": "カテゴリのサムネイルを更新しました。",
       "updateThumbnailFailed": "サムネイルを更新できませんでした。",
-      "personalizationLocked": "パーソナライズはクリエイター機能です"
+      "personalizationLocked": "カテゴリのパーソナライズはクリエイター機能です。無料のグループでは9つのデフォルトカテゴリのままです。"
     },
     "locked": {
       "ownerTitle": "プライベートグループの利用期間が終了しました",
@@ -518,7 +518,11 @@
       "choose": "選択",
       "removeBackgroundLabel": "{{name}}の背景を削除",
       "remove": "削除",
-      "bgUploadLocked": "画像アップロードはロック中"
+      "bgUploadLocked": "ホーム画像はクリエイター機能です",
+      "shareCapTitle": "グループが満員です",
+      "shareCapReached": "グループが満員です（{{cap}}人）。クリエイタープランなら上限は30人になります。",
+      "shareAnyway": "共有する",
+      "groupUnavailable": "このグループは現在、このアカウントでは利用できません。"
     },
     "menu": {
       "groups": "グループ",
@@ -554,7 +558,7 @@
       "restoring": "復元中...",
       "currentPlan": "現在のプラン",
       "tierPremium": "プレミアム",
-      "tierPrivateGroup": "プライベートグループ",
+      "tierPrivateGroup": "クリエイター",
       "tierNoAds": "広告なし",
       "tierFree": "無料",
       "refreshing": "プランを更新中…",
@@ -563,6 +567,38 @@
       "upgrade": "アップグレード",
       "manage": "サブスクリプションを管理",
       "openSettingsFailed": "サブスクリプション設定を開けませんでした"
+    },
+    "tiers": {
+      "premium": {
+        "label": "プレミアム",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "グループをパーソナライズ（画像・カテゴリ）+ 30人",
+          "強制広告を削除",
+          "すべてのコアゲームモード"
+        ],
+        "cta": "登録する"
+      },
+      "private_group_creator": {
+        "label": "クリエイター",
+        "eyebrow": "CREATOR",
+        "features": [
+          "グループのホーム画面をパーソナライズ",
+          "新しい当てるカテゴリを追加",
+          "最大30人"
+        ],
+        "cta": "登録する"
+      },
+      "no_ads": {
+        "label": "広告なし",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "すべての広告を削除",
+          "中断なしでプレイ",
+          "より速いラウンド"
+        ],
+        "cta": "登録する"
+      }
     }
   }
 }

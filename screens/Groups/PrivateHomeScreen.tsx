@@ -23,7 +23,8 @@ import { updateGroupSettings, deletePrivateImage } from '../../services/groups/g
 import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/groups/groupHomeBackgrounds';
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
-import { canPersonalizeGroup } from '../../services/billing/groupPersonalization';
+import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
+import { showPersonalizationUpsellAlert } from '../../services/billing/personalizationUpsell';
 import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
 import type { GroupHomeBackgroundSlotData, GroupScope, GroupsHubData } from '../../types/groups';
 
@@ -61,6 +62,7 @@ type PrivateHomeRouteParams = {
 type PrivateHomeParamList = {
   PrivateHomeScreen: PrivateHomeRouteParams;
   HomeScreen: undefined;
+  GroupsListScreen: undefined;
   GroupSettingsScreen: undefined;
   MemberManagementScreen: undefined;
   PaywallScreen: { intent?: string };
@@ -89,14 +91,16 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   };
   const { setPrivateMode } = authContext;
   const activeScope = routeScope ?? scope;
-  const { data, isLoading, error, refresh } = useGroupsHub() as {
+  const { data, isLoading, error, isFresh = true, refresh } = useGroupsHub() as {
     data: GroupsHubData | null;
     isLoading: boolean;
     error: unknown;
+    isFresh?: boolean;
     refresh: () => Promise<void>;
   };
   const group = activeScope?.kind === 'private'
-    ? [...(data?.owned ?? []), ...(data?.joined ?? [])].find((g) => g.id === activeScope.groupId)
+    ? [...(data?.owned ?? []), ...(data?.joined ?? [])]
+      .find((g) => g?.id != null && String(g.id) === String(activeScope.groupId))
     : null;
   const isLocked = group?.locked === true;
   const isOwner = group?.role === 'owner';
@@ -115,6 +119,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   const [bgUris, setBgUris] = useState<Record<string, string>>({});
   const [savingSlot, setSavingSlot] = useState<Record<string, boolean>>({});
   const savingSlotRef = useRef<Record<string, boolean>>({});
+  const lastNotFoundWarnRef = useRef<string | null>(null);
 
   const setSaving = useCallback((slot: BackgroundSlot, value: boolean) => {
     savingSlotRef.current = { ...savingSlotRef.current, [slot]: value };
@@ -156,19 +161,37 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     groupId,
   ]);
 
-  const shareCode = useCallback(async () => {
-    const code = group?.joining_code;
-    if (!code) {
-      Alert.alert(t('groups.home.noInviteCode'));
-      return;
-    }
+  const shareInvitation = useCallback(async (code: string) => {
     const message = t('groups.home.shareMessage', { code });
     try {
       await Share.share({ message });
     } catch (_) {
       Alert.alert(t('groups.home.inviteCodeTitle'), message);
     }
-  }, [group?.joining_code, t]);
+  }, [t]);
+
+  const shareCode = useCallback(async () => {
+    const code = group?.joining_code;
+    if (!code) {
+      Alert.alert(t('groups.home.noInviteCode'));
+      return;
+    }
+    // Owner-side invite at the free cap: upsell first, but never block sharing.
+    const cap = memberCapFor(authContext?.paidTier ?? 0);
+    const isFreeOwnerAtCap = isOwner && !canPersonalize && (group?.member_count ?? 0) >= cap;
+    if (isFreeOwnerAtCap) {
+      Alert.alert(
+        t('groups.home.shareCapTitle'),
+        t('groups.home.shareCapReached', { cap }),
+        [
+          { text: t('settings.viewPlans'), onPress: openPersonalizationUpsell },
+          { text: t('groups.home.shareAnyway'), onPress: () => { shareInvitation(code); } },
+        ],
+      );
+      return;
+    }
+    await shareInvitation(code);
+  }, [group?.joining_code, group?.member_count, isOwner, canPersonalize, authContext?.paidTier, openPersonalizationUpsell, shareInvitation, t]);
 
   const openColorEditor = useCallback(() => {
     setIsColorEditorVisible(true);
@@ -181,11 +204,11 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   const alertFailure = useCallback((err: unknown, fallbackKey: string) => {
     const error = err as (Error & { status?: number; response?: { status?: number } }) | null | undefined;
     if (error?.status === 403 || error?.response?.status === 403) {
-      Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+      showPersonalizationUpsellAlert(t, openPersonalizationUpsell);
       return;
     }
     Alert.alert(t('common.error'), error?.message ?? t(fallbackKey));
-  }, [t]);
+  }, [t, openPersonalizationUpsell]);
 
   const chooseSlotBackground = useCallback(async (slot: BackgroundSlot) => {
     if (!groupId) return;
@@ -354,6 +377,37 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     );
   }
 
+  // Hub settled but the active private group is not in the payload (e.g. the
+  // group vanished server-side): fail loudly instead of a degraded ungated body.
+  // isFresh gates this on a completed 200 for the current credentials, so a
+  // stale cache-only payload cannot masquerade as a server-side not-found.
+  if (!isLoading && !error && data && isFresh && activeScope?.kind === 'private' && !group) {
+    const dataGroupIds = [...(data?.owned ?? []), ...(data?.joined ?? [])].map((g) => g?.id);
+    const warnSignature = `${groupId}|${dataGroupIds.join(',')}`;
+    if (lastNotFoundWarnRef.current !== warnSignature) {
+      lastNotFoundWarnRef.current = warnSignature;
+      console.warn('[PrivateHomeScreen] group not found', { scopeGroupId: groupId, dataGroupIds });
+    }
+    return (
+      <View style={styles.errorContainer} testID="private-home.not-found">
+        <Text style={styles.errorText}>{t('groups.home.groupUnavailable')}</Text>
+        <BigButton
+          text={t('common.retry')}
+          onPress={() => refresh()}
+          testID="private-home.button.retry-group"
+        />
+        <BigButton
+          text={t('groups.menu.groups')}
+          onPress={() => {
+            clear();
+            navigation.navigate('GroupsListScreen');
+          }}
+          testID="private-home.button.back-to-groups"
+        />
+      </View>
+    );
+  }
+
   const goScoped = (target: 'HidingPathScreen' | 'GuessPathScreen' | 'RankingScreen') =>
     navigation.navigate(target, {
       // Degenerate public-mode entry can flow a null groupId; scope consumers
@@ -426,6 +480,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
             appearance="light"
             onRefresh={refresh}
             onSaved={closeColorEditor}
+            onUpsell={openPersonalizationUpsell}
             testIDPrefix="private-home"
           />
           <Text style={[styles.bgSectionTitle, { color: groupTheme.lightText }]}>{t('groups.home.buttonBackgrounds')}</Text>

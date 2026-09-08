@@ -51,10 +51,10 @@ function makeWrapper() {
   };
 }
 
-function renderCategories({ groupId = 'g-1', onRefresh = jest.fn() } = {}) {
-  return renderHook(({ groupId, onRefresh }) => useGroupCategories({ groupId, onRefresh }), {
+function renderCategories({ groupId = 'g-1', onRefresh = jest.fn(), onUpsell } = {}) {
+  return renderHook(({ groupId, onRefresh, onUpsell }) => useGroupCategories({ groupId, onRefresh, onUpsell }), {
     wrapper: makeWrapper(),
-    initialProps: { groupId, onRefresh },
+    initialProps: { groupId, onRefresh, onUpsell },
   });
 }
 
@@ -207,6 +207,53 @@ describe('useGroupCategories', () => {
     expect(Alert.alert).toHaveBeenCalled();
     expect(result.current.categories).toEqual(initial);
     expect(refreshGroupCategories).not.toHaveBeenCalled();
+  });
+
+  it('shows the store-linked upsell alert on a 403 mutation failure, firing onUpsell from the CTA', async () => {
+    loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, []));
+    createGroupCategory.mockResolvedValue({ status: 403 });
+    const onUpsell = jest.fn();
+
+    const { result } = renderCategories({ onUpsell });
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setNewCategoryName('Animals'));
+
+    await act(async () => {
+      await result.current.add();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    const [title, , buttons] = Alert.alert.mock.calls[0];
+    expect(title).toBe('Personalization is a Creator feature');
+
+    const storeCta = buttons.find((button) => button.text === 'View plans');
+    expect(storeCta).toBeTruthy();
+    expect(onUpsell).not.toHaveBeenCalled();
+
+    act(() => {
+      storeCta.onPress();
+    });
+    expect(onUpsell).toHaveBeenCalledTimes(1);
+    expect(buttons.some((button) => button.style === 'cancel')).toBe(true);
+  });
+
+  it('keeps the upsell alert CTA-less when no onUpsell is provided', async () => {
+    loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, []));
+    createGroupCategory.mockResolvedValue({ status: 403 });
+
+    const { result } = renderCategories();
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    act(() => result.current.setNewCategoryName('Animals'));
+
+    await act(async () => {
+      await result.current.add();
+    });
+
+    const [, , buttons] = Alert.alert.mock.calls[0];
+    expect(buttons.find((button) => button.text === 'View plans')).toBeUndefined();
+    expect(buttons.some((button) => button.style === 'cancel')).toBe(true);
   });
 
   it('skips the PATCH when the draft equals the saved name and updates when dirty', async () => {

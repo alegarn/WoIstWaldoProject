@@ -671,6 +671,40 @@ describe('GuessPathScreen', () => {
     expect(getAddCategoryButtonProps()).toBeUndefined();
   });
 
+  it('shows the owner affordances once the hub resolves after a cold-start null and refreshes the hub on focus', async () => {
+    const hubRefresh = jest.fn();
+    mockUseGroupsHub.mockReturnValue({ data: null, refresh: hubRefresh });
+
+    const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    expect(getAddCategoryButtonProps()).toBeUndefined();
+    expect(getManageButtonProps()).toBeUndefined();
+
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-1', role: 'owner' }] },
+      refresh: hubRefresh,
+    });
+
+    await act(async () => {
+      renderer.update(
+        <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
+          <GuessPathScreen
+            navigation={navigation}
+            route={{ params: { scope: { kind: 'private', groupId: 'g-1' } } }}
+          />
+        </AuthContext.Provider>
+      );
+      await flushEffects();
+    });
+
+    expect(getAddCategoryButtonProps()).toBeDefined();
+    expect(getManageButtonProps()).toBeDefined();
+
+    await triggerFocusEffects();
+
+    expect(hubRefresh).toHaveBeenCalled();
+  });
+
   it('renders the add-category affordance for the owner in private scope and creates a category on submit', async () => {
     mockUseGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-1', role: 'owner' }] },

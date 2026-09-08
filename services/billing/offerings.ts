@@ -1,13 +1,17 @@
+export const CREATOR_TIER_KEY = 'private_group_creator';
+
 export type BillingTier = {
   key: string;
   offeringId: string;
   productId: string;
   tier: number;
   testId: string;
+  // i18n keys; resolved with t() in PaywallScreen. `features` maps to a
+  // string[] resource resolved via returnObjects.
   label: string;
   eyebrow: string;
   image: number;
-  features: string[];
+  features: string;
   priceSuffix: string;
   isSubscription: boolean;
   ctaText: string;
@@ -21,28 +25,28 @@ export const BILLING_TIERS: BillingTier[] = [
     productId: 'premium',
     tier: 3,
     testId: 'paywall.tier.premium',
-    label: 'Premium',
-    eyebrow: 'BUNDLE',
+    label: 'billing.tiers.premium.label',
+    eyebrow: 'billing.tiers.premium.eyebrow',
     image: require('../../assets/categories/all-image-cat.webp'),
-    features: ['Personalize your group (images, categories) + 30 members', 'Remove mandatory ads', 'All core game modes'],
+    features: 'billing.tiers.premium.features',
     priceSuffix: '/month',
     isSubscription: true,
-    ctaText: 'Subscribe',
+    ctaText: 'billing.tiers.premium.cta',
     featured: true,
   },
   {
-    key: 'private_group_creator',
+    key: CREATOR_TIER_KEY,
     offeringId: 'private_group_creator_offering',
     productId: 'private_group_creator',
     tier: 2,
     testId: 'paywall.tier.private-group-creator',
-    label: 'Private Group',
-    eyebrow: 'PRIVATE',
+    label: 'billing.tiers.private_group_creator.label',
+    eyebrow: 'billing.tiers.private_group_creator.eyebrow',
     image: require('../../assets/home/WoIstWaldo-character-hide.webp'),
-    features: ['Personalize your group home screen', 'Add new categories to guess', 'Max 30 members'],
+    features: 'billing.tiers.private_group_creator.features',
     priceSuffix: '/month',
     isSubscription: true,
-    ctaText: 'Subscribe',
+    ctaText: 'billing.tiers.private_group_creator.cta',
     featured: false,
   },
   {
@@ -51,13 +55,13 @@ export const BILLING_TIERS: BillingTier[] = [
     productId: 'no_ads',
     tier: 1,
     testId: 'paywall.tier.no-ads',
-    label: 'No Ads',
-    eyebrow: 'AD-FREE',
+    label: 'billing.tiers.no_ads.label',
+    eyebrow: 'billing.tiers.no_ads.eyebrow',
     image: require('../../assets/home/WoIstWaldo-character-stats.webp'),
-    features: ['Remove all ads', 'Uninterrupted play', 'Faster rounds'],
+    features: 'billing.tiers.no_ads.features',
     priceSuffix: '/month',
     isSubscription: true,
-    ctaText: 'Subscribe',
+    ctaText: 'billing.tiers.no_ads.cta',
     featured: false,
   },
 ];

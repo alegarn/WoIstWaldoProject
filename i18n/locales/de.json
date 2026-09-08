@@ -425,7 +425,7 @@
       "locked": "Gruppe ist gesperrt.",
       "unknownCode": "Unbekannter Code.",
       "alreadyMember": "Du bist bereits in dieser Gruppe.",
-      "full": "Gruppe ist voll.",
+      "full": "Diese Gruppe ist voll. Der Gruppeninhaber kann auf Creator upgraden (bis zu 30 Mitglieder).",
       "failed": "Beitritt fehlgeschlagen. Bitte erneut versuchen."
     },
     "members": {
@@ -486,7 +486,7 @@
       "uploadedTitle": "Hochgeladen",
       "thumbnailUpdated": "Kategorie-Miniaturbild aktualisiert.",
       "updateThumbnailFailed": "Miniaturbild konnte nicht aktualisiert werden.",
-      "personalizationLocked": "Personalisierung ist eine Creator-Funktion"
+      "personalizationLocked": "Kategorien zu personalisieren ist eine Creator-Funktion. Deine kostenlose Gruppe behält die 9 Standardkategorien."
     },
     "locked": {
       "ownerTitle": "Dein Privatgruppen-Zugang ist abgelaufen",
@@ -519,7 +519,11 @@
       "choose": "Wählen",
       "removeBackgroundLabel": "Hintergrund von {{name}} entfernen",
       "remove": "Entfernen",
-      "bgUploadLocked": "Bild-Upload gesperrt"
+      "bgUploadLocked": "Startseiten-Bilder sind eine Creator-Funktion",
+      "shareCapTitle": "Deine Gruppe ist voll",
+      "shareCapReached": "Deine Gruppe ist voll ({{cap}} Mitglieder). Creator erhöht das Limit auf 30.",
+      "shareAnyway": "Trotzdem teilen",
+      "groupUnavailable": "Diese Gruppe ist auf diesem Konto gerade nicht verfügbar."
     },
     "menu": {
       "groups": "Gruppen",
@@ -555,7 +559,7 @@
       "restoring": "Wird wiederhergestellt...",
       "currentPlan": "Aktueller Plan",
       "tierPremium": "Premium",
-      "tierPrivateGroup": "Privatgruppe",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "Werbefrei",
       "tierFree": "Kostenlos",
       "refreshing": "Plan wird aktualisiert…",
@@ -564,6 +568,38 @@
       "upgrade": "Upgrade",
       "manage": "Abo verwalten",
       "openSettingsFailed": "Abo-Einstellungen konnten nicht geöffnet werden"
+    },
+    "tiers": {
+      "premium": {
+        "label": "Premium",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "Personalisiere deine Gruppe (Bilder, Kategorien) + 30 Mitglieder",
+          "Entfernt Pflichtwerbung",
+          "Alle Kernspielmodi"
+        ],
+        "cta": "Abonnieren"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "Personalisiere deinen Gruppen-Startbildschirm",
+          "Füge neue Kategorien zum Erraten hinzu",
+          "Bis zu 30 Mitglieder"
+        ],
+        "cta": "Abonnieren"
+      },
+      "no_ads": {
+        "label": "Keine Werbung",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "Entfernt alle Werbeanzeigen",
+          "Ununterbrochenes Spielen",
+          "Schnellere Runden"
+        ],
+        "cta": "Abonnieren"
+      }
     }
   }
 }

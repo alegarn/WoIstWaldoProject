@@ -33,7 +33,7 @@
 
 ## Work Guidance
 
-- Prefer TypeScript for new code. Migrating existing JavaScript to TypeScript is encouraged.
+- Prefer **TypeScript** for new code. Migrating existing JavaScript to TypeScript is encouraged.
 - Keep screen files thin when possible. Put reusable view logic in `components/` and request/helper logic in `utils/`.
 - Prefer Jest for unit and mocked integration coverage. Use Maestro for full-device journeys, gesture-heavy flows, or deterministic E2E behavior.
 - Keep source-of-truth runtime rules here; keep one-off proposals in `planning/` instead.

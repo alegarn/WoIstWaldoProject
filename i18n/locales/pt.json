@@ -425,7 +425,7 @@
       "locked": "O grupo está bloqueado.",
       "unknownCode": "Código desconhecido.",
       "alreadyMember": "Você já está neste grupo.",
-      "full": "O grupo está cheio.",
+      "full": "Este grupo está cheio. O proprietário pode assinar o plano Creator para até 30 membros.",
       "failed": "Não foi possível entrar. Tente novamente."
     },
     "members": {
@@ -486,7 +486,7 @@
       "uploadedTitle": "Enviada",
       "thumbnailUpdated": "Miniatura da categoria atualizada.",
       "updateThumbnailFailed": "Não foi possível atualizar a miniatura.",
-      "personalizationLocked": "A personalização é um recurso de criador"
+      "personalizationLocked": "Personalizar categorias é um recurso Creator. Seu grupo gratuito fica com as 9 categorias padrão."
     },
     "locked": {
       "ownerTitle": "Seu acesso a grupos privados terminou",
@@ -519,7 +519,11 @@
       "choose": "Escolher",
       "removeBackgroundLabel": "Remover plano de fundo de {{name}}",
       "remove": "Remover",
-      "bgUploadLocked": "Envio de imagens bloqueado"
+      "bgUploadLocked": "Imagens da tela inicial são um recurso Creator",
+      "shareCapTitle": "Seu grupo está cheio",
+      "shareCapReached": "Seu grupo está cheio ({{cap}} membros). O Creator eleva o limite para 30.",
+      "shareAnyway": "Compartilhar mesmo assim",
+      "groupUnavailable": "Este grupo não está disponível nesta conta no momento."
     },
     "menu": {
       "groups": "Grupos",
@@ -548,14 +552,14 @@
       "empty": "Nenhuma oferta disponível no momento.",
       "noSubscription": "Nenhuma assinatura ativa encontrada.",
       "restorePurchases": "Restaurar compras",
-      "personalizeTitle": "A personalização é um recurso de criador",
-      "personalizeMessage": "Faça upgrade para um plano Criador para personalizar seu grupo (imagens, categorias) e ter até 30 membros."
+      "personalizeTitle": "A personalização é um recurso Creator",
+      "personalizeMessage": "Faça upgrade para um plano Creator para personalizar seu grupo (imagens, categorias) e ter até 30 membros."
     },
     "subscription": {
       "restoring": "Restaurando...",
       "currentPlan": "Plano atual",
       "tierPremium": "Premium",
-      "tierPrivateGroup": "Grupo Privado",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "Sem anúncios",
       "tierFree": "Grátis",
       "refreshing": "Atualizando plano…",
@@ -564,6 +568,38 @@
       "upgrade": "Fazer upgrade",
       "manage": "Gerenciar assinatura",
       "openSettingsFailed": "Não foi possível abrir as configurações de assinatura"
+    },
+    "tiers": {
+      "premium": {
+        "label": "Premium",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "Personalize seu grupo (imagens, categorias) + 30 membros",
+          "Remove anúncios obrigatórios",
+          "Todos os modos de jogo principais"
+        ],
+        "cta": "Assinar"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "Personalize a tela inicial do seu grupo",
+          "Adicione novas categorias para adivinhar",
+          "Até 30 membros"
+        ],
+        "cta": "Assinar"
+      },
+      "no_ads": {
+        "label": "Sem anúncios",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "Remove todos os anúncios",
+          "Jogo sem interrupções",
+          "Rodadas mais rápidas"
+        ],
+        "cta": "Assinar"
+      }
     }
   }
 }

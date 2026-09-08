@@ -353,6 +353,39 @@ describe('GroupSettingsScreen', () => {
     expect(saveButtonProps.accessibilityLabel).toBe('Save changes');
   });
 
+  it('shows the store-linked upsell alert on a 403 identity save, routing the CTA to the paywall', async () => {
+    const navigation: NavigationMock = { replace: jest.fn(), navigate: jest.fn() };
+    mockedUpdateGroupSettings.mockResolvedValue({ status: 403, data: {} });
+
+    const { renderer } = await renderScreen({
+      navigation,
+      authContext: { paidTier: 0 },
+      groupsData: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine' }],
+        joined: [],
+      },
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'group-settings.button.save-colors' }).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledTimes(1);
+    const [title, , buttons] = alertSpy.mock.calls[0];
+    expect(title).toBe('Personalization is a Creator feature');
+
+    const storeCta = buttons.find((button: { text?: string }) => button.text === 'View plans');
+    expect(storeCta).toBeTruthy();
+    expect(navigation.navigate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      storeCta.onPress();
+    });
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+  });
+
   it('launches picker and prepares category thumbnail upload without categoryId payload', async () => {
     const category = { id: 'cat-1', name: 'Cats' };
     mockedListGroupCategories.mockResolvedValue({ status: 200, data: [category] });

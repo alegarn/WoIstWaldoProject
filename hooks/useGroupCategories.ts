@@ -18,10 +18,12 @@ import {
   resolveCategoryThumbnail,
 } from '../services/groups/groupCategoryThumbnails';
 import { uploadCategoryThumbnail } from '../services/groups/categoryThumbnailUpload';
+import { showPersonalizationUpsellAlert } from '../services/billing/personalizationUpsell';
 
 type UseGroupCategoriesOptions = {
   groupId: string;
   onRefresh?: () => void | Promise<void>;
+  onUpsell?: () => void;
 };
 
 export type UseGroupCategoriesResult = {
@@ -66,7 +68,7 @@ type MutationError = (Error & { status?: number; response?: { status?: number } 
  * @param onRefresh - refresh the group hub after mutations that
  *   affect group-level data (e.g. a thumbnail swap).
  */
-export function useGroupCategories({ groupId, onRefresh }: UseGroupCategoriesOptions): UseGroupCategoriesResult {
+export function useGroupCategories({ groupId, onRefresh, onUpsell }: UseGroupCategoriesOptions): UseGroupCategoriesResult {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
 
@@ -157,20 +159,20 @@ export function useGroupCategories({ groupId, onRefresh }: UseGroupCategoriesOpt
 
   const alertMutationFailure = useCallback((response: MutationResponse, messageKey: string) => {
     if (response?.status === 403) {
-      Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+      showPersonalizationUpsellAlert(t, onUpsell);
       return;
     }
     Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t(messageKey));
-  }, [t]);
+  }, [t, onUpsell]);
 
   const alertMutationError = useCallback((err: unknown, messageKey: string) => {
     const error = err as MutationError;
     if (error?.response?.status === 403 || error?.status === 403) {
-      Alert.alert(t('billing.paywall.personalizeTitle'), t('billing.paywall.personalizeMessage'));
+      showPersonalizationUpsellAlert(t, onUpsell);
       return;
     }
     Alert.alert(t('common.error'), error?.message ?? t(messageKey));
-  }, [t]);
+  }, [t, onUpsell]);
 
   const addCategory = useCallback(async () => {
     const trimmed = newCategoryName.trim();

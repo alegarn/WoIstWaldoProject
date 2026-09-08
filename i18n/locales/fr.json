@@ -425,7 +425,7 @@
       "locked": "Le groupe est verrouillé.",
       "unknownCode": "Code inconnu.",
       "alreadyMember": "Vous êtes déjà dans ce groupe.",
-      "full": "Le groupe est complet.",
+      "full": "Ce groupe est complet. Le propriétaire peut passer au plan Creator pour jusqu'à 30 membres.",
       "failed": "Impossible de rejoindre. Veuillez réessayer."
     },
     "members": {
@@ -486,7 +486,7 @@
       "uploadedTitle": "Téléversée",
       "thumbnailUpdated": "Miniature de la catégorie mise à jour.",
       "updateThumbnailFailed": "Impossible de mettre à jour la miniature.",
-      "personalizationLocked": "La personnalisation est une fonction de créateur"
+      "personalizationLocked": "Personnaliser les catégories est une fonction Creator. Votre groupe gratuit garde les 9 catégories par défaut."
     },
     "locked": {
       "ownerTitle": "Votre accès aux groupes privés est terminé",
@@ -519,7 +519,11 @@
       "choose": "Choisir",
       "removeBackgroundLabel": "Retirer l'arrière-plan de {{name}}",
       "remove": "Retirer",
-      "bgUploadLocked": "Téléversement d'images verrouillé"
+      "bgUploadLocked": "Les images d'accueil sont une fonction Creator",
+      "shareCapTitle": "Votre groupe est complet",
+      "shareCapReached": "Votre groupe est complet ({{cap}} membres). Creator porte la limite à 30.",
+      "shareAnyway": "Partager quand même",
+      "groupUnavailable": "Ce groupe n'est pas disponible sur ce compte pour le moment."
     },
     "menu": {
       "groups": "Groupes",
@@ -548,14 +552,14 @@
       "empty": "Aucune offre disponible pour le moment.",
       "noSubscription": "Aucun abonnement actif trouvé.",
       "restorePurchases": "Restaurer les achats",
-      "personalizeTitle": "La personnalisation est une fonction de créateur",
-      "personalizeMessage": "Passez à un plan créateur pour personnaliser votre groupe (images, catégories) et accueillir jusqu'à 30 membres."
+      "personalizeTitle": "La personnalisation est une fonction Creator",
+      "personalizeMessage": "Passez à un plan Creator pour personnaliser votre groupe (images, catégories) et accueillir jusqu'à 30 membres."
     },
     "subscription": {
       "restoring": "Restauration...",
       "currentPlan": "Offre actuelle",
       "tierPremium": "Premium",
-      "tierPrivateGroup": "Groupe privé",
+      "tierPrivateGroup": "Creator",
       "tierNoAds": "Sans publicité",
       "tierFree": "Gratuit",
       "refreshing": "Actualisation de l'offre…",
@@ -564,6 +568,38 @@
       "upgrade": "Améliorer",
       "manage": "Gérer l'abonnement",
       "openSettingsFailed": "Impossible d'ouvrir les paramètres d'abonnement"
+    },
+    "tiers": {
+      "premium": {
+        "label": "Premium",
+        "eyebrow": "BUNDLE",
+        "features": [
+          "Personnalisez votre groupe (images, catégories) + 30 membres",
+          "Supprime les publicités obligatoires",
+          "Tous les modes de jeu principaux"
+        ],
+        "cta": "S'abonner"
+      },
+      "private_group_creator": {
+        "label": "Creator",
+        "eyebrow": "CREATOR",
+        "features": [
+          "Personnalisez l'écran d'accueil de votre groupe",
+          "Ajoutez de nouvelles catégories à deviner",
+          "Jusqu'à 30 membres"
+        ],
+        "cta": "S'abonner"
+      },
+      "no_ads": {
+        "label": "Sans pub",
+        "eyebrow": "AD-FREE",
+        "features": [
+          "Supprime toutes les publicités",
+          "Jeu ininterrompu",
+          "Manches plus rapides"
+        ],
+        "cta": "S'abonner"
+      }
     }
   }
 }
