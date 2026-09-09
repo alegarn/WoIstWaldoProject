@@ -131,7 +131,7 @@ jest.mock('../../services/cardDeck', () => {
 
 import React from 'react';
 import { AppState } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
@@ -171,6 +171,12 @@ const flush = async () => {
     }
   });
 };
+
+// Same teardown hazards as __tests__/GuessScreen.test.tsx: heavy animated
+// trees make the fake→real timer switch cost 50-800ms of real time per test
+// (CPU-coupled), so the 5s default can flip to timeout failures on starved
+// CI workers. 20s bounds that without slowing green runs.
+jest.setTimeout(20000);
 
 describe('private scope games', () => {
   describe('GuessScreen', () => {
@@ -233,7 +239,15 @@ describe('private scope games', () => {
       jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
     });
 
-    afterEach(() => {
+    afterEach(async () => {
+      // Drain in-flight chains inside act while fake timers are still active,
+      // unmount before the fake→real switch, then drop queued frames so no
+      // leaked rAF/timer chain survives into the next test on real timers.
+      await act(async () => {
+        await Promise.resolve();
+      });
+      cleanup();
+      jest.clearAllTimers();
       jest.restoreAllMocks();
       jest.useRealTimers();
     });

@@ -208,6 +208,12 @@ const advance = async (ms) => {
   }
 };
 
+// Same teardown hazard as __tests__/GuessScreen.test.tsx: the fake→real
+// timer switch costs variable real time per test (CPU-coupled), so the 5s
+// default can flip on starved CI workers. 20s bounds it without slowing
+// green runs.
+jest.setTimeout(20000);
+
 // --- rendering + gesture helpers ---------------------------------------------
 
 async function renderSwipeImage({ category, language, scope } = {}) {
@@ -372,6 +378,9 @@ describe('SwipeImage', () => {
     await act(async () => {
       await Promise.resolve();
     });
+    // Drop queued animation frames while fake timers are still installed so
+    // no rAF/timer chain leaks into the next test on real timers.
+    jest.clearAllTimers();
     jest.restoreAllMocks();
     jest.useRealTimers();
     setE2EMode(false);

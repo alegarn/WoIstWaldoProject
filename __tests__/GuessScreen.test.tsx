@@ -171,7 +171,7 @@ jest.mock('../utils/nextCardAdvancer', () => {
 
 import React from 'react';
 import { AppState, Image } from 'react-native';
-import { act, fireEvent, render, RenderAPI } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, RenderAPI } from '@testing-library/react-native';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
 import { AuthContext } from '../store/auth-context';
@@ -213,6 +213,12 @@ function makeNav(): Nav {
 
 const HIT_HIDDEN_LOCATION = { x: 0.5, y: 0.5 };
 const MISS_HIDDEN_LOCATION = { x: 0.05, y: 0.5 };
+
+// Every test pays a variable real-time teardown (fake→real timer switch after
+// heavy animated trees, 50-800ms measured, CPU-coupled). The 5s default lets
+// starved CI workers flip heavy tests to timeout failures intermittently.
+// 20s bounds that without slowing green runs.
+jest.setTimeout(20000);
 
 function baseParams(overrides: Record<string, unknown> = {}) {
   return {
@@ -438,9 +444,18 @@ describe('GuessScreen', () => {
   });
 
   afterEach(async () => {
+    // Drain in-flight promise chains inside act while the tree is still
+    // mounted and fake timers are active, so the deck-ahead warm-up
+    // (setNextCardUris) cannot settle outside act between hooks.
     await act(async () => {
       await Promise.resolve();
     });
+    // Unmount while fake timers are still installed: animation loops stop
+    // scheduling rAF frames and effect cleanups run act-wrapped.
+    cleanup();
+    // Drop queued animation frames before the fake→real switch so no leaked
+    // rAF/timer chain survives into the next test on real timers.
+    jest.clearAllTimers();
     jest.restoreAllMocks();
     jest.useRealTimers();
     setE2EMode(false);
@@ -958,6 +973,9 @@ describe('GuessScreen', () => {
     it('e2e mode plays without hints', async () => {
       setE2EMode(true);
       const handle = renderGuessScreen(baseParams());
+      // Let the mount-time deck-ahead warm-up settle inside act (it would
+      // otherwise setState outside act between hooks).
+      await flush();
 
       expect(handle.screen.queryByTestId('guess.hint.swipe-halo')).toBeNull();
     });
