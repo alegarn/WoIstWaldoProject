@@ -1,24 +1,61 @@
-import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
-import { bufferScore, mintGuessId } from '../utils/sessionScoreStore';
-import { removeImageFromList, deleteImageFromStorage, sweepPlayedOrphanCacheFiles } from '../utils/storageDatum';
-import { addPlayedPictureId } from '../utils/playedPictureIds';
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
+);
 
-jest.mock('../utils/sessionScoreStore', () => ({
-  bufferScore: jest.fn(),
-  mintGuessId: jest.fn(() => 'id-1'),
+jest.mock('expo-file-system', () => {
+  const deletedFiles = [];
+  const cacheFiles = new Set();
+
+  class MockFile {
+    constructor(base, child) {
+      this.uri = typeof base === 'string' ? base : `${base?.uri ?? ''}${child ?? ''}`;
+      this.exists = true;
+      this.delete = jest.fn(() => {
+        deletedFiles.push(this.uri);
+      });
+    }
+  }
+
+  const cacheDir = {
+    uri: 'file:///cache/',
+    list: jest.fn(() => Array.from(cacheFiles)),
+  };
+
+  return {
+    __esModule: true,
+    File: MockFile,
+    Paths: {
+      get cache() {
+        return cacheDir;
+      },
+    },
+    __deletedFiles: deletedFiles,
+    __cacheFiles: cacheFiles,
+    __cacheList: cacheDir.list,
+  };
+});
+
+jest.mock('../utils/scoreRequests', () => ({
+  submitScoreBatch: jest.fn(),
 }));
-jest.mock('../utils/storageDatum', () => ({
-  removeImageFromList: jest.fn().mockResolvedValue(),
-  deleteImageFromStorage: jest.fn().mockResolvedValue(),
-  sweepPlayedOrphanCacheFiles: jest.fn().mockResolvedValue(),
-}));
-jest.mock('../utils/playedPictureIds', () => ({
-  addPlayedPictureId: jest.fn(() => Promise.resolve()),
-}));
-jest.mock('../utils/nextCardResolver', () => ({ resolveNextCard: jest.fn() }));
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  __deletedFiles as deletedFiles,
+  __cacheFiles as cacheFiles,
+  __cacheList as cacheList,
+} from 'expo-file-system';
+
+import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
+import { getPending } from '../utils/sessionScoreStore';
+import { getPlayedPictureIds } from '../utils/playedPictureIds';
+
+const DECK_KEY = 'imageList:animals:en';
+const PLAYED_PUBLIC_KEY = 'playedPictureIds:public:en';
+const PLAYED_GROUP_KEY = 'playedPictureIds:group:g-3:en';
 
 const baseArgs = {
-  listId: 'list-1',
+  listId: 1,
   categoryKey: 'animals',
   language: 'en',
   imageFile: 'file:///img.png',
@@ -27,98 +64,165 @@ const baseArgs = {
   userId: 'user-1',
 };
 
+function seedDeck() {
+  return AsyncStorage.setItem(DECK_KEY, JSON.stringify([
+    { listId: 1, pictureId: 'pic-1', imageFile: 'file:///img.png' },
+    { listId: 2, pictureId: 'pic-2', imageFile: 'file:///cache/pic-2.jpg' },
+  ]));
+}
+
+async function storedDeck() {
+  return JSON.parse(await AsyncStorage.getItem(DECK_KEY));
+}
+
 describe('applySuccessSideEffects', () => {
+  let consoleWarnSpy;
+
   beforeEach(() => {
-    jest.clearAllMocks();
+    cacheFiles.clear();
+    deletedFiles.length = 0;
+    cacheList.mockClear();
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
-  it('defaults to points=1 and omits multiplier when not passed', async () => {
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+  });
+
+  async function bufferedScores() {
+    return getPending();
+  }
+
+  it('a plain win buffers a single score event with defaults: 1 point, streak 0, no multipliers', async () => {
     await applySuccessSideEffects(baseArgs);
 
-    expect(bufferScore).toHaveBeenCalledTimes(1);
-    const arg = bufferScore.mock.calls[0][0];
-    expect(arg).toEqual(expect.objectContaining({ points: 1 }));
-    expect('multiplier' in arg).toBe(false);
-  });
-
-  it('threads points and multiplier into the buffered item', async () => {
-    await applySuccessSideEffects({ ...baseArgs, points: 2, multiplier: 2 });
-
-    expect(bufferScore).toHaveBeenCalledTimes(1);
-    const arg = bufferScore.mock.calls[0][0];
-    expect(arg).toEqual(expect.objectContaining({
-      points: 2,
-      multiplier: 2,
-      guessId: 'id-1',
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 1,
+      streak: 0,
       pictureId: 'pic-1',
       userId: 'user-1',
+      scope: { kind: 'public' },
       ts: expect.any(Number),
+      guessId: expect.stringMatching(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/),
     }));
-    expect(mintGuessId).toHaveBeenCalled();
+    expect('multiplier' in scores[0]).toBe(false);
+    expect('streakMultiplier' in scores[0]).toBe(false);
   });
 
-  it('keeps buffering the score when storage cleanup throws', async () => {
-    removeImageFromList.mockRejectedValueOnce(new Error('boom'));
+  it('a streaked, multiplied win buffers those bonuses on the score event', async () => {
+    await applySuccessSideEffects({ ...baseArgs, points: 2, multiplier: 2, streak: 5, streakMultiplier: 1.5 });
 
-    await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
-
-    expect(bufferScore).toHaveBeenCalledTimes(1);
-    expect(deleteImageFromStorage).not.toHaveBeenCalled();
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 2,
+      multiplier: 2,
+      streak: 5,
+      streakMultiplier: 1.5,
+      pictureId: 'pic-1',
+      userId: 'user-1',
+    }));
   });
 
-  it('defaults streak to 0 and omits streakMultiplier when not passed', async () => {
-    await applySuccessSideEffects(baseArgs);
-
-    const arg = bufferScore.mock.calls[0][0];
-    expect(arg).toEqual(expect.objectContaining({ streak: 0 }));
-    expect('streakMultiplier' in arg).toBe(false);
-  });
-
-  it('threads streak and streakMultiplier into the buffered item', async () => {
-    await applySuccessSideEffects({ ...baseArgs, streak: 5, streakMultiplier: 1.5 });
-
-    const arg = bufferScore.mock.calls[0][0];
-    expect(arg).toEqual(expect.objectContaining({ streak: 5, streakMultiplier: 1.5 }));
-  });
-
-  it('threads streak without streakMultiplier when only streak is passed', async () => {
+  it('a win with streak but no streak multiplier omits the streak multiplier', async () => {
     await applySuccessSideEffects({ ...baseArgs, streak: 5 });
 
-    const arg = bufferScore.mock.calls[0][0];
-    expect(arg).toEqual(expect.objectContaining({ streak: 5 }));
-    expect('streakMultiplier' in arg).toBe(false);
+    const [score] = await bufferedScores();
+    expect(score).toEqual(expect.objectContaining({ streak: 5 }));
+    expect('streakMultiplier' in score).toBe(false);
   });
 
-  it('(l) win records the played pictureId in the played-set (fire-and-forget, failure kept silent)', async () => {
-    addPlayedPictureId.mockRejectedValueOnce(new Error('played write failed'));
+  it('a failed deck cleanup keeps the buffered score and stops the remaining cleanup', async () => {
+    await seedDeck();
+    const baseGetItem = AsyncStorage.getItem.getMockImplementation();
+    AsyncStorage.getItem.mockImplementation(async (key) => {
+      if (key === DECK_KEY) {
+        throw new Error('deck read boom');
+      }
+      return baseGetItem(key);
+    });
 
-    await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+    try {
+      await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+    } finally {
+      AsyncStorage.getItem.mockImplementation(baseGetItem);
+    }
 
-    expect(addPlayedPictureId).toHaveBeenCalledWith('pic-1', 'en', { kind: 'public' });
-    expect(removeImageFromList).toHaveBeenCalledWith('list-1', 'animals', 'en');
-    expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///img.png');
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await storedDeck()).toHaveLength(2);
+    expect(deletedFiles).toEqual([]);
+    expect(cacheList).not.toHaveBeenCalled();
   });
 
-  it('Task 2b: a public win runs the played-orphan sweep after the winner file is deleted', async () => {
+  it('a failed played-set write stays silent and the rest of the win still applies', async () => {
+    await seedDeck();
+    const baseSetItem = AsyncStorage.setItem.getMockImplementation();
+    AsyncStorage.setItem.mockImplementation(async (key, value) => {
+      if (String(key).startsWith('playedPictureIds')) {
+        throw new Error('played write failed');
+      }
+      return baseSetItem(key, value);
+    });
+
+    try {
+      await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+    } finally {
+      AsyncStorage.setItem.mockImplementation(baseSetItem);
+    }
+
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual([]);
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+  });
+
+  it('a public win records the played picture, drops the card from its deck, deletes the winner file, and sweeps orphaned cache files', async () => {
+    await seedDeck();
+    cacheFiles.add('file:///cache/pic-1.jpg');
+    cacheFiles.add('file:///cache/pic-2.jpg');
+    cacheFiles.add('file:///cache/private-x.jpg');
+    cacheFiles.add('file:///cache/other.jpg');
+
     await applySuccessSideEffects(baseArgs);
 
-    expect(sweepPlayedOrphanCacheFiles).toHaveBeenCalledTimes(1);
-    expect(sweepPlayedOrphanCacheFiles).toHaveBeenCalledWith('en');
-    expect(deleteImageFromStorage.mock.invocationCallOrder[0])
-      .toBeLessThan(sweepPlayedOrphanCacheFiles.mock.invocationCallOrder[0]);
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual(['pic-1']);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png', 'file:///cache/pic-1.jpg']));
+    expect(deletedFiles).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('pic-2.jpg'),
+      expect.stringContaining('private-x.jpg'),
+      expect.stringContaining('other.jpg'),
+    ]));
   });
 
-  it('Task 2b: a private win skips the public sweep (private-* files are swept by purgeAllPrivateCaches)', async () => {
+  it('a private-group win records the picture group-scoped and skips the public orphan sweep', async () => {
+    await seedDeck();
+
     await applySuccessSideEffects({ ...baseArgs, scope: { kind: 'private', groupId: 'g-3' } });
 
-    expect(sweepPlayedOrphanCacheFiles).not.toHaveBeenCalled();
+    expect(await getPlayedPictureIds('en', { kind: 'private', groupId: 'g-3' })).toEqual(['pic-1']);
+    expect(await getPlayedPictureIds('en', { kind: 'public' })).toEqual([]);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+    expect(cacheList).not.toHaveBeenCalled();
+
+    const [score] = await bufferedScores();
+    expect(score.imageId).toBe('pic-1');
   });
 
-  it('Task 2b: a sweep failure is best-effort (score kept, win already applied)', async () => {
-    sweepPlayedOrphanCacheFiles.mockRejectedValueOnce(new Error('sweep boom'));
+  it('a failed orphan sweep keeps the win intact', async () => {
+    await seedDeck();
+    cacheList.mockImplementationOnce(() => {
+      throw new Error('cache list boom');
+    });
 
     await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
 
-    expect(deleteImageFromStorage).toHaveBeenCalledWith('file:///img.png');
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual(['pic-1']);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+    expect(deletedFiles).not.toEqual(expect.arrayContaining([expect.stringContaining('pic-1.jpg')]));
   });
 });

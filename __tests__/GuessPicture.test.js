@@ -8,6 +8,9 @@ jest.mock('react-native', () => ({
   Dimensions: {
     get: jest.fn(() => ({ width: 320, height: 640, scale: 1, fontScale: 1 })),
   },
+  Image: {
+    resolveAssetSource: jest.fn(() => ({ uri: 'file:///asset.jpg', width: 320, height: 320 })),
+  },
 }));
 
 let mockCapturedGestureCallbacks;
@@ -71,36 +74,39 @@ jest.mock('../utils/imageDimensions', () => ({
   })),
 }));
 
-jest.mock('../utils/targetLocation', () => ({
-  determineImageCorners: jest.fn(),
-  handlePicturePress: jest.fn(),
-  buildCenteredTarget: jest.fn(),
-  buildSelectionFromPixels: jest.fn(),
-}));
-
-jest.mock('../utils/e2eMode', () => ({
-  buildE2EPictureSelection: jest.fn(),
-  getE2EHideLocation: jest.fn(),
-  getE2EIncorrectHideLocation: jest.fn(),
-  isE2EMode: jest.fn(),
+jest.mock('expo-file-system', () => ({
+  __esModule: true,
+  File: class MockFile {
+    exists = false;
+    delete() {}
+  },
+  Paths: {
+    get cache() {
+      return { uri: 'file:///cache/', list: () => [] };
+    },
+  },
 }));
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import GuessPicture from '../components/Picture/GuessPicture';
-import {
-  buildCenteredTarget,
-  buildSelectionFromPixels,
-} from '../utils/targetLocation';
-import {
-  buildE2EPictureSelection,
-  getE2EHideLocation,
-  getE2EIncorrectHideLocation,
-  isE2EMode,
-} from '../utils/e2eMode';
+
+function setE2EMode(enabled) {
+  process.env.EXPO_PUBLIC_E2E_MODE = enabled ? 'true' : 'false';
+}
 
 describe('GuessPicture', () => {
+  const originalE2EEnv = process.env.EXPO_PUBLIC_E2E_MODE;
+
+  afterAll(() => {
+    if (originalE2EEnv === undefined) {
+      delete process.env.EXPO_PUBLIC_E2E_MODE;
+    } else {
+      process.env.EXPO_PUBLIC_E2E_MODE = originalE2EEnv;
+    }
+  });
+
   const baseProps = {
     imageFile: 'file:///guess.jpg',
     description: 'Find the hidden point',
@@ -112,36 +118,9 @@ describe('GuessPicture', () => {
     toAdScreen: jest.fn(),
   };
 
-  const centeredSelection = {
-    location: { x: '0.50', y: '0.50' },
-    target: {
-      targetSize: 16,
-      targetStyle: { position: 'absolute', left: 92, top: 42 },
-    },
-  };
-
-  const draggedSelection = {
-    location: { x: '0.55', y: '0.50' },
-    target: {
-      targetSize: 16,
-      targetStyle: { position: 'absolute', left: 102, top: 42 },
-    },
-  };
-
   beforeEach(() => {
     jest.clearAllMocks();
-    isE2EMode.mockReturnValue(true);
-    getE2EHideLocation.mockReturnValue({ x: 0.58, y: 0.46 });
-    getE2EIncorrectHideLocation.mockReturnValue({ x: 0.18, y: 0.18 });
-    buildE2EPictureSelection.mockReturnValue({
-      location: { x: '0.18', y: '0.18' },
-      target: {
-        targetSize: 16,
-        targetStyle: { position: 'absolute', left: 24, top: 24 },
-      },
-    });
-    buildCenteredTarget.mockReturnValue(centeredSelection);
-    buildSelectionFromPixels.mockReturnValue(draggedSelection);
+    setE2EMode(true);
     mockCapturedGestureCallbacks = undefined;
     mockCapturedGesture = undefined;
   });
@@ -180,25 +159,20 @@ describe('GuessPicture', () => {
   }
 
   it('in non-e2e mode, initializes the target at the picture center on mount', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
 
     await renderToPicture();
 
-    expect(buildCenteredTarget).toHaveBeenCalledWith({
-      screenWidth: 320,
-      screenHeight: 640,
-      imageDimensionStyle: { width: 200, height: 100 },
-    });
-
     const pictureProps = getLatestShowPictureProps();
     expect(pictureProps.touchLocation).toEqual({ x: '0.50', y: '0.50' });
-    expect(pictureProps.target).toEqual(centeredSelection.target);
+    expect(pictureProps.target.targetSize).toBe(16);
+    expect(pictureProps.target.targetStyle).toEqual(expect.objectContaining({ left: 92, top: 42 }));
     expect(pictureProps.targetGesture).toBeTruthy();
     expect(mockCapturedGestureCallbacks.__type).toBe('pan');
   });
 
-  it('in non-e2e mode, moves the target when the drag gesture onUpdate fires with translationX=10', async () => {
-    isE2EMode.mockReturnValue(false);
+  it('in non-e2e mode, dragging the target moves it and updates the fractional location', async () => {
+    setE2EMode(false);
 
     await renderToPicture();
 
@@ -211,21 +185,14 @@ describe('GuessPicture', () => {
       onUpdate({ translationX: 10, translationY: 0 });
     });
 
-    expect(buildSelectionFromPixels).toHaveBeenCalledWith({
-      locationX: 110,
-      locationY: 50,
-      screenWidth: 320,
-      screenHeight: 640,
-      imageDimensionStyle: { width: 200, height: 100 },
-    });
-
     const pictureProps = getLatestShowPictureProps();
     expect(pictureProps.touchLocation).toEqual({ x: '0.55', y: '0.50' });
-    expect(pictureProps.target).toEqual(draggedSelection.target);
+    expect(pictureProps.target.targetSize).toBe(16);
+    expect(pictureProps.target.targetStyle).toEqual(expect.objectContaining({ left: 102, top: 42 }));
   });
 
   it('in non-e2e mode, ships the dragged location to toAdScreen on confirm', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
     const toAdScreen = jest.fn();
 
     await renderToPicture({ toAdScreen });
@@ -243,18 +210,22 @@ describe('GuessPicture', () => {
       getLatestShowPictureProps().handleConfirm();
     });
 
+    expect(toAdScreen).toHaveBeenCalledTimes(1);
     expect(toAdScreen).toHaveBeenCalledWith({
       location: { x: '0.55', y: '0.50' },
       hiddenLocation: { x: 0.58, y: 0.46 },
       screenWidth: 320,
       screenHeight: 640,
-      target: draggedSelection.target,
+      target: expect.objectContaining({
+        targetSize: 16,
+        targetStyle: expect.objectContaining({ left: 102, top: 42 }),
+      }),
       elapsedMs: expect.any(Number),
     });
   });
 
   it('in non-e2e mode, opens the confirm modal when the target is tapped without dragging', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
 
     await renderToPicture();
 
@@ -273,7 +244,7 @@ describe('GuessPicture', () => {
   });
 
   it('in non-e2e mode, does not open the modal when the target is dragged past the tap threshold', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
 
     await renderToPicture();
 
@@ -292,7 +263,7 @@ describe('GuessPicture', () => {
   });
 
   it('in non-e2e mode, does not move the target when the picture surface is tapped', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
 
     await renderToPicture();
 
@@ -302,34 +273,29 @@ describe('GuessPicture', () => {
       getLatestShowPictureProps().handlePress({ nativeEvent: { locationX: 10, locationY: 10 } });
     });
 
-    expect(buildE2EPictureSelection).not.toHaveBeenCalled();
-
     const after = getLatestShowPictureProps();
     expect(after.touchLocation).toEqual(before.touchLocation);
     expect(after.target).toEqual(before.target);
     expect(after.touchLocation).toEqual({ x: '0.50', y: '0.50' });
   });
 
-  it('in e2e mode, initializes target as null, attaches no target gesture, and leaves the surface tap to reach handlePress', async () => {
+  it('in e2e mode, starts with no target and places it at the deterministic hide location on a surface tap', async () => {
     await renderToPicture();
 
-    expect(buildCenteredTarget).not.toHaveBeenCalled();
-
-    const pictureProps = getLatestShowPictureProps();
-    expect(pictureProps.touchLocation).toBeNull();
-    expect(pictureProps.target).toBeNull();
-    expect(pictureProps.targetGesture).toBeUndefined();
+    const initialProps = getLatestShowPictureProps();
+    expect(initialProps.touchLocation).toBeNull();
+    expect(initialProps.target).toBeNull();
+    expect(initialProps.targetGesture).toBeUndefined();
 
     await act(async () => {
       getLatestShowPictureProps().handlePress();
     });
 
-    expect(buildE2EPictureSelection).toHaveBeenCalledWith({
-      screenWidth: 320,
-      screenHeight: 640,
-      imageDimensionStyle: { width: 200, height: 100 },
-      relativeLocation: { x: 0.58, y: 0.46 },
-    });
+    const pictureProps = getLatestShowPictureProps();
+    expect(pictureProps.touchLocation).toEqual({ x: '0.58', y: '0.46' });
+    expect(pictureProps.target.targetSize).toBe(16);
+    expect(pictureProps.target.targetStyle.left).toBeCloseTo(108);
+    expect(pictureProps.target.targetStyle.top).toBeCloseTo(38);
   });
 
   it('passes defaultOpen={false} to ShowPicture on a first-card route (skipInstructions falsy)', async () => {
@@ -346,7 +312,7 @@ describe('GuessPicture', () => {
   });
 
   it('skipInstructions flips true after mount → overlay hides reactively (ShowPicture renders)', async () => {
-    isE2EMode.mockReturnValue(false);
+    setE2EMode(false);
     let renderer;
     await act(async () => {
       renderer = create(<GuessPicture {...baseProps} skipInstructions={false} />);
@@ -372,21 +338,21 @@ describe('GuessPicture', () => {
     // `disabled={advance.state !== 'idle'}` had no effect.
 
     it('disabled=true → useTargetDrag enabled=false → ShowPicture receives no targetGesture', async () => {
-      isE2EMode.mockReturnValue(false);
+      setE2EMode(false);
       await renderToPicture({ disabled: true });
 
       expect(getLatestShowPictureProps().targetGesture).toBeUndefined();
     });
 
     it('disabled=false (default) → useTargetDrag enabled=true → ShowPicture receives targetGesture', async () => {
-      isE2EMode.mockReturnValue(false);
+      setE2EMode(false);
       await renderToPicture();
 
       expect(getLatestShowPictureProps().targetGesture).toBeTruthy();
     });
 
     it('disabled=true + e2e mode → still no targetGesture (e2e path keeps its own surface-tap wiring)', async () => {
-      isE2EMode.mockReturnValue(true);
+      setE2EMode(true);
       await renderToPicture({ disabled: true });
 
       expect(getLatestShowPictureProps().targetGesture).toBeUndefined();
@@ -414,12 +380,11 @@ describe('GuessPicture', () => {
       getLatestShowPictureProps().handleLongPress();
     });
 
-    expect(buildE2EPictureSelection).toHaveBeenCalledWith({
-      screenWidth: 320,
-      screenHeight: 640,
-      imageDimensionStyle: { width: 200, height: 100 },
-      relativeLocation: { x: 0.18, y: 0.18 },
-    });
+    const afterLongPress = getLatestShowPictureProps();
+    expect(afterLongPress.touchLocation).toEqual({ x: '0.18', y: '0.18' });
+    expect(afterLongPress.target.targetSize).toBe(16);
+    expect(afterLongPress.target.targetStyle.left).toBeCloseTo(28);
+    expect(afterLongPress.target.targetStyle.top).toBeCloseTo(10);
 
     await act(async () => {
       getLatestShowPictureProps().handleConfirm();
@@ -427,15 +392,16 @@ describe('GuessPicture', () => {
 
     expect(getLatestShowPictureProps().showModal).toBe(false);
 
+    expect(toAdScreen).toHaveBeenCalledTimes(1);
     expect(toAdScreen).toHaveBeenCalledWith({
       location: { x: '0.18', y: '0.18' },
       hiddenLocation: { x: 0.58, y: 0.46 },
       screenWidth: 320,
       screenHeight: 640,
-      target: {
+      target: expect.objectContaining({
         targetSize: 16,
-        targetStyle: { position: 'absolute', left: 24, top: 24 },
-      },
+        targetStyle: expect.objectContaining({ left: expect.closeTo(28), top: expect.closeTo(10) }),
+      }),
       elapsedMs: 0,
     });
   });
@@ -453,7 +419,7 @@ describe('GuessPicture', () => {
     });
 
     it('in non-e2e mode starts the timer on instructions dismiss', () => {
-      isE2EMode.mockReturnValue(false);
+      setE2EMode(false);
       const toAdScreen = jest.fn();
       jest.useFakeTimers();
       try {
@@ -488,7 +454,7 @@ describe('GuessPicture', () => {
     });
 
     it('cleans up the interval on unmount without warnings', () => {
-      isE2EMode.mockReturnValue(false);
+      setE2EMode(false);
       let renderer;
       jest.useFakeTimers();
       try {
@@ -515,7 +481,7 @@ describe('GuessPicture', () => {
 
   describe('reading grace', () => {
     beforeEach(() => {
-      isE2EMode.mockReturnValue(false);
+      setE2EMode(false);
       jest.useFakeTimers();
     });
 
