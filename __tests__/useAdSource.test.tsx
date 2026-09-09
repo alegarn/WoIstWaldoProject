@@ -1,109 +1,150 @@
 // Behavior tests for hooks/useAdSource.
 //
-// Verifies the composite AdSource wiring: the default factory must build AdMob
-// WITH the App-level bridge snapshot (regression: previously constructed
-// without it, so AdMobInterstitialSource.isReady() always returned false), wrap
-// it with InternalProAdSource in a FallbackAdSource, and expose the test-only
-// factory override seam.
+// The real composite runs end-to-end (real FallbackAdSource wrapping the real
+// AdMobInterstitialSource and InternalProAdSource). The only seams mocked are
+// the boundaries the component cannot own in tests: the App-level AdMob bridge
+// snapshot (the native ads boundary) and Platform.OS.
+//
+// What is verified: given ad availability, the hook's ad source USES the right
+// ad source — it shows the AdMob interstitial through the bridge when a loaded
+// ad exists (Android), and falls back to the internal pro panel otherwise.
+// This keeps the original regression guarded (a factory that builds AdMob
+// without the bridge snapshot makes isReady() false and no interstitial ever
+// shows) while asserting observable effects instead of factory wiring.
 
-import { renderHook } from '@testing-library/react-native';
+import { Platform } from 'react-native';
+import type { ReactElement } from 'react';
+import { act, fireEvent, render, renderHook } from '@testing-library/react-native';
 
 import { useAdSource, _setAdSourceFactoryForTests } from '../hooks/useAdSource';
-import { adMobBridgeSnapshot } from '../services/ads/AdMobInterstitialBridge';
-import type { AdSource } from '../services/ads/AdSource';
+import {
+  INTERNAL_AD_CONTINUE_TESTID,
+  INTERNAL_AD_PANEL_TESTID,
+  INTERNAL_AD_TIMEOUT_MS,
+} from '../services/ads/InternalProAdSource';
+import type { AdSource, HookSnapshot } from '../services/ads/AdSource';
 
-const mockAdMobSource: AdSource = {
-  isReady: () => true,
-  show: jest.fn().mockResolvedValue(undefined),
-  renderSurface: () => null,
-};
-const mockInternalSource: AdSource = {
-  isReady: () => true,
-  show: jest.fn().mockResolvedValue(undefined),
-  renderSurface: () => null,
-};
-const mockFallbackSource: AdSource = {
-  isReady: () => true,
-  show: jest.fn().mockResolvedValue(undefined),
-  renderSurface: () => null,
-};
-
-const mockCreateAdMob = jest.fn(() => mockAdMobSource);
-const mockCreateInternal = jest.fn(() => mockInternalSource);
-const mockCreateFallback = jest.fn(() => mockFallbackSource);
-
-jest.mock('../services/ads/AdMobInterstitialSource', () => ({
-  __esModule: true,
-  createAdMobInterstitialSource: (...args: unknown[]) => mockCreateAdMob(...(args as [unknown])),
-}));
-
-jest.mock('../services/ads/InternalProAdSource', () => ({
-  __esModule: true,
-  createInternalProAdSource: (...args: unknown[]) => mockCreateInternal(...(args as [])),
-}));
-
-jest.mock('../services/ads/FallbackAdSource', () => ({
-  __esModule: true,
-  createFallbackAdSource: (...args: unknown[]) =>
-    mockCreateFallback(...(args as [AdSource, AdSource])),
-}));
+// Native-ads boundary: what the App-mounted <AdMobInterstitialBridge /> would
+// report about the loaded interstitial.
+const mockBridge: { snapshot: HookSnapshot | null } = { snapshot: null };
 
 jest.mock('../services/ads/AdMobInterstitialBridge', () => ({
   __esModule: true,
-  adMobBridgeSnapshot: { get: () => null },
+  adMobBridgeSnapshot: { get: () => mockBridge.snapshot },
 }));
 
+function setBridgeSnapshot(snapshot: HookSnapshot | null) {
+  mockBridge.snapshot = snapshot;
+}
+
+const originalOSDescriptor = Object.getOwnPropertyDescriptor(Platform, 'OS');
+
+function setPlatformOS(os: 'android' | 'ios') {
+  Object.defineProperty(Platform, 'OS', { value: os, configurable: true, writable: true });
+}
+
+afterEach(() => {
+  jest.useRealTimers();
+  if (originalOSDescriptor) {
+    Object.defineProperty(Platform, 'OS', originalOSDescriptor);
+  }
+  setBridgeSnapshot(null);
+});
+
 describe('useAdSource', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    // Restore the built-in default between tests so each renderHook exercises
-    // the real default factory (the test-only seam is sticky at module scope).
-    _setAdSourceFactoryForTests(undefined);
-  });
+  it('shows the AdMob interstitial through the app bridge when a loaded ad is available (android)', async () => {
+    setPlatformOS('android');
+    const nativeShow = jest.fn().mockResolvedValue(undefined);
+    setBridgeSnapshot({ isLoaded: true, show: nativeShow });
 
-  afterEach(() => {
-    _setAdSourceFactoryForTests(undefined);
-  });
-
-  it('default factory builds AdMob WITH { hookSnapshot: adMobBridgeSnapshot } (regression: was built without it)', () => {
-    renderHook(() => useAdSource());
-
-    expect(mockCreateAdMob).toHaveBeenCalledTimes(1);
-    expect(mockCreateAdMob).toHaveBeenCalledWith({ hookSnapshot: adMobBridgeSnapshot });
-  });
-
-  it('default factory returns a FallbackAdSource wrapping adMob + internal sources', () => {
     const { result } = renderHook(() => useAdSource());
 
-    expect(mockCreateInternal).toHaveBeenCalledTimes(1);
-    expect(mockCreateFallback).toHaveBeenCalledTimes(1);
-    expect(mockCreateFallback).toHaveBeenCalledWith(mockAdMobSource, mockInternalSource);
+    expect(result.current.isReady()).toBe(true);
 
-    // The composite returned IS the fallback source built by the factory.
-    expect(result.current).toBe(mockFallbackSource);
+    await result.current.show();
+
+    expect(nativeShow).toHaveBeenCalledTimes(1);
   });
 
-  it('_setAdSourceFactoryForTests override replaces the source, and undefined restores the built-in default', () => {
+  it('never picks the AdMob interstitial on iOS, even with a loaded bridge snapshot', async () => {
+    jest.useFakeTimers();
+    setPlatformOS('ios');
+    const nativeShow = jest.fn().mockResolvedValue(undefined);
+    setBridgeSnapshot({ isLoaded: true, show: nativeShow });
+
+    const { result } = renderHook(() => useAdSource());
+
+    expect(result.current.isReady()).toBe(true);
+    const surface = render(result.current.renderSurface() as ReactElement);
+    expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
+
+    const shown = result.current.show();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(INTERNAL_AD_TIMEOUT_MS);
+    });
+    await shown;
+
+    expect(nativeShow).not.toHaveBeenCalled();
+  });
+
+  it('falls back to the internal pro panel when no AdMob interstitial is loaded', async () => {
+    jest.useFakeTimers();
+    setPlatformOS('android');
+    const nativeShow = jest.fn().mockResolvedValue(undefined);
+    setBridgeSnapshot({ isLoaded: false, show: nativeShow });
+
+    const { result } = renderHook(() => useAdSource());
+
+    expect(result.current.isReady()).toBe(true);
+    const surface = render(result.current.renderSurface() as ReactElement);
+    expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
+    expect(surface.getByTestId(INTERNAL_AD_CONTINUE_TESTID)).toBeTruthy();
+
+    const shown = result.current.show();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(INTERNAL_AD_TIMEOUT_MS);
+    });
+    await shown;
+
+    expect(nativeShow).not.toHaveBeenCalled();
+  });
+
+  it('completes the internal fallback ad when the user taps Continue', async () => {
+    setPlatformOS('android');
+    setBridgeSnapshot({ isLoaded: false, show: jest.fn() });
+
+    const { result } = renderHook(() => useAdSource());
+    const surface = render(result.current.renderSurface() as ReactElement);
+
+    let resolved = false;
+    const shown = result.current.show().then(() => {
+      resolved = true;
+    });
+
+    fireEvent.press(surface.getByTestId(INTERNAL_AD_CONTINUE_TESTID));
+    await shown;
+
+    expect(resolved).toBe(true);
+  });
+
+  it('honors the test-only factory override and restores the built-in default afterwards', async () => {
     const customSource: AdSource = {
       isReady: () => true,
       show: jest.fn().mockResolvedValue(undefined),
       renderSurface: () => null,
     };
-    const customFactory = jest.fn(() => customSource);
 
-    _setAdSourceFactoryForTests(customFactory);
+    _setAdSourceFactoryForTests(() => customSource);
 
-    const { result: first } = renderHook(() => useAdSource());
-    expect(first.current).toBe(customSource);
-    expect(customFactory).toHaveBeenCalledTimes(1);
-    // Built-in factories untouched while the override is active.
-    expect(mockCreateAdMob).not.toHaveBeenCalled();
+    const { result: overridden } = renderHook(() => useAdSource());
+    expect(overridden.current).toBe(customSource);
 
-    // Restore the built-in default.
     _setAdSourceFactoryForTests(undefined);
 
-    const { result: second } = renderHook(() => useAdSource());
-    expect(mockCreateAdMob).toHaveBeenCalledWith({ hookSnapshot: adMobBridgeSnapshot });
-    expect(second.current).toBe(mockFallbackSource);
+    const { result: restored } = renderHook(() => useAdSource());
+    expect(restored.current).not.toBe(customSource);
+    expect(restored.current.isReady()).toBe(true);
+    const surface = render(restored.current.renderSurface() as ReactElement);
+    expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
   });
 });

@@ -40,6 +40,7 @@ import { HomeHeaderRight } from '../../screens/Groups/HomeHeaderRight';
 import IconButton from '../../components/UI/IconButton';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
+import { AuthContext } from '../../store/auth-context';
 
 describe('HomeHeaderRight', () => {
   beforeEach(() => {
@@ -51,14 +52,19 @@ describe('HomeHeaderRight', () => {
     Alert.alert.mockRestore();
   });
 
-  function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() } } = {}) {
+  function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() }, authContext = {} } = {}) {
     useActiveGroup.mockReturnValue(activeGroup);
-    useGroupsHub.mockReturnValue({ data: groupsHubData, refresh: jest.fn() });
+    const refresh = jest.fn();
+    useGroupsHub.mockReturnValue({ data: groupsHubData, refresh });
     let renderer;
     act(() => {
-      renderer = create(<HomeHeaderRight navigation={navigation} tintColor="#fff" />);
+      renderer = create(
+        <AuthContext.Provider value={authContext}>
+          <HomeHeaderRight navigation={navigation} tintColor="#fff" />
+        </AuthContext.Provider>
+      );
     });
-    return { renderer, navigation };
+    return { renderer, navigation, refresh };
   }
 
   function getToggle(renderer) {
@@ -147,6 +153,72 @@ describe('HomeHeaderRight', () => {
 
     const toggle = getToggle(renderer);
     expect(toggle.props.disabled).toBe(false);
+  });
+
+  it('navigates to the paywall with intent=store from the menu', () => {
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    openMenu(renderer);
+
+    const storeRow = renderer.root.findByProps({ testID: 'home.menu.store' });
+    expect(storeRow).toBeTruthy();
+    act(() => {
+      storeRow.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });
+  });
+
+  it('keeps the scope toggle enabled for a group owner even when the hub fetch failed, and switches to private', async () => {
+    const setActive = jest.fn().mockResolvedValue({ status: 200 });
+    const { renderer, navigation } = renderHeader({
+      authContext: { isGroupOwner: true },
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: 'g-1',
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: null,
+    });
+
+    openMenu(renderer);
+
+    const toggle = getToggle(renderer);
+    expect(toggle.props.disabled).toBe(false);
+
+    await act(async () => {
+      await toggle.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-1');
+    expect(navigation.navigate).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-1' },
+    });
+  });
+
+  it('refreshes the groups hub when the screen comes into focus', () => {
+    const { refresh } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    expect(refresh).toHaveBeenCalled();
   });
 
   it('navigates to GroupsListScreen when toggling from public to private without an active group', async () => {

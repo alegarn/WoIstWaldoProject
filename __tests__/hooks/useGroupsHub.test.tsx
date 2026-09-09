@@ -9,31 +9,81 @@ jest.mock('@react-native-async-storage/async-storage', () =>
   require('../helpers/statefulAsyncStorageMock')()
 );
 
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    interceptors: {
+      request: { use: jest.fn() },
+      response: { use: jest.fn() },
+    },
+  },
+}));
+
+jest.mock('expo-secure-store', () => ({
+  getItemAsync: jest.fn(() => Promise.resolve(null)),
+  setItemAsync: jest.fn(),
+  deleteItemAsync: jest.fn(),
+}));
+
 import AsyncStorage, { __store as asyncStorageStore } from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { getSnapshot, publish, resetGroupHubStore } from '../../services/groups/groupHubStore';
 import { AuthContext } from '../../store/auth-context';
-
-jest.mock('../../services/groups/groupApi', () => ({
-  fetchGroups: jest.fn(),
-}));
-
-import { fetchGroups } from '../../services/groups/groupApi';
-import type { GroupsResponse, RequestResult } from '../../services/groups/groupApi';
 import type { GroupsHubData } from '../../types/groups';
 
-type FetchGroupsResult = GroupsResponse | RequestResult;
+const mockedAxiosGet = jest.mocked(axios.get);
 
-const mockedFetchGroups = jest.mocked(fetchGroups);
+const GROUPS_URL = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/private_groups/`;
 
 const TOKEN = 'Bearer token-1';
 const USER_ID = 'user-1';
 
+// Wire-level groups rows as the Rails API serves them ({ data: [...] }
+// envelope with owner_id); the real fetchGroups normalizes them into the hub
+// shape (owner_id → role).
+type AxiosPayload = { status: number; data: unknown };
+
+function groupsPayload(status: number, rows: Array<Record<string, unknown>>): AxiosPayload {
+  return { status, data: { data: rows } };
+}
+
+const SERVER_ROWS: Array<Record<string, unknown>> = [
+  { id: 'g-1', owner_id: USER_ID },
+  { id: 'g-2', owner_id: 'other-user' },
+];
+
 const HUB: GroupsHubData = {
-  owned: [{ id: 'g-1', role: 'owner' }],
-  joined: [{ id: 'g-2', role: 'member' }],
+  owned: [{ id: 'g-1', owner_id: USER_ID, role: 'owner' }],
+  joined: [{ id: 'g-2', owner_id: 'other-user', role: 'member' }],
   pendingInvites: [],
 };
+
+const HUB_FRESH: GroupsHubData = {
+  owned: [{ id: 'g-fresh', owner_id: USER_ID, role: 'owner' }],
+  joined: [],
+  pendingInvites: [],
+};
+
+const G2B_SERVER_ROWS = [{ id: 'g-2b', owner_id: 'user-2' }];
+const G2B_HUB: GroupsHubData = {
+  owned: [{ id: 'g-2b', owner_id: 'user-2', role: 'owner' }],
+  joined: [],
+  pendingInvites: [],
+};
+
+// Assert the transport seam received the private-groups URL with the auth
+// header for the given call (1-indexed).
+function expectGroupsRequest(callIndex: number, token: string) {
+  expect(mockedAxiosGet).toHaveBeenNthCalledWith(
+    callIndex,
+    GROUPS_URL,
+    expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: token, HTTP_AUTHORIZATION: token }),
+    }),
+  );
+}
 
 // Mutable auth value: mutate then rerender() to simulate credentials arriving.
 function makeWrapper(auth: { token: string | null; userId: string | null }) {
@@ -71,21 +121,14 @@ describe('useGroupsHub', () => {
       await Promise.resolve();
     });
 
-    expect(fetchGroups).not.toHaveBeenCalled();
+    expect(mockedAxiosGet).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
     expect(result.current.error).toBeNull();
     expect(result.current.isLoading).toBe(true);
   });
 
-  it('populates data.owned and data.joined and flips isLoading to false once fetchGroups resolves', async () => {
-    mockedFetchGroups.mockResolvedValue({
-      status: 200,
-      data: {
-        owned: [{ id: 'g-1', role: 'owner' }],
-        joined: [{ id: 'g-2', role: 'member' }],
-        pendingInvites: [],
-      },
-    });
+  it('populates data.owned and data.joined and flips isLoading to false once the request resolves', async () => {
+    mockedAxiosGet.mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -95,17 +138,14 @@ describe('useGroupsHub', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(fetchGroups).toHaveBeenCalledWith({ token: TOKEN, userId: USER_ID });
-    expect(result.current.data!.owned).toEqual([{ id: 'g-1', role: 'owner' }]);
-    expect(result.current.data!.joined).toEqual([{ id: 'g-2', role: 'member' }]);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
+    expectGroupsRequest(1, TOKEN);
+    expect(result.current.data).toEqual(HUB);
     expect(result.current.error).toBeNull();
   });
 
-  it('exposes the API error payload and keeps isLoading false when fetchGroups fails', async () => {
-    mockedFetchGroups.mockResolvedValue({
-      status: 500,
-      data: { error: 'boom' },
-    });
+  it('exposes the API error payload and keeps isLoading false when the groups request fails', async () => {
+    mockedAxiosGet.mockResolvedValue({ status: 500, data: { error: 'boom' } });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -127,13 +167,13 @@ describe('useGroupsHub', () => {
       await Promise.resolve();
     });
 
-    expect(fetchGroups).not.toHaveBeenCalled();
+    expect(mockedAxiosGet).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
     expect(result.current.isLoading).toBe(true);
   });
 
   it('fetches and writes the hub cache once credentials arrive', async () => {
-    mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
+    mockedAxiosGet.mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
     const auth: { token: string | null; userId: string | null } = { token: null, userId: USER_ID };
     const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
@@ -145,7 +185,7 @@ describe('useGroupsHub', () => {
       await Promise.resolve();
     });
 
-    expect(fetchGroups).not.toHaveBeenCalled();
+    expect(mockedAxiosGet).not.toHaveBeenCalled();
     expect(result.current.isLoading).toBe(true);
 
     auth.token = TOKEN;
@@ -153,7 +193,6 @@ describe('useGroupsHub', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(fetchGroups).toHaveBeenCalledWith({ token: TOKEN, userId: USER_ID });
     expect(result.current.data).toEqual(HUB);
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsHub:user-1', JSON.stringify(HUB));
   });
@@ -161,8 +200,8 @@ describe('useGroupsHub', () => {
   it('hydrates cached hub data before the network resolves (stale-while-revalidate)', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    let resolveFetch!: (value: FetchGroupsResult) => void;
-    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+    let resolveFetch!: (payload: AxiosPayload) => void;
+    mockedAxiosGet.mockReturnValueOnce(new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -177,18 +216,18 @@ describe('useGroupsHub', () => {
     expect(result.current.isLoading).toBe(true);
 
     await act(async () => {
-      resolveFetch({ status: 200, data: { owned: [{ id: 'g-fresh' }], joined: [], pendingInvites: [] } });
+      resolveFetch(groupsPayload(200, [{ id: 'g-fresh', owner_id: USER_ID }]));
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.data).toEqual({ owned: [{ id: 'g-fresh' }], joined: [], pendingInvites: [] });
+    expect(result.current.data).toEqual(HUB_FRESH);
   });
 
   it('sets the error but retains cached data when the fetch fails', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    mockedFetchGroups.mockResolvedValue({ status: 500, data: { error: 'boom' } });
+    mockedAxiosGet.mockResolvedValue({ status: 500, data: { error: 'boom' } });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -200,12 +239,12 @@ describe('useGroupsHub', () => {
     expect(result.current.data).toEqual(HUB);
   });
 
-  it('sets the thrown error but retains cached data and clears isLoading when fetchGroups rejects', async () => {
+  it('sets the error but retains cached data and clears isLoading when the transport crashes', async () => {
     jest.useFakeTimers();
 
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    mockedFetchGroups.mockRejectedValue(new Error('non-axios crash'));
+    mockedAxiosGet.mockRejectedValue(new Error('non-axios crash'));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -215,21 +254,18 @@ describe('useGroupsHub', () => {
       await jest.advanceTimersByTimeAsync(1600);
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(3);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(3);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toEqual(new Error('non-axios crash'));
     expect(result.current.data).toEqual(HUB);
   });
 
   it('drops the previous user hub and hydrates the next user cache when identity changes', async () => {
-    await AsyncStorage.setItem('groupsHub:user-2', JSON.stringify({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] }));
+    await AsyncStorage.setItem('groupsHub:user-2', JSON.stringify(G2B_HUB));
 
-    mockedFetchGroups
-      .mockResolvedValueOnce({ status: 200, data: HUB })
-      .mockResolvedValue({
-        status: 200,
-        data: { owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] },
-      });
+    mockedAxiosGet
+      .mockResolvedValueOnce(groupsPayload(200, SERVER_ROWS))
+      .mockResolvedValue(groupsPayload(200, G2B_SERVER_ROWS));
 
     const auth = { token: TOKEN, userId: USER_ID };
     const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
@@ -243,14 +279,14 @@ describe('useGroupsHub', () => {
     auth.userId = 'user-2';
     rerender();
 
-    await waitFor(() => expect(result.current.data).toEqual({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] }));
+    await waitFor(() => expect(result.current.data).toEqual(G2B_HUB));
 
-    expect(fetchGroups).toHaveBeenCalledWith({ token: 'Bearer token-2', userId: 'user-2' });
+    expectGroupsRequest(2, 'Bearer token-2');
   });
 
-  it('single-flights concurrent mount and focus refresh calls into one fetch per identity', async () => {
-    let resolveFetch!: (value: FetchGroupsResult) => void;
-    mockedFetchGroups.mockImplementation(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+  it('single-flights concurrent mount and focus refresh calls into one request per identity', async () => {
+    let resolveFetch!: (payload: AxiosPayload) => void;
+    mockedAxiosGet.mockImplementation(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -268,10 +304,10 @@ describe('useGroupsHub', () => {
       await Promise.resolve();
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(1);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      resolveFetch({ status: 200, data: HUB });
+      resolveFetch(groupsPayload(200, SERVER_ROWS));
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -279,11 +315,11 @@ describe('useGroupsHub', () => {
   });
 
   it('ignores a stale flight failure that resolves after a newer identity flight succeeded', async () => {
-    let resolveStale!: (value: FetchGroupsResult) => void;
-    let resolveFresh!: (value: FetchGroupsResult) => void;
-    mockedFetchGroups
-      .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveStale = resolve; }))
-      .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFresh = resolve; }));
+    let resolveStale!: (payload: AxiosPayload) => void;
+    let resolveFresh!: (payload: AxiosPayload) => void;
+    mockedAxiosGet
+      .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveStale = resolve; }))
+      .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFresh = resolve; }));
 
     const auth = { token: TOKEN, userId: USER_ID };
     const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
@@ -307,24 +343,24 @@ describe('useGroupsHub', () => {
     expect(resolveFresh).toBeInstanceOf(Function);
 
     await act(async () => {
-      resolveFresh({ status: 200, data: { owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] } });
+      resolveFresh(groupsPayload(200, G2B_SERVER_ROWS));
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    expect(result.current.data).toEqual({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
+    expect(result.current.data).toEqual(G2B_HUB);
 
     await act(async () => {
       resolveStale({ status: 500, data: { error: 'stale' } });
     });
 
     expect(result.current.error).toBeNull();
-    expect(result.current.data).toEqual({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
+    expect(result.current.data).toEqual(G2B_HUB);
   });
 
   it('retries a transport-level failure (no status) within the 3-attempt budget and surfaces the success', async () => {
-    mockedFetchGroups
-      .mockResolvedValueOnce({ data: { message: 'Network Error' } })
-      .mockResolvedValueOnce({ status: 200, data: HUB });
+    mockedAxiosGet
+      .mockRejectedValueOnce({ message: 'Network Error' })
+      .mockResolvedValueOnce(groupsPayload(200, SERVER_ROWS));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -332,7 +368,7 @@ describe('useGroupsHub', () => {
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(fetchGroups).toHaveBeenCalledTimes(2);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
     expect(result.current.error).toBeNull();
     expect(result.current.data).toEqual(HUB);
     expect(result.current.isFresh).toBe(true);
@@ -340,7 +376,7 @@ describe('useGroupsHub', () => {
 
   it('retries transport failures up to 3 attempts with backoff and surfaces the error only after the last attempt', async () => {
     jest.useFakeTimers();
-    mockedFetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
+    mockedAxiosGet.mockRejectedValue({ message: 'Network Error' });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -350,7 +386,7 @@ describe('useGroupsHub', () => {
       await jest.advanceTimersByTimeAsync(0);
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(2);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
     expect(result.current.error).toBeNull();
     expect(result.current.isLoading).toBe(true);
 
@@ -358,7 +394,7 @@ describe('useGroupsHub', () => {
       await jest.advanceTimersByTimeAsync(1500);
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(3);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(3);
     expect(result.current.isLoading).toBe(false);
     expect(result.current.error).toEqual({ message: 'Network Error' });
     expect(result.current.isFresh).toBe(false);
@@ -373,9 +409,9 @@ describe('useGroupsHub', () => {
 
   it('succeeds on the second transport attempt without surfacing an error', async () => {
     jest.useFakeTimers();
-    mockedFetchGroups
-      .mockResolvedValueOnce({ data: { message: 'Network Error' } })
-      .mockResolvedValueOnce({ status: 200, data: HUB });
+    mockedAxiosGet
+      .mockRejectedValueOnce({ message: 'Network Error' })
+      .mockResolvedValueOnce(groupsPayload(200, SERVER_ROWS));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -385,7 +421,7 @@ describe('useGroupsHub', () => {
       await jest.advanceTimersByTimeAsync(100);
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(2);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
     expect(result.current.error).toBeNull();
     expect(result.current.data).toEqual(HUB);
     expect(result.current.isFresh).toBe(true);
@@ -394,7 +430,7 @@ describe('useGroupsHub', () => {
 
   it('surfaces the error after all transport attempts fail and still allows manual retry', async () => {
     jest.useFakeTimers();
-    mockedFetchGroups.mockResolvedValue({ data: { message: 'Network Error' } });
+    mockedAxiosGet.mockRejectedValue({ message: 'Network Error' });
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -404,11 +440,11 @@ describe('useGroupsHub', () => {
       await jest.advanceTimersByTimeAsync(1600);
     });
 
-    expect(fetchGroups).toHaveBeenCalledTimes(3);
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(3);
     expect(result.current.error).toEqual({ message: 'Network Error' });
     expect(result.current.isFresh).toBe(false);
 
-    mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
+    mockedAxiosGet.mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
     await act(async () => {
       await result.current.refresh();
@@ -421,8 +457,8 @@ describe('useGroupsHub', () => {
   it('marks isFresh false while cache-hydrated and true only after the 200 applies', async () => {
     await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
 
-    let resolveFetch!: (value: FetchGroupsResult) => void;
-    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+    let resolveFetch!: (payload: AxiosPayload) => void;
+    mockedAxiosGet.mockReturnValueOnce(new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -437,7 +473,7 @@ describe('useGroupsHub', () => {
     expect(result.current.isFresh).toBe(false);
 
     await act(async () => {
-      resolveFetch({ status: 200, data: HUB });
+      resolveFetch(groupsPayload(200, SERVER_ROWS));
     });
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -447,8 +483,8 @@ describe('useGroupsHub', () => {
   });
 
   it('does not emit a React state-update warning when refresh resolves after unmount', async () => {
-    let resolveRefresh!: (value: FetchGroupsResult) => void;
-    mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => {
+    let resolveRefresh!: (payload: AxiosPayload) => void;
+    mockedAxiosGet.mockReturnValueOnce(new Promise<AxiosPayload>((resolve) => {
       resolveRefresh = resolve;
     }));
 
@@ -463,10 +499,7 @@ describe('useGroupsHub', () => {
     unmount();
 
     await act(async () => {
-      resolveRefresh({
-        status: 200,
-        data: { owned: [{ id: 'g-late' }], joined: [], pendingInvites: [] },
-      });
+      resolveRefresh(groupsPayload(200, [{ id: 'g-late', owner_id: USER_ID }]));
     });
 
     const reactWarningCalls = consoleError.mock.calls.filter((args) =>
@@ -485,16 +518,8 @@ describe('useGroupsHub', () => {
       exception: '#<ActionController::RoutingError: No route matches>',
     };
 
-    const REJECTED_RETURN = {
-      status: 404,
-      data: ERROR_BODY,
-      payloadInvalid: true,
-      rawBodyType: 'object',
-      rawBodySample: '{"status":404,"error":"Not Found","exception":"#<ActionController::RoutingError...',
-    };
-
     it('surfaces the error state, not empty data, when a 200 wraps an error body', async () => {
-      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedAxiosGet.mockResolvedValue({ status: 200, data: ERROR_BODY });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -508,7 +533,7 @@ describe('useGroupsHub', () => {
       expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('groupsHub:user-1', expect.any(String));
 
       expect(warn).toHaveBeenCalledWith('[useGroupsHub] groups payload rejected', {
-        bodySample: '{"status":404,"error":"Not Found","exception":"#<ActionController::RoutingError...',
+        bodySample: '{"status":404,"error":"Not Found","exception":"#<ActionController::RoutingError: No route matches>"}',
         rawType: 'object',
         bodyStatus: 404,
       });
@@ -519,7 +544,7 @@ describe('useGroupsHub', () => {
       jest.useFakeTimers();
 
       publish(`${TOKEN}|${USER_ID}`, HUB);
-      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedAxiosGet.mockResolvedValue({ status: 200, data: ERROR_BODY });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -542,7 +567,7 @@ describe('useGroupsHub', () => {
     it('does not publish a rejected payload to the shared hub store', async () => {
       jest.useFakeTimers();
 
-      mockedFetchGroups.mockResolvedValue(REJECTED_RETURN);
+      mockedAxiosGet.mockResolvedValue({ status: 200, data: ERROR_BODY });
 
       renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -561,7 +586,7 @@ describe('useGroupsHub', () => {
 
     it('applies a well-formed empty 200 immediately with no confirmation refetch or pending timers', async () => {
       jest.useFakeTimers();
-      mockedFetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
+      mockedAxiosGet.mockResolvedValue(groupsPayload(200, []));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -571,7 +596,7 @@ describe('useGroupsHub', () => {
         await jest.advanceTimersByTimeAsync(0);
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
       expect(result.current.data).toEqual(EMPTY);
       expect(result.current.isFresh).toBe(true);
       expect(result.current.isLoading).toBe(false);
@@ -585,7 +610,7 @@ describe('useGroupsHub', () => {
       await act(async () => {
         await jest.advanceTimersByTimeAsync(3000);
       });
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
       expect(jest.getTimerCount()).toBe(0);
 
       expect(warn).toHaveBeenCalledWith('[useGroupsHub] 200 with empty groups payload', expect.objectContaining({
@@ -597,7 +622,7 @@ describe('useGroupsHub', () => {
       jest.useFakeTimers();
 
       await AsyncStorage.setItem('groupsHub:user-1', JSON.stringify(HUB));
-      mockedFetchGroups.mockResolvedValue({ status: 200, data: EMPTY });
+      mockedAxiosGet.mockResolvedValue(groupsPayload(200, []));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -607,7 +632,7 @@ describe('useGroupsHub', () => {
         await jest.advanceTimersByTimeAsync(0);
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
       expect(result.current.data).toEqual(EMPTY);
       expect(result.current.isFresh).toBe(true);
       expect(result.current.isLoading).toBe(false);
@@ -619,12 +644,7 @@ describe('useGroupsHub', () => {
 
     it('emits the raw-body diagnostic warn on an empty 200', async () => {
       jest.useFakeTimers();
-      mockedFetchGroups.mockResolvedValue({
-        status: 200,
-        data: EMPTY,
-        rawBodyType: 'string',
-        rawBodySample: '<html>gateway error</html>',
-      });
+      mockedAxiosGet.mockResolvedValue(groupsPayload(200, []));
 
       renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -636,8 +656,8 @@ describe('useGroupsHub', () => {
 
       expect(warn).toHaveBeenCalledWith('[useGroupsHub] 200 with empty groups payload', {
         hadCachedData: false,
-        rawType: 'string',
-        bodySample: '<html>gateway error</html>',
+        rawType: 'object',
+        bodySample: '{"data":[]}',
       });
     });
   });
@@ -645,9 +665,9 @@ describe('useGroupsHub', () => {
   describe('shared hub store integration', () => {
     it('shares one retried transport flight across concurrently mounted instances', async () => {
       jest.useFakeTimers();
-      mockedFetchGroups
-        .mockResolvedValueOnce({ data: { message: 'Network Error' } })
-        .mockResolvedValue({ status: 200, data: HUB });
+      mockedAxiosGet
+        .mockRejectedValueOnce({ message: 'Network Error' })
+        .mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
       const wrapper = makeWrapper({ token: TOKEN, userId: USER_ID });
       const instanceA = renderHook(() => useGroupsHub(), { wrapper });
@@ -657,7 +677,7 @@ describe('useGroupsHub', () => {
         await jest.advanceTimersByTimeAsync(2000);
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
 
       expect(instanceA.result.current.data).toEqual(HUB);
       expect(instanceA.result.current.error).toBeNull();
@@ -671,8 +691,8 @@ describe('useGroupsHub', () => {
     });
 
     it('heals instances from a store publish that lands between mount and a non-200 shared-flight resolution', async () => {
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups.mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet.mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
       const wrapper = makeWrapper({ token: TOKEN, userId: USER_ID });
       const instanceA = renderHook(() => useGroupsHub(), { wrapper });
@@ -683,7 +703,7 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
       });
       expect(resolveFetch).toBeInstanceOf(Function);
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
       act(() => {
         publish(`${TOKEN}|${USER_ID}`, HUB);
@@ -704,7 +724,7 @@ describe('useGroupsHub', () => {
     });
 
     it('still sets the error on a 4xx when the store has no matching snapshot', async () => {
-      mockedFetchGroups.mockResolvedValue({ status: 401, data: { error: 'unauthorized' } });
+      mockedAxiosGet.mockResolvedValue({ status: 401, data: { error: 'unauthorized' } });
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -720,8 +740,8 @@ describe('useGroupsHub', () => {
     it('hydrates from the store snapshot synchronously on mount, before the cache and network', async () => {
       publish(`${TOKEN}|${USER_ID}`, HUB);
 
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet.mockReturnValueOnce(new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -738,16 +758,16 @@ describe('useGroupsHub', () => {
       expect(result.current.data).toEqual(HUB);
 
       await act(async () => {
-        resolveFetch({ status: 200, data: { owned: [{ id: 'g-fresh' }], joined: [], pendingInvites: [] } });
+        resolveFetch(groupsPayload(200, [{ id: 'g-fresh', owner_id: USER_ID }]));
       });
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
-      expect(result.current.data).toEqual({ owned: [{ id: 'g-fresh' }], joined: [], pendingInvites: [] });
+      expect(result.current.data).toEqual(HUB_FRESH);
     });
 
     it('ignores a publish for a different identity and adopts the matching one', async () => {
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups.mockReturnValueOnce(new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet.mockReturnValueOnce(new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -778,12 +798,12 @@ describe('useGroupsHub', () => {
 
     it('hydrates the new identity from the store snapshot when the identity changes', async () => {
       jest.useFakeTimers();
-      publish('Bearer token-2|user-2', { owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
+      publish('Bearer token-2|user-2', G2B_HUB);
 
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups
-        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }))
-        .mockResolvedValueOnce({ status: 200, data: { owned: [{ id: 'g-2b-fresh' }], joined: [], pendingInvites: [] } });
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }))
+        .mockResolvedValueOnce(groupsPayload(200, [{ id: 'g-2b-fresh', owner_id: 'user-2' }]));
 
       const auth = { token: TOKEN, userId: USER_ID };
       const { result, rerender } = renderHook((_props: void) => useGroupsHub(), {
@@ -800,24 +820,28 @@ describe('useGroupsHub', () => {
       auth.userId = 'user-2';
       rerender();
 
-      expect(result.current.data).toEqual({ owned: [{ id: 'g-2b' }], joined: [], pendingInvites: [] });
+      expect(result.current.data).toEqual(G2B_HUB);
       expect(result.current.isLoading).toBe(true);
 
       await act(async () => {
-        resolveFetch({ status: 200, data: { owned: [{ id: 'g-2b-stale' }], joined: [], pendingInvites: [] } });
+        resolveFetch(groupsPayload(200, [{ id: 'g-2b-stale', owner_id: 'user-2' }]));
         await jest.advanceTimersByTimeAsync(100);
       });
 
       expect(result.current.isLoading).toBe(false);
-      expect(result.current.data).toEqual({ owned: [{ id: 'g-2b-fresh' }], joined: [], pendingInvites: [] });
+      expect(result.current.data).toEqual({
+        owned: [{ id: 'g-2b-fresh', owner_id: 'user-2', role: 'owner' }],
+        joined: [],
+        pendingInvites: [],
+      });
       expect(result.current.error).toBeNull();
     });
   });
 
   describe('cross-instance shared flight dedup', () => {
-    it('collapses two concurrently mounted instances with the same identity into one fetchGroups call', async () => {
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups.mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+    it('collapses two concurrently mounted instances with the same identity into one request', async () => {
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet.mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
       const wrapper = makeWrapper({ token: TOKEN, userId: USER_ID });
       const instanceA = renderHook(() => useGroupsHub(), { wrapper });
@@ -828,10 +852,10 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
       await act(async () => {
-        resolveFetch({ status: 200, data: HUB });
+        resolveFetch(groupsPayload(200, SERVER_ROWS));
       });
 
       await waitFor(() => expect(instanceA.result.current.isLoading).toBe(false));
@@ -847,32 +871,36 @@ describe('useGroupsHub', () => {
     });
 
     it('starts a new shared flight when refreshing after the previous flight completed', async () => {
-      mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
+      mockedAxiosGet.mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
       });
 
       await waitFor(() => expect(result.current.isLoading).toBe(false));
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
       await act(async () => {
         await result.current.refresh();
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
       expect(result.current.data).toEqual(HUB);
       expect(result.current.isFresh).toBe(true);
     });
 
     it('never shares a flight across different identities', async () => {
-      let resolveA!: (value: FetchGroupsResult) => void;
-      let resolveB!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups
-        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveA = resolve; }))
-        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveB = resolve; }));
+      let resolveA!: (payload: AxiosPayload) => void;
+      let resolveB!: (payload: AxiosPayload) => void;
+      mockedAxiosGet
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveA = resolve; }))
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveB = resolve; }));
 
-      const HUB_B: GroupsHubData = { owned: [{ id: 'g-b1' }], joined: [], pendingInvites: [] };
+      const HUB_B: GroupsHubData = {
+        owned: [{ id: 'g-b1', owner_id: 'user-2', role: 'owner' }],
+        joined: [],
+        pendingInvites: [],
+      };
 
       const instanceA = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -886,13 +914,13 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
-      expect(fetchGroups).toHaveBeenCalledWith({ token: TOKEN, userId: USER_ID });
-      expect(fetchGroups).toHaveBeenCalledWith({ token: 'Bearer token-2', userId: 'user-2' });
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
+      expectGroupsRequest(1, TOKEN);
+      expectGroupsRequest(2, 'Bearer token-2');
 
       await act(async () => {
-        resolveA({ status: 200, data: HUB });
-        resolveB({ status: 200, data: HUB_B });
+        resolveA(groupsPayload(200, SERVER_ROWS));
+        resolveB(groupsPayload(200, [{ id: 'g-b1', owner_id: 'user-2' }]));
       });
 
       await waitFor(() => expect(instanceA.result.current.data).toEqual(HUB));
@@ -903,13 +931,17 @@ describe('useGroupsHub', () => {
     });
 
     it('applies the joined outcome under the joiner own seq: a stale shared result never clobbers a newer flight', async () => {
-      let resolveStale!: (value: FetchGroupsResult) => void;
-      let resolveFresh!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups
-        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveStale = resolve; }))
-        .mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFresh = resolve; }));
+      let resolveStale!: (payload: AxiosPayload) => void;
+      let resolveFresh!: (payload: AxiosPayload) => void;
+      mockedAxiosGet
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveStale = resolve; }))
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFresh = resolve; }));
 
-      const HUB2: GroupsHubData = { owned: [{ id: 'g-2x' }], joined: [], pendingInvites: [] };
+      const HUB2: GroupsHubData = {
+        owned: [{ id: 'g-2x', owner_id: 'user-2', role: 'owner' }],
+        joined: [],
+        pendingInvites: [],
+      };
 
       const auth = { token: TOKEN, userId: USER_ID };
       const wrapper = makeWrapper(auth);
@@ -920,7 +952,7 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
       expect(resolveStale).toBeInstanceOf(Function);
 
       auth.token = 'Bearer token-2';
@@ -933,17 +965,17 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
       });
       expect(resolveFresh).toBeInstanceOf(Function);
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
 
       await act(async () => {
-        resolveFresh({ status: 200, data: HUB2 });
+        resolveFresh(groupsPayload(200, [{ id: 'g-2x', owner_id: 'user-2' }]));
       });
 
       await waitFor(() => expect(instanceA.result.current.data).toEqual(HUB2));
       await waitFor(() => expect(instanceB.result.current.data).toEqual(HUB2));
 
       await act(async () => {
-        resolveStale({ status: 200, data: HUB });
+        resolveStale(groupsPayload(200, SERVER_ROWS));
       });
 
       expect(instanceA.result.current.data).toEqual(HUB2);
@@ -953,8 +985,8 @@ describe('useGroupsHub', () => {
     });
 
     it('lets the joiner complete the shared flight after the starter unmounts mid-flight', async () => {
-      let resolveFetch!: (value: FetchGroupsResult) => void;
-      mockedFetchGroups.mockImplementationOnce(() => new Promise<FetchGroupsResult>((resolve) => { resolveFetch = resolve; }));
+      let resolveFetch!: (payload: AxiosPayload) => void;
+      mockedAxiosGet.mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }));
 
       const wrapper = makeWrapper({ token: TOKEN, userId: USER_ID });
       const starter = renderHook(() => useGroupsHub(), { wrapper });
@@ -964,12 +996,12 @@ describe('useGroupsHub', () => {
         await Promise.resolve();
         await Promise.resolve();
       });
-      expect(fetchGroups).toHaveBeenCalledTimes(1);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
       starter.unmount();
 
       await act(async () => {
-        resolveFetch({ status: 200, data: HUB });
+        resolveFetch(groupsPayload(200, SERVER_ROWS));
       });
 
       await waitFor(() => expect(joiner.result.current.isLoading).toBe(false));
@@ -983,7 +1015,7 @@ describe('useGroupsHub', () => {
 
   describe('hub cache write-diff', () => {
     it('writes the cache once when two identical accepted 200s land back-to-back', async () => {
-      mockedFetchGroups.mockResolvedValue({ status: 200, data: HUB });
+      mockedAxiosGet.mockResolvedValue(groupsPayload(200, SERVER_ROWS));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -995,7 +1027,7 @@ describe('useGroupsHub', () => {
         await result.current.refresh();
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
 
       const cacheWrites = jest.mocked(AsyncStorage.setItem).mock.calls
         .filter(([key]) => key === 'groupsHub:user-1');
@@ -1004,10 +1036,14 @@ describe('useGroupsHub', () => {
     });
 
     it('writes the cache again when the accepted payload changed since the last write', async () => {
-      const HUB2: GroupsHubData = { owned: [{ id: 'g-9' }], joined: [], pendingInvites: [] };
-      mockedFetchGroups
-        .mockResolvedValueOnce({ status: 200, data: HUB })
-        .mockResolvedValue({ status: 200, data: HUB2 });
+      const HUB2: GroupsHubData = {
+        owned: [{ id: 'g-9', owner_id: USER_ID, role: 'owner' }],
+        joined: [],
+        pendingInvites: [],
+      };
+      mockedAxiosGet
+        .mockResolvedValueOnce(groupsPayload(200, SERVER_ROWS))
+        .mockResolvedValue(groupsPayload(200, [{ id: 'g-9', owner_id: USER_ID }]));
 
       const { result } = renderHook(() => useGroupsHub(), {
         wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
@@ -1019,7 +1055,7 @@ describe('useGroupsHub', () => {
         await result.current.refresh();
       });
 
-      expect(fetchGroups).toHaveBeenCalledTimes(2);
+      expect(mockedAxiosGet).toHaveBeenCalledTimes(2);
 
       const cacheWrites = jest.mocked(AsyncStorage.setItem).mock.calls
         .filter(([key]) => key === 'groupsHub:user-1');

@@ -109,6 +109,38 @@ describe('GroupsListScreen', () => {
     expect(ownedRenderer.root.findAllByProps({ testID: 'groups-list.button.create' })).toHaveLength(1);
   });
 
+  it('renders the Store entry point for a tier-0 user and routes it to the paywall with intent=store', async () => {
+    const navigation = { navigate: jest.fn() };
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    mockUseActiveGroup.mockReturnValue({ setActive: jest.fn().mockResolvedValue({ status: 200 }) });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ paidTier: 0 }}>
+          <GroupsListScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+      await Promise.resolve();
+    });
+
+    expect(renderer.root.findByProps({ testID: 'groups-list.button.create' })).toBeTruthy();
+
+    const storeButton = renderer.root.findByProps({ testID: 'groups-list.button.store' });
+    expect(storeButton).toBeTruthy();
+
+    await act(async () => {
+      storeButton.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });
+  });
+
   it('calls setActive with the tapped group id and then navigates to PrivateHomeScreen with private scope', async () => {
     const navigation = { navigate: jest.fn() };
     const setActive = jest.fn().mockResolvedValue({ status: 200 });

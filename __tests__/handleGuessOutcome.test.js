@@ -35,10 +35,6 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-jest.mock('../utils/scoreRequests', () => ({
-  submitScoreBatch: jest.fn(),
-}));
-
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   __deletedFiles as deletedFiles,

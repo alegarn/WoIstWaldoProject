@@ -1,111 +1,195 @@
-jest.mock('../../utils/scoreRequests', () => ({
-  getRankingData: jest.fn(),
-  getUserScores: jest.fn(),
-}));
+// Private-scope behavior for the screens shared by public and private games.
+//
+// Renders the REAL screens (GuessScreen, HideScreen, RankingScreen) and drives
+// user-visible interactions (taps on instructions, picture surface, validation
+// modal). Asserts the observable private-scope contracts:
+// - a private win banks the buffered score under the group scope and keeps the
+//   player in the game (never routes to ResultScreen/AdScreen)
+// - a private hide flow carries the group scope into the SetInstructions step
+// - a private ranking reads the group leaderboard endpoint, not the public one
+//
+// Boundary mocks only:
+// - react-native-gesture-handler (native gestures; Pan handlers are captured so
+//   the real ShowPicture subtree renders under jest)
+// - @react-native-vector-icons/ionicons (native font component)
+// - react-native-google-mobile-ads (native SDK)
+// - expo-screen-orientation (native)
+// - expo-file-system (native file system; cached deck files "exist", deletes
+//   are recorded no-ops)
+// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   stateful fake; the private deck and the buffered score are seeded/asserted
+//   through it)
+// - services/cardDeck (the server deck boundary; fetchCardBatch answers empty
+//   so top-ups/prefetch hit no network)
+// - axios (HTTP boundary for the leaderboard)
+//
+// Everything else (hit-testing, resolve lifecycle, score buffering, streak,
+// ad cadence, group feed cache, i18n) runs REAL. Assertions target rendered
+// output, AsyncStorage state, and navigation calls.
 
-jest.mock('../../utils/targetLocation', () => ({
-  isOnTarget: jest.fn(),
-}));
+const mockPanGestures = [];
 
-jest.mock('../../components/Picture/GuessPicture', () => {
-  const React = require('react');
-  return function MockGuessPicture(props) {
-    return React.createElement('GuessPicture', props);
-  };
-});
-
-jest.mock('../../components/Picture/HidePicture', () => {
-  const React = require('react');
-  return function MockHidePicture(props) {
-    return React.createElement('HidePicture', props);
-  };
-});
-
-jest.mock('../../components/UI/TutorialOverlay', () => () => null);
-
-jest.mock('../../components/UI/TableComponent', () => {
-  const React = require('react');
-  return function MockTableComponent() {
-    return React.createElement('TableComponent');
-  };
-});
-
-jest.mock('../../components/UI/LoadingOverlay', () => () => null);
-
-jest.mock('../../components/Guess/SuccessOverlay', () => () => null);
-
-// GuessScreen renders a localized <GestureHandlerRootView>; stub it so the
-// screen renders under jest (RNGH's real root calls a native install()).
 jest.mock('react-native-gesture-handler', () => {
-  const React = require('react');
+  const React = jest.requireActual('react');
+  const makePan = () => {
+    const gesture = {};
+    mockPanGestures.push(gesture);
+    for (const chain of ['activeOffsetX', 'activeOffsetY', 'failOffsetX', 'failOffsetY', 'enabled']) {
+      gesture[chain] = () => gesture;
+    }
+    for (const cb of ['onBegin', 'onUpdate', 'onEnd', 'onFinalize']) {
+      gesture[cb] = (handler) => {
+        gesture[`${cb}Handler`] = handler;
+        return gesture;
+      };
+    }
+    return gesture;
+  };
   return {
     GestureHandlerRootView: ({ children }) =>
       React.createElement('GestureHandlerRootView', null, children),
+    GestureDetector: ({ children }) => React.createElement(React.Fragment, null, children),
+    Gesture: { Pan: makePan },
   };
 });
 
-jest.mock('../../utils/handleGuessOutcome', () => ({
-  applySuccessSideEffects: jest.fn(),
-  resolveNextGuessParams: jest.fn(),
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  __esModule: true,
+  default: () => null,
+  Ionicons: () => null,
 }));
 
-jest.mock('../../utils/guessNavigation', () => ({
-  navigateToNextGuess: jest.fn(),
+jest.mock('react-native-google-mobile-ads', () => ({
+  TestIds: { INTERSTITIAL: 'test-interstitial-id' },
+  useInterstitialAd: jest.fn(() => ({ load: jest.fn(), isLoaded: false })),
 }));
 
-jest.mock('../../hooks/useActiveGroup', () => ({
-  useActiveGroup: () => ({
-    scope: { kind: 'public' },
-    activeGroupId: null,
-    setActive: jest.fn(),
-    clear: jest.fn(),
-  }),
+jest.mock('expo-screen-orientation', () => ({
+  getOrientationAsync: jest.fn().mockResolvedValue(3),
+  getOrientationLockAsync: jest.fn().mockResolvedValue('PORTRAIT_UP'),
+  lockAsync: jest.fn().mockResolvedValue(undefined),
+  OrientationLock: {
+    PORTRAIT_UP: 'PORTRAIT_UP',
+    PORTRAIT_DOWN: 'PORTRAIT_DOWN',
+    LANDSCAPE_LEFT: 'LANDSCAPE_LEFT',
+    LANDSCAPE_RIGHT: 'LANDSCAPE_RIGHT',
+  },
 }));
 
-jest.mock('../../hooks/useGroupsHub', () => ({
-  useGroupsHub: () => ({ data: null, isLoading: false, error: null, refresh: jest.fn() }),
-}));
-
-jest.mock('../../store/auth-context', () => {
-  const React = require('react');
+jest.mock('expo-file-system', () => {
+  class File {
+    constructor(_uri) {}
+    get exists() {
+      return true;
+    }
+    delete() {}
+    create() {}
+  }
   return {
-    AuthContext: React.createContext({ token: 'Bearer token-1', userId: 'user-1' }),
+    File,
+    Paths: { cache: 'file:///cache/', document: 'file:///documents/' },
+    documentDirectory: 'file:///documents/',
+    cacheDirectory: 'file:///cache/',
+    getInfoAsync: jest.fn().mockResolvedValue({ exists: true }),
+    downloadAsync: jest.fn().mockResolvedValue({ uri: 'file:///cache/x', status: 200 }),
+    readAsStringAsync: jest.fn().mockResolvedValue(''),
+    writeAsStringAsync: jest.fn().mockResolvedValue(undefined),
+    deleteAsync: jest.fn().mockResolvedValue(undefined),
+    makeDirectoryAsync: jest.fn().mockResolvedValue(undefined),
+    moveAsync: jest.fn().mockResolvedValue(undefined),
+    copyAsync: jest.fn().mockResolvedValue(undefined),
+  };
+});
+
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('../helpers/statefulAsyncStorageMock')({ autoReset: true }),
+);
+
+jest.mock('axios', () => ({
+  __esModule: true,
+  default: {
+    get: jest.fn(),
+    post: jest.fn(),
+    put: jest.fn(),
+    interceptors: {
+      request: { use: jest.fn() },
+      response: { use: jest.fn() },
+    },
+  },
+}));
+
+// Server deck boundary: the server never has cards in this suite, so
+// prefetch/top-up noise resolves to empty without touching axios.
+jest.mock('../../services/cardDeck', () => {
+  const actual = jest.requireActual('../../services/cardDeck');
+  return {
+    ...actual,
+    fetchCardBatch: jest.fn().mockResolvedValue({ isError: false, images: [] }),
+    probeAllPoolForUnplayed: jest.fn().mockResolvedValue({ status: 'exhausted' }),
   };
 });
 
 import React from 'react';
-import { Dimensions } from 'react-native';
-import { act, create } from 'react-test-renderer';
+import { AppState } from 'react-native';
+import { act, fireEvent, render } from '@testing-library/react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import axios from 'axios';
 
 import GuessScreen from '../../screens/GuessScreens/GuessScreen';
 import HideScreen from '../../screens/HideScreens/HideScreen';
 import RankingScreen from '../../screens/RankingScreen';
-import SuccessOverlay from '../../components/Guess/SuccessOverlay';
-import { isOnTarget } from '../../utils/targetLocation';
-import { getRankingData } from '../../utils/scoreRequests';
-import { applySuccessSideEffects, resolveNextGuessParams } from '../../utils/handleGuessOutcome';
+import { AuthContext } from '../../store/auth-context';
 
 const PRIVATE_SCOPE = { kind: 'private', groupId: 'g-123' };
 
-describe('reused screens — private scope wiring', () => {
-  beforeEach(() => {
-    jest.clearAllMocks();
-    jest.spyOn(Dimensions, 'get').mockReturnValue({
-      width: 320,
-      height: 640,
-      scale: 1,
-      fontScale: 1,
-    });
-  });
+const AUTH = {
+  token: 'Bearer token-1',
+  uid: 'uid-1',
+  expiry: 'never',
+  access_token: 'access-1',
+  client: 'client-1',
+  userId: 'user-1',
+};
 
-  afterEach(() => {
-    Dimensions.get.mockRestore();
-  });
+function makeNav() {
+  return {
+    replace: jest.fn(),
+    setParams: jest.fn(),
+    popToTop: jest.fn(),
+    navigate: jest.fn(),
+    goBack: jest.fn(),
+    reset: jest.fn(),
+    setOptions: jest.fn(),
+    addListener: jest.fn(() => () => {}),
+  };
+}
 
-  it('GuessScreen on private success buffers side effects with scope and never routes to AdScreen/ResultScreen', async () => {
-    const navigation = { replace: jest.fn(), setParams: jest.fn() };
-    const route = {
-      params: {
+const flush = async () => {
+  await act(async () => {
+    for (let i = 0; i < 30; i++) {
+      await Promise.resolve();
+    }
+  });
+};
+
+describe('private scope games', () => {
+  describe('GuessScreen', () => {
+    // Manual wall clock: the win overlay and hint animations run on
+    // Animated/rAF, so the suite drives Date.now() + the timer queue in
+    // lockstep (same harness as __tests__/GuessScreen.test.tsx).
+    let mockClockMs = 0;
+
+    function useFakeAnimationTimers() {
+      jest.useFakeTimers();
+      mockClockMs = 0;
+      jest.spyOn(Date, 'now').mockImplementation(() => mockClockMs);
+      jest.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) =>
+        setTimeout(() => cb(jest.now()), 16),
+      );
+    }
+
+    function privateGuessParams() {
+      return {
         imageFile: 'file:///waldo.jpg',
         pictureId: 'img-1',
         description: 'Find Waldo',
@@ -115,91 +199,166 @@ describe('reused screens — private scope wiring', () => {
         hiddenLocation: { x: 0.5, y: 0.5 },
         listId: 1,
         isTutorial: false,
+        skipInstructions: true,
         category: { id: 'cat-1', key: 'nature' },
         language: 'fr',
         scope: PRIVATE_SCOPE,
-      },
-    };
-    isOnTarget.mockReturnValue(true);
-    applySuccessSideEffects.mockResolvedValue(undefined);
-    resolveNextGuessParams.mockResolvedValue({ params: { listId: 2 } });
-
-    let renderer;
-    await act(async () => {
-      renderer = create(<GuessScreen navigation={navigation} route={route} />);
-    });
-
-    const guessPictureInstance = renderer.root.findByType('GuessPicture');
-
-    await act(async () => {
-      guessPictureInstance.props.toAdScreen({ location: { x: 0.5, y: 0.5 } });
-    });
-
-    const successOverlayInstance = renderer.root.findByType(SuccessOverlay);
-    await act(async () => {
-      await successOverlayInstance.props.onDone();
-    });
-
-    expect(applySuccessSideEffects).toHaveBeenCalledWith(
-      expect.objectContaining({ scope: PRIVATE_SCOPE })
-    );
-
-    const targets = navigation.replace.mock.calls.map(([target]) => target);
-    expect(targets).not.toContain('AdScreen');
-    expect(targets).not.toContain('ResultScreen');
-  });
-
-  it('HideScreen forwards the private scope into HidePicture so the hide flow stays scoped', async () => {
-    const navigation = { navigate: jest.fn(), replace: jest.fn() };
-    const route = {
-      params: {
-        uri: 'file:///hide.jpg',
-        imageHeight: 1200,
-        imageWidth: 800,
-        isPortrait: true,
-        isTutorial: false,
-        scope: PRIVATE_SCOPE,
-      },
-    };
-
-    let renderer;
-    await act(async () => {
-      renderer = create(<HideScreen navigation={navigation} route={route} />);
-    });
-
-    const hidePictureProps = renderer.root.findByType('HidePicture').props;
-    expect(hidePictureProps.scope).toEqual(PRIVATE_SCOPE);
-
-    expect(hidePictureProps.navigation).toBe(navigation);
-
-    // Regression: the hide path must host ShowPicture's GestureDetectors in a
-    // localized RNGH root (mirror of GuessScreen) or RNGH throws at mount.
-    expect(renderer.root.findByType('GestureHandlerRootView')).toBeTruthy();
-  });
-
-  it('RankingScreen calls getRankingData with the private group scope (not the public "initial" string)', async () => {
-    getRankingData.mockResolvedValue({
-      status: 200,
-      data: { rows: [], nextCursor: null, hasMore: false },
-    });
-
-    const navigation = { setOptions: jest.fn(), replace: jest.fn() };
-    const route = { params: { scope: PRIVATE_SCOPE } };
-
-    await act(async () => {
-      create(<RankingScreen route={route} navigation={navigation} />);
-      await Promise.resolve();
-      await Promise.resolve();
-    });
-
-    expect(getRankingData).toHaveBeenCalledWith(
-      expect.objectContaining({ token: 'Bearer token-1' }),
-      expect.objectContaining({ scope: PRIVATE_SCOPE })
-    );
-
-    const allCalls = getRankingData.mock.calls;
-    for (const call of allCalls) {
-      expect(call[1].scope).not.toBe('initial');
+      };
     }
+
+    async function seedGroupDeck(cards) {
+      // Key shape from services/groups/groupFeedCache (categoryId, language).
+      await AsyncStorage.setItem('groupFeed:g-123:cat-1:fr', JSON.stringify(cards));
+    }
+
+    async function confirmGuess(screen) {
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      });
+      await flush();
+    }
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+      delete process.env.EXPO_PUBLIC_E2E_MODE;
+      useFakeAnimationTimers();
+      jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }));
+    });
+
+    afterEach(() => {
+      jest.restoreAllMocks();
+      jest.useRealTimers();
+    });
+
+    it('a correct guess banks the score under the group scope and keeps the player in the game', async () => {
+      await seedGroupDeck([
+        { pictureId: 'img-1', imageFile: 'file:///waldo.jpg', listId: 1 },
+        { pictureId: 'img-2', imageFile: 'file:///waldo-2.jpg', listId: 2 },
+      ]);
+      const navigation = makeNav();
+      const screen = render(
+        <AuthContext.Provider value={AUTH}>
+          <GuessScreen navigation={navigation} route={{ params: privateGuessParams() }} />
+        </AuthContext.Provider>,
+      );
+
+      await confirmGuess(screen);
+
+      expect(screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+      expect(navigation.replace).not.toHaveBeenCalled();
+      expect(navigation.navigate).not.toHaveBeenCalled();
+
+      const buffered = JSON.parse(await AsyncStorage.getItem('pendingScoreEvents'));
+      expect(buffered).toHaveLength(1);
+      expect(buffered[0]).toEqual(
+        expect.objectContaining({
+          scope: PRIVATE_SCOPE,
+          imageId: 'img-1',
+          pictureId: 'img-1',
+          points: 2,
+          userId: 'user-1',
+        }),
+      );
+    });
+  });
+
+  describe('HideScreen', () => {
+    it('hiding in a private group carries the group scope into the instructions step', async () => {
+      const navigation = makeNav();
+      const screen = render(
+        <HideScreen
+          navigation={navigation}
+          route={{
+            params: {
+              uri: 'file:///hide.jpg',
+              imageHeight: 1200,
+              imageWidth: 800,
+              isPortrait: true,
+              isTutorial: false,
+              scope: PRIVATE_SCOPE,
+            },
+          }}
+        />,
+      );
+
+      // The picture subtree hosts its GestureDetectors in a localized RNGH
+      // root (mirror of GuessScreen) or RNGH throws at mount.
+      const roots = screen.root.findAll((node) => node.type === 'GestureHandlerRootView');
+      expect(roots.length).toBeGreaterThanOrEqual(1);
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
+      });
+      expect(screen.queryByTestId('game.picture.hide-image')).not.toBeNull();
+
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.hide-surface'), {
+          locationX: 50,
+          locationY: 50,
+          nativeEvent: { locationX: 50, locationY: 50 },
+        });
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
+      });
+      await act(async () => {
+        fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+      });
+      await flush();
+
+      expect(navigation.navigate).toHaveBeenCalledTimes(1);
+      const [routeName, params] = navigation.navigate.mock.calls[0];
+      expect(routeName).toBe('SetInstructions');
+      expect(params.scope).toEqual(PRIVATE_SCOPE);
+    });
+  });
+
+  describe('RankingScreen', () => {
+    it('loads the private ranking from the group leaderboard endpoint, not the public scores endpoint', async () => {
+      axios.get.mockImplementation(async (url) => {
+        if (String(url).includes('/leaderboard')) {
+          return {
+            status: 200,
+            data: {
+              data: {
+                rows: [{ rank: '1', username: 'waldo', total_score: 25, max_streak: 2, user_id: 'u1' }],
+                next_cursor: null,
+                has_more: false,
+              },
+            },
+          };
+        }
+        return { status: 200, data: { owned: [], joined: [] } };
+      });
+
+      const navigation = { setOptions: jest.fn() };
+      const screen = render(
+        <AuthContext.Provider value={AUTH}>
+          <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
+        </AuthContext.Provider>,
+      );
+      await flush();
+
+      const leaderboardCalls = axios.get.mock.calls.filter(([url]) =>
+        String(url).includes('api/v1/private_groups/g-123/leaderboard'),
+      );
+      expect(leaderboardCalls).toHaveLength(1);
+      expect(leaderboardCalls[0][1].headers.Authorization).toBe('Bearer token-1');
+
+      const publicScoresCalls = axios.get.mock.calls.filter(([url]) =>
+        String(url).includes(`/users/${AUTH.userId}/scores`),
+      );
+      expect(publicScoresCalls).toHaveLength(0);
+
+      expect(screen.getByText('waldo')).toBeTruthy();
+    });
   });
 });
