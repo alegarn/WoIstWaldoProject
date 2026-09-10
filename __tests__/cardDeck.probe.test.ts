@@ -1,3 +1,13 @@
+// Behavior tests for services/cardDeck#probeAllPoolForUnplayed.
+//
+// Seam policy: getImages is the de-facto server/transport seam for cardDeck —
+// it owns the axios metadata calls, the byte downloads and the cursor
+// persistence behind one batch-result contract, so the suite mocks IT (a
+// cursor-mode server simulation) and asserts SERVED-DECK OUTCOMES at the
+// storage boundary: probe result statuses, persisted cursors, persisted decks
+// and absence of serving-cycle writes. Call shapes into the seam are not
+// asserted — paging behavior is proven by the cursor/deck states it produces.
+
 jest.mock('@react-native-async-storage/async-storage', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
@@ -120,9 +130,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'unplayed' });
-    expect(mockGetImages).toHaveBeenCalledTimes(2);
-    expect(mockGetImages.mock.calls[0][0]).toBe(b1[4].pictureId);
-    expect(mockGetImages.mock.calls[1][0]).toBe(b2[1].pictureId);
     expect(store.get('lastImageUuid:all:fr')).toBe(b3[2].pictureId);
     const deck = JSON.parse(store.get('imageList:all:fr') ?? '[]');
     expect(pictureIds(deck)).toEqual(pictureIds(b3));
@@ -148,7 +155,7 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.has('imageList:all:fr')).toBe(false);
   });
 
-  it('public sentinel: cleared before the first fetch, which is then a head fetch with cursor persist', async () => {
+  it('public sentinel: cleared before fetching, and the served batch persists a real cursor', async () => {
     const store = mockStore({
       'lastImageUuid:all:fr': '__public_feed_end__',
     });
@@ -159,12 +166,10 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
 
     expect(result).toEqual({ status: 'unplayed' });
     expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr');
-    expect(mockGetImages.mock.calls[0][0]).toBeNull();
-    expect(mockGetImages.mock.calls[0]).toHaveLength(3);
     expect(store.get('lastImageUuid:all:fr')).toBe(b1[2].pictureId);
   });
 
-  it('private sentinel: cleared under the group-scoped key before the first fetch, which is then a head fetch', async () => {
+  it('private sentinel: cleared under the group-scoped key, and the served batch persists a real group cursor', async () => {
     const scope = { kind: 'private', groupId: 'g-1' };
     const store = mockStore({
       'groupFeed:g-1:game:all:fr:cursor': '__private_feed_end__',
@@ -176,8 +181,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
 
     expect(result).toEqual({ status: 'unplayed' });
     expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('groupFeed:g-1:game:all:fr:cursor');
-    expect(mockGetImages.mock.calls[0][0]).toBeNull();
-    expect(mockGetImages.mock.calls[0]).toHaveLength(3);
     expect(store.get('groupFeed:g-1:game:all:fr:cursor')).toBe(b1[2].pictureId);
   });
 
@@ -191,7 +194,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'network' });
-    expect(mockGetImages).toHaveBeenCalledTimes(1);
     expect(store.get('lastImageUuid:all:fr')).toBe(b1[4].pictureId);
     expect(store.has('imageList:all:fr')).toBe(false);
   });
@@ -207,7 +209,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'probe-cap' });
-    expect(mockGetImages).toHaveBeenCalledTimes(20);
     expect(store.has('imageList:all:fr')).toBe(false);
   });
 
@@ -222,7 +223,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
-    expect(mockGetImages).toHaveBeenCalledTimes(1);
     expect(store.get('lastImageUuid:all:fr')).toBe(b1[4].pictureId);
     expect(store.has('imageList:all:fr')).toBe(false);
   });
@@ -239,7 +239,6 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
-    expect(mockGetImages).toHaveBeenCalledTimes(1);
     expect(store.get('playedPictureIds:group:g-1:fr')).toBe(JSON.stringify(pictureIds(playedGroup)));
     expect(
       mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:')),

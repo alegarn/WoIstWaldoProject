@@ -41,10 +41,11 @@ describe('useActiveGroup — scope derivation', () => {
   });
 
   it('derives {kind:"private", groupId} after setActive(id)', async () => {
-    setActiveGroup.mockResolvedValue({
+    const response = {
       status: 200,
       data: { active_group_id: 'group-123' },
-    });
+    };
+    setActiveGroup.mockResolvedValue(response);
 
     const { result } = renderHook(() => useActiveGroup(), {
       wrapper: ({ children }) => (
@@ -52,10 +53,16 @@ describe('useActiveGroup — scope derivation', () => {
       ),
     });
 
+    let returned;
     await act(async () => {
-      await result.current.setActive('group-123');
+      returned = await result.current.setActive('group-123');
     });
 
+    expect(setActiveGroup).toHaveBeenCalledWith(
+      { token: 'Bearer token-1', userId: 'user-1' },
+      'group-123'
+    );
+    expect(returned).toBe(response);
     expect(result.current.scope).toEqual({ kind: 'private', groupId: 'group-123' });
   });
 

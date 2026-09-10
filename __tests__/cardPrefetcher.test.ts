@@ -1,645 +1,550 @@
-jest.mock('../services/cardDeck', () => ({
-  fetchCardBatch: jest.fn(),
-  appendCardBatch: jest.fn(),
-}));
-jest.mock('../utils/storageDatum', () => ({
-  getRemainingDeckCount: jest.fn(),
-  normalizeListIds: jest.fn((cards) => cards),
-  isCategoryExhausted: jest.fn().mockResolvedValue(false),
-  markCategoryExhausted: jest.fn().mockResolvedValue(undefined),
-  updateImageList: jest.fn().mockResolvedValue([]),
-  clearExhaustedCategory: jest.fn().mockResolvedValue(undefined),
-  // Fix 2b: the real appendCardBatch (Fix 1 pin) filters played cards through
-  // this helper before dedup — passthrough keeps the pin's semantics.
-  filterPlayedCards: jest.fn((cards) => Promise.resolve(cards)),
-  // Real key builder: the REAL appendCardBatch (Fix 1 pin) derives its
-  // withScopeLock key through this export — delegating keeps the exact
-  // `cardDeck:append:...` format instead of a divergent copy.
-  deckWriteLockKey: jest.requireActual('../utils/storageDatum').deckWriteLockKey,
-}));
-jest.mock('../utils/e2eMode', () => ({ isE2EMode: jest.fn(() => false) }));
+// Behavior-driven suite: the prefetcher runs against the REAL cardDeck,
+// storageDatum, playedPictureIds and groupFeedCache modules. Only the true
+// boundaries are faked: the getImages transport seam, AsyncStorage (stateful
+// in-memory store), expo-file-system, and the E2E environment flag.
+// Outcomes are asserted through deck contents in AsyncStorage and the calls
+// the transport received — never through internal collaborator pins.
 
-import { fetchCardBatch, appendCardBatch } from '../services/cardDeck';
-import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted, clearExhaustedCategory } from '../utils/storageDatum';
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
+);
+
+jest.mock('expo-file-system', () => {
+  class MockFile {
+    uri: string;
+    exists = true;
+    delete = jest.fn();
+    constructor(base?: string | { uri?: string }, child?: string) {
+      const baseUri = typeof base === 'string' ? base : base?.uri;
+      if (baseUri === undefined) {
+        throw new Error('MockFile: missing uri');
+      }
+      this.uri = child ? `${baseUri}${child}` : baseUri;
+    }
+  }
+  return {
+    __esModule: true,
+    File: MockFile,
+    Paths: {
+      get cache() {
+        return { uri: 'file:///cache/' };
+      },
+    },
+  };
+});
+
+jest.mock('../utils/imagesRequests', () => ({
+  getImages: jest.fn(),
+}));
+
+jest.mock('../utils/e2eMode', () => ({
+  isE2EMode: jest.fn(() => false),
+}));
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getImages } from '../utils/imagesRequests';
+import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
+import { prefetchIfLow, warmAllDeckIfNeeded, __resetForTests } from '../services/cardPrefetcher';
 
-const actualCardDeck = jest.requireActual('../services/cardDeck');
-import {
-  LOW_CARD_THRESHOLD,
-  TARGET_BATCH_SIZE,
-  LOOKAHEAD_PREFETCH,
-  prefetchIfLow,
-  warmAllDeckIfNeeded,
-  __resetForTests,
-} from '../services/cardPrefetcher';
+const transport = getImages as unknown as jest.Mock;
+const e2eMock = isE2EMode as unknown as jest.Mock;
 
-const fetchMock = fetchCardBatch as jest.MockedFunction<typeof fetchCardBatch>;
-const appendMock = appendCardBatch as jest.MockedFunction<typeof appendCardBatch>;
-const remainingMock = getRemainingDeckCount as jest.MockedFunction<typeof getRemainingDeckCount>;
-const e2eMock = isE2EMode as jest.MockedFunction<typeof isE2EMode>;
-const normalizeMock = normalizeListIds as jest.MockedFunction<typeof normalizeListIds>;
-const isExhaustedMock = isCategoryExhausted as jest.MockedFunction<typeof isCategoryExhausted>;
-const markExhaustedMock = markCategoryExhausted as jest.MockedFunction<typeof markCategoryExhausted>;
-const clearExhaustedMock = clearExhaustedCategory as jest.MockedFunction<typeof clearExhaustedCategory>;
-let warnSpy: jest.SpyInstance;
+// ─── Fake feed transport ────────────────────────────────────────────────────
+// Serves cursor-paged batches per feed key (the feed key mirrors what
+// fetchCardBatch/buildFeedFilters put on the wire) and persists each served
+// batch's tail through the REAL saveLastImageUuid, exactly like the production
+// transport. A chain entry is one of:
+//   - a card batch (served when the cursor reaches it; empty array = terminal
+//     genuine-empty batch)
+//   - a full error/played-out response object
+//   - an Error (transport crash)
+//   - { deferred, cards } — a card batch gated behind a promise, so a test can
+//     park the transport mid-flight.
 
-const IMAGES = [{ listId: 1 }, { listId: 2 }, { listId: 3 }];
+type FakeCard = { pictureId: string; imageFile: string };
+type FakeErrorResponse =
+  | { isError: true; reason?: 'network' | 'server' }
+  | { isError: false; reason: 'played-out'; images: [] };
+type ChainEntry = FakeCard[] | FakeErrorResponse | Error | { deferred: Promise<void>; cards: FakeCard[] };
 
-function okResponse(images = IMAGES) {
-  return Promise.resolve({ isError: false, images });
+const feedChains = new Map<string, ChainEntry[]>();
+
+function card(pictureId: string): FakeCard {
+  return { pictureId, imageFile: `file:///cache/${pictureId}.jpg` };
 }
 
-describe('cardPrefetcher', () => {
+function cardBatch(prefix: string, count: number, startAt = 1): FakeCard[] {
+  return Array.from({ length: count }, (_, i) => card(`${prefix}${i + startAt}`));
+}
+
+function feedKeyOf(filters: {
+  category_key?: string;
+  category_id?: string;
+  scope?: { kind?: string; groupId?: string } | null;
+} | null): string {
+  const scope = filters?.scope;
+  if (scope && typeof scope === 'object' && scope.kind === 'private' && scope.groupId) {
+    return `private:${scope.groupId}:${filters?.category_id ?? 'all'}`;
+  }
+  return filters?.category_key ?? '__all__';
+}
+
+function cursorCategoryOf(filters: {
+  category_key?: string;
+  category_id?: string;
+  scope?: { kind?: string } | null;
+} | null): string {
+  const scope = filters?.scope;
+  if (scope && typeof scope === 'object' && scope.kind === 'private') {
+    return filters?.category_key ?? filters?.category_id ?? 'all';
+  }
+  return filters?.category_key ?? 'all';
+}
+
+async function serveFeed(
+  pictureId: string | null,
+  _context: unknown,
+  filters: Parameters<typeof feedKeyOf>[0],
+  ...rest: unknown[]
+) {
+  const opts = rest[0] as { persistCursor?: boolean } | undefined;
+  const batches = feedChains.get(feedKeyOf(filters)) ?? [];
+  const index = pictureId === null
+    ? 0
+    : batches.findIndex((b) => Array.isArray(b) && b.length > 0 && b[b.length - 1]!.pictureId === pictureId) + 1;
+  const entry = batches[index];
+  if (!entry) {
+    return { isError: false, reason: 'empty', images: [] };
+  }
+  if (entry instanceof Error) {
+    throw entry;
+  }
+  if (!Array.isArray(entry) && !('deferred' in entry)) {
+    return entry;
+  }
+  const cards = Array.isArray(entry) ? entry : await entry.deferred.then(() => entry.cards);
+  if (cards.length === 0) {
+    return { isError: false, reason: 'empty', images: [] };
+  }
+  if (opts?.persistCursor !== false) {
+    await saveLastImageUuid(cards[cards.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope);
+  }
+  return { isError: false, images: cards };
+}
+
+function chain(feedKey: string, entries: ChainEntry[]): void {
+  feedChains.set(feedKey, entries);
+}
+
+type TransportCall = { pictureId: string | null; filters: Record<string, unknown> };
+
+function transportCalls(): TransportCall[] {
+  return transport.mock.calls.map(([pictureId, _context, filters]) => ({
+    pictureId: pictureId as string | null,
+    filters: (filters ?? {}) as Record<string, unknown>,
+  }));
+}
+
+function callsFor(feedKey: string): TransportCall[] {
+  const privatePrefix = `private:`;
+  return transportCalls().filter((call) => {
+    const key = feedKeyOf(call.filters as Parameters<typeof feedKeyOf>[0]);
+    if (feedKey.startsWith(privatePrefix)) {
+      return key === feedKey;
+    }
+    return key === feedKey;
+  });
+}
+
+// ─── Storage helpers ────────────────────────────────────────────────────────
+
+const ALL_DECK_KEY = 'imageList:all:fr';
+const CITY_DECK_KEY = 'imageList:city:fr';
+const CITY_EXHAUSTED_KEY = 'exhaustedCategory:city:fr';
+
+async function storedDeck(key: string): Promise<Array<{ pictureId?: string; listId?: number }> | null> {
+  const raw = await AsyncStorage.getItem(key);
+  return raw ? JSON.parse(raw) : null;
+}
+
+async function seedDeck(key: string, cards: FakeCard[]): Promise<void> {
+  const numbered = cards.map((c, i) => ({ ...c, listId: i + 1 }));
+  await AsyncStorage.setItem(key, JSON.stringify(numbered));
+}
+
+async function resetStore(): Promise<void> {
+  const keys = await AsyncStorage.getAllKeys();
+  if (keys.length > 0) {
+    await AsyncStorage.multiRemove(keys);
+  }
+}
+
+// Fails deck writes for one storage key so the failure surfaces inside the
+// prefetcher's own catch (reported + deck unchanged) without rejecting the
+// transport promise itself — a rejecting transport leaves fetchCardBatch's
+// fire-and-forget `p.finally(...)` bookkeeping promise unhandled, which kills
+// the Node test process. Returns a restore function.
+function failDeckWrites(deckKey: string): () => void {
+  const stateful = (AsyncStorage.setItem as jest.Mock).getMockImplementation()!;
+  (AsyncStorage.setItem as jest.Mock).mockImplementation(
+    (key: string, value: string) => (key === deckKey ? Promise.reject(new Error('disk full')) : stateful(key, value))
+  );
+  return () => (AsyncStorage.setItem as jest.Mock).mockImplementation(stateful);
+}
+
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
+
+const PUBLIC_ARGS = { language: 'fr', scope: { kind: 'public' }, authContext: {} };
+const prefetchCity = { ...PUBLIC_ARGS, categoryKey: 'city', categoryId: 7 } as const;
+const prefetchAll = { ...PUBLIC_ARGS, categoryKey: 'all' } as const;
+const warmArgs = PUBLIC_ARGS;
+
+describe('cardPrefetcher (behavior-driven)', () => {
+  let warnSpy: jest.SpyInstance;
+
   beforeEach(() => {
+    feedChains.clear();
+    transport.mockReset();
+    transport.mockImplementation(serveFeed as never);
     __resetForTests();
-    jest.clearAllMocks();
-    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
     e2eMock.mockReturnValue(false);
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockResolvedValue({ isError: false, images: IMAGES } as never);
-    appendMock.mockResolvedValue([] as never);
-    isExhaustedMock.mockResolvedValue(false);
-    markExhaustedMock.mockResolvedValue(undefined);
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
 
   afterEach(() => {
     warnSpy.mockRestore();
   });
 
-  it('exports LOW_CARD_THRESHOLD equal to 4 (refill at ≤3 remaining)', () => {
-    expect(LOW_CARD_THRESHOLD).toBe(4);
-  });
+  describe('prefetchIfLow — when a deck runs low', () => {
+    it('prefetches when only three cards remain ahead of the cursor and grows the persisted deck', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
 
-  it('exports TARGET_BATCH_SIZE equal to 5 (single source of truth for category top-up + all-deck fill)', () => {
-    expect(TARGET_BATCH_SIZE).toBe(5);
-  });
+      await prefetchIfLow(prefetchAll);
 
-  it('exports LOOKAHEAD_PREFETCH equal to 3', () => {
-    expect(LOOKAHEAD_PREFETCH).toBe(3);
-  });
-
-  it('does not fetch when count >= LOW_CARD_THRESHOLD', async () => {
-    remainingMock.mockResolvedValue(12);
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(appendMock).not.toHaveBeenCalled();
-  });
-
-  it('fetches and appends when count < LOW_CARD_THRESHOLD', async () => {
-    remainingMock.mockResolvedValue(2);
-
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: { token: 'x' } });
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith({
-      categoryKey: 'all',
-      categoryId: undefined,
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: { token: 'x' },
+      expect(callsFor('__all__')).toHaveLength(1);
+      const deck = await storedDeck(ALL_DECK_KEY);
+      expect(deck).toHaveLength(5);
+      expect(deck!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'n1', 'n2']);
     });
-    expect(appendMock).toHaveBeenCalledTimes(1);
-    expect(appendMock).toHaveBeenCalledWith({
-      cards: IMAGES,
-      categoryKey: 'all',
-      categoryId: undefined,
-      language: 'fr',
-      scope: { kind: 'public' },
+
+    it('does not prefetch while four cards remain ahead of the cursor', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 4));
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(4);
     });
-  });
 
-  it('fires prefetch when count === 3 (the previously-broken boundary)', async () => {
-    remainingMock.mockResolvedValue(3);
+    it('pages forward from the stored cursor instead of restarting at the feed head', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      await AsyncStorage.setItem('lastImageUuid:all:fr', 'c2');
+      chain('__all__', [cardBatch('c', 2), cardBatch('n', 2)]);
 
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: { token: 'x' } });
+      await prefetchIfLow(prefetchAll);
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
+      const calls = callsFor('__all__');
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.pictureId).toBe('c2');
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'n1', 'n2']);
+    });
 
-  it('skips append when fetchCardBatch returns isError', async () => {
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockResolvedValue({ isError: true } as never);
+    it('a cold deck pages from the feed head', async () => {
+      chain('__all__', [cardBatch('c', 2)]);
 
-    await expect(
-      prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} }),
-    ).resolves.toBeUndefined();
+      await prefetchIfLow(prefetchAll);
 
-    expect(appendMock).not.toHaveBeenCalled();
-  });
+      expect(callsFor('__all__')[0]!.pictureId).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
+    });
 
-  it('swallows errors from fetchCardBatch', async () => {
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockRejectedValue(new Error('network down') as never);
+    it('a failed batch (isError) leaves the deck unchanged and marks nothing', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [{ isError: true }]);
 
-    await expect(
-      prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} }),
-    ).resolves.toBeUndefined();
+      await prefetchIfLow(prefetchAll);
 
-    expect(appendMock).not.toHaveBeenCalled();
-  });
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
+      const keys = await AsyncStorage.getAllKeys();
+      expect(keys.filter((k) => k.startsWith('exhaustedCategory:'))).toEqual([]);
+    });
 
-  it('warns on prefetch failure even when __DEV__ is false', async () => {
-    const priorDev = global.__DEV__;
-    global.__DEV__ = false;
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockRejectedValue(new Error('network down') as never);
+    it('a failure mid-prefetch is swallowed, reported, and leaves the deck unchanged', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [cardBatch('n', 2)]);
+      const restore = failDeckWrites(ALL_DECK_KEY);
 
-    try {
-      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
+      try {
+        await expect(prefetchIfLow(prefetchAll)).resolves.toBeUndefined();
 
-      expect(console.warn).toHaveBeenCalledWith('[cardPrefetcher] prefetch failed', expect.any(String), expect.any(Error));
-    } finally {
-      global.__DEV__ = priorDev;
-    }
-  });
-
-  it('dedups concurrent calls for the same deck key (one fetchCardBatch total)', async () => {
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockImplementation(() => okResponse());
-
-    const a = prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    const b = prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    await Promise.all([a, b]);
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('allows a new prefetch after the in-flight promise resolves (dedup cleared)', async () => {
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('warms the "all" deck in addition to the category fetch when the total deck is below TARGET_BATCH_SIZE', async () => {
-    // count=0 + category returns 3 (IMAGES) = 3 < TARGET_BATCH_SIZE=5 → top-up
-    // of 2 fires from 'all'. Pins the (count + appendedCount) gate at deck level.
-    remainingMock.mockResolvedValueOnce(0);
-    remainingMock.mockResolvedValueOnce(0);
-    fetchMock.mockImplementation((params) =>
-      okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : IMAGES),
-    );
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const allCall = fetchMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
-    expect(allCall).toBeDefined();
-    expect(allCall![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
-
-    const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
-    expect(allAppend).toBeDefined();
-    expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }], categoryKey: 'all' });
-  });
-
-  it('does not re-warm while the persisted "all" deck already has >= TARGET_BATCH_SIZE cards', async () => {
-    // B1/F1: the gate is now `count >= target` (was `count > 0`). A partial
-    // 'all' deck (e.g. 2 cards) MUST top up to TARGET_BATCH_SIZE=5; only a
-    // deck already at >= target short-circuits.
-    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(TARGET_BATCH_SIZE);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(1);
-    expect(appendMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('cold-starts the all-deck warm in cursor mode (no head override) when the persisted all deck is empty', async () => {
-    remainingMock.mockResolvedValueOnce(0);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(fetchMock).toHaveBeenCalledWith({
-      categoryKey: 'all',
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: {},
+        expect(warnSpy).toHaveBeenCalledWith('[cardPrefetcher] prefetch failed', expect.any(String), expect.any(Error));
+        expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
+      } finally {
+        restore();
+      }
     });
   });
 
-  it("warm with an existing 'all' cursor fetches cursor-mode (pages forward, no head override)", async () => {
-    remainingMock.mockResolvedValueOnce(2);
-    fetchMock.mockImplementation(() => okResponse([{ listId: 100 }]));
+  describe('prefetchIfLow — dedup', () => {
+    it('concurrent prefetches for the same deck share one round-trip', async () => {
+      chain('__all__', [cardBatch('c', 2)]);
 
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
+      await Promise.all([prefetchIfLow(prefetchAll), prefetchIfLow(prefetchAll)]);
 
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(1);
-    expect(allCalls[0]![0]).not.toHaveProperty('pictureIdOverride');
-    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
-  });
-
-  it('does not warm when categoryKey === "all"', async () => {
-    remainingMock.mockResolvedValue(2);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock.mock.calls[0][0]).toMatchObject({ categoryKey: 'all' });
-  });
-
-  it('is a no-op in e2e mode (prefetchIfLow)', async () => {
-    e2eMock.mockReturnValue(true);
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(remainingMock).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(appendMock).not.toHaveBeenCalled();
-  });
-
-  it('prefetchIfLow passes currentListId through to getRemainingDeckCount', async () => {
-    remainingMock.mockResolvedValue(7);
-
-    await prefetchIfLow({
-      categoryKey: 'city',
-      categoryId: 7,
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: {},
-      currentListId: 42,
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
     });
 
-    expect(remainingMock).toHaveBeenCalledTimes(1);
-    expect(remainingMock).toHaveBeenCalledWith({
-      category: { key: 'city', id: 7 },
-      language: 'fr',
-      currentListId: 42,
-      scope: { kind: 'public' },
+    it('a settled prefetch does not block the next one', async () => {
+      chain('__all__', [cardBatch('c', 2), cardBatch('n', 2)]);
+
+      await prefetchIfLow(prefetchAll);
+      await prefetchIfLow(prefetchAll);
+
+      expect(callsFor('__all__')).toHaveLength(2);
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'n1', 'n2']);
     });
   });
 
-  it('prefetchIfLow forwards currentListId: undefined when not provided (cursor-agnostic)', async () => {
-    remainingMock.mockResolvedValue(7);
+  describe('prefetchIfLow — deck-level top-up from "all"', () => {
+    it('a category top-up below the deck target pulls the remainder from the all deck', async () => {
+      chain('city', [cardBatch('k', 3)]);
+      chain('__all__', [cardBatch('a', 2)]);
 
-    await prefetchIfLow({
-      categoryKey: 'city',
-      categoryId: 7,
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: {},
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(callsFor('city')).toHaveLength(1);
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(CITY_DECK_KEY)).toHaveLength(3);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
     });
 
-    expect(remainingMock).toHaveBeenCalledWith(expect.objectContaining({
-      currentListId: undefined,
-    }));
-  });
+    it('a category top-up that reaches the deck target leaves the all deck alone', async () => {
+      chain('city', [cardBatch('k', 5)]);
 
-  it('is a no-op in e2e mode (warmAllDeckIfNeeded)', async () => {
-    e2eMock.mockReturnValue(true);
+      await prefetchIfLow(prefetchCity);
+      await settle();
 
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(appendMock).not.toHaveBeenCalled();
-  });
-
-  it('warm-all retries on failure', async () => {
-    fetchMock.mockImplementation(() => Promise.reject(new Error('net down') as never));
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    fetchMock.mockImplementation(() => okResponse());
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(2);
-    expect(appendMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('warns on warm-all failure even when __DEV__ is false', async () => {
-    const priorDev = global.__DEV__;
-    global.__DEV__ = false;
-    fetchMock.mockImplementation(() => Promise.reject(new Error('net down') as never));
-
-    try {
-      await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-      expect(console.warn).toHaveBeenCalledWith('[cardPrefetcher] warm-all failed', expect.any(String), expect.any(Error));
-    } finally {
-      global.__DEV__ = priorDev;
-    }
-  });
-
-  it('warm-all is awaitable and shares in-flight promise across concurrent callers', async () => {
-    fetchMock.mockImplementation(() => okResponse());
-
-    const p = warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    expect(p).toBeInstanceOf(Promise);
-
-    const p2 = warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    await Promise.all([p, p2]);
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(1);
-  });
-
-  it('warm-all fetches again when the persisted all deck drains back to zero', async () => {
-    remainingMock.mockResolvedValueOnce(0).mockResolvedValueOnce(0);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    expect(appendMock).toHaveBeenCalledTimes(1);
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(2);
-    expect(appendMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('warm-all with empty result retries on the next call', async () => {
-    fetchMock.mockResolvedValue({ isError: false, images: [] } as never);
-
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(2);
-    expect(appendMock).not.toHaveBeenCalled();
-  });
-
-  it('prefetcher normalizeListIds is called on fetched cards before append (T2.6 defense-in-depth)', async () => {
-    remainingMock.mockResolvedValue(2);
-    normalizeMock.mockImplementation((cards) => cards);
-
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(normalizeMock).toHaveBeenCalledTimes(1);
-    expect(normalizeMock).toHaveBeenCalledWith(IMAGES);
-    expect(appendMock).toHaveBeenCalledTimes(1);
-    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({ cards: IMAGES }));
-  });
-
-  it('warmAllDeckIfNeeded uses cursor-filtered count (RC8/CB3): count=N>0 but no listId > currentListId → fires warm (not short-circuited)', async () => {
-    // Without T2.8, warmAllDeckIfNeeded called getDeckCountForScope which
-    // returns the TOTAL 'all' deck size (5 here). The cursor is exhausted
-    // (no listId > currentListId=42), so the cursor-aware count is 0. With
-    // the T2.8 swap, warm fires; under the old bug it would short-circuit
-    // and Tier 3 would return empty.
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation(() => okResponse());
-
-    await warmAllDeckIfNeeded({
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: {},
-      currentListId: 42,
+      expect(callsFor('city')).toHaveLength(1);
+      expect(callsFor('__all__')).toHaveLength(0);
+      expect(await storedDeck(CITY_DECK_KEY)).toHaveLength(5);
     });
 
-    expect(remainingMock).toHaveBeenCalledWith({
-      category: { key: 'all' },
-      language: 'fr',
-      currentListId: 42,
-      scope: { kind: 'public' },
-    });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledWith(expect.objectContaining({ categoryKey: 'all' }));
-  });
+    it('a category marked exhausted skips its round-trip and fills the deck from "all"', async () => {
+      await AsyncStorage.setItem(CITY_EXHAUSTED_KEY, '1');
+      chain('__all__', [cardBatch('a', 5)]);
 
-  it('warmAllDeckIfNeeded short-circuits when cursor-filtered remaining >= target (RC8/CB3 + B1 gate)', async () => {
-    // B1/F1: the early-return gate is now `count >= target` (default
-    // TARGET_BATCH_SIZE=5). Same persisted 'all' deck semantics as before —
-    // the cursor-aware count is consulted with currentListId and short-
-    // circuits when the deck already has enough cards ahead of the cursor.
-    remainingMock.mockResolvedValue(TARGET_BATCH_SIZE);
+      await prefetchIfLow(prefetchCity);
+      await settle();
 
-    await warmAllDeckIfNeeded({
-      language: 'fr',
-      scope: { kind: 'public' },
-      authContext: {},
-      currentListId: 10,
+      expect(callsFor('city')).toHaveLength(0);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(appendMock).not.toHaveBeenCalled();
-  });
+    it('an empty category batch marks the category exhausted', async () => {
+      chain('city', [[]]);
+      chain('__all__', [cardBatch('a', 1)]);
 
-  it('warmAllDeckIfNeeded forwards currentListId: undefined when not provided (cursor-agnostic)', async () => {
-    remainingMock.mockResolvedValue(0);
+      await prefetchIfLow(prefetchCity);
+      await settle();
 
-    await warmAllDeckIfNeeded({ language: 'fr', scope: { kind: 'public' }, authContext: {} });
-
-    expect(remainingMock).toHaveBeenCalledWith(expect.objectContaining({
-      currentListId: undefined,
-    }));
-  });
-
-  // ─── B1 / F1: download 5 at once, topping up from 'all' ───
-
-  it('B1(a): category returns 2 + count=0 → fetches 3 from "all" to reach TARGET_BATCH_SIZE=5', async () => {
-    remainingMock.mockResolvedValue(0); // count=0; 'all' count=0
-    fetchMock.mockImplementation((params) =>
-      okResponse(
-        (params as { categoryKey: string }).categoryKey === 'all'
-          ? [{ listId: 100 }, { listId: 101 }, { listId: 102 }]
-          : [{ listId: 1 }, { listId: 2 }],
-      ),
-    );
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(categoryCalls).toHaveLength(1);
-    expect(allCalls).toHaveLength(1);
-    // count(0) + appended(2) = 2 → target = 5 - 2 = 3
-    expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
-  });
-
-  it('B1(b): category returns 5 → no "all" top-up (total deck already at target)', async () => {
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation(() => okResponse([
-      { listId: 1 }, { listId: 2 }, { listId: 3 }, { listId: 4 }, { listId: 5 },
-    ]));
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCalls).toHaveLength(0);
-  });
-
-  it('B1(c): category known-empty (isCategoryExhausted true) → skips category fetch, fetches 5 from "all"', async () => {
-    isExhaustedMock.mockResolvedValue(true);
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation((params) =>
-      okResponse(
-        (params as { categoryKey: string }).categoryKey === 'all'
-          ? [{ listId: 100 }, { listId: 101 }, { listId: 102 }, { listId: 103 }, { listId: 104 }]
-          : [],
-      ),
-    );
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(isExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
-    const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
-    const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(categoryCalls).toHaveLength(0);
-    expect(allCalls).toHaveLength(1);
-  });
-
-  it('B1(d): categoryKey === "all" → never tops up (single fetch, single cycle)', async () => {
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation(() => okResponse([{ listId: 1 }]));
-
-    await prefetchIfLow({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    expect(isExhaustedMock).not.toHaveBeenCalled();
-  });
-
-  it('B1(e): category fetch returns 0 + non-"all" → markCategoryExhausted called (prefetcher writes cache)', async () => {
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation((params) =>
-      okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : []),
-    );
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(markExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
-  });
-
-  it('Fix 1 pin: prefetch that lands ≥1 card calls clearExhaustedCategory (via real appendCardBatch)', async () => {
-    // Bridge through the REAL appendCardBatch (storageDatum stays mocked at
-    // the AsyncStorage boundary: updateImageList/filterPlayedCards/
-    // clearExhaustedCategory), so the pin proves the prefetch success path
-    // triggers the marker clear through the production append contract.
-    appendMock.mockImplementation((args?: { cards?: unknown[]; categoryKey?: string; categoryId?: unknown; language?: string | null; scope?: unknown }) =>
-      actualCardDeck.appendCardBatch(args));
-    remainingMock.mockResolvedValue(2);
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-
-    expect(appendMock).toHaveBeenCalledWith(expect.objectContaining({
-      categoryKey: 'city',
-      categoryId: 7,
-      language: 'fr',
-      scope: { kind: 'public' },
-    }));
-    expect(clearExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
-  });
-
-  it('B1(e-CC4): isError (5xx) → markCategoryExhausted NOT called (transient blip must not poison cache)', async () => {
-    remainingMock.mockResolvedValue(0);
-    fetchMock.mockImplementation((params) =>
-      (params as { categoryKey: string }).categoryKey === 'all'
-        ? okResponse([{ listId: 100 }])
-        : Promise.resolve({ isError: true } as never),
-    );
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    expect(markExhaustedMock).not.toHaveBeenCalled();
-  });
-
-  it('B1(f): deck-level gate pin — count=2 + category returns 2 → fetches 1 from "all"; count=2 + category returns 4 → no top-up', async () => {
-    // Branch 1: count=2 + appended=2 = 4 < 5 → top-up of 1.
-    remainingMock.mockResolvedValueOnce(2).mockResolvedValueOnce(0);
-    fetchMock.mockImplementationOnce(() => okResponse([{ listId: 1 }, { listId: 2 }]));
-    fetchMock.mockImplementation(() => okResponse([{ listId: 100 }]));
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const allCallsBranch1 = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCallsBranch1).toHaveLength(1);
-
-    __resetForTests();
-    jest.clearAllMocks();
-    e2eMock.mockReturnValue(false);
-    remainingMock.mockResolvedValue(0);
-    isExhaustedMock.mockResolvedValue(false);
-
-    // Branch 2: count=2 + appended=4 = 6 >= 5 → no top-up.
-    remainingMock.mockResolvedValueOnce(2);
-    fetchMock.mockImplementation(() => okResponse([{ listId: 1 }, { listId: 2 }, { listId: 3 }, { listId: 4 }]));
-
-    await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-    await Promise.resolve();
-    await Promise.resolve();
-
-    const allCallsBranch2 = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-    expect(allCallsBranch2).toHaveLength(0);
-  });
-
-  // characterization: pins I3, existing behavior cardPrefetcher.ts:202-205
-  describe('proactive handoff (I3)', () => {
-    it("prefetchIfLow with category remaining 3 (below LOW_CARD_THRESHOLD=4) warms the 'all' deck in the same cycle (proactive handoff I3)", async () => {
-      remainingMock.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
-      fetchMock.mockImplementation((params) =>
-        okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }] : [{ listId: 1 }]),
-      );
-
-      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-      await Promise.resolve();
-      await Promise.resolve();
-
-      const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
-      const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-      expect(categoryCalls).toHaveLength(1);
-      expect(allCalls).toHaveLength(1);
-      expect(allCalls[0]![0]).toMatchObject({ categoryKey: 'all', language: 'fr' });
-
-      const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
-      expect(allAppend).toBeDefined();
-      expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }], categoryKey: 'all' });
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
     });
 
-    it("exhausted-marker skip path still tops the deck up from 'all' (no empty handoff)", async () => {
-      isExhaustedMock.mockResolvedValue(true);
-      remainingMock.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
-      fetchMock.mockImplementation((params) =>
-        okResponse((params as { categoryKey: string }).categoryKey === 'all' ? [{ listId: 100 }, { listId: 101 }] : []),
-      );
+    it('a 5xx-style failure does not mark the category exhausted', async () => {
+      chain('city', [{ isError: true }]);
+      chain('__all__', [cardBatch('a', 1)]);
 
-      await prefetchIfLow({ categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' }, authContext: {} });
-      await Promise.resolve();
-      await Promise.resolve();
+      await prefetchIfLow(prefetchCity);
+      await settle();
 
-      expect(isExhaustedMock).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
-      const categoryCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'city');
-      const allCalls = fetchMock.mock.calls.filter((c) => c[0]?.categoryKey === 'all');
-      expect(categoryCalls).toHaveLength(0);
-      expect(allCalls).toHaveLength(1);
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
+    });
 
-      const allAppend = appendMock.mock.calls.find((c) => c[0]?.categoryKey === 'all');
-      expect(allAppend).toBeDefined();
-      expect(allAppend![0]).toMatchObject({ cards: [{ listId: 100 }, { listId: 101 }], categoryKey: 'all' });
+    it('"all" never writes an exhausted marker, even when the server has nothing', async () => {
+      chain('__all__', [[]]);
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      const keys = await AsyncStorage.getAllKeys();
+      expect(keys.filter((k) => k.startsWith('exhaustedCategory:'))).toEqual([]);
+      expect(await storedDeck(ALL_DECK_KEY)).toBeNull();
+    });
+
+    it('the top-up size follows how much the category landing actually added', async () => {
+      await seedDeck(CITY_DECK_KEY, cardBatch('c', 2));
+      chain('city', [cardBatch('k', 2)]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(callsFor('__all__')).toHaveLength(1);
+
+      await resetStore();
+      transport.mockClear();
+      feedChains.clear();
+      await seedDeck(CITY_DECK_KEY, cardBatch('c', 2));
+      chain('city', [cardBatch('k', 4)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(callsFor('__all__')).toHaveLength(0);
+    });
+
+    it('a category down to its last cards hands off to the all deck in the same cycle', async () => {
+      await seedDeck(CITY_DECK_KEY, cardBatch('c', 3));
+      chain('city', [[card('k4')]]);
+      chain('__all__', [[card('a1')]]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(callsFor('city')).toHaveLength(1);
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect((await storedDeck(CITY_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'k4']);
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['a1']);
+    });
+  });
+
+  describe('warmAllDeckIfNeeded', () => {
+    it('fills the all deck to target once; an immediate repeat short-circuits', async () => {
+      chain('__all__', [cardBatch('a', 5)]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a partial all deck is topped up to target, not skipped', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      await AsyncStorage.setItem('lastImageUuid:all:fr', 'c2');
+      chain('__all__', [cardBatch('c', 2), cardBatch('n', 3)]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a deck exhausted for the cursor still warms (cursor-aware count)', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 5));
+      chain('__all__', [cardBatch('n', 6)]);
+
+      await warmAllDeckIfNeeded({ ...warmArgs, currentListId: 42 });
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(11);
+    });
+
+    it('a deck with enough cards ahead of the cursor does not warm', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 5));
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a failed warm is retried on the next call', async () => {
+      chain('__all__', [cardBatch('a', 5), cardBatch('d', 5)]);
+      const restore = failDeckWrites(ALL_DECK_KEY);
+
+      try {
+        await warmAllDeckIfNeeded(warmArgs);
+      } finally {
+        restore();
+      }
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(2);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a warm failure is reported even when __DEV__ is false', async () => {
+      const priorDev = global.__DEV__;
+      global.__DEV__ = false;
+      chain('__all__', [cardBatch('a', 5)]);
+      const restore = failDeckWrites(ALL_DECK_KEY);
+
+      try {
+        await warmAllDeckIfNeeded(warmArgs);
+
+        expect(warnSpy).toHaveBeenCalledWith('[cardPrefetcher] warm-all failed', expect.any(String), expect.any(Error));
+      } finally {
+        restore();
+        global.__DEV__ = priorDev;
+      }
+    });
+
+    it('concurrent warms share one round-trip', async () => {
+      chain('__all__', [cardBatch('a', 5)]);
+
+      await Promise.all([warmAllDeckIfNeeded(warmArgs), warmAllDeckIfNeeded(warmArgs)]);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a drained all deck is warmed again on the next warm', async () => {
+      chain('__all__', [cardBatch('a', 5), cardBatch('d', 5)]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+      await AsyncStorage.setItem(ALL_DECK_KEY, '[]');
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(2);
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['d1', 'd2', 'd3', 'd4', 'd5']);
+    });
+
+    it('an empty warm result appends nothing and is retried on the next warm', async () => {
+      chain('__all__', [[]]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+      expect(await storedDeck(ALL_DECK_KEY)).toBeNull();
+
+      feedChains.set('__all__', [cardBatch('a', 5)]);
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(2);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+  });
+
+  describe('persistence contracts', () => {
+    it('server cards without listIds are persisted with fresh, unique listIds', async () => {
+      chain('__all__', [
+        [
+          { pictureId: 'raw-1', imageFile: 'file:///cache/raw-1.jpg' },
+          { pictureId: 'raw-2', imageFile: 'file:///cache/raw-2.jpg' },
+        ],
+      ]);
+
+      await prefetchIfLow(prefetchAll);
+
+      const deck = await storedDeck(ALL_DECK_KEY);
+      expect(deck!.map((c) => c.listId)).toEqual([1, 2]);
+    });
+
+    it('prefetch and warm are no-ops in e2e mode', async () => {
+      e2eMock.mockReturnValue(true);
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+
+      await prefetchIfLow(prefetchCity);
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
     });
   });
 });
