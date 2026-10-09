@@ -203,8 +203,15 @@
       "deleteCategories": "Hapus kategori",
       "closeManageCategories": "Tutup kelola kategori",
       "openLanguageFilter": "Buka filter bahasa",
+      "openModeFilter": "Buka filter mode",
       "editThumbnailLabel": "Edit gambar mini {{name}}",
       "deleteCategoryLabel": "Hapus {{name}}"
+    },
+    "modeFilter": {
+      "label": "Mode",
+      "any": "Mode apa saja",
+      "point": "Titik",
+      "shape": "Bentuk"
     },
     "exitMenu": {
       "closeExitPanel": "Tutup panel keluar",

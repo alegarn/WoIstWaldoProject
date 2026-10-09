@@ -30,6 +30,7 @@ export type GetImagesFilters = {
   category_id?: string;
   category_key?: string;
   language?: string;
+  mode?: string;
   scope?: { kind?: string; groupId?: string } | null;
 };
 
@@ -248,6 +249,7 @@ async function getImagesInfos({ config, userId, filters, excludeNames }: {
   if (filters?.category_id != null) params.category_id = filters.category_id;
   if (filters?.category_key != null) params.category_key = filters.category_key;
   if (filters?.language != null) params.language = filters.language;
+  if (filters?.mode != null) params.mode = filters.mode;
   if (excludeNames != null && excludeNames.length > 0) params.exclude = excludeNames.join(',');
   if (Object.keys(params).length > 0) {
     requestConfig.params = { ...requestConfig.params, ...params };
@@ -288,12 +290,13 @@ async function getNextImagesInfos({ config, userId, pictureId, filters, excludeN
 }): Promise<ImagesInfosResponse> {
   //console.log("getNextImagesInfos");
   const url = `${process.env.EXPO_PUBLIC_APP_BACKEND_URL}api/v1/users/${userId}/next_image_batch`;
-  const imageBody: { name: string; category_id?: string; category_key?: string; language?: string } = {
+  const imageBody: { name: string; category_id?: string; category_key?: string; language?: string; mode?: string } = {
     name: pictureId
   };
   if (filters?.category_id != null) imageBody.category_id = filters.category_id;
   if (filters?.category_key != null) imageBody.category_key = filters.category_key;
   if (filters?.language != null) imageBody.language = filters.language;
+  if (filters?.mode != null) imageBody.mode = filters.mode;
   const imageData: { image: typeof imageBody; exclude?: string } = {
     image: imageBody
   };
@@ -497,6 +500,7 @@ export async function getImages(
       groupId: filters.scope.groupId,
       categoryId: filters?.category_id,
       language: filters?.language,
+      mode: filters?.mode,
       categoryKey: filters?.category_key ?? filters?.category_id ?? 'all',
       persistCursor,
     });
@@ -553,7 +557,7 @@ export async function getImages(
 
     if (unplayedRows.length === 0) {
       if (persistCursor) {
-        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
       }
       skippedPlayedBatches += 1;
       nextPictureId = lastBatchPictureId;
@@ -564,7 +568,7 @@ export async function getImages(
 
     if (images.length > 0) {
       if (persistCursor) {
-        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
       }
       return { isError: false, images: images };
     }
@@ -579,7 +583,7 @@ export async function getImages(
     }
 
     if (persistCursor) {
-      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language);
+      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
     }
     skippedBrokenBatches += 1;
     nextPictureId = lastBatchPictureId;

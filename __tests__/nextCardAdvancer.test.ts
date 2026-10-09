@@ -141,7 +141,7 @@ async function serveFeed(
     return { isError: false, reason: 'empty', images: [] };
   }
   if (opts?.persistCursor !== false) {
-    await saveLastImageUuid(entry[entry.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope);
+    await saveLastImageUuid(entry[entry.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope, (filters as { mode?: string }).mode);
   }
   return { isError: false, images: entry };
 }
@@ -174,9 +174,9 @@ function headReplaysFor(feedKey: string): TransportCall[] {
 
 // ─── Storage helpers ────────────────────────────────────────────────────────
 
-const ALL_DECK_KEY = 'imageList:all:fr';
-const CITY_DECK_KEY = 'imageList:city:fr';
-const CITY_EXHAUSTED_KEY = 'exhaustedCategory:city:fr';
+const ALL_DECK_KEY = 'imageList:all:fr:any';
+const CITY_DECK_KEY = 'imageList:city:fr:any';
+const CITY_EXHAUSTED_KEY = 'exhaustedCategory:city:fr:any';
 const PUBLIC_SCOPE = { kind: 'public' };
 const GROUP_SCOPE = { kind: 'private', groupId: 'g-1' };
 
@@ -192,7 +192,7 @@ async function seedDeck(key: string, cards: FakeCard[]): Promise<void> {
 
 async function seedGroupDeck(groupId: string, categoryId: string, cards: FakeCard[]): Promise<void> {
   const numbered = cards.map((c, i) => ({ ...c, listId: i + 1 }));
-  await AsyncStorage.setItem(`groupFeed:${groupId}:${categoryId}:fr`, JSON.stringify(numbered));
+  await AsyncStorage.setItem(`groupFeed:${groupId}:${categoryId}:fr:any`, JSON.stringify(numbered));
 }
 
 async function seedPlayedPublic(pictureIds: string[]): Promise<void> {
@@ -242,7 +242,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('foreground-fetches the drained category and serves the fetched card', async () => {
     await seedDeck(CITY_DECK_KEY, cardBatch('c', 3));
-    await AsyncStorage.setItem('lastImageUuid:city:fr', 'c3');
+    await AsyncStorage.setItem('lastImageUuid:city:fr:any', 'c3');
     chain('city', [cardBatch('c', 3), cardBatch('k', 2)]);
 
     const result = await resolveNextCardWithServerFallback(cityArgs);
@@ -277,7 +277,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
   it('warms the all deck even when it looks full overall but is drained ahead of the cursor', async () => {
     await seedDeck(ALL_DECK_KEY, cardBatch('a', 5));
     await seedPlayedPublic(['a1', 'a2', 'a3', 'a4', 'a5']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'a5');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a5');
     chain('__all__', [cardBatch('a', 5), cardBatch('n', 2)]);
 
     const result = await resolveNextCardWithServerFallback(cityArgs);
@@ -292,7 +292,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('shares one category round-trip when a background prefetch and an advance race on the same scope', async () => {
     await seedDeck(CITY_DECK_KEY, cardBatch('c', 10));
-    await AsyncStorage.setItem('lastImageUuid:city:fr', 'c10');
+    await AsyncStorage.setItem('lastImageUuid:city:fr:any', 'c10');
     chain('city', [cardBatch('c', 10), cardBatch('k', 2)]);
     chain('__all__', [[]]);
 
@@ -316,7 +316,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
   });
 
   it('replays fresh cards by re-fetching the all pool from the head when the cursor is drained', async () => {
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'r2');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'r2');
     chain('__all__', [cardBatch('r', 2), []]);
 
     const result = await resolveNextCardWithServerFallback(allArgs);
@@ -335,7 +335,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
   it('after a proven pool exhaustion starts a new cycle and replays the already-played deck cards with no extra fetch', async () => {
     await seedDeck(ALL_DECK_KEY, cardBatch('a', 5));
     await seedPlayedPublic(['a1', 'a2', 'a3', 'a4', 'a5']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'a5');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a5');
     chain('__all__', [cardBatch('a', 5), []]);
 
     const result = await resolveNextCardWithServerFallback(allArgs);
@@ -360,7 +360,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('recovers through the warmed all deck when the category fetch fails', async () => {
     await seedDeck(CITY_DECK_KEY, cardBatch('c', 3));
-    await AsyncStorage.setItem('lastImageUuid:city:fr', 'c3');
+    await AsyncStorage.setItem('lastImageUuid:city:fr:any', 'c3');
     chain('city', [{ isError: true, reason: 'network' }]);
     chain('__all__', [cardBatch('a', 5)]);
 
@@ -459,7 +459,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
       isTutorial: false,
       scope: GROUP_SCOPE,
     };
-    const markerKey = 'groupFeedExhausted:g-1:cat-private-uuid:fr';
+    const markerKey = 'groupFeedExhausted:g-1:cat-private-uuid:fr:any';
     chain('private:g-1:cat-private-uuid', [{ isError: false, reason: 'played-out', images: [] }]);
     chain('private:g-1:all', [cardBatch('a', 2)]);
 
@@ -533,8 +533,8 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
     expect(await isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' })).toBe(true);
     expect(await isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupB' })).toBe(false);
     const keys = await AsyncStorage.getAllKeys();
-    expect(keys).toContain('groupFeedExhausted:groupA:city:fr');
-    expect(keys).not.toContain('groupFeedExhausted:groupB:city:fr');
+    expect(keys).toContain('groupFeedExhausted:groupA:city:fr:any');
+    expect(keys).not.toContain('groupFeedExhausted:groupB:city:fr:any');
   });
 
   it('purging private caches drops the group exhausted marker', async () => {
@@ -548,12 +548,12 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
     expect(await isCategoryExhausted('city', 'fr', { kind: 'private', groupId: 'groupA' })).toBe(false);
     const keys = await AsyncStorage.getAllKeys();
-    expect(keys).not.toContain('groupFeedExhausted:groupA:city:fr');
+    expect(keys).not.toContain('groupFeedExhausted:groupA:city:fr:any');
   });
 
   it('a proven exhaustion retries the all head exactly once and replays the cycled deck', async () => {
     await seedPlayedPublic(['a1', 'a2']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'a2');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a2');
     chain('__all__', [cardBatch('a', 2), []]);
 
     const result = await resolveNextCardWithServerFallback(allArgs);
@@ -566,7 +566,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('the replay resolve drops a stale cursor that can never be satisfied', async () => {
     await seedDeck(ALL_DECK_KEY, cardBatch('r', 2));
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'r2');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'r2');
     chain('__all__', [cardBatch('r', 2), []]);
 
     const result = await resolveNextCardWithServerFallback({ ...allArgs, currentListId: 999 });
@@ -579,7 +579,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('a failed replay retry stops after one attempt with a single cycle transition', async () => {
     await seedPlayedPublic(['p1', 'p2']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'stale-cursor');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'stale-cursor');
     chain('__all__', [[]]);
     scriptHeadReplays('__all__', [cardBatch('p', 2)]);
 
@@ -593,7 +593,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('a group-scope exhaustion transitions the group cycle and replays its deck', async () => {
     await seedPlayedGroup('g-1', ['a1', 'a2']);
-    await AsyncStorage.setItem('groupFeed:g-1:game:all:fr:cursor', 'a2');
+    await AsyncStorage.setItem('groupFeed:g-1:game:all:fr:any:cursor', 'a2');
     chain('private:g-1:all', [cardBatch('a', 2), []]);
     const groupArgs = { ...PUBLIC_ARGS, category: { key: 'all' }, currentListId: 3, isTutorial: false, scope: GROUP_SCOPE };
 
@@ -608,7 +608,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('when the probe finds unplayed cards beyond the head batch, they serve without a cycle transition', async () => {
     await seedPlayedPublic(['p1', 'p2']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'stale-cursor');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'stale-cursor');
     chain('__all__', [cardBatch('p', 2), cardBatch('u', 2)]);
 
     const result = await resolveNextCardWithServerFallback({ ...allArgs, currentListId: 0 });
@@ -621,7 +621,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
   it('an indeterminate probe never transitions the cycle', async () => {
     await seedPlayedPublic(['p1', 'p2']);
-    await AsyncStorage.setItem('lastImageUuid:all:fr', 'p2');
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'p2');
     chain('__all__', [cardBatch('p', 2), [{ isError: false, reason: 'played-out', images: [] }] as unknown as FakeCard[]]);
 
     const result = await resolveNextCardWithServerFallback(allArgs);
@@ -645,7 +645,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
     try {
       await seedPlayedPublic(['a1', 'a2']);
-      await AsyncStorage.setItem('lastImageUuid:all:fr', 'a2');
+      await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a2');
       chain('__all__', [cardBatch('a', 2), []]);
 
       const result = await resolveNextCardWithServerFallback(allArgs);
@@ -679,5 +679,71 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
       authContext: { token: 'x' },
     });
     expect(counting).toEqual({ status: 'unplayed' });
+  });
+});
+
+describe('Task C6/D3: mode-filtered advance', () => {
+  beforeEach(() => {
+    feedChains.clear();
+    headReplayQueues.clear();
+    transport.mockReset();
+    transport.mockImplementation(serveFeed as never);
+    __resetForTests();
+    e2eMock.mockReturnValue(false);
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('a mode-filtered advance resolves from the mode-segmented local deck without a server round-trip', async () => {
+    await seedDeck('imageList:city:fr:shape', cardBatch('s', 9));
+
+    const result = await resolveNextCardWithServerFallback({ ...cityArgs, mode: 'shape' });
+
+    expect(result.reason).toBe('ok');
+    expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('s4');
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('a mode-filtered empty category marks exhaustion under the MODE segment and fetches with mode on the wire', async () => {
+    chain('city', [[]]);
+    chain('__all__', [cardBatch('a', 5)]);
+
+    const result = await resolveNextCardWithServerFallback({ ...cityArgs, mode: 'shape' });
+
+    expect(result.reason).toBe('ok');
+    expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+    expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
+    expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:any')).toBeNull();
+    expect(callsFor('city')[0]!.filters.mode).toBe('shape');
+    expect(callsFor('__all__')[0]!.filters.mode).toBe('shape');
+  });
+
+  it('a mode-segmented exhausted marker short-circuits the category fetch for that mode', async () => {
+    await AsyncStorage.setItem('exhaustedCategory:city:fr:shape', '1');
+    chain('city', [cardBatch('k', 2)]);
+    chain('__all__', [cardBatch('a', 5)]);
+
+    const result = await resolveNextCardWithServerFallback({ ...cityArgs, mode: 'shape' });
+
+    expect(result.reason).toBe('ok');
+    expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+    expect(callsFor('city')).toHaveLength(0);
+    expect(callsFor('__all__')).toHaveLength(1);
+  });
+
+  it('the probe threads the filter mode into its cursor namespace', async () => {
+    await seedPlayedPublic(['p1', 'p2']);
+    await AsyncStorage.setItem('lastImageUuid:all:fr:shape', 'stale-cursor');
+    chain('__all__', [cardBatch('p', 2), cardBatch('u', 2)]);
+
+    const result = await resolveNextCardWithServerFallback({ ...allArgs, mode: 'shape', currentListId: 0 });
+
+    expect(result.reason).toBe('ok');
+    expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('u1');
+    expect(callsFor('__all__').every((call) => call.filters.mode === 'shape')).toBe(true);
+    expect(await AsyncStorage.getItem('lastImageUuid:all:fr:shape')).toBe('u2');
   });
 });

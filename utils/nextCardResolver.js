@@ -16,23 +16,24 @@ import { getNextImageForScope } from './storageDatum';
  * cross-fallback — so the just-played card is never re-served. This is the fix
  * for the stuck-on-card bug.
  *
- * @param {object} args - { category, language, currentListId, scope, currentPictureId }
+ * @param {object} args - { category, language, mode, currentListId, scope, currentPictureId }
  * @returns {Promise<{card: object, category: object}|null>}
  */
-export async function resolveNextCard({ category, language, currentListId, scope, currentPictureId }) {
+export async function resolveNextCard({ category, language, mode, currentListId, scope, currentPictureId }) {
   const exclude = currentPictureId ? { excludePictureId: currentPictureId } : {};
   const inAll = category?.key === 'all';
   if (inAll) {
-    const card = await getNextImageForScope({ category, language, currentListId, scope, ...exclude });
+    const card = await getNextImageForScope({ category, language, mode, currentListId, scope, ...exclude });
     return card ? { card, category } : null;
   }
 
-  const cat = await getNextImageForScope({ category, language, currentListId, scope, ...exclude });
+  const cat = await getNextImageForScope({ category, language, mode, currentListId, scope, ...exclude });
   if (cat) return { card: cat, category };
 
   const allCard = await getNextImageForScope({
     category: RECENT_ALL_CATEGORY,
     language,
+    mode,
     currentListId: undefined,
     scope,
     ...exclude,

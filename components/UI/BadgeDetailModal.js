@@ -37,7 +37,7 @@ function formatCreatedAt(value) {
   });
 }
 
-export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDPrefix }) {
+export default function BadgeDetailModal({ image, onClose, onOpenFilter, onOpenModeFilter, testIDPrefix }) {
   const { t } = useTranslation();
   const tags = normalizeTags(image?.tags);
   const category = image?.category?.name ?? image?.category;
@@ -62,6 +62,9 @@ export default function BadgeDetailModal({ image, onClose, onOpenFilter, testIDP
         <View style={styles.header}>
           <Pressable onPress={onOpenFilter} testID={`${testIDPrefix}.filter`} style={styles.filterButton}>
             <Text style={styles.filterText}>{t('ui.badgeDetail.filter')}</Text>
+          </Pressable>
+          <Pressable onPress={onOpenModeFilter} testID={`${testIDPrefix}.mode`} style={styles.filterButton}>
+            <Text style={styles.filterText}>{t('guess.modeFilter.label')}</Text>
           </Pressable>
           <Pressable onPress={onClose} testID={`${testIDPrefix}.close`} style={styles.closeButton}>
             <Text style={styles.closeText}>X</Text>

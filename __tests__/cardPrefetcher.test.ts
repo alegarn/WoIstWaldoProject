@@ -45,7 +45,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getImages } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
-import { prefetchIfLow, warmAllDeckIfNeeded, __resetForTests } from '../services/cardPrefetcher';
+import { getPrefetchScopeKey, prefetchIfLow, warmAllDeckIfNeeded, __resetForTests } from '../services/cardPrefetcher';
 
 const transport = getImages as unknown as jest.Mock;
 const e2eMock = isE2EMode as unknown as jest.Mock;
@@ -128,7 +128,7 @@ async function serveFeed(
     return { isError: false, reason: 'empty', images: [] };
   }
   if (opts?.persistCursor !== false) {
-    await saveLastImageUuid(cards[cards.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope);
+    await saveLastImageUuid(cards[cards.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope, filters?.mode);
   }
   return { isError: false, images: cards };
 }
@@ -159,9 +159,9 @@ function callsFor(feedKey: string): TransportCall[] {
 
 // ─── Storage helpers ────────────────────────────────────────────────────────
 
-const ALL_DECK_KEY = 'imageList:all:fr';
-const CITY_DECK_KEY = 'imageList:city:fr';
-const CITY_EXHAUSTED_KEY = 'exhaustedCategory:city:fr';
+const ALL_DECK_KEY = 'imageList:all:fr:any';
+const CITY_DECK_KEY = 'imageList:city:fr:any';
+const CITY_EXHAUSTED_KEY = 'exhaustedCategory:city:fr:any';
 
 async function storedDeck(key: string): Promise<Array<{ pictureId?: string; listId?: number }> | null> {
   const raw = await AsyncStorage.getItem(key);
@@ -240,7 +240,7 @@ describe('cardPrefetcher (behavior-driven)', () => {
 
     it('pages forward from the stored cursor instead of restarting at the feed head', async () => {
       await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
-      await AsyncStorage.setItem('lastImageUuid:all:fr', 'c2');
+      await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'c2');
       chain('__all__', [cardBatch('c', 2), cardBatch('n', 2)]);
 
       await prefetchIfLow(prefetchAll);
@@ -428,7 +428,7 @@ describe('cardPrefetcher (behavior-driven)', () => {
 
     it('a partial all deck is topped up to target, not skipped', async () => {
       await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
-      await AsyncStorage.setItem('lastImageUuid:all:fr', 'c2');
+      await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'c2');
       chain('__all__', [cardBatch('c', 2), cardBatch('n', 3)]);
 
       await warmAllDeckIfNeeded(warmArgs);
@@ -546,5 +546,75 @@ describe('cardPrefetcher (behavior-driven)', () => {
       expect(transport).not.toHaveBeenCalled();
       expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
     });
+  });
+});
+
+describe('Task C6/D3: mode-segmented prefetch', () => {
+  beforeEach(() => {
+    feedChains.clear();
+    transport.mockReset();
+    transport.mockImplementation(serveFeed as never);
+    __resetForTests();
+    e2eMock.mockReturnValue(false);
+  });
+
+  it('getPrefetchScopeKey is distinct per filter mode (in-flight keys cannot collapse)', () => {
+    const shapeKey = getPrefetchScopeKey({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, mode: 'shape' });
+    const pointKey = getPrefetchScopeKey({ categoryKey: 'all', language: 'fr', scope: { kind: 'public' }, mode: 'point' });
+
+    expect(shapeKey).not.toBe(pointKey);
+  });
+
+  it('concurrent prefetches for DIFFERENT modes do not share one round-trip (§7 dedup row)', async () => {
+    chain('__all__', [cardBatch('a', 2)]);
+
+    await Promise.all([
+      prefetchIfLow({ ...prefetchAll, mode: 'shape' }),
+      prefetchIfLow({ ...prefetchAll, mode: 'point' }),
+    ]);
+
+    expect(callsFor('__all__')).toHaveLength(2);
+  });
+
+  it('prefetch reads and appends the mode-segmented deck namespace', async () => {
+    await seedDeck('imageList:all:fr:shape', cardBatch('c', 3));
+    chain('__all__', [cardBatch('n', 2)]);
+
+    await prefetchIfLow({ ...prefetchAll, mode: 'shape' });
+
+    const deck = await storedDeck('imageList:all:fr:shape');
+    expect(deck!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'n1', 'n2']);
+  });
+
+  it('an empty category batch marks exhaustion under the MODE segment only', async () => {
+    chain('city', [[]]);
+    chain('__all__', [cardBatch('a', 1)]);
+
+    await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
+    await settle();
+
+    expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
+    expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+  });
+
+  it('a mode-segmented exhausted marker skips that mode\'s round-trip and tops up from "all"', async () => {
+    await AsyncStorage.setItem('exhaustedCategory:city:fr:shape', '1');
+    chain('city', [cardBatch('k', 2)]);
+    chain('__all__', [cardBatch('a', 5)]);
+
+    await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
+    await settle();
+
+    expect(callsFor('city')).toHaveLength(0);
+    expect(await storedDeck('imageList:all:fr:shape')).toHaveLength(5);
+    expect(await storedDeck(ALL_DECK_KEY)).toBeNull();
+  });
+
+  it('warmAllDeckIfNeeded fills the mode-segmented all deck', async () => {
+    chain('__all__', [cardBatch('a', 5)]);
+
+    await warmAllDeckIfNeeded({ ...warmArgs, mode: 'shape' });
+
+    expect(await storedDeck('imageList:all:fr:shape')).toHaveLength(5);
   });
 });

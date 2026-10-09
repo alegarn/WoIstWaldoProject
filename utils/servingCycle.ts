@@ -49,39 +49,46 @@ export async function startNewServingCycle(
  * miss forever (head replays persist nothing, cardDeck.ts), and an
  * `exhaustedCategory:all` marker never auto-clears (clearExhaustedMarkerIfLanded
  * excludes 'all'). Both must go under the SAME epoch lock/transition, scoped to
- * (scope, language): public clears `lastImageUuid:*:<lang>` cursors +
- * `exhaustedCategory:*:<lang>` markers; group parity clears this group's
- * `groupFeed:<gid>:*:<lang>:cursor` entries + `groupFeedExhausted:<gid>:*:<lang>`
+ * (scope, language): public clears `lastImageUuid:*:<lang>:<mode>` cursors +
+ * `exhaustedCategory:*:<lang>:<mode>` markers; group parity clears this group's
+ * `groupFeed:<gid>:*:<lang>:<mode>:cursor` entries + `groupFeedExhausted:<gid>:*:<lang>:<mode>`
  * markers. Key shapes mirror utils/storageDatum.ts and
  * services/groups/groupFeedCache.ts (no import — module stays
  * AsyncStorage + scopeMutex + playedPictureIds).
+ *
+ * Mode-agnostic by design (D7): since feed-cache keys gained the trailing
+ * `:<mode>` segment, the language segment is matched BY POSITION (contains
+ * `:<lang>:`), not by suffix — so a transition clears ALL modes for the
+ * scope+language. The `servingCycle:<scope>:<lang>` epoch key itself stays
+ * language-scoped and is never touched here.
  */
 async function clearStaleCycleCursorsAndMarkers(
   language: string | null | undefined,
   scope: ServingScope,
 ): Promise<void> {
   const lang = language || 'any';
-  const langSuffix = `:${lang}`;
+  const langSegment = `:${lang}:`;
   const keys = await AsyncStorage.getAllKeys();
 
-  const matches = (key: unknown, prefix: string, suffix: string): key is string =>
-    typeof key === 'string' && key.startsWith(prefix) && key.endsWith(suffix);
+  const matches = (key: unknown, prefix: string, suffix?: string): key is string =>
+    typeof key === 'string' && key.startsWith(prefix) && key.includes(langSegment) &&
+    (suffix ? key.endsWith(suffix) : true);
 
   // Private game-path transport cursor is being relocated to the
-  // groupFeed:<gid>:<cat>:<lang> namespace (parallel agent), making the :cursor
+  // groupFeed:<gid>:<cat>:<lang>:<mode> namespace (parallel agent), making the :cursor
   // clear operative; legacy unscoped lastImageUuid:* private keys are dead
   // garbage cleared only by dev wipe.
   const groupId = isGroupScope(scope) ? scope.groupId : undefined;
   const target = groupId
     ? keys.filter(
         (key) =>
-          matches(key, `${GROUP_FEED_KEY_PREFIX}${groupId}:`, `${langSuffix}:cursor`) ||
-          matches(key, `${GROUP_FEED_EXHAUSTED_KEY_PREFIX}${groupId}:`, langSuffix),
+          matches(key, `${GROUP_FEED_KEY_PREFIX}${groupId}:`, ':cursor') ||
+          matches(key, `${GROUP_FEED_EXHAUSTED_KEY_PREFIX}${groupId}:`),
       )
     : keys.filter(
         (key) =>
-          matches(key, LAST_IMAGE_UUID_KEY_PREFIX, langSuffix) ||
-          matches(key, EXHAUSTED_CATEGORY_KEY_PREFIX, langSuffix),
+          matches(key, LAST_IMAGE_UUID_KEY_PREFIX) ||
+          matches(key, EXHAUSTED_CATEGORY_KEY_PREFIX),
       );
 
   if (target.length > 0) {

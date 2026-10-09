@@ -48,7 +48,16 @@ jest.mock('expo-file-system', () => {
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File } from 'expo-file-system';
-import { readGroupFeedCache, markGroupCategoryExhausted, isGroupCategoryExhausted, clearGroupCategoryExhausted } from '../services/groups/groupFeedCache';
+import {
+  readGroupFeedCache,
+  markGroupCategoryExhausted,
+  isGroupCategoryExhausted,
+  clearGroupCategoryExhausted,
+  groupFeedListKey,
+  groupFeedCursorKey,
+  groupGameCursorKey,
+  groupFeedExhaustedKey,
+} from '../services/groups/groupFeedCache';
 
 import {
   clearE2EHiddenGuessCard,
@@ -70,6 +79,7 @@ import {
   getPreferredLanguage,
   getRemainingDeckCount,
   getSessionLanguageFilter,
+  getSessionModeFilter,
   getUserTags,
   isCategoryExhausted,
   markCategoryExhausted,
@@ -79,6 +89,7 @@ import {
   saveLastImageUuid,
   savePreferredLanguage,
   saveSessionLanguageFilter,
+  saveSessionModeFilter,
   saveUserTag,
   setOnboardingCompleted,
   storeImageList,
@@ -123,12 +134,12 @@ describe('storageDatum utilities', () => {
       { listId: 1, imageFile: 'file:///cache/gone.jpg' },
       { listId: 2, imageFile: 'file:///cache/also-gone.jpg' },
     ]);
-    AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:all:any' ? stored : null));
+    AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:all:any:any' ? stored : null));
 
     const result = await getLocalImages('all', 'any');
 
     expect(result).toEqual([]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([]));
   });
 
   it('derives the highest stored image id and falls back to zero for an empty list', async () => {
@@ -146,7 +157,7 @@ describe('storageDatum utilities', () => {
 
   it('stores and reads the last downloaded image uuid', async () => {
     await saveLastImageUuid('uuid-1');
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('lastImageUuid:all:any', 'uuid-1');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('lastImageUuid:all:any:any', 'uuid-1');
 
     AsyncStorage.getItem.mockResolvedValueOnce('uuid-1');
     expect(await getLastImageUuid()).toBe('uuid-1');
@@ -154,10 +165,10 @@ describe('storageDatum utilities', () => {
 
   it('clearLastImageUuid removes the scoped cursor key (public + private)', async () => {
     await clearLastImageUuid('all', 'fr');
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr:any');
 
     await clearLastImageUuid('all', 'fr', { kind: 'private', groupId: 'g-9' });
-    expect(AsyncStorage.removeItem).toHaveBeenLastCalledWith('groupFeed:g-9:game:all:fr:cursor');
+    expect(AsyncStorage.removeItem).toHaveBeenLastCalledWith('groupFeed:g-9:game:all:fr:any:cursor');
     expect(AsyncStorage.setItem).not.toHaveBeenCalled();
   });
 
@@ -166,14 +177,14 @@ describe('storageDatum utilities', () => {
 
     await saveLastImageUuid('cursor-42', 'cat-uuid-7', 'fr', scope);
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:cursor', 'cursor-42');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:any:cursor', 'cursor-42');
 
     await saveLastImageUuid('cursor-a', undefined, undefined, { kind: 'private', groupId: 'gA' });
-    expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('groupFeed:gA:game:all:any:cursor', 'cursor-a');
+    expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('groupFeed:gA:game:all:any:any:cursor', 'cursor-a');
 
     AsyncStorage.getItem.mockResolvedValueOnce('cursor-42');
     expect(await getLastImageUuid('cat-uuid-7', 'fr', scope)).toBe('cursor-42');
-    expect(AsyncStorage.getItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:cursor');
+    expect(AsyncStorage.getItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:any:cursor');
   });
 
   it('private END sentinel lands in the group-scoped key; the public all cursor stays untouched (no poisoning)', async () => {
@@ -181,13 +192,13 @@ describe('storageDatum utilities', () => {
 
     await saveLastImageUuid('__private_feed_end__', 'all', 'fr', scope);
     expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:all:fr:cursor', '__private_feed_end__');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:all:fr:any:cursor', '__private_feed_end__');
 
     // Asymmetry preserved: the PUBLIC 'all' cursor read must not see the
     // private sentinel (pre-fix the sentinel was written to
     // lastImageUuid:all:<lang> and poisoned the public feed cursor).
     AsyncStorage.getItem.mockImplementation(async (key) => (
-      key === 'groupFeed:g-9:game:all:fr:cursor' ? '__private_feed_end__' : null
+      key === 'groupFeed:g-9:game:all:fr:any:cursor' ? '__private_feed_end__' : null
     ));
     expect(await getLastImageUuid('all', 'fr')).toBeNull();
     expect(await getLastImageUuid('all', 'fr', scope)).toBe('__private_feed_end__');
@@ -202,6 +213,33 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     expect(await getSessionLanguageFilter()).toBeNull();
+  });
+
+  it('round-trips the session mode filter and returns null when never set (D3)', async () => {
+    await saveSessionModeFilter('shape');
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('sessionModeFilter', 'shape');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('shape');
+    expect(await getSessionModeFilter()).toBe('shape');
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getSessionModeFilter()).toBeNull();
+  });
+
+  it('an explicit "any" mode pick reads back as "any" — never-set null stays distinct (D3)', async () => {
+    AsyncStorage.getItem.mockResolvedValueOnce('any');
+    expect(await getSessionModeFilter()).toBe('any');
+  });
+
+  it('sessionModeFilter survives wipePublicGuessStorage (session filter is never wiped, D3)', async () => {
+    AsyncStorage.getAllKeys.mockResolvedValue(['sessionModeFilter', 'imageList:city:fr:any']);
+    AsyncStorage.getItem.mockResolvedValue(null);
+
+    await wipePublicGuessStorage();
+
+    const removedKeys = AsyncStorage.multiRemove.mock.calls.flatMap(([keys]) => keys);
+    expect(removedKeys).not.toContain('sessionModeFilter');
+    expect(removedKeys).toContain('imageList:city:fr:any');
   });
 
   it('round-trips the preferred language and returns null when unset', async () => {
@@ -298,19 +336,19 @@ describe('storageDatum utilities', () => {
     expect(File).toHaveBeenCalledWith('file:///cache/a.jpg');
     expect(File).toHaveBeenCalledWith('file:///cache/b.jpg');
     expect(mockDelete).toHaveBeenCalledTimes(2);
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList:city:fr');
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:city:fr');
-    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('imageList:city:fr:any');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:city:fr:any');
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any');
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
   });
 
   it('wipes public guess storage across namespaces and deletes cached deck files', async () => {
     AsyncStorage.getAllKeys.mockResolvedValue([
       'imageList:interior:en',
-      'imageList:city:fr',
+      'imageList:city:fr:any',
       'lastImageUuid:interior:en',
       'lastImageUuid:private-category:en',
-      'exhaustedCategory:city:fr',
+      'exhaustedCategory:city:fr:any',
       'playedPictureIds:public:en',
       'playedPictureIds:public:any',
       'groupFeed:g1:all:any',
@@ -324,7 +362,7 @@ describe('storageDatum utilities', () => {
           { imageFile: 'file:///cache/interior-b.jpg' },
         ]);
       }
-      if (key === 'imageList:city:fr') {
+      if (key === 'imageList:city:fr:any') {
         return JSON.stringify([{ imageFile: 'file:///cache/city-a.jpg' }]);
       }
       return null;
@@ -338,10 +376,10 @@ describe('storageDatum utilities', () => {
     expect(mockDelete).toHaveBeenCalledTimes(3);
     expect(AsyncStorage.multiRemove).toHaveBeenCalledWith(expect.arrayContaining([
       'imageList:interior:en',
-      'imageList:city:fr',
+      'imageList:city:fr:any',
       'lastImageUuid:interior:en',
       'lastImageUuid:private-category:en',
-      'exhaustedCategory:city:fr',
+      'exhaustedCategory:city:fr:any',
       'playedPictureIds:public:en',
       'playedPictureIds:public:any',
     ]));
@@ -393,19 +431,19 @@ describe('storageDatum utilities', () => {
     const updatedList = await updateImageList([{ listId: 3 }]);
 
     expect(updatedList).toEqual([{ listId: 1 }, { listId: 2 }, { listId: 3 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify(updatedList));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify(updatedList));
 
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1 }, { listId: 2 }, { listId: 3 }]));
     await removeImageFromList(2);
 
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([{ listId: 1 }, { listId: 3 }]));
   });
 
   it('treats a missing stored list as empty and creates it on append', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     const updatedList = await updateImageList([{ listId: 5 }], 'city', 'fr');
     expect(updatedList).toEqual([{ listId: 5 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr', JSON.stringify([{ listId: 5 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr:any', JSON.stringify([{ listId: 5 }]));
   });
 
   it('assigns sequential listIds (continuing from the deck max) to appended cards that lack one', async () => {
@@ -427,7 +465,7 @@ describe('storageDatum utilities', () => {
       { pictureId: 'b', listId: 14 },
       { pictureId: 'c', listId: 15 },
     ]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:fr', JSON.stringify(updatedList));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:fr:any', JSON.stringify(updatedList));
   });
 
   it('does not throw or write when no image list is stored for the namespace', async () => {
@@ -441,20 +479,20 @@ describe('storageDatum utilities', () => {
     const natureList = [{ listId: 2 }];
 
     await storeImageList(cityList, 'city', 'fr');
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr', JSON.stringify(cityList));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr:any', JSON.stringify(cityList));
 
     await storeImageList(natureList, 'nature', 'fr');
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:nature:fr', JSON.stringify(natureList));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:nature:fr:any', JSON.stringify(natureList));
 
-    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('imageList:city:fr', JSON.stringify(natureList));
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('imageList:city:fr:any', JSON.stringify(natureList));
 
     await storeImageList([{ listId: 9 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 9 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([{ listId: 9 }]));
   });
 
   it('stores image lists and deletes both the cached file and ImagePicker mirror', async () => {
     await storeImageList([{ listId: 7 }]);
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any', JSON.stringify([{ listId: 7 }]));
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([{ listId: 7 }]));
 
     await deleteImageFromStorage('file:///cache/abc.jpg');
 
@@ -820,7 +858,7 @@ describe('storageDatum utilities', () => {
         scope: { kind: 'public' },
       });
 
-      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:city:fr');
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:city:fr:any');
     });
 
     it('falls back to the "all" category key when category is missing', async () => {
@@ -834,7 +872,7 @@ describe('storageDatum utilities', () => {
         scope: { kind: 'public' },
       });
 
-      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr');
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr:any');
     });
 
     it('returns the readGroupFeedCache images length for a private scope', async () => {
@@ -899,7 +937,7 @@ describe('storageDatum utilities', () => {
         scope: { kind: 'public' },
       });
 
-      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr');
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:all:fr:any');
 
       readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
 
@@ -1011,44 +1049,44 @@ describe('storageDatum utilities', () => {
 
   describe('exhaustedCategory cache (F3a)', () => {
     it('exhaustedCategoryKey mirrors lastImageUuidKey format and falls back to all/any', () => {
-      expect(exhaustedCategoryKey('city', 'fr')).toBe('exhaustedCategory:city:fr');
-      expect(exhaustedCategoryKey(undefined, undefined)).toBe('exhaustedCategory:all:any');
-      expect(exhaustedCategoryKey(null, null)).toBe('exhaustedCategory:all:any');
+      expect(exhaustedCategoryKey('city', 'fr')).toBe('exhaustedCategory:city:fr:any');
+      expect(exhaustedCategoryKey(undefined, undefined)).toBe('exhaustedCategory:all:any:any');
+      expect(exhaustedCategoryKey(null, null)).toBe('exhaustedCategory:all:any:any');
     });
 
     it('PUBLIC scope round-trips mark → is → clear against AsyncStorage', async () => {
       await markCategoryExhausted('city', 'fr', { kind: 'public' });
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr', '1');
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any', '1');
 
       AsyncStorage.getItem.mockResolvedValueOnce('1');
       expect(await isCategoryExhausted('city', 'fr', { kind: 'public' })).toBe(true);
-      expect(AsyncStorage.getItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any');
 
       AsyncStorage.getItem.mockResolvedValueOnce(null);
       expect(await isCategoryExhausted('city', 'fr', { kind: 'public' })).toBe(false);
 
       await clearExhaustedCategory('city', 'fr', { kind: 'public' });
-      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any');
     });
 
     it('PRIVATE scope delegates to groupFeedCache helpers with scope.groupId (isolation)', async () => {
       const privateScope = { kind: 'private', groupId: 'g-7' };
 
       await markCategoryExhausted('city', 'fr', privateScope);
-      expect(markGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
+      expect(markGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr', undefined);
       expect(AsyncStorage.setItem).not.toHaveBeenCalled();
 
       await isCategoryExhausted('city', 'fr', privateScope);
-      expect(isGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
+      expect(isGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr', undefined);
 
       await clearExhaustedCategory('city', 'fr', privateScope);
-      expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr');
-      expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('exhaustedCategory:city:fr');
+      expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-7', 'city', 'fr', undefined);
+      expect(AsyncStorage.removeItem).not.toHaveBeenCalledWith('exhaustedCategory:city:fr:any');
     });
 
     it('PUBLIC scope without kind still uses AsyncStorage (defensive default)', async () => {
       await markCategoryExhausted('city', 'fr', undefined);
-      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr', '1');
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any', '1');
       expect(markGroupCategoryExhausted).not.toHaveBeenCalled();
     });
 
@@ -1057,7 +1095,7 @@ describe('storageDatum utilities', () => {
 
       await emptyImageList('city', 'fr');
 
-      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr');
+      expect(AsyncStorage.removeItem).toHaveBeenCalledWith('exhaustedCategory:city:fr:any');
     });
   });
 
@@ -1191,9 +1229,9 @@ describe('storageDatum utilities', () => {
       const removalWriteGate = new Promise((resolve) => { releaseRemovalWrite = resolve; });
       let removalWriteGated = false;
 
-      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:city:fr' ? store : null));
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:city:fr:any' ? store : null));
       AsyncStorage.setItem.mockImplementation(async (key, value) => {
-        if (key !== 'imageList:city:fr') return;
+        if (key !== 'imageList:city:fr:any') return;
         if (!removalWriteGated) {
           removalWriteGated = true;
           await removalWriteGate;
@@ -1215,7 +1253,7 @@ describe('storageDatum utilities', () => {
       await flushMicrotasks();
       // The append RMW must queue behind the in-flight removal (same lock
       // key): without the lock it would already have read the stale deck.
-      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:city:fr')).toHaveLength(1);
+      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:city:fr:any')).toHaveLength(1);
 
       releaseRemovalWrite();
       await removal;
@@ -1230,9 +1268,9 @@ describe('storageDatum utilities', () => {
       const firstWriteGate = new Promise((resolve) => { releaseFirstWrite = resolve; });
       let firstWriteGated = false;
 
-      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:nature:fr' ? store : null));
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'imageList:nature:fr:any' ? store : null));
       AsyncStorage.setItem.mockImplementation(async (key, value) => {
-        if (key !== 'imageList:nature:fr') return;
+        if (key !== 'imageList:nature:fr:any') return;
         if (!firstWriteGated) {
           firstWriteGated = true;
           await firstWriteGate;
@@ -1247,7 +1285,7 @@ describe('storageDatum utilities', () => {
       const second = removeImageFromList(2, 'nature', 'fr');
       await flushMicrotasks();
       await flushMicrotasks();
-      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:nature:fr')).toHaveLength(1);
+      expect(AsyncStorage.getItem.mock.calls.filter(([key]) => key === 'imageList:nature:fr:any')).toHaveLength(1);
 
       releaseFirstWrite();
       await first;
@@ -1292,7 +1330,7 @@ describe('storageDatum utilities', () => {
       let appendWriteGated = false;
 
       AsyncStorage.getItem.mockImplementation(async (key) => {
-        if (key === 'imageList:city:fr') {
+        if (key === 'imageList:city:fr:any') {
           return store;
         }
         if (key === 'playedPictureIds:public:fr') {
@@ -1301,7 +1339,7 @@ describe('storageDatum utilities', () => {
         return null;
       });
       AsyncStorage.setItem.mockImplementation(async (key, value) => {
-        if (key !== 'imageList:city:fr') {
+        if (key !== 'imageList:city:fr:any') {
           return;
         }
         if (!appendWriteGated) {
@@ -1336,6 +1374,49 @@ describe('storageDatum utilities', () => {
         { listId: 2, imageFile: 'file:///cache/live.jpg' },
         { listId: 3, imageFile: 'file:///cache/new.jpg' },
       ]);
+    });
+  });
+
+  describe('D7 mode-segmented persistence keys', () => {
+    it('exhaustedCategoryKey carries the mode segment and defaults to any', () => {
+      expect(exhaustedCategoryKey('city', 'fr', 'shape')).toBe('exhaustedCategory:city:fr:shape');
+      expect(exhaustedCategoryKey('city', 'fr')).toBe('exhaustedCategory:city:fr:any');
+      expect(exhaustedCategoryKey(null, null)).toBe('exhaustedCategory:all:any:any');
+    });
+
+    it('the four group cache builders carry the mode segment and default to any', () => {
+      expect(groupFeedListKey('g-1', 'cat', 'fr', 'shape')).toBe('groupFeed:g-1:cat:fr:shape');
+      expect(groupFeedCursorKey('g-1', 'cat', 'fr', 'shape')).toBe('groupFeed:g-1:cat:fr:shape:cursor');
+      expect(groupGameCursorKey('g-1', 'cat', 'fr', 'shape')).toBe('groupFeed:g-1:game:cat:fr:shape:cursor');
+      expect(groupFeedExhaustedKey('g-1', 'cat', 'fr', 'shape')).toBe('groupFeedExhausted:g-1:cat:fr:shape');
+      expect(groupFeedListKey('g-1', undefined, undefined)).toBe('groupFeed:g-1:all:any:any');
+    });
+
+    it('public deck/cursor/marker round-trip under the mode namespace', async () => {
+      await storeImageList([{ listId: 1 }], 'city', 'fr', 'shape');
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:city:fr:shape', JSON.stringify([{ listId: 1 }]));
+
+      await saveLastImageUuid('uuid-1', 'city', 'fr', null, 'shape');
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('lastImageUuid:city:fr:shape', 'uuid-1');
+
+      await markCategoryExhausted('city', 'fr', { kind: 'public' }, 'shape');
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('exhaustedCategory:city:fr:shape', '1');
+
+      AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([{ listId: 1, imageFile: 'file:///cache/1.jpg' }]));
+      expect(await getLocalImages('city', 'fr', 'shape')).toEqual([{ listId: 1, imageFile: 'file:///cache/1.jpg' }]);
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('imageList:city:fr:shape');
+    });
+
+    it('private game cursor round-trips under the group-scoped key with the mode segment', async () => {
+      const scope = { kind: 'private', groupId: 'g-9' };
+
+      await saveLastImageUuid('cursor-42', 'cat-uuid-7', 'fr', scope, 'shape');
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:shape:cursor', 'cursor-42');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('cursor-42');
+      expect(await getLastImageUuid('cat-uuid-7', 'fr', scope, 'shape')).toBe('cursor-42');
+      expect(AsyncStorage.getItem).toHaveBeenLastCalledWith('groupFeed:g-9:game:cat-uuid-7:fr:shape:cursor');
     });
   });
 

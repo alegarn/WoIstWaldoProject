@@ -62,6 +62,9 @@ type GuessRouteParams = {
   isTutorial?: boolean;
   category?: GuessCategory;
   language?: string;
+  // Session filter mode (D8) — travels as filterMode, NEVER `mode`, which is
+  // the CARD's mode. Absent → 'any' = today's unfiltered behavior.
+  filterMode?: string;
   scope?: AdScope;
   activeGroup?: ActiveGroupAdContext | null;
   skipInstructions?: boolean;
@@ -137,7 +140,8 @@ const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComp
 
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, scope, activeGroup, skipInstructions } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, filterMode, scope, activeGroup, skipInstructions } = route.params;
+  const sessionFilterMode = filterMode || 'any';
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -209,6 +213,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     resolveArgs: {
       category,
       language,
+      filterMode: sessionFilterMode,
       currentListId: listId,
       currentPictureId: pictureId,
       isTutorial,
@@ -219,6 +224,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       listId,
       categoryKey: category?.key,
       language,
+      filterMode: sessionFilterMode,
       imageFile,
       pictureId,
       scope,
@@ -263,6 +269,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     if (category?.key === 'all') return;
     warmAllDeckIfNeeded({
       language,
+      mode: sessionFilterMode,
       scope,
       authContext,
     }).catch(() => {});
@@ -311,6 +318,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     getNextImagesForScope({
       category,
       language,
+      mode: sessionFilterMode,
       currentListId: listId,
       scope,
       limit: 7,
@@ -341,6 +349,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       categoryKey: category?.key || 'all',
       ...(isPrivate ? { categoryId: category?.id } : {}),
       language,
+      mode: sessionFilterMode,
       scope,
       authContext,
       currentListId: listId,
@@ -451,7 +460,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // category+scope so re-entering re-queries the server (handles newly
     // uploaded images since the category was marked empty). Fire-and-forget —
     // navigation proceeds without waiting; the next mount re-queries fresh.
-    clearExhaustedCategory(category?.key, language, scope).catch(() => {});
+    clearExhaustedCategory(category?.key, language, scope, sessionFilterMode).catch(() => {});
     navigation.navigate('GuessPathScreen', isPrivate ? { scope } : {});
   }
 

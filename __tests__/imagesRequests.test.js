@@ -449,7 +449,7 @@ describe('imagesRequests utilities', () => {
     expect(mockBase64).not.toHaveBeenCalled();
     expect(response.isError).toBe(false);
     expect(response.images[0].imageFile).toBe('file:///cache/img-1.png');
-    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', undefined, undefined, undefined, undefined);
   });
 
   it('derives the file extension from the response Content-Type header', async () => {
@@ -577,7 +577,7 @@ describe('imagesRequests utilities', () => {
         }),
       ],
     });
-    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('playable-img', undefined, undefined, undefined, undefined);
   });
 
   it('H1: aborts after one metadata request with no cursor write when every download fails network-class (no HTTP response)', async () => {
@@ -610,10 +610,10 @@ describe('imagesRequests utilities', () => {
     expect(downloadAsync).toHaveBeenCalledTimes(4);
     expect(axios.post).toHaveBeenCalledTimes(3);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(4);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-2', undefined, undefined);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(3, 'img-3', undefined, undefined);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined, undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-2', undefined, undefined, undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(3, 'img-3', undefined, undefined, undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined, undefined, undefined);
   });
 
   it('H1: retries a fully server-class 404 batch (HTTP response received) to budget exhaustion and fails terminal server', async () => {
@@ -629,8 +629,8 @@ describe('imagesRequests utilities', () => {
     expect(response).toEqual(SERVER_ERROR_RESULT);
     expect(axios.post).toHaveBeenCalledTimes(3);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(4);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-1', undefined, undefined, undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined, undefined, undefined);
   });
 
   it('H1: returns partial successes without retrying when some downloads succeed and others fail network-class', async () => {
@@ -647,7 +647,7 @@ describe('imagesRequests utilities', () => {
     expect(response.isError).toBe(false);
     expect(response.images.map((image) => image.pictureId)).toEqual(['img-1', 'img-2']);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('img-5', undefined, undefined);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-5', undefined, undefined, undefined, undefined);
     expect(axios.post).not.toHaveBeenCalled();
   });
 
@@ -769,10 +769,10 @@ describe('imagesRequests utilities', () => {
     await getImages(
       null,
       { token: 'Bearer token' },
-      { category_id: 'uuid-123', category_key: 'nature', language: 'fr' }
+      { category_id: 'uuid-123', category_key: 'nature', language: 'fr', mode: 'shape' }
     );
 
-    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', 'nature', 'fr');
+    expect(saveLastImageUuid).toHaveBeenCalledWith('img-1', 'nature', 'fr', undefined, 'shape');
   });
 
   it('B2: threads category_key into the public image batch query params (no category_id)', async () => {
@@ -856,7 +856,7 @@ describe('imagesRequests utilities', () => {
     );
     expect(response.isError).toBe(false);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-3' });
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-3' }, undefined);
   });
 
   it('leaves the request unchanged when no filters are provided (legacy full feed)', async () => {
@@ -903,7 +903,7 @@ describe('imagesRequests utilities', () => {
         expect.anything()
       );
       expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-      expect(saveLastImageUuid).toHaveBeenCalledWith('played-3', undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenCalledWith('played-3', undefined, undefined, undefined, undefined);
     });
 
     it('fetches the played set once per getImages call, not once per batch', async () => {
@@ -935,9 +935,9 @@ describe('imagesRequests utilities', () => {
       expect(axios.get).toHaveBeenCalledTimes(1);
       expect(axios.post).toHaveBeenCalledTimes(5);
       expect(saveLastImageUuid).toHaveBeenCalledTimes(6);
-      expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-2', undefined, undefined);
-      expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-3', undefined, undefined);
-      expect(saveLastImageUuid).toHaveBeenLastCalledWith('img-1', undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'img-2', undefined, undefined, undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'img-3', undefined, undefined, undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenLastCalledWith('img-1', undefined, undefined, undefined, undefined);
     });
 
     it('persistCursor:false still pages forward in-memory past a played batch but suppresses every cursor write', async () => {
@@ -1252,5 +1252,95 @@ describe('buildImageObject', () => {
     expect(absentMode.shape).toBeNull();
     expect(nullMode.mode).toBe('point');
     expect(nullMode.shape).toBeNull();
+  });
+});
+
+describe('Task C4/D3: mode filter threading', () => {
+  const setPublicPlayed = (ids) => {
+    AsyncStorage.getItem.mockImplementation(async (key) =>
+      key === 'playedPictureIds:public:fr' ? JSON.stringify(ids) : null);
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.EXPO_PUBLIC_APP_BACKEND_URL = 'https://backend.example/';
+    getBackendHeaders.mockResolvedValue({
+      token: 'Bearer token',
+      uid: 'waldo@example.com',
+      expiry: '123',
+      access_token: 'access',
+      client: 'client',
+      userId: '42',
+    });
+    setHeaders.mockReturnValue({ Authorization: 'Bearer token' });
+    AsyncStorage.getItem.mockReset();
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  it('threads mode into the initial image batch query params beside language', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' }, { category_id: 'X', language: 'fr', mode: 'shape' });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/get_image_batch',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { category_id: 'X', language: 'fr', mode: 'shape' },
+        timeout: 15000,
+      }
+    );
+  });
+
+  it('threads mode into the nested next_image_batch body beside language; exclude stays top-level', async () => {
+    setPublicPlayed(['played-1']);
+    axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages('first-img', { token: 'Bearer token' }, { language: 'fr', mode: 'shape' });
+
+    expect(axios.post).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/next_image_batch',
+      { image: { name: 'first-img', language: 'fr', mode: 'shape' }, exclude: 'played-1' },
+      { headers: { Authorization: 'Bearer token' }, timeout: 15000 }
+    );
+  });
+
+  it('omits the mode param entirely when the filter carries none (legacy full feed unchanged)', async () => {
+    axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+    await getImages(null, { token: 'Bearer token' }, { language: 'fr' });
+
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('mode');
+  });
+
+  it('private delegation forwards mode beside language into fetchPrivateFeedPageForGame (wire + cursor write)', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'img-1' }], next_cursor: 'cursor-9' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+    const response = await getImages(null, { token: 'Bearer token' }, {
+      category_id: 'cat-private-uuid',
+      language: 'fr',
+      mode: 'shape',
+      scope: { kind: 'private', groupId: 'g-3' },
+    });
+
+    expect(response.isError).toBe(false);
+    expect(axios.get).toHaveBeenNthCalledWith(
+      1,
+      'https://backend.example/api/v1/private_groups/g-3/images/',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { category_id: 'cat-private-uuid', language: 'fr', mode: 'shape' },
+      }
+    );
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-9', 'cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-3' }, 'shape');
   });
 });

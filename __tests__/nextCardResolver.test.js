@@ -104,3 +104,43 @@ describe('resolveNextCard', () => {
     expect(getNextImageForScope).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('Task C6/D3: filter-mode threading', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('threads the filter mode beside language into every getNextImageForScope call', async () => {
+    const category = { key: 'city', id: 7 };
+    const allCard = { listId: 1, imageFile: 'file:///cache/all1.jpg' };
+    getNextImageForScope
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(allCard);
+
+    const result = await resolveNextCard({ category, language: 'fr', mode: 'shape', currentListId: 9, scope: { kind: 'public' } });
+
+    expect(result).toEqual({ card: allCard, category: RECENT_ALL_CATEGORY });
+    expect(getNextImageForScope).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      category, language: 'fr', mode: 'shape', currentListId: 9, scope: { kind: 'public' },
+    }));
+    expect(getNextImageForScope).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      category: RECENT_ALL_CATEGORY, language: 'fr', mode: 'shape', currentListId: undefined, scope: { kind: 'public' },
+    }));
+  });
+
+  it('advancing within All forwards the filter mode too', async () => {
+    const card = { listId: 12, imageFile: 'file:///cache/12.jpg' };
+    getNextImageForScope.mockResolvedValueOnce(card);
+
+    const result = await resolveNextCard({
+      category: RECENT_ALL_CATEGORY,
+      language: 'en',
+      mode: 'point',
+      currentListId: 11,
+      scope: { kind: 'public' },
+    });
+
+    expect(result).toEqual({ card, category: RECENT_ALL_CATEGORY });
+    expect(getNextImageForScope).toHaveBeenCalledWith(expect.objectContaining({ mode: 'point' }));
+  });
+});

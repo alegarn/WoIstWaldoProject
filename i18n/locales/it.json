@@ -203,8 +203,15 @@
       "deleteCategories": "Elimina categorie",
       "closeManageCategories": "Chiudi gestione categorie",
       "openLanguageFilter": "Apri filtro lingua",
+      "openModeFilter": "Apri filtro modalità",
       "editThumbnailLabel": "Modifica miniatura di {{name}}",
       "deleteCategoryLabel": "Elimina {{name}}"
+    },
+    "modeFilter": {
+      "label": "Modalità",
+      "any": "Qualsiasi modalità",
+      "point": "Punto",
+      "shape": "Contorno"
     },
     "exitMenu": {
       "closeExitPanel": "Chiudi pannello di uscita",

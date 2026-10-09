@@ -146,11 +146,12 @@ function normalizePrivateImage(row: PrivateImageRow, filePath: string) {
 
 export async function fetchPrivateFeedPage(
   context: unknown,
-  { groupId, cursor, categoryId, language, excludeNames }: {
+  { groupId, cursor, categoryId, language, mode, excludeNames }: {
     groupId?: string | number | null;
     cursor?: string | null;
     categoryId?: string;
     language?: string;
+    mode?: string;
     excludeNames?: string[];
   } = {}
 ): Promise<PrivateFeedPageResult> {
@@ -163,6 +164,7 @@ export async function fetchPrivateFeedPage(
   if (cursor) config.params.after = cursor;
   if (categoryId) config.params.category_id = categoryId;
   if (language) config.params.language = language;
+  if (mode) config.params.mode = mode;
   if (excludeNames != null && excludeNames.length > 0) config.params.exclude = excludeNames.join(',');
 
   const response = await axios.get(`${imagesUrl(groupId)}/`, config)
@@ -234,10 +236,11 @@ export async function downloadPrivateImageFromRow(
 export async function fetchPrivateFeedPageForGame(
   pictureId: string | null,
   context: unknown,
-  { groupId, categoryId, language, categoryKey, persistCursor = true }: {
+  { groupId, categoryId, language, mode, categoryKey, persistCursor = true }: {
     groupId?: string | number | null;
     categoryId?: string;
     language?: string;
+    mode?: string;
     categoryKey?: string | null;
     persistCursor?: boolean;
   } = {}
@@ -270,6 +273,7 @@ export async function fetchPrivateFeedPageForGame(
       cursor,
       categoryId,
       language,
+      mode,
       excludeNames,
     });
 
@@ -282,7 +286,7 @@ export async function fetchPrivateFeedPageForGame(
 
     if (rows.length === 0) {
       if (persistCursor) {
-        await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+        await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope, mode);
       }
       return skippedPlayedBatches > 0
         ? { isError: false, reason: 'played-out', images: [] }
@@ -297,12 +301,12 @@ export async function fetchPrivateFeedPageForGame(
     if (unplayedRows.length === 0) {
       if (!nextCursor) {
         if (persistCursor) {
-          await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+          await saveLastImageUuid(PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope, mode);
         }
         return { isError: false, reason: 'played-out', images: [] };
       }
       if (persistCursor) {
-        await saveLastImageUuid(nextCursor, categoryKey, language, cursorScope);
+        await saveLastImageUuid(nextCursor, categoryKey, language, cursorScope, mode);
       }
       skippedPlayedBatches += 1;
       if (skippedPlayedBatches > MAX_PLAYED_SKIPS) {
@@ -313,7 +317,7 @@ export async function fetchPrivateFeedPageForGame(
     }
 
     if (persistCursor) {
-      await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope);
+      await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope, mode);
     }
 
     const downloaded = await Promise.all(

@@ -214,7 +214,7 @@ describe('private scope games', () => {
 
     async function seedGroupDeck(cards) {
       // Key shape from services/groups/groupFeedCache (categoryId, language).
-      await AsyncStorage.setItem('groupFeed:g-123:cat-1:fr', JSON.stringify(cards));
+      await AsyncStorage.setItem('groupFeed:g-123:cat-1:fr:any', JSON.stringify(cards));
     }
 
     async function confirmGuess(screen) {

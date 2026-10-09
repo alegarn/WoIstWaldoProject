@@ -169,88 +169,88 @@ describe('servingCycle (card-serving-cycle Task A1)', () => {
 
   it('startNewServingCycle removes lastImageUuid cursors (every category key + \'all\') for the scope+language', async () => {
     const store = mockStore({
-      'lastImageUuid:interiors:fr': 'uuid-1',
-      'lastImageUuid:nature:fr': 'uuid-2',
-      'lastImageUuid:all:fr': '__public_feed_end__',
-      'lastImageUuid:interiors:en': 'uuid-en',
+      'lastImageUuid:interiors:fr:any': 'uuid-1',
+      'lastImageUuid:nature:fr:any': 'uuid-2',
+      'lastImageUuid:all:fr:any': '__public_feed_end__',
+      'lastImageUuid:interiors:en:any': 'uuid-en',
     });
 
     await startNewServingCycle('fr', null);
 
-    expect(store.has('lastImageUuid:interiors:fr')).toBe(false);
-    expect(store.has('lastImageUuid:nature:fr')).toBe(false);
-    expect(store.has('lastImageUuid:all:fr')).toBe(false);
-    expect(store.get('lastImageUuid:interiors:en')).toBe('uuid-en');
+    expect(store.has('lastImageUuid:interiors:fr:any')).toBe(false);
+    expect(store.has('lastImageUuid:nature:fr:any')).toBe(false);
+    expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
+    expect(store.get('lastImageUuid:interiors:en:any')).toBe('uuid-en');
   });
 
   it('startNewServingCycle removes exhaustedCategory markers including \'all\'', async () => {
     const store = mockStore({
-      'exhaustedCategory:interiors:fr': '1',
-      'exhaustedCategory:all:fr': '1',
-      'exhaustedCategory:interiors:en': '1',
+      'exhaustedCategory:interiors:fr:any': '1',
+      'exhaustedCategory:all:fr:any': '1',
+      'exhaustedCategory:interiors:en:any': '1',
     });
 
     await startNewServingCycle('fr', null);
 
-    expect(store.has('exhaustedCategory:interiors:fr')).toBe(false);
-    expect(store.has('exhaustedCategory:all:fr')).toBe(false);
-    expect(store.get('exhaustedCategory:interiors:en')).toBe('1');
+    expect(store.has('exhaustedCategory:interiors:fr:any')).toBe(false);
+    expect(store.has('exhaustedCategory:all:fr:any')).toBe(false);
+    expect(store.get('exhaustedCategory:interiors:en:any')).toBe('1');
   });
 
   it('group scope clears group :cursor + groupFeedExhausted, leaves public cursors alone', async () => {
     const store = mockStore({
-      'groupFeed:gA:cat-uuid-1:fr:cursor': JSON.stringify({ nextCursor: 'cursor-1' }),
-      'groupFeed:gA:all:fr:cursor': JSON.stringify({ nextCursor: null }),
-      'groupFeed:gA:cat-uuid-1:fr': JSON.stringify([{ listId: 1 }]),
-      'groupFeed:gA:game:cat-uuid-1:fr:cursor': 'cursor-game-1',
-      'groupFeed:gA:game:all:fr:cursor': '__private_feed_end__',
-      'groupFeedExhausted:gA:cat-uuid-1:fr': '1',
-      'groupFeed:gB:cat-uuid-1:fr:cursor': JSON.stringify({ nextCursor: 'cursor-b' }),
-      'groupFeedExhausted:gB:cat-uuid-1:fr': '1',
-      'lastImageUuid:interiors:fr': 'public-cursor',
-      'exhaustedCategory:interiors:fr': '1',
-      'groupFeed:gA:cat-uuid-1:en:cursor': JSON.stringify({ nextCursor: 'cursor-en' }),
+      'groupFeed:gA:cat-uuid-1:fr:any:cursor': JSON.stringify({ nextCursor: 'cursor-1' }),
+      'groupFeed:gA:all:fr:any:cursor': JSON.stringify({ nextCursor: null }),
+      'groupFeed:gA:cat-uuid-1:fr:any': JSON.stringify([{ listId: 1 }]),
+      'groupFeed:gA:game:cat-uuid-1:fr:any:cursor': 'cursor-game-1',
+      'groupFeed:gA:game:all:fr:any:cursor': '__private_feed_end__',
+      'groupFeedExhausted:gA:cat-uuid-1:fr:any': '1',
+      'groupFeed:gB:cat-uuid-1:fr:any:cursor': JSON.stringify({ nextCursor: 'cursor-b' }),
+      'groupFeedExhausted:gB:cat-uuid-1:fr:any': '1',
+      'lastImageUuid:interiors:fr:any': 'public-cursor',
+      'exhaustedCategory:interiors:fr:any': '1',
+      'groupFeed:gA:cat-uuid-1:en:any:cursor': JSON.stringify({ nextCursor: 'cursor-en' }),
     });
 
     await startNewServingCycle('fr', { kind: 'private', groupId: 'gA' });
 
-    expect(store.has('groupFeed:gA:cat-uuid-1:fr:cursor')).toBe(false);
-    expect(store.has('groupFeed:gA:all:fr:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:cat-uuid-1:fr:any:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:all:fr:any:cursor')).toBe(false);
     // F1/F2 junction pin: the group-scoped GAME transport cursor keys match
     // the clear pattern (groupFeed:<gid>:*:<lang>:cursor) so the transition
     // wipes the live private cursor — no post-transition cursor-mode misses.
-    expect(store.has('groupFeed:gA:game:cat-uuid-1:fr:cursor')).toBe(false);
-    expect(store.has('groupFeed:gA:game:all:fr:cursor')).toBe(false);
-    expect(store.has('groupFeedExhausted:gA:cat-uuid-1:fr')).toBe(false);
-    expect(JSON.parse(store.get('groupFeed:gA:cat-uuid-1:fr') ?? '[]')).toEqual([{ listId: 1 }]);
-    expect(store.get('lastImageUuid:interiors:fr')).toBe('public-cursor');
-    expect(store.get('exhaustedCategory:interiors:fr')).toBe('1');
-    expect(store.get('groupFeed:gB:cat-uuid-1:fr:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-b' }));
-    expect(store.get('groupFeedExhausted:gB:cat-uuid-1:fr')).toBe('1');
-    expect(store.get('groupFeed:gA:cat-uuid-1:en:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-en' }));
+    expect(store.has('groupFeed:gA:game:cat-uuid-1:fr:any:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:game:all:fr:any:cursor')).toBe(false);
+    expect(store.has('groupFeedExhausted:gA:cat-uuid-1:fr:any')).toBe(false);
+    expect(JSON.parse(store.get('groupFeed:gA:cat-uuid-1:fr:any') ?? '[]')).toEqual([{ listId: 1 }]);
+    expect(store.get('lastImageUuid:interiors:fr:any')).toBe('public-cursor');
+    expect(store.get('exhaustedCategory:interiors:fr:any')).toBe('1');
+    expect(store.get('groupFeed:gB:cat-uuid-1:fr:any:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-b' }));
+    expect(store.get('groupFeedExhausted:gB:cat-uuid-1:fr:any')).toBe('1');
+    expect(store.get('groupFeed:gA:cat-uuid-1:en:any:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-en' }));
   });
 
   it('public scope leaves group keys untouched (no bleed)', async () => {
     const store = mockStore({
-      'lastImageUuid:interiors:fr': 'public-cursor',
-      'lastImageUuid:all:fr': '__public_feed_end__',
-      'groupFeed:gA:cat-uuid-1:fr:cursor': JSON.stringify({ nextCursor: 'cursor-1' }),
-      'groupFeed:gA:cat-uuid-1:fr': JSON.stringify([{ listId: 1 }]),
-      'groupFeed:gA:game:cat-uuid-1:fr:cursor': 'cursor-game-1',
-      'groupFeedExhausted:gA:cat-uuid-1:fr': '1',
+      'lastImageUuid:interiors:fr:any': 'public-cursor',
+      'lastImageUuid:all:fr:any': '__public_feed_end__',
+      'groupFeed:gA:cat-uuid-1:fr:any:cursor': JSON.stringify({ nextCursor: 'cursor-1' }),
+      'groupFeed:gA:cat-uuid-1:fr:any': JSON.stringify([{ listId: 1 }]),
+      'groupFeed:gA:game:cat-uuid-1:fr:any:cursor': 'cursor-game-1',
+      'groupFeedExhausted:gA:cat-uuid-1:fr:any': '1',
     });
 
     await startNewServingCycle('fr', null);
 
-    expect(store.has('lastImageUuid:interiors:fr')).toBe(false);
-    expect(store.has('lastImageUuid:all:fr')).toBe(false);
+    expect(store.has('lastImageUuid:interiors:fr:any')).toBe(false);
+    expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
     // F1/F2: a public transition must never wipe the group-scoped private
     // game cursor (pre-fix the private cursor lived at lastImageUuid:<uuid>
     // and was over-broadly cleared by the public branch).
-    expect(store.get('groupFeed:gA:cat-uuid-1:fr:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-1' }));
-    expect(store.get('groupFeed:gA:game:cat-uuid-1:fr:cursor')).toBe('cursor-game-1');
-    expect(JSON.parse(store.get('groupFeed:gA:cat-uuid-1:fr') ?? '[]')).toEqual([{ listId: 1 }]);
-    expect(store.get('groupFeedExhausted:gA:cat-uuid-1:fr')).toBe('1');
+    expect(store.get('groupFeed:gA:cat-uuid-1:fr:any:cursor')).toBe(JSON.stringify({ nextCursor: 'cursor-1' }));
+    expect(store.get('groupFeed:gA:game:cat-uuid-1:fr:any:cursor')).toBe('cursor-game-1');
+    expect(JSON.parse(store.get('groupFeed:gA:cat-uuid-1:fr:any') ?? '[]')).toEqual([{ listId: 1 }]);
+    expect(store.get('groupFeedExhausted:gA:cat-uuid-1:fr:any')).toBe('1');
   });
 
   it('locks released after each call (_debugLocksSize() === 0)', async () => {
@@ -268,5 +268,59 @@ describe('servingCycle (card-serving-cycle Task A1)', () => {
     await addPlayedPictureId('pic-1', 'fr', null);
     await startNewServingCycle('fr', null);
     expect(_debugLocksSize()).toBe(0);
+  });
+});
+
+describe('Task C7: cycle reset is mode-agnostic (contains-match on the language segment)', () => {
+  it('public transition clears mode-segmented cursors + markers for EVERY mode, keeps other languages and the epoch key', async () => {
+    const store = mockStore({
+      'servingCycle:public:fr': '0',
+      'lastImageUuid:city:fr:point': 'u1',
+      'lastImageUuid:city:fr:shape': 'u2',
+      'lastImageUuid:all:fr:any': '__public_feed_end__',
+      'exhaustedCategory:city:fr:shape': '1',
+      'exhaustedCategory:all:fr:point': '1',
+      'lastImageUuid:city:en:point': 'kept-en',
+      'exhaustedCategory:city:en:any': 'kept-en',
+      'groupFeed:gA:game:cat:fr:shape:cursor': 'kept-group',
+    });
+
+    await startNewServingCycle('fr', null);
+
+    expect(store.has('lastImageUuid:city:fr:point')).toBe(false);
+    expect(store.has('lastImageUuid:city:fr:shape')).toBe(false);
+    expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
+    expect(store.has('exhaustedCategory:city:fr:shape')).toBe(false);
+    expect(store.has('exhaustedCategory:all:fr:point')).toBe(false);
+    expect(store.get('lastImageUuid:city:en:point')).toBe('kept-en');
+    expect(store.get('exhaustedCategory:city:en:any')).toBe('kept-en');
+    expect(store.get('groupFeed:gA:game:cat:fr:shape:cursor')).toBe('kept-group');
+    expect(store.get('servingCycle:public:fr')).toBe('1');
+  });
+
+  it('group transition clears mode-segmented group cursors + exhausted markers for EVERY mode, keeps deck lists and other groups', async () => {
+    const store = mockStore({
+      'groupFeed:gA:cat:fr:point:cursor': JSON.stringify({ nextCursor: 'c1' }),
+      'groupFeed:gA:game:cat:fr:any:cursor': 'c2',
+      'groupFeed:gA:game:all:fr:shape:cursor': '__private_feed_end__',
+      'groupFeedExhausted:gA:cat:fr:shape': '1',
+      'groupFeedExhausted:gA:all:fr:point': '1',
+      'groupFeed:gA:cat:fr:any': JSON.stringify([{ listId: 1 }]),
+      'groupFeed:gB:cat:fr:point:cursor': 'kept-b',
+      'groupFeedExhausted:gB:cat:fr:point': 'kept-b',
+      'lastImageUuid:city:fr:point': 'kept-public',
+    });
+
+    await startNewServingCycle('fr', { kind: 'private', groupId: 'gA' });
+
+    expect(store.has('groupFeed:gA:cat:fr:point:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:game:cat:fr:any:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:game:all:fr:shape:cursor')).toBe(false);
+    expect(store.has('groupFeedExhausted:gA:cat:fr:shape')).toBe(false);
+    expect(store.has('groupFeedExhausted:gA:all:fr:point')).toBe(false);
+    expect(store.get('groupFeed:gA:cat:fr:any')).toBe(JSON.stringify([{ listId: 1 }]));
+    expect(store.get('groupFeed:gB:cat:fr:point:cursor')).toBe('kept-b');
+    expect(store.get('groupFeedExhausted:gB:cat:fr:point')).toBe('kept-b');
+    expect(store.get('lastImageUuid:city:fr:point')).toBe('kept-public');
   });
 });
