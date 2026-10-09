@@ -203,8 +203,15 @@
       "deleteCategories": "Kategorien löschen",
       "closeManageCategories": "Kategorienverwaltung schließen",
       "openLanguageFilter": "Sprachfilter öffnen",
+      "openModeFilter": "Modusfilter öffnen",
       "editThumbnailLabel": "Miniaturbild von {{name}} bearbeiten",
       "deleteCategoryLabel": "{{name}} löschen"
+    },
+    "modeFilter": {
+      "label": "Modus",
+      "any": "Beliebiger Modus",
+      "point": "Punkt",
+      "shape": "Umriss"
     },
     "exitMenu": {
       "closeExitPanel": "Exit-Leiste schließen",

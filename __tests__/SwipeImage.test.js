@@ -140,29 +140,29 @@ const contextValue = {
 // --- storage keys (shapes owned by storageDatum / playedPictureIds /
 // servingCycle / groupFeedCache) ---------------------------------------------
 
-const deckKey = (categoryKey = 'all', language = 'any') => `imageList:${categoryKey}:${language}`;
-const publicCursorKey = (categoryKey = 'all', language = 'any') => `lastImageUuid:${categoryKey}:${language}`;
-const exhaustedKey = (categoryKey, language = 'any') => `exhaustedCategory:${categoryKey}:${language}`;
+const deckKey = (categoryKey = 'all', language = 'any', mode = 'any') => `imageList:${categoryKey}:${language}:${mode}`;
+const publicCursorKey = (categoryKey = 'all', language = 'any', mode = 'any') => `lastImageUuid:${categoryKey}:${language}:${mode}`;
+const exhaustedKey = (categoryKey, language = 'any', mode = 'any') => `exhaustedCategory:${categoryKey}:${language}:${mode}`;
 const playedKey = (language = 'any') => `playedPictureIds:public:${language}`;
 const groupPlayedKey = (groupId, language = 'any') => `playedPictureIds:group:${groupId}:${language}`;
 const groupCycleKey = (groupId, language = 'any') => `servingCycle:group:${groupId}:${language}`;
 const publicCycleKey = (language = 'any') => `servingCycle:public:${language}`;
-const groupDeckKey = (groupId, categoryId = null, language = 'any') =>
-  `groupFeed:${groupId}:${categoryId || 'all'}:${language}`;
+const groupDeckKey = (groupId, categoryId = null, language = 'any', mode = 'any') =>
+  `groupFeed:${groupId}:${categoryId || 'all'}:${language}:${mode}`;
 // Private game cursors key off the category KEY (storageDatum
 // lastImageUuidKeyForScope), not the server UUID.
-const groupGameCursorKey = (groupId, categoryKey = 'all', language = 'any') =>
-  `groupFeed:${groupId}:game:${categoryKey || 'all'}:${language}:cursor`;
+const groupGameCursorKey = (groupId, categoryKey = 'all', language = 'any', mode = 'any') =>
+  `groupFeed:${groupId}:game:${categoryKey || 'all'}:${language}:${mode}:cursor`;
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 
 // --- storage helpers ---------------------------------------------------------
 
-async function seedDeck(cards, categoryKey = 'all', language = 'any') {
-  await AsyncStorage.setItem(deckKey(categoryKey, language), JSON.stringify(cards));
+async function seedDeck(cards, categoryKey = 'all', language = 'any', mode = 'any') {
+  await AsyncStorage.setItem(deckKey(categoryKey, language, mode), JSON.stringify(cards));
 }
 
-async function storedDeck(categoryKey = 'all', language = 'any') {
-  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language));
+async function storedDeck(categoryKey = 'all', language = 'any', mode = 'any') {
+  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language, mode));
   return raw ? JSON.parse(raw) : [];
 }
 
@@ -216,7 +216,7 @@ jest.setTimeout(20000);
 
 // --- rendering + gesture helpers ---------------------------------------------
 
-async function renderSwipeImage({ category, language, scope } = {}) {
+async function renderSwipeImage({ category, language, mode, scope } = {}) {
   const startGuessing = jest.fn();
   let renderer;
 
@@ -229,6 +229,7 @@ async function renderSwipeImage({ category, language, scope } = {}) {
           startGuessing={startGuessing}
           category={category}
           language={language}
+          mode={mode}
           scope={scope}
         />
       </AuthContext.Provider>,
@@ -1168,5 +1169,102 @@ describe('SwipeImage', () => {
       expect(hostNodesWithProps(renderer, { testID: 'guess-path.card.fallback' })).toHaveLength(0);
       expect(renderedCardImageUris(renderer)).toContain('file:///saved-hide.jpg');
     });
+  });
+});
+
+describe('Task C6/D3: mode threading', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    __resetForTests();
+    setE2EMode(false);
+    fetchCardBatchMock.mockReset().mockResolvedValue(EMPTY_BATCH);
+    probeAllPoolForUnplayedMock.mockReset().mockResolvedValue({ status: 'exhausted' });
+    axiosGetMock.mockReset();
+    defaultAxiosRoutes();
+    axios.post.mockReset().mockResolvedValue({ data: {} });
+    jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    useFakeAnimationTimers();
+  });
+
+  it('the PRIMARY deck-fill fetch forwards the session mode beside language/scope', async () => {
+    fetchCardBatchMock.mockResolvedValue({
+      isError: false,
+      images: [card('shape-1', 'file:///shape-1.jpg')],
+    });
+
+    const { renderer } = await renderSwipeImage({
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      mode: 'shape',
+    });
+
+    expect(fetchCardBatchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ categoryKey: 'nature', language: 'fr', mode: 'shape' }),
+    );
+    expect(await storedDeck('nature', 'fr', 'shape')).toEqual([
+      expect.objectContaining({ pictureId: 'shape-1', listId: 1 }),
+    ]);
+    expect(renderedCardImageUris(renderer)).toContain('file:///shape-1.jpg');
+  });
+
+  it('a dry top-up under an active mode marks exhaustion under the MODE segment only', async () => {
+    await seedDeck(fourCardDeck('nat'), 'nature', 'fr', 'shape');
+
+    const { renderer } = await renderSwipeImage({
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      mode: 'shape',
+    });
+
+    await swipeLeft(renderer, 1);
+    await swipeLeft(renderer, 2);
+
+    const natureFetches = fetchCardBatchMock.mock.calls.filter(
+      (call) => call[0]?.categoryKey === 'nature',
+    );
+    expect(natureFetches).toHaveLength(1);
+    expect(await AsyncStorage.getItem(exhaustedKey('nature', 'fr', 'shape'))).toBe('1');
+    expect(await AsyncStorage.getItem(exhaustedKey('nature', 'fr', 'any'))).toBeNull();
+    expect(renderedCardImageUris(renderer)).toEqual(['file:///nat-4.jpg', 'file:///nat-3.jpg']);
+  });
+
+  it('a private-scope dismissal keys the group-deck removal on the session mode', async () => {
+    const scope = { kind: 'private', groupId: 'group-7' };
+    await AsyncStorage.setItem(
+      groupDeckKey('group-7', 'cat-nature', 'fr', 'shape'),
+      JSON.stringify(fourCardDeck('grp')),
+    );
+    fetchCardBatchMock.mockResolvedValue({
+      isError: false,
+      images: [card('grp-topup', 'file:///grp-topup.jpg')],
+    });
+
+    const { renderer } = await renderSwipeImage({
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      mode: 'shape',
+      scope,
+    });
+
+    await swipeLeft(renderer, 1);
+
+    const groupDeck = JSON.parse(await AsyncStorage.getItem(groupDeckKey('group-7', 'cat-nature', 'fr', 'shape')));
+    expect(groupDeck.map((c) => c.pictureId)).not.toContain('grp-1');
+    expect(groupDeck.map((c) => c.pictureId)).toContain('grp-topup');
+  });
+
+  it('the exhausted sentinel write lands in the mode-segmented cursor namespace', async () => {
+    fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
+
+    await renderSwipeImage({
+      category: { id: 'cat-nature', key: 'nature' },
+      language: 'fr',
+      mode: 'shape',
+    });
+
+    expect(fetchCardBatchMock).toHaveBeenCalledTimes(2);
+    expect(await AsyncStorage.getItem(publicCursorKey('nature', 'fr', 'shape'))).toBe(PUBLIC_FEED_END_CURSOR);
   });
 });

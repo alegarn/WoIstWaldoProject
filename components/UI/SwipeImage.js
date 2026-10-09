@@ -33,13 +33,14 @@ const FEED_ERROR_KEYS = {
   'Please reconnect': 'guess.feedErrors.reconnectMessage',
 };
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, onOpenFilter, scope }) {
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, mode, onOpenFilter, onOpenModeFilter, scope }) {
   const { t } = useTranslation();
 
   const translateFeedErrorText = (raw) => t(FEED_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
 
   const categoryKey = category?.key || 'all';
   const lang = language || 'any';
+  const filterMode = mode || 'any';
   const privateGroupId = scope?.kind === 'private' ? scope.groupId : null;
   const isPrivateScope = !!privateGroupId;
 
@@ -85,6 +86,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         categoryKey: aKey,
         categoryId: aCat?.id,
         language: lang,
+        mode: filterMode,
         scope,
       });
       // Repeals predecessor plan D3 exemption ("UI replay feature"): the
@@ -104,6 +106,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           categoryKey: aKey,
           categoryId: aCat?.id,
           language: lang,
+          mode: filterMode,
           scope,
         });
         // Resurrection-race reconciliation (Fix 3 §2.3.4): removeCard runs
@@ -120,7 +123,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
       return false;
     };
-  }, [lang, scope]);
+  }, [filterMode, lang, scope]);
 
   /**
    * Fetch+append path: call `fetchCardBatch` with the active category/language/
@@ -138,6 +141,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       categoryKey: activeCategoryKeyRef.current,
       categoryId: activeCategoryRef.current?.id,
       language,
+      mode: filterMode,
       scope,
       authContext: context,
       pictureIdOverride,
@@ -152,7 +156,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, handleData, language, scope]);
+  }, [context, filterMode, handleData, language, scope]);
 
   /**
    * Centralized image-loading entry. Drives the `asyncImagesAreLoading` and
@@ -262,19 +266,21 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         isPrivateScope ? PRIVATE_FEED_END_CURSOR : PUBLIC_FEED_END_CURSOR,
         categoryKey,
         lang,
-        ...(isPrivateScope ? [scope] : []),
+        scope,
+        filterMode,
       );
     }
 
     const headDeck = normalizeListIds(
       isPrivateScope
-        ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang }))?.images ?? []
-        : await getLocalImages(categoryKey, lang) ?? [],
+        ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang, mode: filterMode }))?.images ?? []
+        : await getLocalImages(categoryKey, lang, filterMode) ?? [],
     );
     const servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
     if (isCycleExhausted(headDeck.length, servableCount)) {
       const probe = await probeAllPoolForUnplayed({
         language: lang,
+        mode: filterMode,
         scope,
         authContext: context,
         excludePictureId: imageListRef.current?.[0]?.pictureId,
@@ -285,8 +291,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         // step 3 does, so win-removal namespaces stay consistent.
         const allDeck = await filterPlayedCards(normalizeListIds(
           isPrivateScope
-            ? (await readGroupFeedCache(privateGroupId, { categoryId: undefined, language: lang }))?.images ?? []
-            : await getLocalImages('all', lang) ?? [],
+            ? (await readGroupFeedCache(privateGroupId, { categoryId: undefined, language: lang, mode: filterMode }))?.images ?? []
+            : await getLocalImages('all', lang, filterMode) ?? [],
         ), lang, scope);
         if (allDeck.length > 0) {
           setActiveCategoryKey('all');
@@ -299,7 +305,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       }
       // 'indeterminate' → NO transition (I7); the exhausted flow stands.
     }
-  }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, privateGroupId, scope]);
+  }, [category?.id, categoryKey, context, filterMode, handleImagesLoading, isPrivateScope, lang, privateGroupId, scope]);
 
   /**
    * Mount loader. Reads the local deck for the active (category, language) and
@@ -336,8 +342,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     //await emptyImageList(categoryKey, lang);
     const localImageList = isPrivateScope
-      ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang }))?.images ?? null
-      : await getLocalImages(categoryKey, lang);
+      ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang, mode: filterMode }))?.images ?? null
+      : await getLocalImages(categoryKey, lang, filterMode);
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
@@ -369,17 +375,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       // shared recovery tail still applies (I4).
       await runMountRecoveryFlow(cursorResult, { resetServeStateForHead: false });
     };
-  }, [category?.id, categoryKey, context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, runMountRecoveryFlow, scope]);
+  }, [category?.id, categoryKey, context, filterMode, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, runMountRecoveryFlow, scope]);
 
 
   const deleteImage = useCallback(async (id, imageFilePath) => {
     // delete image
     if (!isPrivateScope) {
-      await removeImageFromList(id, activeCategoryKeyRef.current, lang);
+      await removeImageFromList(id, activeCategoryKeyRef.current, lang, filterMode);
     }
     await deleteImageFromStorage(imageFilePath);
     return null;
-  }, [isPrivateScope, lang]);
+  }, [filterMode, isPrivateScope, lang]);
 
   /*
    * Deck-empty fallback. Prefers background-prefetched cards (re-read the active
@@ -394,8 +400,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     const readDeck = async (deckKey, deckCategory) => filterPlayedCards(normalizeListIds(
       isPrivateScope
-        ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang }))?.images ?? []
-        : await getLocalImages(deckKey, lang) ?? [],
+        ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang, mode: filterMode }))?.images ?? []
+        : await getLocalImages(deckKey, lang, filterMode) ?? [],
     ), lang, scope);
 
     // 1. Re-read the active deck — the background prefetcher may have appended
@@ -415,6 +421,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       categoryKey: aKey,
       categoryId: aCat?.id,
       language,
+      mode: filterMode,
       scope,
       authContext: context,
       currentListId: undefined,
@@ -429,7 +436,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     // 3. Active deck empty and not already on 'all' → fall back to the 'all' deck.
     //    Await the warm so we don't bounce when the warm is mid-flight.
     if (aKey !== 'all') {
-      await warmAllDeckIfNeeded({ language, scope, authContext: context }).catch(() => {});
+      await warmAllDeckIfNeeded({ language, mode: filterMode, scope, authContext: context }).catch(() => {});
       const allDeck = await readDeck('all', RECENT_ALL_CATEGORY);
       if (allDeck.length > 0) {
         setActiveCategoryKey('all');
@@ -442,14 +449,14 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     // 4. Both empty — last-resort foreground load (will show the overlay, but
     //    only when truly out of cards). Keep on the active category/scope.
     if (aKey !== 'all') {
-      const exhausted = await isCategoryExhausted(aKey, language, scope).catch(() => false);
+      const exhausted = await isCategoryExhausted(aKey, language, scope, filterMode).catch(() => false);
       if (exhausted) {
         setNoMoreCard('exhausted');
         return;
       }
     }
     await handleImagesLoading();
-  }, [context, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
+  }, [context, filterMode, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -482,6 +489,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           groupId: privateGroupId,
           categoryId: aCat?.id === 'all' ? undefined : aCat?.id,
           language: lang,
+          mode: filterMode,
           listId: id,
         });
       }
@@ -492,6 +500,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         categoryKey: activeCategoryKeyRef.current,
         categoryId: aCat?.id,
         language,
+        mode: filterMode,
         scope,
         authContext: context,
         currentListId: undefined,
@@ -506,7 +515,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
       return null;
     },
-    [context, deleteImage, isPrivateScope, lang, language, privateGroupId, refillOrFallback, scope]
+    [context, deleteImage, filterMode, isPrivateScope, lang, language, privateGroupId, refillOrFallback, scope]
   );
 
   // Effects __________________________________________________________________
@@ -615,6 +624,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
               image={modalImage}
               onClose={closeDetail}
               onOpenFilter={onOpenFilter}
+              onOpenModeFilter={onOpenModeFilter}
               testIDPrefix="guess-path.detail"
             />
           ) : null}

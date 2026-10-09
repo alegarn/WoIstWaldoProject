@@ -220,7 +220,7 @@ describe('services/groups/groupFeedApi', () => {
     });
 
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' }, undefined);
   });
 
   it('empty private page persists the PRIVATE_FEED_END_CURSOR under the group scope (public cursor never poisoned)', async () => {
@@ -236,7 +236,7 @@ describe('services/groups/groupFeedApi', () => {
     });
 
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', { kind: 'private', groupId: 'g-3' });
+    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', { kind: 'private', groupId: 'g-3' }, undefined);
   });
 
   it('Fix 2a: exported PRIVATE_FEED_END_CURSOR sentinel value is stable', () => {
@@ -546,7 +546,7 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
       undefined,
     );
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', SCOPE, undefined);
   });
 
   it('6a: a row without name matches the played set by its id (normalizePrivateImage identity fallback)', async () => {
@@ -578,9 +578,9 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
     expect(response.images.map((image) => image.imageFile)).toEqual(['file:///cache/private-img-3.jpeg']);
     expect(downloadAsync).toHaveBeenCalledTimes(1);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(2);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE);
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'cursor-3', 'all', 'fr', SCOPE);
-    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE, undefined);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(2, 'cursor-3', 'all', 'fr', SCOPE, undefined);
+    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE, undefined);
   });
 
   it('6b: all-played at the end of the feed (no nextCursor) persists the end sentinel and returns reason played-out with zero downloads', async () => {
@@ -592,7 +592,7 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
     expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
     expect(downloadAsync).not.toHaveBeenCalled();
     expect(saveLastImageUuid).toHaveBeenCalledTimes(1);
-    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE, undefined);
   });
 
   it('6b: an empty page after played skips is played-out, not genuine-empty (a first empty page keeps NO reason)', async () => {
@@ -605,8 +605,8 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
 
     expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
     expect(downloadAsync).not.toHaveBeenCalled();
-    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE);
-    expect(saveLastImageUuid).toHaveBeenLastCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'cursor-2', 'all', 'fr', SCOPE, undefined);
+    expect(saveLastImageUuid).toHaveBeenLastCalledWith('__private_feed_end__', 'all', 'fr', SCOPE, undefined);
   });
 
   it('6b: bound hit after MAX_PLAYED_SKIPS consecutive all-played pages returns played-out with full-tail cursor writes and no sentinel', async () => {
@@ -625,8 +625,8 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
     expect(downloadAsync).not.toHaveBeenCalled();
     expect(axios.get).toHaveBeenCalledTimes(6);
     expect(saveLastImageUuid).toHaveBeenCalledTimes(6);
-    expect(saveLastImageUuid).toHaveBeenLastCalledWith('cursor-7', 'all', 'fr', SCOPE);
-    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE);
+    expect(saveLastImageUuid).toHaveBeenLastCalledWith('cursor-7', 'all', 'fr', SCOPE, undefined);
+    expect(saveLastImageUuid).not.toHaveBeenCalledWith('__private_feed_end__', 'all', 'fr', SCOPE, undefined);
   });
 
   it('6d: persistCursor:false suppresses every cursor write on the played-out loop, including the terminal sentinel', async () => {
@@ -777,5 +777,77 @@ describe('Task 7c: private feed exclude param from group played set', () => {
       headers: AUTH_HEADERS,
       params: { language: 'fr' },
     });
+  });
+});
+
+describe('Task C5/D3: mode filter threading', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getBackendHeaders.mockResolvedValue({ token: TOKEN, userId: 'user-1', scoreId: 'score-1' });
+    setHeaders.mockReturnValue(AUTH_HEADERS);
+  });
+
+  it('fetchPrivateFeedPage sends mode as a query param when provided', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [{ id: 'img-1' }], next_cursor: 'cursor-2' },
+    });
+
+    await fetchPrivateFeedPage(CONTEXT, {
+      groupId: 'g-3',
+      cursor: 'cursor-1',
+      categoryId: 'cat-5',
+      language: 'fr',
+      mode: 'shape',
+    });
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/private_groups/g-3/images/',
+      {
+        headers: AUTH_HEADERS,
+        params: { after: 'cursor-1', category_id: 'cat-5', language: 'fr', mode: 'shape' },
+      }
+    );
+  });
+
+  it('fetchPrivateFeedPage omits the mode param when none is provided (legacy shape unchanged)', async () => {
+    axios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { images: [{ id: 'img-1' }], next_cursor: 'cursor-2' },
+    });
+
+    await fetchPrivateFeedPage(CONTEXT, { groupId: 'g-3', language: 'fr' });
+
+    expect(axios.get.mock.calls[0][1].params).not.toHaveProperty('mode');
+  });
+
+  it('fetchPrivateFeedPageForGame forwards mode onto the wire and persists the cursor under the mode namespace', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'Waldo' }], next_cursor: 'cursor-2' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'fr',
+      mode: 'shape',
+    });
+
+    expect(response.isError).toBe(false);
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/private_groups/g-3/images/',
+      {
+        headers: AUTH_HEADERS,
+        params: { language: 'fr', mode: 'shape' },
+      }
+    );
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' }, 'shape');
   });
 });

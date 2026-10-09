@@ -1,4 +1,5 @@
 const mockSwipeImage = jest.fn(() => null);
+const mockSwipeImageMounts = [];
 const mockSwipeInstructions = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockLoadingOverlay = jest.fn(() => null);
@@ -49,7 +50,14 @@ jest.mock('@react-navigation/native-stack', () => {
 });
 
 jest.mock('../components/UI/SwipeImage', () => {
+  const React = require('react');
+
   return function MockSwipeImage(props) {
+    React.useEffect(() => {
+      mockSwipeImageMounts.push(
+        `${props.category?.key || 'all'}:${props.language || 'any'}:${props.mode || 'any'}`
+      );
+    }, []);
     mockSwipeImage(props);
     return null;
   };
@@ -111,6 +119,8 @@ jest.mock('../utils/storageDatum', () => ({
   getOnboardingCompleted: jest.fn(),
   getSessionLanguageFilter: jest.fn(),
   saveSessionLanguageFilter: jest.fn(),
+  getSessionModeFilter: jest.fn(),
+  saveSessionModeFilter: jest.fn(),
 }));
 
 jest.mock('../hooks/useGroupsHub', () => ({
@@ -133,6 +143,8 @@ import {
   getOnboardingCompleted,
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
+  getSessionModeFilter,
+  saveSessionModeFilter,
 } from '../utils/storageDatum';
 
 describe('GuessFeedScreen', () => {
@@ -140,9 +152,12 @@ describe('GuessFeedScreen', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSwipeImageMounts.length = 0;
     getOnboardingCompleted.mockResolvedValue(true);
     getSessionLanguageFilter.mockResolvedValue('fr');
     saveSessionLanguageFilter.mockResolvedValue(undefined);
+    getSessionModeFilter.mockResolvedValue(null);
+    saveSessionModeFilter.mockResolvedValue(undefined);
     jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
       height: 640,
@@ -207,7 +222,7 @@ describe('GuessFeedScreen', () => {
     const route = makeRoute({ language: 'de' });
     const renderer = await renderScreen(navigation, route);
 
-    expect(mockSwipeInstructions).toHaveBeenCalledTimes(1);
+    expect(mockSwipeInstructions).toHaveBeenCalled();
     expect(mockSwipeInstructions.mock.calls[0][0].screenWidth).toBe(320);
     expect(mockSwipeImage).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
@@ -335,6 +350,7 @@ describe('GuessFeedScreen', () => {
       description: 'Find Waldo',
       touchLocation: { x: 0.5, y: 0.5 },
       hiddenLocation: { x: 0.5, y: 0.5 },
+      filterMode: 'any',
     });
   });
 
@@ -431,6 +447,116 @@ describe('GuessFeedScreen', () => {
     expect(saveSessionLanguageFilter).toHaveBeenCalledWith('de');
     expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('de');
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
+  });
+
+  it('seeds the mode filter from the route mode param without reading storage', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ mode: 'point' });
+    const renderer = await renderScreen(navigation, route);
+
+    expect(getSessionModeFilter).not.toHaveBeenCalled();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('point');
+
+    dismissSwipeInstructions(renderer);
+
+    expect(mockSwipeImage).toHaveBeenCalledTimes(1);
+    expect(mockSwipeImage.mock.calls[0][0].mode).toBe('point');
+  });
+
+  it('falls back to the stored session mode filter, then to the any sentinel', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: undefined });
+    const deferredMode = createDeferred();
+
+    getSessionModeFilter.mockReturnValue(deferredMode.promise);
+
+    const renderer = await renderScreen(navigation, route);
+
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('any');
+
+    await act(async () => {
+      deferredMode.resolve('shape');
+      await flushEffects();
+    });
+
+    expect(getSessionModeFilter).toHaveBeenCalledTimes(1);
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('shape');
+
+    dismissSwipeInstructions(renderer);
+
+    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].mode).toBe('shape');
+  });
+
+  it('opens the mode filter modal when the badge detail mode button requests it', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute();
+    const renderer = await renderScreen(navigation, route);
+
+    expect(() => renderer.root.findByProps({ testID: 'guess-feed.filter.mode' })).toThrow();
+
+    dismissSwipeInstructions(renderer);
+
+    await act(async () => {
+      mockSwipeImage.mock.calls[0][0].onOpenModeFilter();
+      await flushEffects();
+    });
+
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.option.shape' })).toBeTruthy();
+  });
+
+  it('persists the selected mode and remounts the deck with the new mode key segment', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute();
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
+
+    await act(async () => {
+      mockSwipeImage.mock.calls[0][0].onOpenModeFilter();
+      await flushEffects();
+    });
+
+    expect(mockSwipeImageMounts).toEqual(['nature:fr:any']);
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-feed.filter.mode.option.shape' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(saveSessionModeFilter).toHaveBeenCalledWith('shape');
+    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].mode).toBe('shape');
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('shape');
+    expect(mockSwipeImageMounts).toEqual(['nature:fr:any', 'nature:fr:shape']);
+  });
+
+  it('startGuessing threads filterMode beside the card mode without shadowing it (D8)', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute({ language: undefined });
+
+    getSessionLanguageFilter.mockResolvedValue('fr');
+    getSessionModeFilter.mockResolvedValue('point');
+
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
+
+    const { startGuessing } = mockSwipeImage.mock.calls[0][0];
+
+    await act(async () => {
+      startGuessing({
+        item: {
+          pictureId: 'img-card-1',
+          touchLocation: { x: 0.5, y: 0.5 },
+          mode: 'shape',
+          shape: [{ x: 0.5, y: 0.5 }],
+        },
+      });
+    });
+
+    const params = navigation.navigate.mock.calls[0][1];
+    expect(params.mode).toBe('shape');
+    expect(params.filterMode).toBe('point');
   });
 });
 

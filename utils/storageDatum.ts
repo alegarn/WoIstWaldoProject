@@ -14,6 +14,7 @@ import type { CardImage } from "../services/cardDeck";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
 const SESSION_LANGUAGE_FILTER_KEY = 'sessionLanguageFilter';
+const SESSION_MODE_FILTER_KEY = 'sessionModeFilter';
 const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
 const UI_LOCALE_KEY = 'uiLocale';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
@@ -32,16 +33,16 @@ function isPrivateScope(scope: unknown): scope is PrivateScope {
     !!(scope as { groupId?: unknown }).groupId;
 }
 
-function imageListKey(categoryKey: string | null | undefined, language: string | null | undefined): string {
-  return `${IMAGE_LIST_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
+function imageListKey(categoryKey: string | null | undefined, language: string | null | undefined, mode: string | null | undefined): string {
+  return `${IMAGE_LIST_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
 };
 
-function lastImageUuidKey(categoryKey: string | null | undefined, language: string | null | undefined): string {
-  return `${LAST_IMAGE_UUID_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
+function lastImageUuidKey(categoryKey: string | null | undefined, language: string | null | undefined, mode: string | null | undefined): string {
+  return `${LAST_IMAGE_UUID_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
 };
 
-export function exhaustedCategoryKey(categoryKey: string | null | undefined, language?: string | null): string {
-  return `${EXHAUSTED_CATEGORY_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}`;
+export function exhaustedCategoryKey(categoryKey: string | null | undefined, language?: string | null, mode?: string | null): string {
+  return `${EXHAUSTED_CATEGORY_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
 };
 
 export interface DeckWriteLockScope {
@@ -91,35 +92,35 @@ export function deckWriteLockKey({ categoryKey, categoryId, language, scope }: D
  * @param language - Language code ('any' when unset).
  * @returns {Promise<void>}
  */
-export async function markCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void> {
+export async function markCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown, mode?: string | null): Promise<void> {
   if (isPrivateScope(scope)) {
-    await markGroupCategoryExhausted(scope.groupId, categoryKey, language);
+    await markGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
     return;
   }
-  await AsyncStorage.setItem(exhaustedCategoryKey(categoryKey, language), '1');
+  await AsyncStorage.setItem(exhaustedCategoryKey(categoryKey, language, mode), '1');
 };
 
 /**
  * Read the exhausted flag for (categoryKey, language, scope).
  * @returns {Promise<boolean>}
  */
-export async function isCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<boolean> {
+export async function isCategoryExhausted(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown, mode?: string | null): Promise<boolean> {
   if (isPrivateScope(scope)) {
-    return isGroupCategoryExhausted(scope.groupId, categoryKey, language);
+    return isGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
   }
-  return (await AsyncStorage.getItem(exhaustedCategoryKey(categoryKey, language))) === '1';
+  return (await AsyncStorage.getItem(exhaustedCategoryKey(categoryKey, language, mode))) === '1';
 };
 
 /**
  * Clear the exhausted flag for (categoryKey, language, scope).
  * @returns {Promise<void>}
  */
-export async function clearExhaustedCategory(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown): Promise<void> {
+export async function clearExhaustedCategory(categoryKey: string | null | undefined, language: string | null | undefined, scope: unknown, mode?: string | null): Promise<void> {
   if (isPrivateScope(scope)) {
-    await clearGroupCategoryExhausted(scope.groupId, categoryKey, language);
+    await clearGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
     return;
   }
-  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
+  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language, mode));
 };
 
 /**
@@ -129,8 +130,8 @@ export async function clearExhaustedCategory(categoryKey: string | null | undefi
  * @param language - Language code ('any' when unset).
  * @returns Viable cards, or null when none stored/unparseable.
  */
-export async function getLocalImages(categoryKey: string | null | undefined, language: string | null | undefined): Promise<CardImage[] | null> {
-  const listKey = imageListKey(categoryKey, language);
+export async function getLocalImages(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<CardImage[] | null> {
+  const listKey = imageListKey(categoryKey, language, mode);
   const stored = await AsyncStorage.getItem(listKey);
   if (!stored) {
     return null;
@@ -207,8 +208,8 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
  * @param excludePictureId - pictureId to filter out before selecting.
  * @returns The next card, or null.
  */
-export async function getNextImage(categoryKey: string | null | undefined, language: string | null | undefined, currentListId?: number, excludePictureId?: string): Promise<CardImage | null> {
-  const raw = await getLocalImages(categoryKey, language);
+export async function getNextImage(categoryKey: string | null | undefined, language: string | null | undefined, currentListId?: number, excludePictureId?: string, mode?: string | null): Promise<CardImage | null> {
+  const raw = await getLocalImages(categoryKey, language, mode);
   if (!Array.isArray(raw) || raw.length === 0) {
     return null;
   }
@@ -232,6 +233,7 @@ export async function getNextImage(categoryKey: string | null | undefined, langu
 export interface NextImageForScopeArgs {
   category?: { key?: string; id?: string | number } | null;
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   scope?: unknown;
   excludePictureId?: string;
@@ -250,13 +252,13 @@ export interface NextImageForScopeArgs {
  *
  * @returns The next card, or null.
  */
-export async function getNextImageForScope({ category, language, currentListId, scope, excludePictureId }: NextImageForScopeArgs): Promise<CardImage | null> {
+export async function getNextImageForScope({ category, language, mode, currentListId, scope, excludePictureId }: NextImageForScopeArgs): Promise<CardImage | null> {
   if (!isPrivateScope(scope)) {
-    return getNextImage(category?.key || 'all', language, currentListId, excludePictureId);
+    return getNextImage(category?.key || 'all', language, currentListId, excludePictureId, mode);
   }
 
   const categoryId = (category?.key === 'all' ? undefined : category?.id) as string | undefined;
-  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language, mode });
   const raw = cache?.images;
   if (!Array.isArray(raw) || raw.length === 0) {
     return null;
@@ -281,6 +283,7 @@ export async function getNextImageForScope({ category, language, currentListId, 
 export interface NextImagesForScopeArgs {
   category?: { key?: string; id?: string | number };
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   scope?: unknown;
   limit?: number;
@@ -296,15 +299,15 @@ export interface NextImagesForScopeArgs {
  * Returns [] (never null) for missing/empty decks so the warmer can feed an
  * empty array directly and render nothing without a null-check at the call site.
  */
-export async function getNextImagesForScope({ category, language, currentListId, scope, limit = 7 }: NextImagesForScopeArgs): Promise<CardImage[]> {
+export async function getNextImagesForScope({ category, language, mode, currentListId, scope, limit = 7 }: NextImagesForScopeArgs): Promise<CardImage[]> {
   const cap = Number.isFinite(limit) && limit > 0 ? Math.floor(limit) : 7;
 
   let images: CardImage[] | null | undefined;
   if (!isPrivateScope(scope)) {
-    images = await getLocalImages(category?.key || 'all', language);
+    images = await getLocalImages(category?.key || 'all', language, mode);
   } else {
     const categoryId = (category?.key === 'all' ? undefined : category?.id) as string | undefined;
-    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language, mode });
     images = cache?.images as CardImage[] | undefined;
   }
 
@@ -328,6 +331,7 @@ export interface RemainingDeckCategory {
 export interface RemainingDeckCountArgs {
   category?: RemainingDeckCategory;
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   scope?: unknown;
 }
@@ -335,6 +339,7 @@ export interface RemainingDeckCountArgs {
 export interface ScopeDeckCountArgs {
   category?: RemainingDeckCategory;
   language?: string | null;
+  mode?: string | null;
   scope?: unknown;
 }
 
@@ -352,14 +357,14 @@ export interface ScopeDeckCountArgs {
  *             - Private scope: count readGroupFeedCache(scope.groupId, {categoryId, language}).images.
  *             Returns 0 for missing/empty decks. Never throws.
  */
-export async function getDeckCountForScope({ category, language, scope }: ScopeDeckCountArgs): Promise<number> {
+export async function getDeckCountForScope({ category, language, mode, scope }: ScopeDeckCountArgs): Promise<number> {
   if (!isPrivateScope(scope)) {
-    const images = await getLocalImages(category?.key || 'all', language);
+    const images = await getLocalImages(category?.key || 'all', language, mode);
     return Array.isArray(images) ? images.length : 0;
   }
 
   const categoryId = (category?.key === 'all' ? undefined : category?.id) as string | undefined;
-  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+  const cache = await readGroupFeedCache(scope.groupId, { categoryId, language, mode });
   return Array.isArray(cache?.images) ? cache.images.length : 0;
 };
 
@@ -382,12 +387,12 @@ export async function getDeckCountForScope({ category, language, scope }: ScopeD
  * Cards with missing or non-finite listId are NOT counted (they are not
  * cursor-resolvable; cardDeck appendCardBatch normalizes them on write).
  */
-export async function getRemainingDeckCount({ category, language, currentListId, scope }: RemainingDeckCountArgs): Promise<number> {
+export async function getRemainingDeckCount({ category, language, mode, currentListId, scope }: RemainingDeckCountArgs): Promise<number> {
   const cursor = Number.isFinite(currentListId) ? (currentListId as number) : -Infinity;
 
   let images;
   if (!isPrivateScope(scope)) {
-    const stored = await AsyncStorage.getItem(imageListKey(category?.key || 'all', language));
+    const stored = await AsyncStorage.getItem(imageListKey(category?.key || 'all', language, mode));
     if (!stored) return 0;
     try {
       images = JSON.parse(stored);
@@ -396,7 +401,7 @@ export async function getRemainingDeckCount({ category, language, currentListId,
     }
   } else {
     const categoryId = (category?.key === 'all' ? undefined : category?.id) as string | undefined;
-    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language });
+    const cache = await readGroupFeedCache(scope.groupId, { categoryId, language, mode });
     images = cache?.images;
   }
 
@@ -412,9 +417,9 @@ function getLastListId(list: CardImage[]): number {
   return lastListId
 };
 
-export async function getLastImageId(categoryKey: string | null | undefined, language: string | null | undefined): Promise<number> {
+export async function getLastImageId(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<number> {
   console.log("getLastImageId");
-  const localImageList = await AsyncStorage.getItem(imageListKey(categoryKey, language));
+  const localImageList = await AsyncStorage.getItem(imageListKey(categoryKey, language, mode));
   //console.log("getLastImageId localImageList", localImageList);
 
   if ((localImageList !== null) && (localImageList !== "[]")) {
@@ -436,11 +441,11 @@ export async function getLastImageId(categoryKey: string | null | undefined, lan
  * (F1/F2 review fix) so the private transport cursor never shares — and never
  * poisons — the public cursor namespace.
  */
-function lastImageUuidKeyForScope(categoryKey: string | null | undefined, language: string | null | undefined, scope?: unknown): string {
+function lastImageUuidKeyForScope(categoryKey: string | null | undefined, language: string | null | undefined, scope?: unknown, mode?: string | null): string {
   if (isPrivateScope(scope)) {
-    return groupGameCursorKey(scope.groupId, categoryKey, language);
+    return groupGameCursorKey(scope.groupId, categoryKey, language, mode);
   }
-  return lastImageUuidKey(categoryKey, language);
+  return lastImageUuidKey(categoryKey, language, mode);
 }
 
 /**
@@ -462,8 +467,8 @@ function lastImageUuidKeyForScope(categoryKey: string | null | undefined, langua
  * @param language - Language code ('any' when unset).
  * @param scope - Private scope object.
  */
-export async function saveLastImageUuid(imageUuid: string, categoryKey?: string | null, language?: string | null, scope?: unknown): Promise<null> {
-  await AsyncStorage.setItem(lastImageUuidKeyForScope(categoryKey, language, scope), imageUuid);
+export async function saveLastImageUuid(imageUuid: string, categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<null> {
+  await AsyncStorage.setItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode), imageUuid);
   return null;
 };
 
@@ -479,8 +484,8 @@ export async function saveLastImageUuid(imageUuid: string, categoryKey?: string 
  * @param scope - Private scope object.
  * @returns Stored cursor, sentinel, or null when unset.
  */
-export async function getLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown): Promise<string | null> {
-  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKeyForScope(categoryKey, language, scope));
+export async function getLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<string | null> {
+  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
   return lastImageUuid;
 };
 
@@ -495,8 +500,8 @@ export async function getLastImageUuid(categoryKey?: string | null, language?: s
  * @param scope - Private scope object.
  * @returns {Promise<void>}
  */
-export async function clearLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown): Promise<void> {
-  await AsyncStorage.removeItem(lastImageUuidKeyForScope(categoryKey, language, scope));
+export async function clearLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<void> {
+  await AsyncStorage.removeItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
 };
 
 export async function getSessionLanguageFilter(): Promise<string | null> {
@@ -510,6 +515,19 @@ export async function getSessionLanguageFilter(): Promise<string | null> {
 
 export async function saveSessionLanguageFilter(code: string | null): Promise<null> {
   await AsyncStorage.setItem(SESSION_LANGUAGE_FILTER_KEY, code as string);
+  return null;
+};
+
+export async function getSessionModeFilter(): Promise<string | null> {
+  const stored = await AsyncStorage.getItem(SESSION_MODE_FILTER_KEY);
+
+  // Keep "unset" distinct from an explicit mode pick ('any' included), mirroring
+  // the session language filter contract.
+  return stored || null;
+};
+
+export async function saveSessionModeFilter(mode: string | null): Promise<null> {
+  await AsyncStorage.setItem(SESSION_MODE_FILTER_KEY, mode as string);
   return null;
 };
 
@@ -632,8 +650,8 @@ async function removeFromCache(localUri: string | null | undefined): Promise<voi
  * @param language - Language code ('any' when unset).
  * @returns {Promise<void>}
  */
-export async function emptyImageList(categoryKey: string | null | undefined, language: string | null | undefined): Promise<void> {
-  const listKey = imageListKey(categoryKey, language);
+export async function emptyImageList(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<void> {
+  const listKey = imageListKey(categoryKey, language, mode);
   const localList = await AsyncStorage.getItem(listKey)
   //console.log("emptyImageList imageList", localList);
   //console.log("if (localList !== null) && (localList !== '[]')", (localList !== null) && (localList !== "[]"));
@@ -645,8 +663,8 @@ export async function emptyImageList(categoryKey: string | null | undefined, lan
   };
 
   await AsyncStorage.removeItem(listKey);
-  await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language));
-  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language));
+  await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language, mode));
+  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language, mode));
   await AsyncStorage.removeItem(playedPictureIdsKey(language, null));
 };
 
@@ -706,8 +724,8 @@ export async function wipePublicGuessStorage(): Promise<void> {
   }
 }
 
-export async function storeImageList(imageList: CardImage[], categoryKey?: string | null, language?: string | null): Promise<void> {
-  await AsyncStorage.setItem(imageListKey(categoryKey, language), JSON.stringify(imageList));
+export async function storeImageList(imageList: CardImage[], categoryKey?: string | null, language?: string | null, mode?: string | null): Promise<void> {
+  await AsyncStorage.setItem(imageListKey(categoryKey, language, mode), JSON.stringify(imageList));
 };
 
 function removeObjectById(imageListObject: CardImage[], listId: number): CardImage[] {
@@ -784,8 +802,8 @@ function dedupByPictureId(prior: unknown, incoming: CardImage[]): CardImage[] {
  * @param language - Language code ('any' when unset).
  * @returns The new persisted deck (post-dedup/normalize).
  */
-export async function updateImageList(updatedImageList: CardImage[], categoryKey?: string | null, language?: string | null): Promise<CardImage[]> {
-  const listKey = imageListKey(categoryKey, language);
+export async function updateImageList(updatedImageList: CardImage[], categoryKey?: string | null, language?: string | null, mode?: string | null): Promise<CardImage[]> {
+  const listKey = imageListKey(categoryKey, language, mode);
   const imageList = await AsyncStorage.getItem(listKey);
   const jsonImageList = imageList ? JSON.parse(imageList) : [];
   const deduped = dedupByPictureId(jsonImageList, updatedImageList);
@@ -805,11 +823,11 @@ export async function updateImageList(updatedImageList: CardImage[], categoryKey
  * @param language - Language code ('any' when unset).
  * @returns {Promise<null>}
  */
-export async function removeImageFromList(listId: number, categoryKey?: string | null, language?: string | null): Promise<null> {
+export async function removeImageFromList(listId: number, categoryKey?: string | null, language?: string | null, mode?: string | null): Promise<null> {
   return withScopeLock(
     deckWriteLockKey({ categoryKey, language, scope: null }),
     async () => {
-      const listKey = imageListKey(categoryKey, language);
+      const listKey = imageListKey(categoryKey, language, mode);
       const imageList = await AsyncStorage.getItem(listKey);
       if (imageList === null || imageList === undefined) {
         return null;

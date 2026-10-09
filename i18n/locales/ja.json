@@ -203,8 +203,15 @@
       "deleteCategories": "カテゴリーを削除",
       "closeManageCategories": "カテゴリー管理を閉じる",
       "openLanguageFilter": "言語フィルターを開く",
+      "openModeFilter": "モードフィルターを開く",
       "editThumbnailLabel": "{{name}} のサムネイルを編集",
       "deleteCategoryLabel": "{{name}} を削除"
+    },
+    "modeFilter": {
+      "label": "モード",
+      "any": "すべてのモード",
+      "point": "ポイント",
+      "shape": "なぞる"
     },
     "exitMenu": {
       "closeExitPanel": "終了パネルを閉じる",

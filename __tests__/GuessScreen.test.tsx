@@ -283,16 +283,16 @@ function serveSuccessiveNextCards() {
   });
 }
 
-function deckKey(categoryKey: string, language: string): string {
-  return `imageList:${categoryKey}:${language}`;
+function deckKey(categoryKey: string, language: string, mode = 'any'): string {
+  return `imageList:${categoryKey}:${language}:${mode}`;
 }
 
-async function seedDeck(categoryKey: string, language: string, cards: Array<Record<string, unknown>>) {
-  await AsyncStorage.setItem(deckKey(categoryKey, language), JSON.stringify(cards));
+async function seedDeck(categoryKey: string, language: string, cards: Array<Record<string, unknown>>, mode = 'any') {
+  await AsyncStorage.setItem(deckKey(categoryKey, language, mode), JSON.stringify(cards));
 }
 
-async function storedDeck(categoryKey: string, language: string): Promise<Array<Record<string, unknown>>> {
-  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language));
+async function storedDeck(categoryKey: string, language: string, mode = 'any'): Promise<Array<Record<string, unknown>>> {
+  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language, mode));
   return raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : [];
 }
 
@@ -714,14 +714,14 @@ describe('GuessScreen', () => {
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
       // The empty server fetch marked the category exhausted while advancing.
-      await expect(AsyncStorage.getItem('exhaustedCategory:nature:fr')).resolves.toBe('1');
+      await expect(AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).resolves.toBe('1');
 
       await act(async () => {
         fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
       });
       await flush();
 
-      expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr')).toBeNull();
+      expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).toBeNull();
       expect(navigation.navigate).toHaveBeenCalledWith('GuessPathScreen', {});
     });
 
@@ -1598,5 +1598,103 @@ describe('GuessScreen', () => {
       expect(outlineMatchMock).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
     });
+  });
+});
+
+describe('GuessScreen session filter threading (D8 filterMode)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
+    applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
+    fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    outlineMatchMock.mockReset().mockImplementation(actualShapeMatch.outlineMatch);
+    useFakeAnimationTimers();
+    setE2EMode(false);
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    cleanup();
+    jest.clearAllTimers();
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+    setE2EMode(false);
+  });
+
+  it('the win-advance resolve carries filterMode as mode — NEVER the card route mode', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    expect(resolveNextCardWithServerFallbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'shape' }),
+    );
+    expect(resolveNextCardWithServerFallbackMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'point' }),
+    );
+  });
+
+  it('the played-card side effects key on filterMode, not the card mode', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    expect(applySuccessSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'shape' }),
+    );
+    expect(applySuccessSideEffectsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'point' }),
+    );
+  });
+
+  it('the deck-ahead warmer reads the filter-mode deck namespace', async () => {
+    serveSuccessiveNextCards();
+    await seedDeck('nature', 'fr', [
+      { listId: 4, pictureId: 'ahead-1', imageFile: 'file:///ahead-1.jpg' },
+      { listId: 5, pictureId: 'ahead-2', imageFile: 'file:///ahead-2.jpg' },
+    ], 'shape');
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await flush();
+
+    expect(renderedImageUris(handle.screen)).toContain('file:///ahead-1.jpg');
+  });
+
+  it('the win prefetch runs against the filter-mode namespace', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    const prefetchCall = fetchCardBatchMock.mock.calls.find(
+      (call) => (call[0] as { categoryKey?: string }).categoryKey === 'nature',
+    );
+    expect(prefetchCall).toBeTruthy();
+    expect((prefetchCall![0] as { mode?: string }).mode).toBe('shape');
+  });
+
+  it('"Switch category" clears only the filter-mode exhausted marker', async () => {
+    resolveNextGuessParamsMock.mockResolvedValue(null);
+    await AsyncStorage.setItem('exhaustedCategory:nature:fr:shape', '1');
+    await AsyncStorage.setItem('exhaustedCategory:nature:fr:any', '1');
+    const navigation = makeNav();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }), navigation);
+
+    await confirmGuess(handle);
+    await dismissWinOverlay(handle);
+
+    await act(async () => {
+      fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
+    });
+    await flush();
+
+    expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:shape')).toBeNull();
+    expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).toBe('1');
   });
 });

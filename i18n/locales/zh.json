@@ -203,8 +203,15 @@
       "deleteCategories": "删除类别",
       "closeManageCategories": "关闭类别管理",
       "openLanguageFilter": "打开语言筛选",
+      "openModeFilter": "打开模式筛选",
       "editThumbnailLabel": "编辑 {{name}} 的缩略图",
       "deleteCategoryLabel": "删除 {{name}}"
+    },
+    "modeFilter": {
+      "label": "模式",
+      "any": "任意模式",
+      "point": "点选",
+      "shape": "圈画"
     },
     "exitMenu": {
       "closeExitPanel": "关闭退出面板",

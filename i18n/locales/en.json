@@ -203,8 +203,15 @@
       "deleteCategories": "Delete categories",
       "closeManageCategories": "Close manage categories",
       "openLanguageFilter": "Open language filter",
+      "openModeFilter": "Open mode filter",
       "editThumbnailLabel": "Edit {{name}} thumbnail",
       "deleteCategoryLabel": "Delete {{name}}"
+    },
+    "modeFilter": {
+      "label": "Mode",
+      "any": "Any mode",
+      "point": "Point",
+      "shape": "Shape"
     },
     "exitMenu": {
       "closeExitPanel": "Close exit panel",

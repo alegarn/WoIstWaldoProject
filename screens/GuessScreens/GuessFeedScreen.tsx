@@ -7,10 +7,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
 import LanguageSelector from '../../components/UI/LanguageSelector';
+import ModeSelector from '../../components/UI/ModeSelector';
 import {
   getOnboardingCompleted,
   getSessionLanguageFilter,
   saveSessionLanguageFilter,
+  getSessionModeFilter,
+  saveSessionModeFilter,
 } from '../../utils/storageDatum';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useFlushOnLeave } from '../../hooks/useFlushOnLeave';
@@ -25,6 +28,7 @@ import { handleOrientation } from '../../utils/orientation';
 // (storageDatum.ts). A hard 'en' default here made every unset query hit
 // `WHERE language = 'en'` against fr/null rows → empty feed until manual reload.
 const DEFAULT_LANGUAGE = 'any';
+const DEFAULT_MODE = 'any';
 
 type Theme = {
   primaryColor?: string;
@@ -40,6 +44,7 @@ type SwipeItem = {
 type GuessFeedRouteParams = {
   category?: { key?: string; id?: string };
   language?: string | null;
+  mode?: string | null;
   skipInstructions?: boolean;
   scope?: { kind: 'private'; groupId: string } | { kind: 'public' };
   [key: string]: unknown;
@@ -61,7 +66,7 @@ type GuessFeedScreenProps = {
 export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenProps) {
   const authContext = useAuthContext();
   useFlushOnLeave({ navigation, authContext });
-  const { category, language: routeLanguage, skipInstructions } = route.params || {};
+  const { category, language: routeLanguage, mode: routeMode, skipInstructions } = route.params || {};
   const routeScope = route?.params?.scope;
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
@@ -71,8 +76,10 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
     theme: Theme | null;
   };
   const [language, setLanguage] = useState<string | null>(routeLanguage || null);
+  const [mode, setMode] = useState<string | null>(routeMode || null);
   const [showOverlay, setShowOverlay] = useState(!skipInstructions);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
+  const [isModeFilterModalVisible, setIsModeFilterModalVisible] = useState(false);
 
   const screenWidth = Dimensions.get('window').width;
   const screenHeight = Dimensions.get('window').height;
@@ -101,7 +108,23 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
       }
     }
 
+    async function loadMode() {
+      if (routeMode) {
+        setMode(routeMode);
+        return;
+      }
+
+      const storedMode = await getSessionModeFilter();
+
+      if (!cancelled && storedMode) {
+        setMode(storedMode);
+      } else if (!cancelled) {
+        setMode(DEFAULT_MODE);
+      }
+    }
+
     loadLanguage();
+    loadMode();
 
     return () => {
       cancelled = true;
@@ -126,10 +149,24 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
     setIsFilterModalVisible(false);
   };
 
+  const handleOpenModeFilter = () => {
+    setIsModeFilterModalVisible(true);
+  };
+
+  const handleCloseModeFilter = () => {
+    setIsModeFilterModalVisible(false);
+  };
+
   const handleSelectLanguage = async (code: string) => {
     await saveSessionLanguageFilter(code);
     setLanguage(code);
     setIsFilterModalVisible(false);
+  };
+
+  const handleSelectMode = async (filterMode: string) => {
+    await saveSessionModeFilter(filterMode);
+    setMode(filterMode);
+    setIsModeFilterModalVisible(false);
   };
 
   const startGuessing = ({ item }: { item: SwipeItem }) => {
@@ -139,14 +176,20 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
       hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
       language: language || DEFAULT_LANGUAGE,
+      filterMode: mode || DEFAULT_MODE,
     });
   };
 
   if (!routeLanguage && language === null) {
     return (
-      <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
-        {DEFAULT_LANGUAGE}
-      </Text>
+      <>
+        <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
+          {DEFAULT_LANGUAGE}
+        </Text>
+        <Text style={styles.hiddenCurrent} testID="guess-feed.filter.mode.current">
+          {DEFAULT_MODE}
+        </Text>
+      </>
     );
   }
 
@@ -156,6 +199,9 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
       <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
         {language || DEFAULT_LANGUAGE}
       </Text>
+      <Text style={styles.hiddenCurrent} testID="guess-feed.filter.mode.current">
+        {mode || DEFAULT_MODE}
+      </Text>
 
       {showOverlay ? (
         <SwipeInstructions
@@ -164,13 +210,15 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
         />
       ) : (
         <SwipeImage
-          key={`${category?.key || 'all'}:${language || 'any'}`}
+          key={`${category?.key || 'all'}:${language || 'any'}:${mode || 'any'}`}
           screenWidth={screenWidth}
           screenHeight={screenHeight}
           startGuessing={startGuessing}
           category={category}
           language={language || DEFAULT_LANGUAGE}
+          mode={mode || DEFAULT_MODE}
           onOpenFilter={handleOpenFilter}
+          onOpenModeFilter={handleOpenModeFilter}
           scope={scope}
         />
       )}
@@ -181,6 +229,14 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
         onClose={handleCloseFilter}
         testIDPrefix="guess-feed.filter.language"
         visible={isFilterModalVisible}
+      />
+
+      <ModeSelector
+        value={mode || DEFAULT_MODE}
+        onChange={handleSelectMode}
+        onClose={handleCloseModeFilter}
+        testIDPrefix="guess-feed.filter.mode"
+        visible={isModeFilterModalVisible}
       />
     </>
     </PrivateGroupThemeProvider>
