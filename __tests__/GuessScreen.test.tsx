@@ -31,10 +31,12 @@
 // AsyncStorage state, and navigation calls.
 
 type PanHandler = (event: { translationX?: number; translationY?: number }, success?: boolean) => void;
+type ShapePanHandler = (event: { x?: number; y?: number }) => void;
 
 type MockGesture = {
   onBeginHandler?: PanHandler;
-  onUpdateHandler?: PanHandler;
+  onStartHandler?: ShapePanHandler;
+  onUpdateHandler?: PanHandler & ShapePanHandler;
   onEndHandler?: PanHandler;
   onFinalizeHandler?: PanHandler;
 };
@@ -56,6 +58,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.onStart = (cb: ShapePanHandler) => {
+      gesture.onStartHandler = cb;
+      return gesture;
+    };
     gesture.onBegin = (cb: PanHandler) => {
       gesture.onBeginHandler = cb;
       return gesture;
@@ -169,15 +175,28 @@ jest.mock('../utils/nextCardAdvancer', () => {
   };
 });
 
+// Shape matcher boundary: the pure corridor math is covered by shapeMatch.test.ts;
+// here tests control the outcome to pin the toAdScreen shape BRANCH (win/lose,
+// args, 10s speed window) while point mode keeps the real isOnTarget path.
+jest.mock('../utils/shapeMatch', () => ({
+  ...jest.requireActual('../utils/shapeMatch'),
+  outlineMatch: jest.fn(),
+}));
+
 import React from 'react';
 import { AppState, Image } from 'react-native';
 import { act, cleanup, fireEvent, render, RenderAPI } from '@testing-library/react-native';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
+import ShowFailure from '../components/Results/ShowFailure';
 import { AuthContext } from '../store/auth-context';
 import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 import { fetchCardBatch } from '../services/cardDeck';
+import { outlineMatch } from '../utils/shapeMatch';
+
+const actualShapeMatch = jest.requireActual('../utils/shapeMatch') as typeof import('../utils/shapeMatch');
+const outlineMatchMock = outlineMatch as jest.MockedFunction<typeof outlineMatch>;
 
 const applySuccessSideEffectsMock = applySuccessSideEffects as jest.MockedFunction<typeof applySuccessSideEffects>;
 const resolveNextGuessParamsMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
@@ -366,6 +385,26 @@ async function confirmGuess(handle: ScreenHandle) {
   await flush();
 }
 
+// Fires the ShapeCanvas draw recognizer (the captured Pan registering onStart)
+// the way the native gesture layer would, then confirms in the validation modal.
+async function confirmShapeGuess(handle: ScreenHandle) {
+  const shapePan = [...mockPanGestures].reverse().find((g) => g.onStartHandler);
+  if (!shapePan?.onStartHandler) {
+    throw new Error('no shape draw Pan gesture captured');
+  }
+  await act(async () => {
+    shapePan.onStartHandler?.({ x: 40, y: 40 });
+    shapePan.onUpdateHandler?.({ x: 120, y: 40 });
+    shapePan.onUpdateHandler?.({ x: 120, y: 120 });
+    shapePan.onUpdateHandler?.({ x: 40, y: 120 });
+    shapePan.onEndHandler?.({}, true);
+  });
+  await act(async () => {
+    fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
+  });
+  await flush();
+}
+
 // The real SuccessOverlay auto-fires onDone when its animation completes; step
 // frames until it does.
 async function dismissWinOverlay(handle: ScreenHandle, maxMs = 10000) {
@@ -438,6 +477,7 @@ describe('GuessScreen', () => {
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    outlineMatchMock.mockReset().mockImplementation(actualShapeMatch.outlineMatch);
     useFakeAnimationTimers();
     setE2EMode(false);
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
@@ -526,6 +566,26 @@ describe('GuessScreen', () => {
       );
       expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+    });
+
+    it('retrying a failed point card re-serves the card with the point params unchanged', async () => {
+      const navigation = makeNav();
+      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
+
+      await confirmGuess(handle);
+
+      const resultParams = navigation.replace.mock.calls[0][1] as Record<string, unknown>;
+
+      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      await act(async () => {
+        fireEvent.press(failure.getByTestId('result.button.retry'));
+      });
+
+      const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
+      expect(retryParams).toMatchObject({ pictureId: 'image-1', isTutorial: false });
+      expect(retryParams).not.toHaveProperty('mode');
+      expect(retryParams).not.toHaveProperty('shape');
+      failure.unmount();
     });
 
     it('a miss in a private group keeps the group context on the result screen', async () => {
@@ -1415,6 +1475,128 @@ describe('GuessScreen', () => {
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
       expect(navigation.setParams).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).toBeNull();
+    });
+  });
+
+  describe('shape mode (guess)', () => {
+    // Hidden shape as stored on the card (normalized [0,1], closed).
+    const HIDDEN_SHAPE = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    function shapeParams(overrides: Record<string, unknown> = {}) {
+      return baseParams({ mode: 'shape', shape: HIDDEN_SHAPE, ...overrides });
+    }
+
+    it('a matching shape outline plays the win animation via outlineMatch, not isOnTarget', async () => {
+      outlineMatchMock.mockReturnValueOnce(true);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      expect(outlineMatchMock).toHaveBeenCalledTimes(1);
+      expect(outlineMatchMock).toHaveBeenCalledWith(expect.objectContaining({
+        hiddenShape: HIDDEN_SHAPE,
+        imageWidth: 800,
+        imageHeight: 1200,
+        screenWidth: expect.any(Number),
+        screenHeight: expect.any(Number),
+      }));
+      expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+      expect(navigation.replace).not.toHaveBeenCalled();
+    });
+
+    it('a disjoint shape outline ends the round on the text-only failure screen', async () => {
+      outlineMatchMock.mockReturnValueOnce(false);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledWith(
+        'ResultScreen',
+        expect.objectContaining({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE, pictureId: 'image-1' }),
+      );
+      expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
+      expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+    });
+
+    it('retrying a failed shape card re-serves the shape surface with the stored outline', async () => {
+      outlineMatchMock.mockReturnValueOnce(false);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      const resultParams = navigation.replace.mock.calls[0][1] as Record<string, unknown>;
+      expect(resultParams).toMatchObject({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE });
+
+      // The real navigator renders the failure screen with the ResultScreen
+      // params; pressing Retry replaces back onto GuessScreen.
+      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      await act(async () => {
+        fireEvent.press(failure.getByTestId('result.button.retry'));
+      });
+
+      const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
+      expect(retryParams).toMatchObject({ mode: 'shape', shape: HIDDEN_SHAPE });
+      failure.unmount();
+
+      // The retried card renders the shape surface and the win check matches
+      // against the STORED outline, not the failed guess outline. Retry params
+      // carry no skipInstructions (same as a point retry), so the mount opens
+      // on the instructions filter — dismiss it like the player would.
+      outlineMatchMock.mockReturnValueOnce(true);
+      const retried = renderGuessScreen(retryParams);
+      await act(async () => {
+        fireEvent.press(retried.screen.getByTestId('game.instructions.guess.start'));
+      });
+      expect(retried.screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+
+      await confirmShapeGuess(retried);
+
+      expect(outlineMatchMock).toHaveBeenCalledWith(expect.objectContaining({ hiddenShape: HIDDEN_SHAPE }));
+      expect(outlineMatchMock.mock.lastCall?.[0]).toMatchObject({ hiddenShape: HIDDEN_SHAPE });
+      expect(retried.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+    });
+
+    it('a shape find past the 5s point window but under 10s still earns the ×2 bonus', async () => {
+      outlineMatchMock.mockReturnValueOnce(true);
+      const handle = renderGuessScreen(shapeParams());
+
+      // Reading grace (3s) holds the chrono; 9s on the clock is ~6s elapsed —
+      // over the 5s point window, inside the 10s shape window.
+      await advance(9000);
+      await confirmShapeGuess(handle);
+
+      expect(handle.screen.getByTestId('guess.success.speed-badge')).toBeTruthy();
+      expect(handle.screen.getByText('×2')).toBeTruthy();
+    });
+
+    it('a shape find over the 10s window earns no bonus', async () => {
+      outlineMatchMock.mockReturnValueOnce(true);
+      const handle = renderGuessScreen(shapeParams());
+
+      await advance(14000);
+      await confirmShapeGuess(handle);
+
+      expect(handle.screen.queryByTestId('guess.success.speed-badge')).toBeNull();
+      expect(handle.screen.getByText('+1')).toBeTruthy();
+    });
+
+    it('a point-mode card never consults outlineMatch', async () => {
+      const handle = renderGuessScreen(baseParams());
+
+      await confirmGuess(handle);
+
+      expect(outlineMatchMock).not.toHaveBeenCalled();
+      expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
     });
   });
 });

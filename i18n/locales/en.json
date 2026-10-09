@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Wait until someone else upload new images",
     "emptyWaitUploadsHint": " - Wait until someone else uploads new images",
     "noDescription": "No description",
+    "shapeInstructions": "Draw the outline you think matches the hidden shape",
+    "shapeEnigmaLabel": "Re-open enigma",
+    "shapeExitLabel": "Exit",
     "card": {
       "open": "Open",
       "swipeableLabel": "Swipeable card {{id}}",
@@ -347,7 +350,10 @@
     "unexpectedError": "Unexpected error",
     "tryAgainLater": "Please try again later",
     "invalidTypeTitle": "Invalid image type",
-    "invalidTypeMessage": "Please select a valid image type (png, jpg or jpeg)"
+    "invalidTypeMessage": "Please select a valid image type (png, jpg or jpeg)",
+    "modeLabel": "Mode",
+    "modePoint": "Point",
+    "modeShape": "Shape"
   },
   "hideInstructions": {
     "describeLabel": "Describe the hidden point",
@@ -386,7 +392,12 @@
       "guessSurfaceLabel": "Guess picture surface",
       "hideSurfaceLabel": "Hide picture surface",
       "guessImageLabel": "Guess picture image",
-      "hideImageLabel": "Hide picture image"
+      "hideImageLabel": "Hide picture image",
+      "shapeSurfaceLabel": "Draw an outline around the hiding spot",
+      "shapeClearLabel": "Clear outline",
+      "shapeRedrawLabel": "Redraw outline",
+      "shapeTooSimple": "Outline too simple — draw a closed shape around the spot",
+      "shapeConfirmLabel": "Confirm outline"
     }
   },
   "groups": {

@@ -120,8 +120,11 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: 'row',
     justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    rowGap: 10,
   },
   space: {
     paddingHorizontal: 10,
+    paddingVertical: 5,
   },
 });

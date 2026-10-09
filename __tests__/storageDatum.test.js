@@ -266,6 +266,27 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.removeItem).toHaveBeenCalledWith('e2eHiddenGuessCard');
   });
 
+  it('round-trips a shape-mode saved e2e hidden guess payload with mode and shape intact', async () => {
+    const payload = {
+      uri: 'file:///guess-shape.jpg',
+      pictureId: 'e2e-hidden-guess-card',
+      mode: 'shape',
+      shape: [
+        { x: 0.5, y: 0.3 },
+        { x: 0.7, y: 0.5 },
+        { x: 0.5, y: 0.7 },
+        { x: 0.3, y: 0.5 },
+        { x: 0.5, y: 0.3 },
+      ],
+    };
+
+    await saveE2EHiddenGuessCard(payload);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('e2eHiddenGuessCard', JSON.stringify(payload));
+
+    AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify(payload));
+    expect(await getE2EHiddenGuessCard()).toEqual(payload);
+  });
+
   it('empties the stored image list for one tuple, clears cache files, and removes exact tracking keys', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
       { imageFile: 'file:///cache/a.jpg' },

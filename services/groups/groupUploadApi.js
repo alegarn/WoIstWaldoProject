@@ -43,6 +43,8 @@ export async function preparePrivateUpload({
   xLocation,
   yLocation,
   language,
+  mode,
+  shape,
 }) {
   const { token } = await getBackendHeaders(context);
   const config = { headers: setHeaders({ token }) };
@@ -68,6 +70,8 @@ export async function preparePrivateUpload({
   if (xLocation !== undefined) privateImage.x_location = xLocation;
   if (yLocation !== undefined) privateImage.y_location = yLocation;
   if (language !== undefined) privateImage.language = language;
+  if (mode !== undefined) privateImage.mode = mode;
+  if (shape !== undefined) privateImage.shape = shape;
 
   const body = { private_image: privateImage };
 

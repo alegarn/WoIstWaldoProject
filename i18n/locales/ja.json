@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - 他の人が新しい画像をアップロードするのを待つ",
     "emptyWaitUploadsHint": " - 他の人が新しい画像をアップロードするのを待つ",
     "noDescription": "説明なし",
+    "shapeInstructions": "隠された形に合うと思う線をなぞってください",
+    "shapeEnigmaLabel": "なぞなぞをもう一度開く",
+    "shapeExitLabel": "やめる",
     "card": {
       "open": "開く",
       "swipeableLabel": "スワイプ可能なカード {{id}}",
@@ -346,7 +349,10 @@
     "unexpectedError": "予期しないエラー",
     "tryAgainLater": "後でもう一度お試しください",
     "invalidTypeTitle": "無効な画像形式",
-    "invalidTypeMessage": "有効な画像形式（png、jpg、jpeg）を選択してください"
+    "invalidTypeMessage": "有効な画像形式（png、jpg、jpeg）を選択してください",
+    "modeLabel": "モード",
+    "modePoint": "ポイント",
+    "modeShape": "なぞる"
   },
   "hideInstructions": {
     "describeLabel": "隠した場所を説明",
@@ -385,7 +391,12 @@
       "guessSurfaceLabel": "推測画像の表面",
       "hideSurfaceLabel": "隠し画像の表面",
       "guessImageLabel": "推測画像",
-      "hideImageLabel": "隠し画像"
+      "hideImageLabel": "隠し画像",
+      "shapeSurfaceLabel": "隠した場所の周りをなぞってください",
+      "shapeClearLabel": "線を消す",
+      "shapeRedrawLabel": "もう一度なぞる",
+      "shapeTooSimple": "線が簡単すぎます — 場所を囲む閉じた形をなぞってください",
+      "shapeConfirmLabel": "線を確定"
     }
   },
   "groups": {

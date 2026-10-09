@@ -1219,4 +1219,38 @@ describe('buildImageObject', () => {
 
     expect(mapped.category).toBeNull();
   });
+
+  it('maps a shape-mode row onto the image (mode + normalized shape)', () => {
+    const shape = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+    const apiImage = {
+      name: 'shape-img',
+      storage_url: 'https://backend.example/api/v1/local_image_storage/shape-img',
+      mode: 'shape',
+      shape,
+    };
+
+    const mapped = buildImageObject(apiImage, 'file:///cache/shape-img.png');
+
+    expect(mapped.mode).toBe('shape');
+    expect(mapped.shape).toEqual(shape);
+  });
+
+  it('defaults absent or null mode to point with null shape (legacy rows stay playable)', () => {
+    const absentMode = buildImageObject(batchRow('legacy-img'), 'file:///cache/legacy-img.png');
+    const nullMode = buildImageObject(
+      { name: 'null-mode-img', mode: null, shape: null },
+      'file:///cache/null-mode-img.png',
+    );
+
+    expect(absentMode.mode).toBe('point');
+    expect(absentMode.shape).toBeNull();
+    expect(nullMode.mode).toBe('point');
+    expect(nullMode.shape).toBeNull();
+  });
 });

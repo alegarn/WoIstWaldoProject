@@ -3,13 +3,14 @@
 // The countdown ring window equals SPEED_WINDOW_MS (same 5s).
 
 export const SPEED_BONUS_THRESHOLD_MS = 5000;
+export const SHAPE_SPEED_BONUS_THRESHOLD_MS = 10000;
 export const SPEED_WINDOW_MS = 5000;
 export const SPEED_MULTIPLIER_BASE = 1;
 export const SPEED_MULTIPLIER_FAST = 2;
 
-export function computeMultiplier(elapsedMs) {
+export function computeMultiplier(elapsedMs, thresholdMs = SPEED_BONUS_THRESHOLD_MS) {
   const clamped = Math.max(0, elapsedMs);
-  if (clamped < SPEED_BONUS_THRESHOLD_MS) {
+  if (clamped < thresholdMs) {
     return SPEED_MULTIPLIER_FAST;
   }
   return SPEED_MULTIPLIER_BASE;

@@ -370,6 +370,8 @@ export function buildImageObject(image: ImageMetadataRow, filePath: string) {
   imageObject.createdAt = image.created_at;
   imageObject.fullDescription = image.full_description;
   imageObject.language = image.language;
+  imageObject.mode = image.mode ?? 'point';
+  imageObject.shape = image.shape ?? null;
 
   if (image.category != null) {
     const { thumbnail_url, sort_order, ...rest } = image.category;

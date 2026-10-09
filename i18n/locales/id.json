@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Menunggu orang lain mengunggah gambar baru",
     "emptyWaitUploadsHint": " - Menunggu orang lain mengunggah gambar baru",
     "noDescription": "Tidak ada deskripsi",
+    "shapeInstructions": "Gambar garis tepi yang menurutmu sesuai dengan bentuk tersembunyi",
+    "shapeEnigmaLabel": "Buka lagi enigma",
+    "shapeExitLabel": "Keluar",
     "card": {
       "open": "Buka",
       "swipeableLabel": "Kartu yang bisa digeser {{id}}",
@@ -346,7 +349,10 @@
     "unexpectedError": "Kesalahan tak terduga",
     "tryAgainLater": "Silakan coba lagi nanti",
     "invalidTypeTitle": "Jenis gambar tidak valid",
-    "invalidTypeMessage": "Pilih jenis gambar yang valid (png, jpg atau jpeg)"
+    "invalidTypeMessage": "Pilih jenis gambar yang valid (png, jpg atau jpeg)",
+    "modeLabel": "Mode",
+    "modePoint": "Titik",
+    "modeShape": "Bentuk"
   },
   "hideInstructions": {
     "describeLabel": "Jelaskan titik tersembunyi",
@@ -385,7 +391,12 @@
       "guessSurfaceLabel": "Permukaan gambar tebakan",
       "hideSurfaceLabel": "Permukaan gambar penyembunyian",
       "guessImageLabel": "Gambar tebakan",
-      "hideImageLabel": "Gambar penyembunyian"
+      "hideImageLabel": "Gambar penyembunyian",
+      "shapeSurfaceLabel": "Gambar garis tepi di sekitar tempat persembunyian",
+      "shapeClearLabel": "Hapus garis tepi",
+      "shapeRedrawLabel": "Gambar ulang garis tepi",
+      "shapeTooSimple": "Garis tepi terlalu sederhana — gambar bentuk tertutup di sekitar lokasinya",
+      "shapeConfirmLabel": "Konfirmasi garis tepi"
     }
   },
   "groups": {

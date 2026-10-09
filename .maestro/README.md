@@ -6,8 +6,11 @@ This directory contains login-first Maestro flows for the deterministic app runt
 
 - `auth-boot-login.yml`: clean launch/login smoke flow using the stable auth and home-screen ids.
 - `hide-login-save-picture.yml`: assumes an already-connected, logged-in session on HomeScreen; hides a point, uploads the fixture image, walks the 3-step describe → language → category wizard, and saves the hidden-picture bridge payload for later guess flows.
+- `hide-shape-to-guess.yml`: same session assumptions; picks shape mode (the E2E shape chip auto-seeds the deterministic outline), confirms the outline, walks the same 3-step wizard, and saves the shape-mode bridge payload for the shape guess flows.
 - `guess-login-saved-picture-success.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, submits a star rating, verifies the success result actions, then uses `Next Card` to confirm direct continuation into the next guess.
 - `guess-login-saved-picture-failure.yml`: assumes an already-connected, logged-in session on HomeScreen; opens the guess path, reuses the saved hide payload, long-presses the guess surface to select the E2E wrong point, verifies the failure result actions, then uses `Next Card` to confirm direct continuation into the next guess.
+- `guess-shape-success.yml`: opens the guess path on the saved shape payload, taps the guess surface to seed the deterministic HIT outline, confirms it, and asserts the in-place success overlay.
+- `guess-shape-failure.yml`: opens the guess path on the saved shape payload, long-presses the guess surface to seed the deterministic MISS outline, confirms it, and asserts the text-only failure ResultScreen actions.
 - `hide-to-guess-to-result.yml`: assumes an already-connected, logged-in session on HomeScreen; runs the deterministic hide -> guess -> ranking journey using the saved hide payload bridge.
 - `auth-boot-signup.yml`: signup smoke flow that generates unique credentials at runtime so it can be rerun without email or username collisions.
 - `private-manage-mode-smoke.yml`: NON-destructive smoke of the owner-only private category manage UI. Switches to a private group, opens the GuessPathScreen "manage" modal, asserts the Update-images / Delete-categories options, and that the per-card pencil / trash icons appear only in the chosen mode. Never taps a pencil/trash. See "Private group flows" below for preconditions.
@@ -50,6 +53,10 @@ The checked-in sample file is `.maestro/e2e.env.example.yaml`; it only documents
 - `guess-path.card.saved` proves the saved hide payload is present; `guess-path.card.fallback` identifies the seeded fallback card.
 - On the guess screen, a normal tap on `game.picture.guess-surface` selects the saved hidden point. A long press on the same surface selects the deterministic incorrect point for failure coverage.
 - `guess-path.card.1` is either the saved hidden picture or the seeded fallback card; swiping it to the right enters the guess screen.
+- Hide mode picker: `game.picture.mode-picker` with `game.picture.mode-chip-point` / `game.picture.mode-chip-shape` chips. Selecting the shape chip in E2E mode auto-seeds the hidden outline from the deterministic shim polygon — no traced gestures. The ShapeCanvas renders `game.picture.shape-surface`, and the stored outline as `game.picture.shape-outline`.
+- Shape confirm/redraw reuses the picture modal with the pinned labels `Confirm outline` / `Redraw outline`. On the hide side the modal auto-opens whenever a drawable outline exists — both from a real stroke on `game.picture.shape-surface` and from the E2E shape chip seed (see `hide-shape-to-guess.yml`).
+- On a shape guess card the surface swipe classifier is suppressed, so `Re-open enigma` (`game.picture.shape-enigma`) and `Exit` (`game.picture.shape-exit`) render as explicit controls at the bottom of the screen.
+- On a shape guess card, a normal tap on `game.picture.guess-surface` seeds the deterministic HIT outline and auto-opens the confirm modal; a long press seeds the deterministic MISS outline. Confirming runs the both-direction outline match against the saved shape (10s speed window).
 - Ranking data is seeded deterministically; the first row name is `John`.
 - Ad delay is reduced to zero, so the result screen is reached immediately after guess confirmation.
 - On success, `result.button.home` and `result.button.next` appear only after selecting a global star on `result.rating.global.star.{1-5}` and waiting for the auto-submit to finish.
@@ -84,6 +91,22 @@ maestro test .maestro/hide-to-guess-to-result.yml
 ```
 
 These flows take no env vars.
+
+### Shape mode flows
+
+The shape flows cover the public-scope shape journey only (the private shape journey is manual). They follow the same order contract as the point flows — a shape hide must run before the shape-only guess flows, because they assert the shape bridge payload the hide flow creates:
+
+```bash
+maestro test .maestro/hide-shape-to-guess.yml
+maestro test .maestro/guess-shape-success.yml
+maestro test .maestro/guess-shape-failure.yml
+```
+
+These flows take no env vars either. Notes:
+
+- Run them AFTER `hide-login-save-picture.yml` in a Phase 2 sequence; `hide-shape-to-guess.yml` overwrites the bridge payload with the shape-mode one, so re-run `hide-login-save-picture.yml` afterwards if you want the point-only guess flows to see the point payload again.
+- No drawing gestures are used anywhere: the hidden outline is seeded by the shape chip, and the guess outline is seeded by tap (HIT) / long press (MISS) on the guess surface.
+- The hide-side confirm modal auto-opens as soon as a drawable outline exists (chip-seeded in E2E mode), matching the guess-side behavior.
 
 ### Private group flows
 

@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - 等别人上传新图片",
     "emptyWaitUploadsHint": " - 等别人上传新图片",
     "noDescription": "暂无描述",
+    "shapeInstructions": "画出你认为与隐藏形状相符的轮廓",
+    "shapeEnigmaLabel": "重新打开谜题",
+    "shapeExitLabel": "退出",
     "card": {
       "open": "打开",
       "swipeableLabel": "可滑动卡片 {{id}}",
@@ -346,7 +349,10 @@
     "unexpectedError": "意外错误",
     "tryAgainLater": "请稍后重试",
     "invalidTypeTitle": "无效的图片类型",
-    "invalidTypeMessage": "请选择有效的图片类型（png、jpg 或 jpeg）"
+    "invalidTypeMessage": "请选择有效的图片类型（png、jpg 或 jpeg）",
+    "modeLabel": "模式",
+    "modePoint": "点选",
+    "modeShape": "圈画"
   },
   "hideInstructions": {
     "describeLabel": "描述隐藏点",
@@ -385,7 +391,12 @@
       "guessSurfaceLabel": "猜测图片区域",
       "hideSurfaceLabel": "隐藏图片区域",
       "guessImageLabel": "猜测图片",
-      "hideImageLabel": "隐藏图片"
+      "hideImageLabel": "隐藏图片",
+      "shapeSurfaceLabel": "在藏匿处周围画一个轮廓",
+      "shapeClearLabel": "清除轮廓",
+      "shapeRedrawLabel": "重新绘制轮廓",
+      "shapeTooSimple": "轮廓太简单——请在藏匿点周围画一个闭合的形状",
+      "shapeConfirmLabel": "确认轮廓"
     }
   },
   "groups": {

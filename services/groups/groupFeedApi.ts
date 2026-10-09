@@ -31,6 +31,8 @@ export type PrivateImageRow = {
   y_location?: number | null;
   screen_height?: number | null;
   screen_width?: number | null;
+  mode?: string | null;
+  shape?: unknown;
   ratings_average?: number | null;
   ratings_count?: number | null;
   creator_username?: string | null;
@@ -135,6 +137,9 @@ function normalizePrivateImage(row: PrivateImageRow, filePath: string) {
     safeRow.language,
     safeRow.category,
   );
+
+  image.mode = safeRow.mode ?? 'point';
+  image.shape = safeRow.shape ?? null;
 
   return image;
 }

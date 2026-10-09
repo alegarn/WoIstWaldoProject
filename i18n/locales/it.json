@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Aspettare che qualcun altro carichi nuove immagini",
     "emptyWaitUploadsHint": " - Aspettare che qualcun altro carichi nuove immagini",
     "noDescription": "Nessuna descrizione",
+    "shapeInstructions": "Disegna il contorno che pensi corrisponda alla forma nascosta",
+    "shapeEnigmaLabel": "Riapri l'enigma",
+    "shapeExitLabel": "Esci",
     "card": {
       "open": "Apri",
       "swipeableLabel": "Carta scorrevole {{id}}",
@@ -347,7 +350,10 @@
     "unexpectedError": "Errore imprevisto",
     "tryAgainLater": "Riprova più tardi",
     "invalidTypeTitle": "Tipo di immagine non valido",
-    "invalidTypeMessage": "Seleziona un tipo di immagine valido (png, jpg o jpeg)"
+    "invalidTypeMessage": "Seleziona un tipo di immagine valido (png, jpg o jpeg)",
+    "modeLabel": "Modalità",
+    "modePoint": "Punto",
+    "modeShape": "Contorno"
   },
   "hideInstructions": {
     "describeLabel": "Descrivi il punto nascosto",
@@ -386,7 +392,12 @@
       "guessSurfaceLabel": "Superficie dell'immagine da indovinare",
       "hideSurfaceLabel": "Superficie dell'immagine da nascondere",
       "guessImageLabel": "Immagine da indovinare",
-      "hideImageLabel": "Immagine da nascondere"
+      "hideImageLabel": "Immagine da nascondere",
+      "shapeSurfaceLabel": "Disegna un contorno attorno al nascondiglio",
+      "shapeClearLabel": "Cancella il contorno",
+      "shapeRedrawLabel": "Ridisegna il contorno",
+      "shapeTooSimple": "Contorno troppo semplice — disegna una forma chiusa attorno al punto",
+      "shapeConfirmLabel": "Conferma il contorno"
     }
   },
   "groups": {

@@ -14,10 +14,12 @@ import GuessAdvanceLoader from '../../components/Guess/GuessAdvanceLoader';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
+import { outlineMatch } from '../../utils/shapeMatch';
+import type { Point } from '../../utils/shapeGeometry';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { getNextImagesForScope, clearExhaustedCategory } from '../../utils/storageDatum';
-import { computeMultiplier, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { computeMultiplier, SPEED_MULTIPLIER_BASE, SHAPE_SPEED_BONUS_THRESHOLD_MS } from '../../utils/speedMultiplier';
 import { computePoints } from '../../utils/guessPoints';
 import { useAdvanceStateMachine } from '../../hooks/useAdvanceStateMachine';
 import { useResolveLifecycle } from '../../hooks/useResolveLifecycle';
@@ -32,6 +34,8 @@ import type { ActiveGroupAdContext } from '../../services/billing/adPolicy';
 
 type HiddenLocation = { x: number; y: number };
 type GuessCategory = { id?: string; key?: string };
+type ImageMode = 'point' | 'shape';
+type ShapeOutline = Point[];
 
 type TargetInfos = {
   location: { x: number; y: number };
@@ -40,6 +44,8 @@ type TargetInfos = {
   screenHeight: number;
   target?: unknown;
   elapsedMs?: number;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
 };
 
 type GuessRouteParams = {
@@ -50,6 +56,8 @@ type GuessRouteParams = {
   imageWidth?: number;
   isPortrait?: boolean;
   hiddenLocation?: HiddenLocation;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
   listId?: number;
   isTutorial?: boolean;
   category?: GuessCategory;
@@ -78,6 +86,8 @@ type SharedParams = {
   imageWidth?: number;
   isPortrait?: boolean;
   hiddenLocation?: HiddenLocation;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
   screenHeight: number;
   screenWidth: number;
   listId?: number;
@@ -101,6 +111,8 @@ type GuessPictureComponent = FC<{
   imageHeight?: number;
   imageWidth?: number;
   hiddenLocation?: HiddenLocation;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
   screenDimensions?: { width?: number; height?: number };
   toAdScreen?: (targetInfos: TargetInfos) => Promise<void> | void;
   skipInstructions?: boolean;
@@ -125,7 +137,7 @@ const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComp
 
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, activeGroup, skipInstructions } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, scope, activeGroup, skipInstructions } = route.params;
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -353,13 +365,30 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }
 
   async function toAdScreen(targetInfos: TargetInfos) {
-    const onTarget = isOnTarget(targetInfos);
-    const multiplier = computeMultiplier(targetInfos?.elapsedMs ?? 0);
+    // Shape branch (plan H5): hidden `shape` (storage, normalized [0,1]) vs the
+    // guess outline drawn on the F surface, matched both-ways by outlineMatch;
+    // the speed bonus uses the 10s shape window. Point mode keeps isOnTarget +
+    // the 5s window byte-identical.
+    const isShapeMode = mode === 'shape';
+    const onTarget = isShapeMode
+      ? outlineMatch({
+          hiddenShape: shape ?? [],
+          guessShape: targetInfos.shape ?? [],
+          imageWidth: imageWidth ?? 0,
+          imageHeight: imageHeight ?? 0,
+          screenWidth,
+          screenHeight,
+        })
+      : isOnTarget(targetInfos);
+    const multiplier = isShapeMode
+      ? computeMultiplier(targetInfos?.elapsedMs ?? 0, SHAPE_SPEED_BONUS_THRESHOLD_MS)
+      : computeMultiplier(targetInfos?.elapsedMs ?? 0);
     const sharedParams: SharedParams = {
       onTarget, imageFile: uri, pictureId, description,
       imageHeight, imageWidth, isPortrait, hiddenLocation,
       screenHeight, screenWidth, listId, isTutorial,
       category, language, scope,
+      ...(isShapeMode ? { mode, shape } : {}),
     };
     if (!onTarget) {
       applyFailurePath(sharedParams);
@@ -462,6 +491,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       imageHeight={imageHeight}
       imageWidth={imageWidth}
       hiddenLocation={hiddenLocation}
+      mode={mode}
+      shape={shape}
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
       skipInstructions={skipInstructions}

@@ -434,6 +434,60 @@ describe('services/groups/groupFeedApi', () => {
     expect(response.isError).toBe(false);
     expect(response.images).toHaveLength(1);
   });
+
+  it('maps a shape-mode row onto the normalized image (mode + shape)', async () => {
+    const shape = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'Shape', mode: 'shape', shape }], next_cursor: null },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'any',
+    });
+
+    expect(response.isError).toBe(false);
+    expect(response.images).toHaveLength(1);
+    expect(response.images[0].mode).toBe('shape');
+    expect(response.images[0].shape).toEqual(shape);
+  });
+
+  it('defaults a mode-absent row to point mode with null shape', async () => {
+    axios.get
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { images: [{ id: 'img-1', name: 'Waldo' }], next_cursor: null },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        data: { data: { url: 'https://backend.example/storage/img-1' } },
+      });
+    downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, {
+      groupId: 'g-3',
+      categoryKey: 'all',
+      language: 'any',
+    });
+
+    expect(response.isError).toBe(false);
+    expect(response.images[0].mode).toBe('point');
+    expect(response.images[0].shape).toBeNull();
+  });
 });
 
 describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () => {

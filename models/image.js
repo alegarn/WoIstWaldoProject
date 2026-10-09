@@ -35,6 +35,10 @@ class Image {
     this.fullDescription = fullDescription;
     this.language = language;
     this.category = category;
+    // Shape mode (plan H1): fields assigned post-constructor style (no ctor
+    // signature change). Absent mode = point; shape stays null on point rows.
+    this.mode = 'point';
+    this.shape = null;
   };
 };
 

@@ -32,6 +32,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.onStart = (cb) => {
+      gesture.onStartHandler = cb;
+      return gesture;
+    };
     gesture.onBegin = (cb) => {
       gesture.onBeginHandler = cb;
       return gesture;
@@ -93,6 +97,7 @@ import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import GuessPicture from '../components/Picture/GuessPicture';
+import { getE2EShapeOutline } from '../utils/e2eMode';
 
 // Real setImageDimensions (landscape 640×480 onto a 320×640 screen) resolves
 // the picture surface to 320×240; the target is min(w,h) * 0.05 = 16 and its
@@ -138,6 +143,29 @@ describe('GuessPicture', () => {
   // onFinalize (ShowPicture's surface swipe registers onEnd).
   function findTargetPan() {
     return [...mockPanGestures].reverse().find((g) => g.onFinalizeHandler);
+  }
+
+  // The ShapeCanvas draw recognizer is the only captured Pan that registers
+  // onStart (point target registers onBegin, surface swipe only onEnd).
+  function findShapePan() {
+    return [...mockPanGestures].reverse().find((g) => g.onStartHandler);
+  }
+
+  // Fires the ShapeCanvas draw recognizer the way the native Pan layer would:
+  // an absolute start point inside the image rect, updates through the
+  // remaining vertices, then end (finalizes the stroke).
+  async function fireShapePan(vertices) {
+    const pan = findShapePan();
+    if (!pan) {
+      throw new Error('no shape draw Pan gesture is attached to the rendered surface');
+    }
+    await act(async () => {
+      pan.onStartHandler({ x: vertices[0].x, y: vertices[0].y });
+      for (const vertex of vertices.slice(1)) {
+        pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
+      }
+      pan.onEndHandler({}, true);
+    });
   }
 
   async function fireTargetPan(handlers) {
@@ -494,6 +522,142 @@ describe('GuessPicture', () => {
       expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: expect.any(Number) }));
       const payload = toAdScreen.mock.calls[0][0];
       expect(typeof payload.elapsedMs).toBe('number');
+    });
+  });
+
+  describe('shape mode (guess)', () => {
+    // Hidden shape shipped on shape cards (normalized [0,1], closed).
+    const HIDDEN_SHAPE = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+    // Landscape 640×480 image on the 320×640 screen renders a 320×240 surface,
+    // so this triangle normalizes to (0.1,0.1) → (0.9,0.1) → (0.5,0.9) (+ auto-close).
+    const STROKE_VERTICES = [{ x: 32, y: 24 }, { x: 288, y: 24 }, { x: 160, y: 216 }];
+    const NORMALIZED_STROKE = [
+      { x: 0.1, y: 0.1 },
+      { x: 0.9, y: 0.1 },
+      { x: 0.5, y: 0.9 },
+      { x: 0.1, y: 0.1 },
+    ];
+
+    it('renders the draw surface instead of the point target', async () => {
+      setE2EMode(false);
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE });
+
+      expect(screen.queryByTestId('game.picture.guess-target-wrap')).toBeNull();
+      expect(screen.queryByTestId('game.picture.clear-guess')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+    });
+
+    it('ships the normalized drawn outline to toAdScreen on confirm', async () => {
+      setE2EMode(false);
+      const toAdScreen = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
+
+      expect(confirmModalQuery(screen)).toBeNull();
+
+      await fireShapePan(STROKE_VERTICES);
+
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+
+      expect(toAdScreen).toHaveBeenCalledTimes(1);
+      expect(toAdScreen).toHaveBeenCalledWith({
+        location: null,
+        hiddenLocation: { x: 0.58, y: 0.46 },
+        screenWidth: 320,
+        screenHeight: 640,
+        target: null,
+        elapsedMs: 0,
+        mode: 'shape',
+        shape: NORMALIZED_STROKE,
+      });
+    });
+
+    it('in e2e mode a surface tap seeds the hit outline and confirm ships it', async () => {
+      const toAdScreen = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
+
+      fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+
+      expect(toAdScreen).toHaveBeenCalledTimes(1);
+      expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'shape',
+        shape: getE2EShapeOutline('hit'),
+      }));
+    });
+
+    it('in e2e mode a surface long press seeds the miss outline', async () => {
+      const toAdScreen = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
+
+      fireEvent(screen.getByTestId('game.picture.guess-surface'), 'longPress');
+
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+
+      expect(toAdScreen).toHaveBeenCalledTimes(1);
+      expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({
+        mode: 'shape',
+        shape: getE2EShapeOutline('miss'),
+      }));
+    });
+
+    it('renders explicit enigma and exit controls; exit fires onEdgeSwipe', async () => {
+      setE2EMode(false);
+      const onEdgeSwipe = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, onEdgeSwipe });
+
+      expect(screen.queryByTestId('game.picture.shape-enigma')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-exit')).not.toBeNull();
+      expect(screen.queryByTestId('guess.enigma.panel')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.shape-exit'));
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+    });
+
+    it('re-opens the enigma from the explicit control after closing it', async () => {
+      setE2EMode(false);
+
+      // skipInstructions=true renders the picture directly (no Start button).
+      const screen = render(
+        <GuessPicture {...baseProps} mode="shape" shape={HIDDEN_SHAPE} skipInstructions={true} />
+      );
+
+      expect(screen.getByTestId('guess.enigma.panel')).toBeTruthy();
+
+      fireEvent.press(screen.getByTestId('guess.enigma.close'));
+      expect(screen.queryByTestId('guess.enigma.panel')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.shape-enigma'));
+
+      expect(screen.getByTestId('guess.enigma.panel')).toBeTruthy();
+    });
+
+    it('renders no shape enigma/exit controls in point mode', async () => {
+      setE2EMode(false);
+
+      const screen = await renderToPicture();
+
+      expect(screen.queryByTestId('game.picture.shape-enigma')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-exit')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
     });
   });
 });

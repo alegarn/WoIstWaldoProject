@@ -7,6 +7,7 @@ import IconButton from '../UI/IconButton';
 import CenteredModal from '../UI/CenteredModal';
 import EnigmaOverlay from './Descriptions/EnigmaOverlay';
 import SpeedRing from '../Guess/SpeedRing';
+import ShapeCanvas from './ShapeCanvas';
 import { GlobalStyle } from '../../constants/theme';
 import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
 
@@ -29,7 +30,7 @@ const EDGE_SWIPE_FAIL_Y = 40;
 const HANDLE_SWIPE_ACTIVE_Y = -40;
 const HANDLE_SWIPE_FAIL_Y = 10;
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, enigmaOpen: enigmaOpenControl }) {
   const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
@@ -50,6 +51,22 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
       setEnigmaOpen(true);
     }
   }, [defaultOpen]);
+
+  // Controlled enigma for shape mode: while the surface classifier is
+  // suppressed, the enigma-reopen affordance lives outside this subtree, so
+  // the parent drives open/close through this channel (same mirror pattern
+  // as defaultOpen above).
+  const previousEnigmaOpenRef = useRef(null);
+  useEffect(() => {
+    if (enigmaOpenControl === undefined) {
+      return;
+    }
+    if (previousEnigmaOpenRef.current === !!enigmaOpenControl) {
+      return;
+    }
+    previousEnigmaOpenRef.current = !!enigmaOpenControl;
+    setEnigmaOpen(!!enigmaOpenControl);
+  }, [enigmaOpenControl]);
 
   useEffect(() => {
     if (!pulseTarget) {
@@ -102,15 +119,19 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
   // One recognizer + a direction branch in onEnd removes the ambiguity: up
   // opens the enigma, right opens the exit menu. Up takes priority so a
   // bottom-up gesture always reaches the description even with drift.
+  // While shapeMode is active the draw Pan lives in the same subtree (the
+  // ShapeCanvas below), so the surface classifier is suppressed for the WHOLE
+  // mode — not just mid-stroke — or the two recognizers race (see risks in
+  // the shape-mode plan). Point mode keeps the chain untouched.
   const surfaceSwipe = useMemo(
-    () =>
-      Gesture.Pan()
+    () => {
+      const pan = Gesture.Pan()
         .activeOffsetX(EDGE_SWIPE_ACTIVE_X)
         .activeOffsetY(HANDLE_SWIPE_ACTIVE_Y)
         .failOffsetX(EDGE_SWIPE_FAIL_X)
         .failOffsetY(HANDLE_SWIPE_FAIL_Y)
         .onEnd((event, success) => {
-          if (!success) {
+          if (shapeMode || !success) {
             return;
           }
           if (event.translationY <= HANDLE_SWIPE_ACTIVE_Y) {
@@ -118,9 +139,18 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           } else if (event.translationX >= EDGE_SWIPE_ACTIVE_X) {
             onEdgeSwipe?.();
           }
-        }),
-    [onEdgeSwipe],
+        });
+      return shapeMode ? pan.enabled(false) : pan;
+    },
+    [onEdgeSwipe, shapeMode],
   );
+
+  // Redraw: clear the parent-owned outline and close the modal so a new
+  // stroke can be drawn.
+  const handleShapeRedraw = () => {
+    onOutlineChange?.(null);
+    onCancel?.();
+  };
 
   const handleEnigmaClose = () => {
     onDescriptionClosed?.();
@@ -168,6 +198,14 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
               ) : null }
             </ImageBackground>
 
+            {shapeMode && (
+              <ShapeCanvas
+                imageDimensionStyle={imageDimensionStyle}
+                outline={outline}
+                onOutlineChange={onOutlineChange}
+              />
+            )}
+
           </Pressable>
 
 {/* no cross, when guess, if null  */}
@@ -185,9 +223,11 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
         showModal &&
           <CenteredModal
             onPress={handleConfirm}
-            onCancel={onCancel}
+            onCancel={shapeMode ? handleShapeRedraw : onCancel}
             isModalVisible={showModal}
             testIDPrefix={guess ? 'game.picture.guess-modal' : 'game.picture.hide-modal'}
+            confirmLabel={shapeMode ? t('game.picture.shapeConfirmLabel') : undefined}
+            cancelLabel={shapeMode ? t('game.picture.shapeRedrawLabel') : undefined}
           >
             {t('game.picture.validate')}
           </CenteredModal>

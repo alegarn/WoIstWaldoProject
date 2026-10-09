@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Warten, bis jemand anderes neue Bilder hochlädt",
     "emptyWaitUploadsHint": " - Warten, bis jemand anderes neue Bilder hochlädt",
     "noDescription": "Keine Beschreibung",
+    "shapeInstructions": "Zeichne den Umriss, der deiner Meinung nach zur verborgenen Form passt",
+    "shapeEnigmaLabel": "Rätsel erneut öffnen",
+    "shapeExitLabel": "Beenden",
     "card": {
       "open": "Öffnen",
       "swipeableLabel": "Wischbare Karte {{id}}",
@@ -347,7 +350,10 @@
     "unexpectedError": "Unerwarteter Fehler",
     "tryAgainLater": "Bitte versuche es später erneut",
     "invalidTypeTitle": "Ungültiger Bildtyp",
-    "invalidTypeMessage": "Bitte wähle einen gültigen Bildtyp (png, jpg oder jpeg)"
+    "invalidTypeMessage": "Bitte wähle einen gültigen Bildtyp (png, jpg oder jpeg)",
+    "modeLabel": "Modus",
+    "modePoint": "Punkt",
+    "modeShape": "Umriss"
   },
   "hideInstructions": {
     "describeLabel": "Versteckten Punkt beschreiben",
@@ -386,7 +392,12 @@
       "guessSurfaceLabel": "Ratebild-Fläche",
       "hideSurfaceLabel": "Versteckbild-Fläche",
       "guessImageLabel": "Ratebild",
-      "hideImageLabel": "Versteckbild"
+      "hideImageLabel": "Versteckbild",
+      "shapeSurfaceLabel": "Zeichne einen Umriss um das Versteck",
+      "shapeClearLabel": "Umriss löschen",
+      "shapeRedrawLabel": "Umriss neu zeichnen",
+      "shapeTooSimple": "Umriss zu einfach — zeichne eine geschlossene Form um die Stelle",
+      "shapeConfirmLabel": "Umriss bestätigen"
     }
   },
   "groups": {

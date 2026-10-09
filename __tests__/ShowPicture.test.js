@@ -2,6 +2,7 @@ const mockEnigmaOverlay = jest.fn(() => null);
 const mockIconButton = jest.fn(() => null);
 const mockSpeedRing = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
+const mockShapeCanvas = jest.fn(() => null);
 
 let mockCapturedPanRecord;
 let mockCapturedPan;
@@ -125,6 +126,14 @@ jest.mock('../components/Guess/SpeedRing', () => {
   return function MockSpeedRing(props) {
     mockSpeedRing(props);
     return null;
+  };
+});
+
+jest.mock('../components/Picture/ShapeCanvas', () => {
+  const React = require('react');
+  return function MockShapeCanvas(props) {
+    mockShapeCanvas(props);
+    return React.createElement('ShapeCanvas', props);
   };
 });
 
@@ -322,6 +331,115 @@ describe('ShowPicture', () => {
 
       expect(latestEnigmaProps().isOpen).toBe(true);
       expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('shape mode', () => {
+    const shapeProps = {
+      shapeMode: true,
+      outline: [{ x: 0.1, y: 0.05 }],
+      onOutlineChange: jest.fn(),
+    };
+
+    function findShapeCanvases(renderer) {
+      return findAllByType(renderer, 'ShapeCanvas');
+    }
+
+    function hasSurfacePanDisabled() {
+      return mockCapturedPanRecord.calls.some(
+        (c) => c.method === 'enabled' && c.args[0] === false
+      );
+    }
+
+    function getOnEnd() {
+      return mockCapturedPanRecord.calls.find((c) => c.method === 'onEnd').args[0];
+    }
+
+    it('renders no ShapeCanvas when shapeMode is absent (point mode untouched)', () => {
+      const renderer = renderShowPicture();
+
+      expect(findShapeCanvases(renderer)).toHaveLength(0);
+      expect(hasSurfacePanDisabled()).toBe(false);
+    });
+
+    it('mounts ShapeCanvas with outline + onOutlineChange when shapeMode is set', () => {
+      const onOutlineChange = jest.fn();
+      const renderer = renderShowPicture({
+        shapeMode: true,
+        outline: [{ x: 0.2, y: 0.3 }],
+        onOutlineChange,
+      });
+
+      const shapeCanvases = findShapeCanvases(renderer);
+      expect(shapeCanvases).toHaveLength(1);
+      expect(shapeCanvases[0].props.imageDimensionStyle).toEqual({ width: 200, height: 400 });
+      expect(shapeCanvases[0].props.outline).toEqual([{ x: 0.2, y: 0.3 }]);
+      expect(shapeCanvases[0].props.onOutlineChange).toBe(onOutlineChange);
+    });
+
+    it('suppresses the surface swipe classifier for the whole shape mode', () => {
+      const onEdgeSwipe = jest.fn();
+      renderShowPicture({ ...shapeProps, onEdgeSwipe, defaultOpen: false });
+
+      expect(hasSurfacePanDisabled()).toBe(true);
+
+      act(() => {
+        getOnEnd()({ translationX: 70, translationY: 2 }, true);
+      });
+      act(() => {
+        getOnEnd()({ translationX: 4, translationY: -60 }, true);
+      });
+
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+      const last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+      expect(last.isOpen).toBe(false);
+    });
+
+    it('mirrors the controlled enigmaOpen prop into the overlay when it flips', () => {
+      let renderer;
+      act(() => {
+        renderer = create(<ShowPicture {...baseProps} {...shapeProps} enigmaOpen={false} />);
+      });
+      let last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+      expect(last.isOpen).toBe(false);
+
+      act(() => {
+        renderer.update(<ShowPicture {...baseProps} {...shapeProps} enigmaOpen={true} />);
+      });
+
+      last = mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+      expect(last.isOpen).toBe(true);
+    });
+
+    it('shape modal confirm calls handleConfirm; redraw clears the outline and cancels', () => {
+      const onOutlineChange = jest.fn();
+      renderShowPicture({ ...shapeProps, onOutlineChange, showModal: true });
+
+      const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+      expect(modalProps.confirmLabel).toBe('Confirm outline');
+      expect(modalProps.cancelLabel).toBe('Redraw outline');
+
+      act(() => {
+        modalProps.onPress();
+      });
+      expect(baseProps.handleConfirm).toHaveBeenCalledTimes(1);
+      expect(onOutlineChange).not.toHaveBeenCalled();
+
+      act(() => {
+        modalProps.onCancel();
+      });
+      expect(onOutlineChange).toHaveBeenCalledWith(null);
+      expect(baseProps.onCancel).toHaveBeenCalledTimes(1);
+    });
+
+    it('point-mode modal keeps the default labels and onCancel untouched', () => {
+      renderShowPicture({ showModal: true });
+
+      const modalProps = mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+      expect(modalProps.confirmLabel).toBeUndefined();
+      expect(modalProps.cancelLabel).toBeUndefined();
+      expect(modalProps.onCancel).toBe(baseProps.onCancel);
+      expect(modalProps.onPress).toBe(baseProps.handleConfirm);
     });
   });
 });

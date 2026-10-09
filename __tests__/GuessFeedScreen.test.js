@@ -338,6 +338,46 @@ describe('GuessFeedScreen', () => {
     });
   });
 
+  it('routes a shape card to GuessScreen carrying mode and shape', async () => {
+    const navigation = { navigate: jest.fn(), goBack: jest.fn() };
+    const route = makeRoute();
+    const shape = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    const renderer = await renderScreen(navigation, route);
+
+    dismissSwipeInstructions(renderer);
+
+    const { startGuessing } = mockSwipeImage.mock.calls[0][0];
+
+    await act(async () => {
+      startGuessing({
+        item: {
+          pictureId: 'img-shape-1',
+          imageFile: 'file:///shape.jpg',
+          listId: 8,
+          description: 'Find the shape',
+          touchLocation: { x: null, y: null },
+          mode: 'shape',
+          shape,
+        },
+      });
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledTimes(1);
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessScreen', expect.objectContaining({
+      pictureId: 'img-shape-1',
+      hiddenLocation: { x: null, y: null },
+      mode: 'shape',
+      shape,
+    }));
+  });
+
   it('continues to host SwipeImage in e2e mode so the saved-card stack renders', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute();
