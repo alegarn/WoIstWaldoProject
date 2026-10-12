@@ -10,6 +10,7 @@ import {
 } from "../services/groups/groupFeedCache";
 import { filterPlayedCards, getPlayedPictureIds, playedPictureIdsKey, PLAYED_PICTURE_IDS_PREFIX } from "./playedPictureIds";
 import { SERVING_CYCLE_PREFIX } from "./servingCycle";
+import { normalizeLanguage, normalizeMode } from "./sessionFilter";
 import type { CardImage } from "../services/cardDeck";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
@@ -34,15 +35,15 @@ function isPrivateScope(scope: unknown): scope is PrivateScope {
 }
 
 function imageListKey(categoryKey: string | null | undefined, language: string | null | undefined, mode: string | null | undefined): string {
-  return `${IMAGE_LIST_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
+  return `${IMAGE_LIST_KEY_PREFIX}${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 };
 
 function lastImageUuidKey(categoryKey: string | null | undefined, language: string | null | undefined, mode: string | null | undefined): string {
-  return `${LAST_IMAGE_UUID_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
+  return `${LAST_IMAGE_UUID_KEY_PREFIX}${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 };
 
 export function exhaustedCategoryKey(categoryKey: string | null | undefined, language?: string | null, mode?: string | null): string {
-  return `${EXHAUSTED_CATEGORY_KEY_PREFIX}${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
+  return `${EXHAUSTED_CATEGORY_KEY_PREFIX}${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 };
 
 export interface DeckWriteLockScope {
@@ -76,7 +77,7 @@ export interface DeckWriteLockKeyArgs {
  *   or `cardDeck:append:private:<groupId>:<categoryId|'all'>:<language|'any'>`.
  */
 export function deckWriteLockKey({ categoryKey, categoryId, language, scope }: DeckWriteLockKeyArgs = {}): string {
-  const lang = language || 'any';
+  const lang = normalizeLanguage(language);
   if (isPrivateScope(scope)) {
     const cid = categoryId === 'all' ? undefined : categoryId;
     return `cardDeck:append:private:${scope.groupId}:${cid ?? 'all'}:${lang}`;

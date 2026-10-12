@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
+import { normalizeLanguage, normalizeMode } from '../../utils/sessionFilter';
 import { clearAllGroupHubCaches } from './groupHubCache';
 
 export type CachedFeedImage = {
@@ -14,7 +15,7 @@ const PREFIX = 'groupFeed';
 const EXHAUSTED_PREFIX = 'groupFeedExhausted';
 
 function groupFeedListKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
+  return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 }
 
 function groupFeedCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
@@ -29,11 +30,11 @@ function groupFeedCursorKey(groupId: string | number, categoryKey?: string | nul
  * so a cycle transition wipes it together with the other group cursors.
  */
 function groupGameCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}:cursor`;
+  return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}:cursor`;
 }
 
 function groupFeedExhaustedKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}:${mode || 'any'}`;
+  return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 }
 
 export { groupFeedListKey, groupFeedCursorKey, groupGameCursorKey, groupFeedExhaustedKey };
@@ -62,8 +63,8 @@ export async function readGroupFeedCache(
   { categoryId, language, mode }: { categoryId?: string | null; language?: string | null; mode?: string | null } = {}
 ): Promise<{ images: CachedFeedImage[]; nextCursor: string | null } | null> {
   const categoryKey = categoryId || 'all';
-  const languageKey = language || 'any';
-  const modeKey = mode || 'any';
+  const languageKey = normalizeLanguage(language);
+  const modeKey = normalizeMode(mode);
   const listKey = groupFeedListKey(groupId, categoryKey, languageKey, modeKey);
   const cursorKey = groupFeedCursorKey(groupId, categoryKey, languageKey, modeKey);
 
@@ -106,8 +107,8 @@ export async function writeGroupFeedCache(
   { images, nextCursor }: { images?: CachedFeedImage[]; nextCursor?: string | null } = {}
 ) {
   const categoryKey = categoryId || 'all';
-  const languageKey = language || 'any';
-  const modeKey = mode || 'any';
+  const languageKey = normalizeLanguage(language);
+  const modeKey = normalizeMode(mode);
 
   await AsyncStorage.setItem(
     groupFeedListKey(groupId, categoryKey, languageKey, modeKey),
