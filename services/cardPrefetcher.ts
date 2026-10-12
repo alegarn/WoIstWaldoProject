@@ -7,6 +7,7 @@ import { fetchCardBatch, appendCardBatch } from './cardDeck';
  */
 import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
+import { ANY_FILTER } from '../utils/sessionFilter';
 
 // Refill when only 3 cards remain — combined with NextCardImageWarmer decode prefetch, the user never waits for cold decode or server round-trip.
 export const LOW_CARD_THRESHOLD = 4;
@@ -64,11 +65,11 @@ function scopeGroupId(scope: unknown): string | undefined {
 }
 
 function dedupKey(categoryKey: string, language: string | null | undefined, mode: string | null | undefined, scope: unknown): string {
-  return `${categoryKey}:${language ?? 'any'}:${mode ?? 'any'}:${scopeGroupId(scope) ?? 'public'}`;
+  return `${categoryKey}:${language ?? ANY_FILTER}:${mode ?? ANY_FILTER}:${scopeGroupId(scope) ?? 'public'}`;
 }
 
 function warmKey(language: string | null | undefined, mode: string | null | undefined, scope: unknown): string {
-  return `${language ?? 'any'}:${mode ?? 'any'}:${scopeGroupId(scope) ?? 'public'}`;
+  return `${language ?? ANY_FILTER}:${mode ?? ANY_FILTER}:${scopeGroupId(scope) ?? 'public'}`;
 }
 
 /**

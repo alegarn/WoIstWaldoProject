@@ -33,6 +33,7 @@ import {
   saveSessionModeFilter,
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
+import { ANY_FILTER, loadSessionFilter } from '../../utils/sessionFilter';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
@@ -53,8 +54,8 @@ import { fetchGroups } from '../../services/groups/groupApi';
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 
 const DEFAULT_LANGUAGE = 'en';
-const NAVIGATION_ANY_LANGUAGE = 'any';
-const NAVIGATION_ANY_MODE = 'any';
+const NAVIGATION_ANY_LANGUAGE = ANY_FILTER;
+const NAVIGATION_ANY_MODE = ANY_FILTER;
 
 type IconButtonProps = {
   icon: string;
@@ -285,27 +286,25 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLanguage() {
-      const [stored, preferred] = await Promise.all([
-        getSessionLanguageFilter(),
-        getPreferredLanguage(),
-      ]);
-      if (cancelled) {
-        return;
-      }
-      setSessionLanguage(stored ?? preferred ?? null);
-    }
+    loadSessionFilter({
+      getter: async () => {
+        const [stored, preferred] = await Promise.all([
+          getSessionLanguageFilter(),
+          getPreferredLanguage(),
+        ]);
+        return stored ?? preferred ?? null;
+      },
+      setter: setSessionLanguage,
+      fallback: null,
+      isCancelled: () => cancelled,
+    });
+    loadSessionFilter({
+      getter: getSessionModeFilter,
+      setter: setSessionMode,
+      fallback: null,
+      isCancelled: () => cancelled,
+    });
 
-    async function loadMode() {
-      const storedMode = await getSessionModeFilter();
-      if (cancelled) {
-        return;
-      }
-      setSessionMode(storedMode);
-    }
-
-    loadLanguage();
-    loadMode();
     return () => {
       cancelled = true;
     };
@@ -324,7 +323,6 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const resolvedLanguage = sessionLanguage ?? DEFAULT_LANGUAGE;
   const navigationLanguage = sessionLanguage ?? NAVIGATION_ANY_LANGUAGE;
   const resolvedMode = sessionMode ?? NAVIGATION_ANY_MODE;
-  const navigationMode = sessionMode ?? NAVIGATION_ANY_MODE;
 
   const handleCategoryPress = async (category: GuessPathCategory) => {
     if (isPrivateScope && isGroupLocked) {
@@ -344,7 +342,7 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
     } = {
       category,
       language: navigationLanguage,
-      mode: navigationMode,
+      mode: resolvedMode,
     };
 
     if (isPrivateScope) {

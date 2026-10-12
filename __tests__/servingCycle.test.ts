@@ -324,3 +324,37 @@ describe('Task C7: cycle reset is mode-agnostic (contains-match on the language 
     expect(store.get('lastImageUuid:city:fr:point')).toBe('kept-public');
   });
 });
+
+describe('legacy pre-mode keys (upgrade path): pinning actual clear behavior', () => {
+  it('public transition leaves legacy no-mode cursors/markers untouched (inert dead garbage)', async () => {
+    const store = mockStore({
+      'servingCycle:public:fr': '0',
+      'lastImageUuid:city:fr': 'legacy-cursor',
+      'exhaustedCategory:city:fr': '1',
+      'lastImageUuid:city:fr:any': 'mode-cursor',
+    });
+
+    await startNewServingCycle('fr', null);
+
+    expect(store.get('lastImageUuid:city:fr')).toBe('legacy-cursor');
+    expect(store.get('exhaustedCategory:city:fr')).toBe('1');
+    expect(store.has('lastImageUuid:city:fr:any')).toBe(false);
+    expect(store.get('servingCycle:public:fr')).toBe('1');
+  });
+
+  it('group transition clears legacy no-mode :cursor entries, leaves legacy exhausted markers + deck lists', async () => {
+    const store = mockStore({
+      'groupFeed:gA:cat:fr:cursor': JSON.stringify({ nextCursor: 'legacy-c1' }),
+      'groupFeed:gA:game:cat:fr:cursor': 'legacy-game-cursor',
+      'groupFeedExhausted:gA:cat:fr': '1',
+      'groupFeed:gA:cat:fr': JSON.stringify([{ listId: 1 }]),
+    });
+
+    await startNewServingCycle('fr', { kind: 'private', groupId: 'gA' });
+
+    expect(store.has('groupFeed:gA:cat:fr:cursor')).toBe(false);
+    expect(store.has('groupFeed:gA:game:cat:fr:cursor')).toBe(false);
+    expect(store.get('groupFeedExhausted:gA:cat:fr')).toBe('1');
+    expect(store.get('groupFeed:gA:cat:fr')).toBe(JSON.stringify([{ listId: 1 }]));
+  });
+});

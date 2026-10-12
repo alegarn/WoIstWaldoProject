@@ -20,6 +20,7 @@ import { useFlushOnLeave } from '../../hooks/useFlushOnLeave';
 import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { handleOrientation } from '../../utils/orientation';
+import { loadSessionFilter, ANY_FILTER } from '../../utils/sessionFilter';
 
 // Language namespace contract (I6): an unset filter means NO server filter.
 // GuessPathScreen navigates with NAVIGATION_ANY_LANGUAGE ('any') when no stored
@@ -27,8 +28,8 @@ import { handleOrientation } from '../../utils/orientation';
 // server boundary — mirroring getSessionLanguageFilter's "unset" sentinel
 // (storageDatum.ts). A hard 'en' default here made every unset query hit
 // `WHERE language = 'en'` against fr/null rows → empty feed until manual reload.
-const DEFAULT_LANGUAGE = 'any';
-const DEFAULT_MODE = 'any';
+const DEFAULT_LANGUAGE = ANY_FILTER;
+const DEFAULT_MODE = ANY_FILTER;
 
 type Theme = {
   primaryColor?: string;
@@ -93,38 +94,20 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
   useEffect(() => {
     let cancelled = false;
 
-    async function loadLanguage() {
-      if (routeLanguage) {
-        setLanguage(routeLanguage);
-        return;
-      }
-
-      const storedLanguage = await getSessionLanguageFilter();
-
-      if (!cancelled && storedLanguage) {
-        setLanguage(storedLanguage);
-      } else if (!cancelled) {
-        setLanguage(DEFAULT_LANGUAGE);
-      }
-    }
-
-    async function loadMode() {
-      if (routeMode) {
-        setMode(routeMode);
-        return;
-      }
-
-      const storedMode = await getSessionModeFilter();
-
-      if (!cancelled && storedMode) {
-        setMode(storedMode);
-      } else if (!cancelled) {
-        setMode(DEFAULT_MODE);
-      }
-    }
-
-    loadLanguage();
-    loadMode();
+    loadSessionFilter({
+      routeValue: routeLanguage,
+      getter: getSessionLanguageFilter,
+      setter: setLanguage,
+      fallback: DEFAULT_LANGUAGE,
+      isCancelled: () => cancelled,
+    });
+    loadSessionFilter({
+      routeValue: routeMode,
+      getter: getSessionModeFilter,
+      setter: setMode,
+      fallback: DEFAULT_MODE,
+      isCancelled: () => cancelled,
+    });
 
     return () => {
       cancelled = true;
@@ -210,7 +193,7 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
         />
       ) : (
         <SwipeImage
-          key={`${category?.key || 'all'}:${language || 'any'}:${mode || 'any'}`}
+          key={`${category?.key || 'all'}:${language || DEFAULT_LANGUAGE}:${mode || DEFAULT_MODE}`}
           screenWidth={screenWidth}
           screenHeight={screenHeight}
           startGuessing={startGuessing}

@@ -4,6 +4,7 @@ import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, dec
 import type { DeckWriteLockScope } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
 import { withScopeLock } from '../utils/scopeMutex';
+import { ANY_FILTER, normalizeLanguage, normalizeMode } from '../utils/sessionFilter';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from './groups/groupFeedApi';
 
@@ -77,14 +78,6 @@ function isPrivateScope(scope: unknown): scope is PrivateScope {
     !!(scope as { groupId?: unknown }).groupId;
 }
 
-function normalizeLanguage(language?: string | null): string {
-  return language || 'any';
-}
-
-function normalizeMode(mode?: string | null): string {
-  return mode || 'any';
-}
-
 /**
  * Server-side language filter. AsyncStorage uses 'any' as the canonical
  * "no language filter" namespace (see normalizeLanguage), but the backend's
@@ -94,7 +87,7 @@ function normalizeMode(mode?: string | null): string {
  * empty. Real codes ('en', 'fr', …) pass through untouched.
  */
 function resolveServerLanguage(language?: string | null): string | undefined {
-  return language && language !== 'any' ? language : undefined;
+  return language && language !== ANY_FILTER ? language : undefined;
 }
 
 /**
@@ -105,7 +98,7 @@ function resolveServerLanguage(language?: string | null): string | undefined {
  * a filtering no-op. Real modes ('point', 'shape') pass through untouched.
  */
 function resolveServerMode(mode?: string | null): string | undefined {
-  return mode && mode !== 'any' ? mode : undefined;
+  return mode && mode !== ANY_FILTER ? mode : undefined;
 }
 
 function resolveCategoryId(categoryId?: string | number | null): string | number | null | undefined {

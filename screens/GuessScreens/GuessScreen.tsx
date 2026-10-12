@@ -19,6 +19,7 @@ import type { Point } from '../../utils/shapeGeometry';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { getNextImagesForScope, clearExhaustedCategory } from '../../utils/storageDatum';
+import { ANY_FILTER } from '../../utils/sessionFilter';
 import { computeMultiplier, SPEED_MULTIPLIER_BASE, SHAPE_SPEED_BONUS_THRESHOLD_MS } from '../../utils/speedMultiplier';
 import { computePoints } from '../../utils/guessPoints';
 import { useAdvanceStateMachine } from '../../hooks/useAdvanceStateMachine';
@@ -141,7 +142,7 @@ const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComp
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
   const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, filterMode, scope, activeGroup, skipInstructions } = route.params;
-  const sessionFilterMode = filterMode || 'any';
+  const sessionFilterMode = filterMode || ANY_FILTER;
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
