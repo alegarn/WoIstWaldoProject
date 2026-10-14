@@ -404,7 +404,10 @@
       "shapeClearLabel": "Cancella il contorno",
       "shapeRedrawLabel": "Ridisegna il contorno",
       "shapeTooSimple": "Contorno troppo semplice — disegna una forma chiusa attorno al punto",
-      "shapeConfirmLabel": "Conferma il contorno"
+      "shapeConfirmLabel": "Conferma il contorno",
+      "traceWin": "Centro!",
+      "traceLoseScore": "Il tuo contorno non copre il punto — riprova",
+      "traceLoseLengthCap": "Contorno troppo lungo — disegna solo attorno al punto"
     }
   },
   "groups": {

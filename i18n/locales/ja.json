@@ -403,7 +403,10 @@
       "shapeClearLabel": "線を消す",
       "shapeRedrawLabel": "もう一度なぞる",
       "shapeTooSimple": "線が簡単すぎます — 場所を囲む閉じた形をなぞってください",
-      "shapeConfirmLabel": "線を確定"
+      "shapeConfirmLabel": "線を確定",
+      "traceWin": "バッチリ！",
+      "traceLoseScore": "線が場所を外しました — もう一度試しましょう",
+      "traceLoseLengthCap": "線が長すぎます — 場所の周りだけをなぞりましょう"
     }
   },
   "groups": {

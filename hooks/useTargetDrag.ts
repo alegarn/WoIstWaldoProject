@@ -36,6 +36,8 @@ export type UseTargetDragArgs = {
   initialSelection: UseTargetDragSelection | null;
   onInteract?: () => void;
   onTap?: () => void;
+  /** Live clamped target centre (image-px) while dragging; null on finalize. */
+  onDragPosition?: (centre: Point | null) => void;
 };
 
 export type UseTargetDragResult = {
@@ -65,6 +67,7 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
     initialSelection,
     onInteract,
     onTap,
+    onDragPosition,
   } = args;
 
   const [touchLocation, setTouchLocation] = useState<{ x: string; y: string } | null>(
@@ -98,6 +101,9 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
   const onTapRef = useRef(onTap);
   onTapRef.current = onTap;
 
+  const onDragPositionRef = useRef(onDragPosition);
+  onDragPositionRef.current = onDragPosition;
+
   const setSelection = useCallback((selection: UseTargetDragSelection) => {
     setTouchLocation(selection.location);
     setTarget(selection.target);
@@ -115,6 +121,16 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
     if (!enabled) {
       return undefined;
     }
+    const reportCentre = (centre: Point | null) => {
+      onDragPositionRef.current?.(centre);
+    };
+    const clampedCentre = (): Point => {
+      const { imageDimensionStyle: dims } = stateRef.current;
+      return {
+        x: clamp(dragStartRef.current.x, 0, dims.width),
+        y: clamp(dragStartRef.current.y, 0, dims.height),
+      };
+    };
     return Gesture.Pan()
       .enabled(true)
       .onBegin(() => {
@@ -126,6 +142,11 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
           x: (currentTarget?.targetStyle?.left ?? 0) + half,
           y: (currentTarget?.targetStyle?.top ?? 0) + half,
         };
+      })
+      // Activation (NOT onBegin — touch-down would flash the loupe on every
+      // modal-tap): first centre report, anchored at the target centre.
+      .onStart(() => {
+        reportCentre(clampedCentre());
       })
       .onUpdate((event) => {
         const {
@@ -144,8 +165,10 @@ export function useTargetDrag(args: UseTargetDragArgs): UseTargetDragResult {
         }) as UseTargetDragSelection;
         setTouchLocation(selection.location);
         setTarget(selection.target);
+        reportCentre({ x: nextX, y: nextY });
       })
       .onFinalize((event) => {
+        reportCentre(null);
         const moved = Math.hypot(event.translationX ?? 0, event.translationY ?? 0);
         if (moved < TAP_THRESHOLD) {
           onTapRef.current?.();

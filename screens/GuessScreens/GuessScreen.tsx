@@ -14,7 +14,7 @@ import GuessAdvanceLoader from '../../components/Guess/GuessAdvanceLoader';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
-import { outlineMatch } from '../../utils/shapeMatch';
+import { isWinningTrace } from '../../utils/shapeMatch';
 import type { Point } from '../../utils/shapeGeometry';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
@@ -376,18 +376,17 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
   async function toAdScreen(targetInfos: TargetInfos) {
     // Shape branch (plan H5): hidden `shape` (storage, normalized [0,1]) vs the
-    // guess outline drawn on the F surface, matched both-ways by outlineMatch;
-    // the speed bonus uses the 10s shape window. Point mode keeps isOnTarget +
-    // the 5s window byte-identical.
+    // guess outline drawn on the F surface, matched by isWinningTrace in IMAGE
+    // space only (score ≥ 0.9 + length cap) — screen size never influences the
+    // verdict. The speed bonus uses the 10s shape window. Point mode keeps
+    // isOnTarget + the 5s window byte-identical.
     const isShapeMode = mode === 'shape';
     const onTarget = isShapeMode
-      ? outlineMatch({
+      ? isWinningTrace({
           hiddenShape: shape ?? [],
           guessShape: targetInfos.shape ?? [],
           imageWidth: imageWidth ?? 0,
           imageHeight: imageHeight ?? 0,
-          screenWidth,
-          screenHeight,
         })
       : isOnTarget(targetInfos);
     const multiplier = isShapeMode

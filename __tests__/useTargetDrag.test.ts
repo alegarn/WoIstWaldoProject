@@ -252,6 +252,68 @@ describe('useTargetDrag', () => {
     expect(onTap).not.toHaveBeenCalled();
   });
 
+  describe('onDragPosition (loupe reporter, D4)', () => {
+    it('fires the clamped centre on activation and each update, and null on finalize', () => {
+      const onDragPosition = jest.fn();
+      act(() => {
+        renderer = renderProbe(defaultProps({ onDragPosition }));
+      });
+
+      const record = mockCapturedGestures[0];
+      const onBegin = findCall(record, 'onBegin')!.args[0];
+      const onStart = findCall(record, 'onStart')!.args[0];
+      const onUpdate = findCall(record, 'onUpdate')!.args[0];
+      const onFinalize = findCall(record, 'onFinalize')!.args[0];
+
+      act(() => {
+        onBegin();
+        onStart();
+      });
+
+      // dragStart = target centre (92+8, 42+8) — reported on ACTIVATION, not
+      // onBegin (touch-down would flash the loupe on every modal-tap).
+      expect(onDragPosition).toHaveBeenNthCalledWith(1, { x: 100, y: 50 });
+
+      act(() => {
+        onUpdate({ translationX: 10, translationY: 0 });
+      });
+      expect(onDragPosition).toHaveBeenNthCalledWith(2, { x: 110, y: 50 });
+
+      act(() => {
+        onUpdate({ translationX: 200, translationY: 0 });
+      });
+      expect(onDragPosition).toHaveBeenNthCalledWith(3, { x: 200, y: 50 });
+
+      act(() => {
+        onFinalize({ translationX: 210, translationY: 0 });
+      });
+      expect(onDragPosition).toHaveBeenNthCalledWith(4, null);
+    });
+
+    it('a tap below the threshold reports no position (no activation) and still routes to onTap', () => {
+      const onTap = jest.fn();
+      const onDragPosition = jest.fn();
+      act(() => {
+        renderer = renderProbe(defaultProps({ onTap, onDragPosition }));
+      });
+
+      const record = mockCapturedGestures[0];
+      const onBegin = findCall(record, 'onBegin')!.args[0];
+      const onFinalize = findCall(record, 'onFinalize')!.args[0];
+
+      act(() => {
+        onBegin();
+        onFinalize({ translationX: 2, translationY: 2 });
+      });
+
+      // Only the finalize null (loupe clear) — never a centre: the drag never
+      // activated, so no position report may leave a loupe visible on a tap.
+      expect(onDragPosition).toHaveBeenCalledTimes(1);
+      expect(onDragPosition).toHaveBeenCalledWith(null);
+      expect(onTap).toHaveBeenCalledTimes(1);
+    });
+  });
+
   it('resets to a new initialSelection when it changes before any user interaction', () => {
     act(() => {
       renderer = renderProbe(defaultProps({ initialSelection: centeredSelection }));

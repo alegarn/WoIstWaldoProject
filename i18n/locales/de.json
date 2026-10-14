@@ -404,7 +404,10 @@
       "shapeClearLabel": "Umriss löschen",
       "shapeRedrawLabel": "Umriss neu zeichnen",
       "shapeTooSimple": "Umriss zu einfach — zeichne eine geschlossene Form um die Stelle",
-      "shapeConfirmLabel": "Umriss bestätigen"
+      "shapeConfirmLabel": "Umriss bestätigen",
+      "traceWin": "Volltreffer!",
+      "traceLoseScore": "Dein Umriss verfehlt die Stelle — versuch es nochmal",
+      "traceLoseLengthCap": "Umriss zu lang — umkreise nur die Stelle"
     }
   },
   "groups": {

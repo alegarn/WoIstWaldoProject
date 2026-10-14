@@ -31,7 +31,7 @@ import {
   getE2EShapeOutline,
   isE2EMode,
 } from '../utils/e2eMode';
-import { outlineMatch } from '../utils/shapeMatch';
+import { isWinningTrace } from '../utils/shapeMatch';
 
 describe('e2eMode helpers', () => {
   const originalE2EMode = process.env.EXPO_PUBLIC_E2E_MODE;
@@ -215,10 +215,11 @@ describe('e2eMode helpers', () => {
     it('keeps the hit outline inside the hidden polygon corridor on representative screens', () => {
       SCREEN_GEOMETRIES.forEach((geometry) => {
         expect(
-          outlineMatch({
+          isWinningTrace({
             hiddenShape: E2E_SHAPE_POLYGON,
             guessShape: E2E_SHAPE_GUESS_HIT,
-            ...geometry,
+            imageWidth: geometry.imageWidth,
+            imageHeight: geometry.imageHeight,
           })
         ).toBe(true);
       });
@@ -227,10 +228,11 @@ describe('e2eMode helpers', () => {
     it('keeps the miss outline disjoint from the hidden polygon corridor on representative screens', () => {
       SCREEN_GEOMETRIES.forEach((geometry) => {
         expect(
-          outlineMatch({
+          isWinningTrace({
             hiddenShape: E2E_SHAPE_POLYGON,
             guessShape: E2E_SHAPE_GUESS_MISS,
-            ...geometry,
+            imageWidth: geometry.imageWidth,
+            imageHeight: geometry.imageHeight,
           })
         ).toBe(false);
       });

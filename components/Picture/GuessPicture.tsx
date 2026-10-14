@@ -114,6 +114,9 @@ const GuessPicture: FC<GuessPictureProps> = ({
   // swipe classifier that used to re-open it is suppressed whole-mode.
   const [guessOutline, setGuessOutline] = useState<ShapeOutline | null>(null);
   const [shapeEnigmaOpen, setShapeEnigmaOpen] = useState(skipInstructions === true);
+  // Live clamped target centre (image-px) while the drag is active; null on
+  // finalize. Threaded into ShowPicture to anchor the loupe (D3/D4).
+  const [dragPosition, setDragPosition] = useState<Point | null>(null);
 
   // Reading grace delays the chrono on 2nd+ cards (skipInstructions) while the
   // enigma opens by default. Ends at the earliest of graceMs or description close.
@@ -156,6 +159,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
     initialSelection,
     onInteract,
     onTap: () => setShowModal(true),
+    onDragPosition: setDragPosition,
   });
 
   useLayoutEffect(() => {
@@ -293,7 +297,11 @@ const GuessPicture: FC<GuessPictureProps> = ({
         // (default-only); the runtime accepts the F surface's Point[] outline.
         outline={(isShapeMode ? guessOutline : null) as unknown as null}
         onOutlineChange={isShapeMode ? applyGuessOutline : undefined}
+        hiddenOutline={shape}
+        imageWidth={imageWidth}
+        imageHeight={imageHeight}
         enigmaOpen={isShapeMode ? shapeEnigmaOpen : undefined}
+        onTargetDragPosition={isShapeMode ? undefined : dragPosition}
       />
     );
   };

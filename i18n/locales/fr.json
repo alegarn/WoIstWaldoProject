@@ -404,7 +404,10 @@
       "shapeClearLabel": "Effacer le contour",
       "shapeRedrawLabel": "Redessiner le contour",
       "shapeTooSimple": "Contour trop simple — dessinez une forme fermée autour de la cachette",
-      "shapeConfirmLabel": "Confirmer le contour"
+      "shapeConfirmLabel": "Confirmer le contour",
+      "traceWin": "Dans le mille !",
+      "traceLoseScore": "Votre contour rate la cachette — réessayez",
+      "traceLoseLengthCap": "Contour trop long — dessinez juste autour de la cachette"
     }
   },
   "groups": {

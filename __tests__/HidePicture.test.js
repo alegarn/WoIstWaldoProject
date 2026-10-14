@@ -27,6 +27,14 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.activateAfterLongPress = (arg) => {
+      gesture.activateAfterLongPressArg = arg;
+      return gesture;
+    };
+    gesture.hitSlop = (arg) => {
+      gesture.hitSlopArg = arg;
+      return gesture;
+    };
     gesture.onStart = (cb) => {
       gesture.onStartHandler = cb;
       return gesture;
@@ -80,6 +88,7 @@ import { act, fireEvent, render } from '@testing-library/react-native';
 
 import HidePicture from '../components/Picture/HidePicture';
 import { E2E_SHAPE_POLYGON } from '../utils/e2eMode';
+import { LOUPE_LONG_PRESS_MS } from '../utils/loupeGeometry';
 
 // Landscape 640×480 image on a 320×640 screen resolves the picture surface to
 // 320×240, so this triangle normalizes to (0.1,0.1) → (0.9,0.1) → (0.5,0.9)
@@ -229,6 +238,42 @@ describe('HidePicture', () => {
       fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
 
       expect(confirmModalQuery(screen)).not.toBeNull();
+    });
+  });
+
+  describe('point precision placement (press-hold)', () => {
+    // The precision Pan is identified BY its activateAfterLongPress call —
+    // the surface classifier and the ShapeCanvas draw Pan never chain it.
+    function findPrecisionPan() {
+      return [...mockPanGestures]
+        .reverse()
+        .find((g) => g.activateAfterLongPressArg !== undefined);
+    }
+
+    it('press-hold-drag-release places the point and dismisses the loupe (marker persists)', async () => {
+      const screen = await renderToPicture();
+
+      const precision = findPrecisionPan();
+      expect(precision).toBeTruthy();
+      expect(precision.activateAfterLongPressArg).toBe(LOUPE_LONG_PRESS_MS);
+
+      await act(async () => {
+        precision.onBeginHandler({ x: 100, y: 200 });
+        precision.onStartHandler({ x: 100, y: 200 });
+        precision.onUpdateHandler({ x: 140, y: 180 });
+      });
+
+      expect(screen.queryByTestId('game.picture.loupe')).not.toBeNull();
+
+      await act(async () => {
+        precision.onEndHandler({ x: 140, y: 180 }, true);
+      });
+
+      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      // The placed point persists: the precision pan payload fed the same
+      // selection pipeline as a tap, so the marker (clear-hide icon) renders.
+      expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
+      expect(confirmModalQuery(screen)).toBeNull();
     });
   });
 });

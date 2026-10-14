@@ -8,8 +8,21 @@ import CenteredModal from '../UI/CenteredModal';
 import EnigmaOverlay from './Descriptions/EnigmaOverlay';
 import SpeedRing from '../Guess/SpeedRing';
 import ShapeCanvas from './ShapeCanvas';
+import GuessShapeSurface from './GuessShapeSurface';
+import MagnifierLoupe from './MagnifierLoupe';
+import TraceInk from './TraceInk';
+import TraceCorridorEdges from './TraceCorridorEdges';
+import { useLoupe } from '../../hooks/useLoupe';
 import { GlobalStyle } from '../../constants/theme';
 import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
+import {
+  LOUPE_ZOOM,
+  LOUPE_DIAMETER_PX,
+  LOUPE_LONG_PRESS_MS,
+  LOUPE_MIRROR_STEP_PX,
+} from '../../utils/loupeGeometry';
+import { clampToImage } from '../../utils/shapeGeometry';
+import { shapeTolerancePx } from '../../utils/shapeMatch';
 
 const PULSE_DURATION_MS = 1200;
 const PULSE_HALF_DURATION_MS = PULSE_DURATION_MS / 2;
@@ -30,10 +43,50 @@ const EDGE_SWIPE_FAIL_Y = 40;
 const HANDLE_SWIPE_ACTIVE_Y = -40;
 const HANDLE_SWIPE_FAIL_Y = 10;
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, enigmaOpen: enigmaOpenControl }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition }) {
   const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
+
+  // Loupe host (D2/D8/D9): the hook owns the ONLY animated values plus the
+  // measurement refs. Dims are read late-bound at report() time — the ref is
+  // null on first render, so imageDimensionStyle is the safe fallback.
+  const loupe = useLoupe(imageDimensionStyle);
+  const loupeRef = useRef(loupe);
+  loupeRef.current = loupe;
+
+  // D8: the ROOT container measures the container dims (screen space for the
+  // frame clamp); the styles.pressable View below measures the root-relative
+  // image origin. Ref writes only — no re-render on layout.
+  const handleContainerLayout = (event) => {
+    if (loupe.dimsRef.current == null) {
+      const { width, height } = event.nativeEvent.layout;
+      loupe.dimsRef.current = { width, height };
+    }
+  };
+
+  const handleImageOriginLayout = (event) => {
+    if (loupe.originRef.current == null) {
+      const { x, y } = event.nativeEvent.layout;
+      loupe.originRef.current = { x, y };
+    }
+  };
+
+  // Guess-side point drag: useTargetDrag (hosted by GuessPicture) threads the
+  // live clamped target centre down as a prop; null clears (drag finalize).
+  useEffect(() => {
+    if (onTargetDragPosition === undefined) {
+      return;
+    }
+    if (onTargetDragPosition === null) {
+      loupeRef.current.hide();
+      return;
+    }
+    if (!loupeRef.current.visible) {
+      loupeRef.current.show();
+    }
+    loupeRef.current.report(onTargetDragPosition);
+  }, [onTargetDragPosition]);
 
   const [enigmaOpen, setEnigmaOpen] = useState(!!defaultOpen);
   const previousDefaultOpenRef = useRef(!!defaultOpen);
@@ -145,6 +198,102 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
     [onEdgeSwipe, shapeMode],
   );
 
+  // Hide-side point precision pan (Q10/D2): press-and-hold ~200ms enters
+  // precision mode (loupe under the finger), drag fine-positions, release
+  // places at the cursor. Built STRICTLY conditionally (point-hide only) so
+  // the guess/shape sides never build a second Pan — a surface never carries
+  // two recognizers with competing activation rules. The long-press gate is
+  // mutually exclusive with the surface classifier's activeOffset rules: a
+  // fast swipe cancels the long-press and flows to the classifier; a hold
+  // never reaches the classifier's offsets first. Gesture coords are IMAGE-px
+  // (the detector wraps the image-sized Pressable); clampToImage bounds them.
+  const pointAnchorRef = useRef(null);
+  const pointPrecisionPan = useMemo(() => {
+    if (guess || shapeMode) {
+      return null;
+    }
+    return Gesture.Pan()
+      .activateAfterLongPress(LOUPE_LONG_PRESS_MS)
+      .onBegin((event) => {
+        pointAnchorRef.current = { x: event.x, y: event.y };
+      })
+      .onStart((event) => {
+        const clamped = clampToImage(
+          { x: event.x, y: event.y },
+          imageDimensionStyle.width,
+          imageDimensionStyle.height
+        );
+        pointAnchorRef.current = clamped;
+        loupeRef.current.report(clamped);
+        loupeRef.current.show();
+      })
+      .onUpdate((event) => {
+        const clamped = clampToImage(
+          { x: event.x, y: event.y },
+          imageDimensionStyle.width,
+          imageDimensionStyle.height
+        );
+        pointAnchorRef.current = clamped;
+        loupeRef.current.report(clamped);
+      })
+      .onEnd(() => {
+        loupeRef.current.hide();
+        const anchor = pointAnchorRef.current;
+        pointAnchorRef.current = null;
+        if (anchor) {
+          onPointPlaced?.(anchor);
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [guess, shapeMode, onPointPlaced, imageDimensionStyle?.width, imageDimensionStyle?.height]);
+
+  // Shape-mode loupe mirror (D4/E2): the host builds the glass content from
+  // the committed stroke points. The MIRROR-COMMIT GATE (§7 budget 2b) keeps
+  // the frame on EVERY report (animated, zero re-render) but commits the
+  // content re-render only when the anchor moved ≥ LOUPE_MIRROR_STEP_PX
+  // since the last mirror commit.
+  const [shapeLoupePoints, setShapeLoupePoints] = useState(null);
+  const lastMirrorAnchorRef = useRef(null);
+
+  const handleStrokeUpdate = (info) => {
+    if (!info) {
+      lastMirrorAnchorRef.current = null;
+      setShapeLoupePoints(null);
+      loupeRef.current.hide();
+      return;
+    }
+    if (!loupeRef.current.visible) {
+      loupeRef.current.show();
+    }
+    loupeRef.current.report(info.anchor);
+    const lastMirror = lastMirrorAnchorRef.current;
+    if (
+      !lastMirror ||
+      Math.hypot(info.anchor.x - lastMirror.x, info.anchor.y - lastMirror.y) >=
+        LOUPE_MIRROR_STEP_PX
+    ) {
+      lastMirrorAnchorRef.current = info.anchor;
+      setShapeLoupePoints(info.renderPoints);
+    }
+  };
+
+  // Point-mode loupe content (D4): the cursor is built into MagnifierLoupe,
+  // so point modes mirror NOTHING; shape mode mirrors the live ink (both
+  // sides) plus the corridor EDGE lines (guess only — never the fat band,
+  // never the hidden outline). Children render in image-px inside the
+  // loupe's scaled wrapper; the edges distance is the IMAGE-space tolerance.
+  const loupeContent = shapeMode ? (
+    <>
+      <TraceInk points={shapeLoupePoints ?? []} />
+      {guess ? (
+        <TraceCorridorEdges
+          trace={shapeLoupePoints ?? []}
+          distance={shapeTolerancePx(imageWidth ?? 0, imageHeight ?? 0)}
+        />
+      ) : null}
+    </>
+  ) : null;
+
   // Redraw: clear the parent-owned outline and close the modal so a new
   // stroke can be drawn.
   const handleShapeRedraw = () => {
@@ -174,39 +323,64 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
     </Animated.View>
   );
 
-  return (
-    <View style={styles.container} >
-      <GestureDetector gesture={surfaceSwipe}>
-        <View style={[styles.pressable, imageDimensionStyle]}>
-          <Pressable
-            accessibilityLabel={guess ? t('game.picture.guessSurfaceLabel') : t('game.picture.hideSurfaceLabel')}
-            onPress={handlePress}
-            onLongPress={handleLongPress}
-            style={StyleSheet.absoluteFill}
-            testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
-          >
-            <ImageBackground
-              accessibilityLabel={guess ? t('game.picture.guessImageLabel') : t('game.picture.hideImageLabel')}
-              source={{uri : uri}}
-              resizeMode='stretch'
-              style={styles.image}
-              testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
-            >
+  const surface = (
+    <Pressable
+      accessibilityLabel={guess ? t('game.picture.guessSurfaceLabel') : t('game.picture.hideSurfaceLabel')}
+      onPress={handlePress}
+      onLongPress={handleLongPress}
+      style={StyleSheet.absoluteFill}
+      testID={guess ? 'game.picture.guess-surface' : 'game.picture.hide-surface'}
+    >
+      <ImageBackground
+        accessibilityLabel={guess ? t('game.picture.guessImageLabel') : t('game.picture.hideImageLabel')}
+        source={{uri : uri}}
+        resizeMode='stretch'
+        style={styles.image}
+        testID={guess ? 'game.picture.guess-image' : 'game.picture.hide-image'}
+      >
 {/* target not showing for guessscreen */}
-              { guess ? (
-                <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} isOpen={enigmaOpen} onClose={handleEnigmaClose}/>
-              ) : null }
-            </ImageBackground>
+        { guess ? (
+          <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} isOpen={enigmaOpen} onClose={handleEnigmaClose}/>
+        ) : null }
+      </ImageBackground>
 
-            {shapeMode && (
-              <ShapeCanvas
-                imageDimensionStyle={imageDimensionStyle}
-                outline={outline}
-                onOutlineChange={onOutlineChange}
-              />
-            )}
+      {shapeMode && (
+        guess ? (
+          <GuessShapeSurface
+            imageDimensionStyle={imageDimensionStyle}
+            outline={outline}
+            onOutlineChange={onOutlineChange}
+            hiddenOutline={hiddenOutline}
+            imageWidth={imageWidth}
+            imageHeight={imageHeight}
+            onStrokeUpdate={handleStrokeUpdate}
+          />
+        ) : (
+          <ShapeCanvas
+            imageDimensionStyle={imageDimensionStyle}
+            outline={outline}
+            onOutlineChange={onOutlineChange}
+            onStrokeUpdate={handleStrokeUpdate}
+          />
+        )
+      )}
 
-          </Pressable>
+    </Pressable>
+  );
+
+  return (
+    <View style={styles.container} onLayout={handleContainerLayout}>
+      <GestureDetector gesture={surfaceSwipe}>
+        <View style={[styles.pressable, imageDimensionStyle]} onLayout={handleImageOriginLayout}>
+          {/* Nesting a Pan detector around the surface Pressable is the
+              documented-safe RNGH pattern: taps still fall through to onPress
+              (same mechanism as the target drag detector over the surface —
+              see hooks/useTargetDrag.ts:106-113). */}
+          {pointPrecisionPan ? (
+            <GestureDetector gesture={pointPrecisionPan}>{surface}</GestureDetector>
+          ) : (
+            surface
+          )}
 
 {/* no cross, when guess, if null  */}
           {targetGesture
@@ -218,6 +392,18 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
             : targetWrap}
         </View>
       </GestureDetector>
+
+      <MagnifierLoupe
+        visible={loupe.visible}
+        frameStyle={loupe.frameStyle}
+        contentStyle={loupe.contentStyle}
+        zoom={LOUPE_ZOOM}
+        diameter={LOUPE_DIAMETER_PX}
+        uri={uri}
+        imageDimensionStyle={imageDimensionStyle}
+      >
+        {loupeContent}
+      </MagnifierLoupe>
 
       {
         showModal &&

@@ -32,6 +32,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.hitSlop = (arg) => {
+      gesture.hitSlopArg = arg;
+      return gesture;
+    };
     gesture.onStart = (cb) => {
       gesture.onStartHandler = cb;
       return gesture;
@@ -93,11 +97,20 @@ jest.mock('expo-file-system', () => ({
   },
 }));
 
+// Shape matcher boundary: the graded reveal percent is made deterministic
+// while the rest of the matcher (constants) stays real.
+jest.mock('../utils/shapeMatch', () => ({
+  ...jest.requireActual('../utils/shapeMatch'),
+  outlineMatchScore: jest.fn(),
+  isWinningTrace: jest.fn(),
+}));
+
 import React from 'react';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import GuessPicture from '../components/Picture/GuessPicture';
 import { getE2EShapeOutline } from '../utils/e2eMode';
+import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
 
 // Real setImageDimensions (landscape 640×480 onto a 320×640 screen) resolves
 // the picture surface to 320×240; the target is min(w,h) * 0.05 = 16 and its
@@ -285,6 +298,35 @@ describe('GuessPicture', () => {
     const after = targetRingStyle(screen);
     expect(ringCenter(after)).toEqual(ringCenter(before));
     expect(ringCenter(after)).toEqual({ x: IMAGE_WIDTH / 2, y: IMAGE_HEIGHT / 2 });
+  });
+
+  describe('loupe (guess drag reporter, D4)', () => {
+    it('shows the loupe anchored at the dragged centre while dragging and hides it on release', async () => {
+      setE2EMode(false);
+
+      const screen = await renderToPicture();
+
+      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+
+      await fireTargetPan({ begin: true, update: { translationX: 10, translationY: 0 } });
+
+      expect(screen.queryByTestId('game.picture.loupe')).not.toBeNull();
+
+      await fireTargetPan({ begin: true, finalize: { translationX: 10, translationY: 0 } });
+
+      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+    });
+
+    it('a tap below the threshold opens the modal and never leaves the loupe visible', async () => {
+      setE2EMode(false);
+
+      const screen = await renderToPicture();
+
+      await fireTargetPan({ begin: true, finalize: { translationX: 2, translationY: 2 } });
+
+      expect(confirmModalQuery(screen)).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+    });
   });
 
   it('in e2e mode, starts with no target and places it at the deterministic hide location on a surface tap', async () => {
@@ -552,6 +594,39 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.guess-target-wrap')).toBeNull();
       expect(screen.queryByTestId('game.picture.clear-guess')).toBeNull();
       expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+    });
+
+    it('renders the corridor band during a stroke and the graded reveal after lift (before confirm)', async () => {
+      outlineMatchScore.mockReturnValue(0.87);
+      isWinningTrace.mockReturnValue(true);
+      const toAdScreen = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
+
+      expect(screen.queryByTestId('game.picture.trace-band')).toBeNull();
+      expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+      const pan = findShapePan();
+      await act(async () => {
+        pan.onStartHandler({ x: STROKE_VERTICES[0].x, y: STROKE_VERTICES[0].y });
+        for (const vertex of STROKE_VERTICES.slice(1)) {
+          pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
+        }
+      });
+
+      expect(screen.queryByTestId('game.picture.trace-band')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+      await act(async () => {
+        pan.onEndHandler({}, true);
+      });
+
+      expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
+      expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      expect(toAdScreen).toHaveBeenCalledTimes(1);
     });
 
     it('ships the normalized drawn outline to toAdScreen on confirm', async () => {

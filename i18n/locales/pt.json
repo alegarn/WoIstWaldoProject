@@ -404,7 +404,10 @@
       "shapeClearLabel": "Limpar o contorno",
       "shapeRedrawLabel": "Voltar a desenhar o contorno",
       "shapeTooSimple": "Contorno demasiado simples — desenhe uma forma fechada à volta do local",
-      "shapeConfirmLabel": "Confirmar o contorno"
+      "shapeConfirmLabel": "Confirmar o contorno",
+      "traceWin": "Acertou em cheio!",
+      "traceLoseScore": "O teu contorno não cobre o local — tenta outra vez",
+      "traceLoseLengthCap": "Contorno demasiado longo — desenha apenas à volta do local"
     }
   },
   "groups": {
