@@ -185,6 +185,33 @@ describe('HidePicture', () => {
     });
   }
 
+  // The hide-side precision Pan is identified BY its activateAfterLongPress
+  // call — the surface classifier, the ShapeCanvas draw Pan and the sidebar
+  // pan never chain it.
+  function findPrecisionPan() {
+    return [...mockPanRecords]
+      .reverse()
+      .find((record) =>
+        record.calls.some((c) => c.method === 'activateAfterLongPress')
+      );
+  }
+
+  // Fires the precision press-hold placement Pan the way the native layer
+  // would: begin, long-press activation start, drag update, release (places
+  // the point through the shared selection pipeline).
+  async function firePrecisionPan(from = { x: 100, y: 200 }, to = { x: 140, y: 180 }) {
+    const pan = findPrecisionPan();
+    if (!pan) {
+      throw new Error('no precision placement Pan gesture is attached to the rendered surface');
+    }
+    await act(async () => {
+      panCallback(pan, 'onBegin')({ x: from.x, y: from.y });
+      panCallback(pan, 'onStart')({ x: from.x, y: from.y });
+      panCallback(pan, 'onUpdate')({ x: to.x, y: to.y });
+      panCallback(pan, 'onEnd')({ x: to.x, y: to.y }, true);
+    });
+  }
+
   async function renderToPicture(overrides = {}) {
     const screen = render(<HidePicture {...baseProps} {...overrides} />);
     fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
@@ -236,6 +263,64 @@ describe('HidePicture', () => {
 
       fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+    });
+  });
+
+  describe('mode switching (point ↔ shape)', () => {
+    it('clears the placed point marker when switching from point to shape mode', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+
+      expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+    });
+
+    it('keeps the stale point out of the shape-mode confirm payload after the switch', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(confirmModalQuery(screen)).toBeNull();
+
+      await fireShapePan(STROKE_VERTICES);
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+
+      expect(baseProps.navigation.navigate).toHaveBeenCalledTimes(1);
+      expect(baseProps.navigation.navigate).toHaveBeenCalledWith('SetInstructions', expect.objectContaining({
+        mode: 'shape',
+        shape: NORMALIZED_STROKE,
+        touchLocation: null,
+        target: null,
+      }));
+    });
+
+    it('does not resurrect the marker when switching back to point mode; a fresh point can be placed', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+      expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
+
+      await firePrecisionPan();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
     });
   });
 
@@ -309,17 +394,6 @@ describe('HidePicture', () => {
   });
 
   describe('point precision placement (press-hold)', () => {
-    // The precision Pan is identified BY its activateAfterLongPress call —
-    // the surface classifier, the ShapeCanvas draw Pan and the sidebar pan
-    // never chain it.
-    function findPrecisionPan() {
-      return [...mockPanRecords]
-        .reverse()
-        .find((record) =>
-          record.calls.some((c) => c.method === 'activateAfterLongPress')
-        );
-    }
-
     it('press-hold-drag-release places the point and dismisses the loupe (marker persists)', async () => {
       const screen = await renderToPicture();
 

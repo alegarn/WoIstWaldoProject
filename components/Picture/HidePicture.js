@@ -62,6 +62,12 @@ export default function HidePicture({
       setOutline(null);
       return;
     }
+    // Mode-switch reset contract, both directions: entering point mode drops
+    // the shape outline; entering shape mode drops a placed point. Leaving
+    // the stale artifact mounted would keep its control interactive over the
+    // new surface and leak it into the confirm payload.
+    setTouchLocation(null);
+    setTarget(null);
     if (isE2EMode()) {
       applyOutline(E2E_SHAPE_POLYGON.map((point) => ({ ...point })));
     }
