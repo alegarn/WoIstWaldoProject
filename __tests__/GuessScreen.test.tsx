@@ -39,6 +39,7 @@ type MockGesture = {
   onUpdateHandler?: PanHandler & ShapePanHandler;
   onEndHandler?: PanHandler;
   onFinalizeHandler?: PanHandler;
+  hitSlopArg?: unknown;
 };
 
 // Captured Pan gestures. Tests fire the same callbacks the native gesture
@@ -58,6 +59,10 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.hitSlop = (arg: unknown) => {
+      gesture.hitSlopArg = arg;
+      return gesture;
+    };
     gesture.onStart = (cb: ShapePanHandler) => {
       gesture.onStartHandler = cb;
       return gesture;
@@ -180,7 +185,7 @@ jest.mock('../utils/nextCardAdvancer', () => {
 // args, 10s speed window) while point mode keeps the real isOnTarget path.
 jest.mock('../utils/shapeMatch', () => ({
   ...jest.requireActual('../utils/shapeMatch'),
-  outlineMatch: jest.fn(),
+  isWinningTrace: jest.fn(),
 }));
 
 import React from 'react';
@@ -193,10 +198,10 @@ import { AuthContext } from '../store/auth-context';
 import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 import { fetchCardBatch } from '../services/cardDeck';
-import { outlineMatch } from '../utils/shapeMatch';
+import { isWinningTrace } from '../utils/shapeMatch';
 
 const actualShapeMatch = jest.requireActual('../utils/shapeMatch') as typeof import('../utils/shapeMatch');
-const outlineMatchMock = outlineMatch as jest.MockedFunction<typeof outlineMatch>;
+const isWinningTraceMock = isWinningTrace as jest.MockedFunction<typeof isWinningTrace>;
 
 const applySuccessSideEffectsMock = applySuccessSideEffects as jest.MockedFunction<typeof applySuccessSideEffects>;
 const resolveNextGuessParamsMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
@@ -477,7 +482,7 @@ describe('GuessScreen', () => {
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
-    outlineMatchMock.mockReset().mockImplementation(actualShapeMatch.outlineMatch);
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
     useFakeAnimationTimers();
     setE2EMode(false);
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
@@ -1492,27 +1497,34 @@ describe('GuessScreen', () => {
       return baseParams({ mode: 'shape', shape: HIDDEN_SHAPE, ...overrides });
     }
 
-    it('a matching shape outline plays the win animation via outlineMatch, not isOnTarget', async () => {
-      outlineMatchMock.mockReturnValueOnce(true);
+    it('a matching shape outline plays the win animation via isWinningTrace, not isOnTarget', async () => {
+      isWinningTraceMock.mockReturnValue(true);
       const navigation = makeNav();
       const handle = renderGuessScreen(shapeParams(), navigation);
 
       await confirmShapeGuess(handle);
 
-      expect(outlineMatchMock).toHaveBeenCalledTimes(1);
-      expect(outlineMatchMock).toHaveBeenCalledWith(expect.objectContaining({
+      // The surface's lift-time reveal consumes the first call; the LAST call
+      // is the screen's toAdScreen verdict — pinned to the LOCKED 4-param
+      // image-space signature (no screenWidth/screenHeight, resolution d).
+      const screenCallArgs = isWinningTraceMock.mock.lastCall?.[0];
+      expect(screenCallArgs).toMatchObject({
         hiddenShape: HIDDEN_SHAPE,
         imageWidth: 800,
         imageHeight: 1200,
-        screenWidth: expect.any(Number),
-        screenHeight: expect.any(Number),
-      }));
+      });
+      expect(Object.keys(screenCallArgs ?? {}).sort()).toEqual([
+        'guessShape',
+        'hiddenShape',
+        'imageHeight',
+        'imageWidth',
+      ]);
       expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
       expect(navigation.replace).not.toHaveBeenCalled();
     });
 
     it('a disjoint shape outline ends the round on the text-only failure screen', async () => {
-      outlineMatchMock.mockReturnValueOnce(false);
+      isWinningTraceMock.mockReturnValue(false);
       const navigation = makeNav();
       const handle = renderGuessScreen(shapeParams(), navigation);
 
@@ -1528,7 +1540,7 @@ describe('GuessScreen', () => {
     });
 
     it('retrying a failed shape card re-serves the shape surface with the stored outline', async () => {
-      outlineMatchMock.mockReturnValueOnce(false);
+      isWinningTraceMock.mockReturnValue(false);
       const navigation = makeNav();
       const handle = renderGuessScreen(shapeParams(), navigation);
 
@@ -1552,7 +1564,7 @@ describe('GuessScreen', () => {
       // against the STORED outline, not the failed guess outline. Retry params
       // carry no skipInstructions (same as a point retry), so the mount opens
       // on the instructions filter — dismiss it like the player would.
-      outlineMatchMock.mockReturnValueOnce(true);
+      isWinningTraceMock.mockReturnValue(true);
       const retried = renderGuessScreen(retryParams);
       await act(async () => {
         fireEvent.press(retried.screen.getByTestId('game.instructions.guess.start'));
@@ -1561,13 +1573,13 @@ describe('GuessScreen', () => {
 
       await confirmShapeGuess(retried);
 
-      expect(outlineMatchMock).toHaveBeenCalledWith(expect.objectContaining({ hiddenShape: HIDDEN_SHAPE }));
-      expect(outlineMatchMock.mock.lastCall?.[0]).toMatchObject({ hiddenShape: HIDDEN_SHAPE });
+      expect(isWinningTraceMock).toHaveBeenCalledWith(expect.objectContaining({ hiddenShape: HIDDEN_SHAPE }));
+      expect(isWinningTraceMock.mock.lastCall?.[0]).toMatchObject({ hiddenShape: HIDDEN_SHAPE });
       expect(retried.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
     });
 
     it('a shape find past the 5s point window but under 10s still earns the ×2 bonus', async () => {
-      outlineMatchMock.mockReturnValueOnce(true);
+      isWinningTraceMock.mockReturnValue(true);
       const handle = renderGuessScreen(shapeParams());
 
       // Reading grace (3s) holds the chrono; 9s on the clock is ~6s elapsed —
@@ -1580,7 +1592,7 @@ describe('GuessScreen', () => {
     });
 
     it('a shape find over the 10s window earns no bonus', async () => {
-      outlineMatchMock.mockReturnValueOnce(true);
+      isWinningTraceMock.mockReturnValue(true);
       const handle = renderGuessScreen(shapeParams());
 
       await advance(14000);
@@ -1590,12 +1602,43 @@ describe('GuessScreen', () => {
       expect(handle.screen.getByText('+1')).toBeTruthy();
     });
 
-    it('a point-mode card never consults outlineMatch', async () => {
+    it('a shape card without image dimensions consults isWinningTrace with 0×0 and loses deterministically', async () => {
+      const navigation = makeNav();
+      const handle = renderGuessScreen(
+        shapeParams({ imageWidth: undefined, imageHeight: undefined }),
+        navigation,
+      );
+
+      await confirmShapeGuess(handle);
+
+      // Real isWinningTrace runs (reset impl): zero dimensions are a defined
+      // losing verdict in the pure layer — no crash, no NaN path.
+      expect(isWinningTraceMock).toHaveBeenCalledWith(expect.objectContaining({
+        hiddenShape: HIDDEN_SHAPE,
+        imageWidth: 0,
+        imageHeight: 0,
+      }));
+      const screenCallArgs = isWinningTraceMock.mock.lastCall?.[0];
+      expect(Object.keys(screenCallArgs ?? {}).sort()).toEqual([
+        'guessShape',
+        'hiddenShape',
+        'imageHeight',
+        'imageWidth',
+      ]);
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledWith(
+        'ResultScreen',
+        expect.objectContaining({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE }),
+      );
+      expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
+    });
+
+    it('a point-mode card never consults isWinningTrace', async () => {
       const handle = renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
 
-      expect(outlineMatchMock).not.toHaveBeenCalled();
+      expect(isWinningTraceMock).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
     });
   });
@@ -1608,7 +1651,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
-    outlineMatchMock.mockReset().mockImplementation(actualShapeMatch.outlineMatch);
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
     useFakeAnimationTimers();
     setE2EMode(false);
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);

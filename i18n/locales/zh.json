@@ -403,7 +403,10 @@
       "shapeClearLabel": "清除轮廓",
       "shapeRedrawLabel": "重新绘制轮廓",
       "shapeTooSimple": "轮廓太简单——请在藏匿点周围画一个闭合的形状",
-      "shapeConfirmLabel": "确认轮廓"
+      "shapeConfirmLabel": "确认轮廓",
+      "traceWin": "完美！",
+      "traceLoseScore": "轮廓没有覆盖藏匿点——再试一次",
+      "traceLoseLengthCap": "轮廓太长——只沿着藏匿点周围画"
     }
   },
   "groups": {

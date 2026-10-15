@@ -1,14 +1,15 @@
 import type { Point } from './shapeGeometry';
+import { outlineLengthInImageSpace } from './shapeGeometry';
 
 export const SHAPE_TOLERANCE_RATIO = 0.05;
+export const MAX_LENGTH_RATIO = 1.4;
+export const MATCH_THRESHOLD_RATIO = 0.9;
 
-interface OutlineMatchParams {
+export interface OutlineScoreParams {
   hiddenShape: Point[];
   guessShape: Point[];
   imageWidth: number;
   imageHeight: number;
-  screenWidth: number;
-  screenHeight: number;
 }
 
 export function distancePointToSegment(point: Point, start: Point, end: Point): number {
@@ -51,11 +52,11 @@ function distanceToOutline(point: Point, segments: [Point, Point][]): number {
   return min;
 }
 
-function passesCorridor(
+function forEachCorridorSample(
   points: Point[],
-  otherSegments: [Point, Point][],
-  tolerance: number
-): boolean {
+  tolerance: number,
+  visitSample: (sample: Point) => void
+): void {
   const maxStep = tolerance / 2;
   for (let i = 0; i < points.length - 1; i++) {
     const start = points[i];
@@ -64,37 +65,92 @@ function passesCorridor(
     const steps = Math.max(1, Math.ceil(segmentLength / maxStep));
     for (let s = 0; s <= steps; s++) {
       const t = s / steps;
-      const sample = {
+      visitSample({
         x: start.x + (end.x - start.x) * t,
         y: start.y + (end.y - start.y) * t,
-      };
-      if (distanceToOutline(sample, otherSegments) > tolerance) {
-        return false;
-      }
+      });
     }
   }
-  return true;
 }
 
-export function outlineMatch({
+function toImageSpace(
+  shape: Point[],
+  imageWidth: number,
+  imageHeight: number
+): Point[] {
+  return shape.map((point) => ({
+    x: point.x * imageWidth,
+    y: point.y * imageHeight,
+  }));
+}
+
+function corridorCoverage(
+  points: Point[],
+  otherSegments: [Point, Point][],
+  tolerance: number
+): number {
+  let withinCount = 0;
+  let totalCount = 0;
+  forEachCorridorSample(points, tolerance, (sample) => {
+    totalCount++;
+    if (distanceToOutline(sample, otherSegments) <= tolerance) {
+      withinCount++;
+    }
+  });
+  return totalCount === 0 ? 0 : withinCount / totalCount;
+}
+
+function isDegenerateOutline(
+  shape: Point[],
+  imageWidth: number,
+  imageHeight: number
+): boolean {
+  return outlineLengthInImageSpace(shape, imageWidth, imageHeight) === 0;
+}
+
+export function shapeTolerancePx(imageWidth: number, imageHeight: number): number {
+  if (!(imageWidth > 0) || !(imageHeight > 0)) {
+    return 0;
+  }
+  return SHAPE_TOLERANCE_RATIO * Math.min(imageWidth, imageHeight);
+}
+
+export function outlineMatchScore({
   hiddenShape,
   guessShape,
   imageWidth,
   imageHeight,
-  screenWidth,
-  screenHeight,
-}: OutlineMatchParams): boolean {
-  const tolerance = Math.min(screenWidth, screenHeight) * SHAPE_TOLERANCE_RATIO;
-  const hiddenPixels = hiddenShape.map((point) => ({
-    x: point.x * imageWidth,
-    y: point.y * imageHeight,
-  }));
-  const guessPixels = guessShape.map((point) => ({
-    x: point.x * imageWidth,
-    y: point.y * imageHeight,
-  }));
+}: OutlineScoreParams): number {
+  if (!(imageWidth > 0) || !(imageHeight > 0)) {
+    return 0;
+  }
+  if (isDegenerateOutline(hiddenShape, imageWidth, imageHeight)) {
+    return 0;
+  }
+  if (isDegenerateOutline(guessShape, imageWidth, imageHeight)) {
+    return 0;
+  }
+  const tolerance = shapeTolerancePx(imageWidth, imageHeight);
+  const hiddenPixels = toImageSpace(hiddenShape, imageWidth, imageHeight);
+  const guessPixels = toImageSpace(guessShape, imageWidth, imageHeight);
+  return Math.min(
+    corridorCoverage(guessPixels, toSegments(hiddenPixels), tolerance),
+    corridorCoverage(hiddenPixels, toSegments(guessPixels), tolerance)
+  );
+}
+
+export function isWinningTrace(params: OutlineScoreParams): boolean {
+  const { hiddenShape, guessShape, imageWidth, imageHeight } = params;
+  if (!(imageWidth > 0) || !(imageHeight > 0)) {
+    return false;
+  }
+  if (isDegenerateOutline(hiddenShape, imageWidth, imageHeight)) {
+    return false;
+  }
   return (
-    passesCorridor(guessPixels, toSegments(hiddenPixels), tolerance) &&
-    passesCorridor(hiddenPixels, toSegments(guessPixels), tolerance)
+    outlineMatchScore(params) >= MATCH_THRESHOLD_RATIO &&
+    outlineLengthInImageSpace(guessShape, imageWidth, imageHeight) <=
+      outlineLengthInImageSpace(hiddenShape, imageWidth, imageHeight) *
+        MAX_LENGTH_RATIO
   );
 }

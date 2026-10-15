@@ -34,10 +34,10 @@ jest.mock('react-native-gesture-handler', () => {
   const makePan = () => {
     const gesture = {};
     mockPanGestures.push(gesture);
-    for (const chain of ['activeOffsetX', 'activeOffsetY', 'failOffsetX', 'failOffsetY', 'enabled']) {
+    for (const chain of ['activeOffsetX', 'activeOffsetY', 'failOffsetX', 'failOffsetY', 'enabled', 'activateAfterLongPress']) {
       gesture[chain] = () => gesture;
     }
-    for (const cb of ['onBegin', 'onUpdate', 'onEnd', 'onFinalize']) {
+    for (const cb of ['onBegin', 'onStart', 'onUpdate', 'onEnd', 'onFinalize']) {
       gesture[cb] = (handler) => {
         gesture[`${cb}Handler`] = handler;
         return gesture;

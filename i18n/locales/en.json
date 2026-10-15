@@ -404,7 +404,10 @@
       "shapeClearLabel": "Clear outline",
       "shapeRedrawLabel": "Redraw outline",
       "shapeTooSimple": "Outline too simple — draw a closed shape around the spot",
-      "shapeConfirmLabel": "Confirm outline"
+      "shapeConfirmLabel": "Confirm outline",
+      "traceWin": "Nailed it!",
+      "traceLoseScore": "Your outline missed the spot — try again",
+      "traceLoseLengthCap": "Outline too long — trace just around the spot"
     }
   },
   "groups": {

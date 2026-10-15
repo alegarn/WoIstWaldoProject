@@ -3,7 +3,9 @@ const mockIconButton = jest.fn(() => null);
 const mockSpeedRing = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockShapeCanvas = jest.fn(() => null);
+const mockTraceCorridorEdges = jest.fn(() => null);
 
+let mockCapturedPanRecords;
 let mockCapturedPanRecord;
 let mockCapturedPan;
 
@@ -17,6 +19,7 @@ jest.mock('react-native', () => {
     setValue = (nextValue) => {
       this._value = nextValue;
     };
+    __getValue = () => this._value;
   }
 
   function buildAnimation(value, config) {
@@ -53,6 +56,7 @@ jest.mock('react-native', () => {
       })),
       View: ({ children, ...props }) => React.createElement('AnimatedView', props, children),
     },
+    Text: ({ children, ...props }) => React.createElement('Text', props, children),
     ImageBackground: ({ children, ...props }) =>
       React.createElement('ImageBackground', props, children),
     Pressable: ({ children, ...props }) => React.createElement('Pressable', props, children),
@@ -81,6 +85,7 @@ jest.mock('react-native-gesture-handler', () => {
       },
     };
     const proxy = new Proxy(record, handler);
+    mockCapturedPanRecords.push(record);
     mockCapturedPanRecord = record;
     mockCapturedPan = proxy;
     return proxy;
@@ -137,10 +142,45 @@ jest.mock('../components/Picture/ShapeCanvas', () => {
   };
 });
 
+// Loupe mirror content boundary: capture the corridor edges props the host
+// composes for the shape-mode glass while rendering the real component.
+jest.mock('../components/Picture/TraceCorridorEdges', () => {
+  const React = require('react');
+  const Actual = jest.requireActual('../components/Picture/TraceCorridorEdges').default;
+  return function MockTraceCorridorEdges(props) {
+    mockTraceCorridorEdges(props);
+    return React.createElement(Actual, props);
+  };
+});
+
+// Shape matcher boundary: the new guess-branch case lets the real
+// GuessShapeSurface run; its graded outcome is controlled here (pattern from
+// GuessScreen.test.tsx) while the hide-branch cases never touch scoring.
+jest.mock('../utils/shapeMatch', () => ({
+  ...jest.requireActual('../utils/shapeMatch'),
+  outlineMatchScore: jest.fn(),
+  isWinningTrace: jest.fn(),
+}));
+
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import ShowPicture from '../components/Picture/ShowPicture';
+import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
+import {
+  LOUPE_LONG_PRESS_MS,
+  LOUPE_ZOOM,
+  LOUPE_DIAMETER_PX,
+  loupeContentTransform,
+  loupeLayout,
+} from '../utils/loupeGeometry';
+import { SHAPE_TOLERANCE_RATIO, shapeTolerancePx } from '../utils/shapeMatch';
+import {
+  corridorBandWidthPx,
+  offsetPolyline,
+} from '../utils/shapeGeometry';
+import { traceSegmentStyle } from '../components/Picture/TraceInk';
+import { buildSelectionFromPixels } from '../utils/targetLocation';
 
 function findByTestID(renderer, testID) {
   return renderer.root.findByProps({ testID });
@@ -148,6 +188,52 @@ function findByTestID(renderer, testID) {
 
 function findAllByType(renderer, type) {
   return renderer.root.findAllByType(type);
+}
+
+// D8 layout harness: RN onLayout never fires under react-test-renderer, so the
+// tests drive the two measured spaces manually — the ROOT container (screen
+// dims) and the styles.pressable View (root-relative image origin; the
+// ImageBackground's own onLayout would be parent-relative ≈(0,0) and unusable).
+function fireLayouts(
+  renderer,
+  container = { width: 360, height: 800 },
+  image = { x: 20, y: 280, width: 320, height: 240 }
+) {
+  const views = findAllByType(renderer, 'View').filter(
+    (node) => typeof node.props.onLayout === 'function'
+  );
+  const root = views.find(
+    (node) => !Array.isArray(node.props.style) && node.props.style?.flex === 1
+  );
+  const pressable = views.find((node) => Array.isArray(node.props.style));
+  expect(root).toBeTruthy();
+  expect(pressable).toBeTruthy();
+  act(() => {
+    root.props.onLayout({ nativeEvent: { layout: container } });
+    pressable.props.onLayout({ nativeEvent: { layout: image } });
+  });
+}
+
+// The precision pan is identified BY its activateAfterLongPress call — the
+// surface classifier never chains that method.
+function precisionPanRecord() {
+  return mockCapturedPanRecords.find((record) =>
+    record.calls.some((c) => c.method === 'activateAfterLongPress')
+  );
+}
+
+function surfacePanRecord() {
+  return mockCapturedPanRecords.find(
+    (record) => !record.calls.some((c) => c.method === 'activateAfterLongPress')
+  );
+}
+
+function panCallback(record, method) {
+  const call = record?.calls.find((c) => c.method === method);
+  if (!call) {
+    throw new Error(`pan never registered ${method}`);
+  }
+  return call.args[0];
 }
 
 describe('ShowPicture', () => {
@@ -184,6 +270,7 @@ describe('ShowPicture', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCapturedPanRecords = [];
     mockCapturedPanRecord = undefined;
     mockCapturedPan = undefined;
   });
@@ -362,10 +449,11 @@ describe('ShowPicture', () => {
       expect(hasSurfacePanDisabled()).toBe(false);
     });
 
-    it('mounts ShapeCanvas with outline + onOutlineChange when shapeMode is set', () => {
+    it('mounts a bare ShapeCanvas with outline + onOutlineChange on the hide branch (guess: false)', () => {
       const onOutlineChange = jest.fn();
       const renderer = renderShowPicture({
         shapeMode: true,
+        guess: false,
         outline: [{ x: 0.2, y: 0.3 }],
         onOutlineChange,
       });
@@ -375,6 +463,48 @@ describe('ShowPicture', () => {
       expect(shapeCanvases[0].props.imageDimensionStyle).toEqual({ width: 200, height: 400 });
       expect(shapeCanvases[0].props.outline).toEqual([{ x: 0.2, y: 0.3 }]);
       expect(shapeCanvases[0].props.onOutlineChange).toBe(onOutlineChange);
+      expect(shapeCanvases[0].props.renderBand).toBeUndefined();
+    });
+
+    it('guess side mounts GuessShapeSurface with hiddenOutline + dims, not a bare ShapeCanvas', () => {
+      outlineMatchScore.mockReturnValue(0.87);
+      isWinningTrace.mockReturnValue(true);
+      const onOutlineChange = jest.fn();
+      const hiddenOutline = [
+        { x: 0.1, y: 0.1 },
+        { x: 0.9, y: 0.1 },
+        { x: 0.5, y: 0.9 },
+        { x: 0.1, y: 0.1 },
+      ];
+      const renderer = renderShowPicture({
+        shapeMode: true,
+        outline: [{ x: 0.2, y: 0.3 }],
+        onOutlineChange,
+        hiddenOutline,
+        imageWidth: 640,
+        imageHeight: 480,
+      });
+
+      // The surface root replaces the bare branch.
+      expect(() => findByTestID(renderer, 'game.picture.guess-shape-surface')).not.toThrow();
+
+      // Single ShapeCanvas, mounted THROUGH the surface: band slot present,
+      // dims and own-stroke outline forwarded untouched. (The corridor offset
+      // pass-through is gone — tracing is finger-true since the offset
+      // retirement.)
+      const shapeCanvases = findShapeCanvases(renderer);
+      expect(shapeCanvases).toHaveLength(1);
+      expect(shapeCanvases[0].props.renderBand).toEqual(expect.any(Function));
+      expect(shapeCanvases[0].props.imageDimensionStyle).toEqual({ width: 200, height: 400 });
+      expect(shapeCanvases[0].props.outline).toEqual([{ x: 0.2, y: 0.3 }]);
+
+      // hiddenOutline reached the surface: a lift reveals the graded overlay.
+      const surfaceProps =
+        mockShapeCanvas.mock.calls[mockShapeCanvas.mock.calls.length - 1][0];
+      act(() => {
+        surfaceProps.onOutlineChange(hiddenOutline);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).not.toThrow();
     });
 
     it('suppresses the surface swipe classifier for the whole shape mode', () => {
@@ -440,6 +570,628 @@ describe('ShowPicture', () => {
       expect(modalProps.cancelLabel).toBeUndefined();
       expect(modalProps.onCancel).toBe(baseProps.onCancel);
       expect(modalProps.onPress).toBe(baseProps.handleConfirm);
+    });
+  });
+
+  describe('point precision loupe (hide press-hold)', () => {
+    const hidePointProps = {
+      guess: false,
+      touchLocation: null,
+      target: null,
+      imageDimensionStyle: { width: 320, height: 480 },
+    };
+
+    function renderHidePoint(overrides = {}) {
+      return renderShowPicture({ ...hidePointProps, ...overrides });
+    }
+
+    // Fixture (D8): image 320×480 at root-relative origin (20,280) inside a
+    // 360×800 container, so image-px (140,260) == container (160,540) — the
+    // anchors stay in-bounds (height 480 > 260), no clamp interference.
+    function fireHidePointLayouts(renderer) {
+      fireLayouts(
+        renderer,
+        { width: 360, height: 800 },
+        { x: 20, y: 280, width: 320, height: 480 }
+      );
+    }
+
+    it('press-hold activates the loupe, follows the drag, and places the clamped point on release', () => {
+      const onPointPlaced = jest.fn();
+      const renderer = renderHidePoint({ onPointPlaced });
+      fireHidePointLayouts(renderer);
+
+      const record = precisionPanRecord();
+      expect(record).toBeTruthy();
+      expect(record.calls.find((c) => c.method === 'activateAfterLongPress').args[0]).toBe(
+        LOUPE_LONG_PRESS_MS
+      );
+
+      act(() => {
+        panCallback(record, 'onBegin')({ x: 100, y: 200 });
+      });
+      act(() => {
+        panCallback(record, 'onStart')({ x: 100, y: 200 });
+      });
+      act(() => {
+        panCallback(record, 'onUpdate')({ x: 140, y: 260 });
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const frameStyle = loupe.props.style[2];
+      const expectedFrame = loupeLayout({
+        anchor: { x: 20 + 140, y: 280 + 260 },
+        screen: { width: 360, height: 800 },
+      });
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
+
+      act(() => {
+        panCallback(record, 'onEnd')({ x: 140, y: 260 }, true);
+      });
+
+      expect(onPointPlaced).toHaveBeenCalledTimes(1);
+      expect(onPointPlaced).toHaveBeenCalledWith({ x: 140, y: 260 });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+
+      // The placed marker persists: the parent applies the onPointPlaced
+      // payload (selection px + target) and the target wrap keeps rendering.
+      const selection = buildSelectionFromPixels({
+        locationX: 140,
+        locationY: 260,
+        screenWidth: 320,
+        screenHeight: 640,
+        imageDimensionStyle: { width: 320, height: 480 },
+      });
+      act(() => {
+        renderer.update(
+          <ShowPicture
+            {...baseProps}
+            {...hidePointProps}
+            onPointPlaced={onPointPlaced}
+            touchLocation={selection.location}
+            target={selection.target}
+          />
+        );
+      });
+      expect(() => findByTestID(renderer, 'game.picture.hide-target-wrap')).not.toThrow();
+    });
+
+    // Orientation-lock regression: the async orientation lock re-layouts the
+    // tree AFTER the first measure, so the SECOND onLayout pair carries the
+    // true dims/origin. The old write-once guards discarded it and an
+    // in-flight loupe stayed mispositioned for the whole mount. The ref
+    // writes must be unconditional and must self-heal the loupe without a
+    // new pointer event.
+    it('second onLayout wins and self-heals an in-flight loupe (no further gesture events)', () => {
+      const renderer = renderHidePoint({});
+      fireLayouts(
+        renderer,
+        { width: 360, height: 800 },
+        { x: 20, y: 280, width: 320, height: 480 }
+      );
+
+      const record = precisionPanRecord();
+      act(() => {
+        panCallback(record, 'onBegin')({ x: 140, y: 260 });
+      });
+      act(() => {
+        panCallback(record, 'onStart')({ x: 140, y: 260 });
+      });
+      act(() => {
+        panCallback(record, 'onUpdate')({ x: 140, y: 260 });
+      });
+
+      const beforeFrame = loupeLayout({
+        anchor: { x: 20 + 140, y: 280 + 260 },
+        screen: { width: 360, height: 800 },
+      });
+
+      // Orientation swap: container 800×360, image origin (33,0). NO gesture
+      // events after this — the layout pass alone must reposition the loupe.
+      fireLayouts(
+        renderer,
+        { width: 800, height: 360 },
+        { x: 33, y: 0, width: 320, height: 480 }
+      );
+
+      const afterFrame = loupeLayout({
+        anchor: { x: 33 + 140, y: 0 + 260 },
+        screen: { width: 800, height: 360 },
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const frameStyle = loupe.props.style[2];
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(afterFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(afterFrame.top);
+      // Bug pin: the old guard kept the stale pre-orientation position.
+      expect(afterFrame.left).not.toBe(beforeFrame.left);
+      expect(afterFrame.top).not.toBe(beforeFrame.top);
+    });
+
+    it('hold without move places at the touch-down point on release', () => {
+      const onPointPlaced = jest.fn();
+      const renderer = renderHidePoint({ onPointPlaced });
+      fireHidePointLayouts(renderer);
+
+      const record = precisionPanRecord();
+      act(() => {
+        panCallback(record, 'onBegin')({ x: 100, y: 200 });
+      });
+      act(() => {
+        panCallback(record, 'onStart')({ x: 100, y: 200 });
+      });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).not.toThrow();
+
+      act(() => {
+        panCallback(record, 'onEnd')({ x: 100, y: 200 }, true);
+      });
+
+      expect(onPointPlaced).toHaveBeenCalledWith({ x: 100, y: 200 });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+    });
+
+    it('quick tap keeps placing through the Pressable and never mounts the loupe', () => {
+      const onPointPlaced = jest.fn();
+      const renderer = renderHidePoint({ onPointPlaced });
+      fireHidePointLayouts(renderer);
+
+      const surface = findByTestID(renderer, 'game.picture.hide-surface');
+      expect(surface.props.onPress).toBe(baseProps.handlePress);
+
+      act(() => {
+        surface.props.onPress({ nativeEvent: { locationX: 100, locationY: 200 } });
+      });
+
+      expect(baseProps.handlePress).toHaveBeenCalledTimes(1);
+      expect(onPointPlaced).not.toHaveBeenCalled();
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+    });
+
+    it('fast swipe never activates the precision pan; the surface classifier still receives its gesture', () => {
+      const onEdgeSwipe = jest.fn();
+      const onPointPlaced = jest.fn();
+      const renderer = renderHidePoint({ onEdgeSwipe, onPointPlaced });
+      fireHidePointLayouts(renderer);
+
+      const precision = precisionPanRecord();
+      expect(precision).toBeTruthy();
+
+      // RNGH semantics: finger movement beyond touch slop (~10dp) during the
+      // 200ms long-press delay CANCELS the long-press, so the recognizer never
+      // ACTIVATES. The mock mirrors that by firing ONLY onUpdate — onStart and
+      // onEnd are never fired (registration entries in `calls` are the builder
+      // chain, not fired gestures).
+      act(() => {
+        panCallback(precision, 'onUpdate')({ x: 160, y: 110, translationX: 60, translationY: 10 });
+      });
+
+      expect(onPointPlaced).not.toHaveBeenCalled();
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+
+      act(() => {
+        panCallback(surfacePanRecord(), 'onEnd')({ translationX: 70, translationY: 2 }, true);
+      });
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+    });
+
+    it('slow-start race is benign: the classifier owns the gesture and the precision pan never activates', () => {
+      // RNGH caveat (pinned): a hold of ~150ms followed by a fast ≥40px drag
+      // cancels long-press activation (movement beyond touch slop during the
+      // delay) — a jittery hold degrades to plain tap/press behaviour, never a
+      // broken mid-flight state. The surface classifier has no long-press
+      // gate, so its existing path owns the outcome (right-swipe → exit menu
+      // here; up-swipe → enigma on the guess side, same classifier).
+      const onEdgeSwipe = jest.fn();
+      const renderer = renderHidePoint({ onEdgeSwipe });
+      fireHidePointLayouts(renderer);
+
+      act(() => {
+        panCallback(surfacePanRecord(), 'onEnd')({ translationX: 60, translationY: 4 }, true);
+      });
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+
+      const precision = precisionPanRecord();
+      expect(precision).toBeTruthy();
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+    });
+
+    it('point loupe content mirrors nothing: zoomed image + built-in cursor only', () => {
+      const renderer = renderHidePoint({});
+      fireHidePointLayouts(renderer);
+
+      const record = precisionPanRecord();
+      act(() => {
+        panCallback(record, 'onStart')({ x: 100, y: 200 });
+      });
+
+      expect(findByTestID(renderer, 'game.picture.loupe-image')).toBeTruthy();
+      expect(findByTestID(renderer, 'game.picture.loupe-cursor')).toBeTruthy();
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const mirrored = loupe.findAll((node) => {
+        const id = node.props.testID;
+        return typeof id === 'string' && /trace|band|outline/.test(id);
+      });
+      expect(mirrored).toHaveLength(0);
+
+      // Point modes pass NO children — the children wrapper stays empty.
+      const wrapper = loupe.find(
+        (node) =>
+          Array.isArray(node.props.style) &&
+          node.props.style.some((s) => s && s.transformOrigin === 'top left')
+      );
+      expect(wrapper.props.children ?? null).toBeNull();
+    });
+  });
+
+  describe('guess drag loupe', () => {
+    it('shows the loupe at the dragged target centre and hides it when the position clears', () => {
+      const props = {
+        ...baseProps,
+        imageDimensionStyle: { width: 320, height: 480 },
+        onTargetDragPosition: null,
+      };
+      let renderer;
+      act(() => {
+        renderer = create(<ShowPicture {...props} />);
+      });
+      fireLayouts(
+        renderer,
+        { width: 360, height: 800 },
+        { x: 20, y: 280, width: 320, height: 480 }
+      );
+
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+
+      act(() => {
+        renderer.update(<ShowPicture {...props} onTargetDragPosition={{ x: 210, y: 310 }} />);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const frameStyle = loupe.props.style[2];
+      const expectedFrame = loupeLayout({
+        anchor: { x: 20 + 210, y: 280 + 310 },
+        screen: { width: 360, height: 800 },
+      });
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
+
+      const contentNode = loupe
+        .findAll((node) => node.type === 'AnimatedView')
+        .find(
+          (node) =>
+            node.props.testID === undefined &&
+            Array.isArray(node.props.style) &&
+            node.props.style.some((s) => s && Array.isArray(s.transform))
+        );
+      const contentStyle = contentNode.props.style[2];
+      const expectedContent = loupeContentTransform({ anchor: { x: 210, y: 310 } });
+      expect(contentStyle.transform[0].translateX.__getValue()).toBe(expectedContent.translateX);
+      expect(contentStyle.transform[1].translateY.__getValue()).toBe(expectedContent.translateY);
+
+      act(() => {
+        renderer.update(<ShowPicture {...props} onTargetDragPosition={null} />);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+    });
+  });
+
+  describe('shape loupe (trace mirror)', () => {
+    // Fixture (D8, non-zero origin): image 320×480 at root-relative origin
+    // (20,280) inside a 360×800 container; stroke reported in IMAGE-px.
+    const shapeLayout = [
+      { width: 360, height: 800 },
+      { x: 20, y: 280, width: 320, height: 480 },
+    ];
+    const shapeDims = { width: 320, height: 480 };
+    // Horizontal stroke so the corridor offsets are exact: ±tolerance on y.
+    const stroke = [
+      { x: 100, y: 200 },
+      { x: 140, y: 200 },
+    ];
+    const strokeUpdate = { anchor: stroke[1], renderPoints: stroke };
+
+    const guessShapeProps = {
+      shapeMode: true,
+      guess: true,
+      touchLocation: null,
+      target: null,
+      imageDimensionStyle: shapeDims,
+      outline: [
+        { x: 0.2, y: 0.2 },
+        { x: 0.8, y: 0.2 },
+        { x: 0.5, y: 0.8 },
+        { x: 0.2, y: 0.2 },
+      ],
+      onOutlineChange: jest.fn(),
+      hiddenOutline: [
+        { x: 0.1, y: 0.1 },
+        { x: 0.9, y: 0.1 },
+        { x: 0.5, y: 0.9 },
+        { x: 0.1, y: 0.1 },
+      ],
+      imageWidth: 1000,
+      imageHeight: 1000,
+    };
+
+    function renderShape(overrides = {}) {
+      const renderer = renderShowPicture({ ...guessShapeProps, ...overrides });
+      fireLayouts(renderer, ...shapeLayout);
+      return renderer;
+    }
+
+    function shapeCanvasProps(renderer) {
+      const nodes = findAllByType(renderer, 'ShapeCanvas');
+      expect(nodes.length).toBe(1);
+      return nodes[nodes.length - 1].props;
+    }
+
+    function loupeNodesByTestID(loupe, testID) {
+      return loupe.findAll((node) => node.props.testID === testID);
+    }
+
+    // react-test-renderer 19 findAll can return alternate-fiber ghosts for
+    // the same logical node — presence/count-by-geometry stays safe, but
+    // expectOne `find` calls must go through these dedupe helpers.
+    function firstLoupeNode(loupe, predicate) {
+      const all = loupe.findAll(predicate);
+      expect(all.length).toBeGreaterThan(0);
+      return all[0];
+    }
+
+    function dedupeStyles(styles) {
+      const seen = new Set();
+      return styles.filter((style) => {
+        const key = JSON.stringify(style);
+        if (seen.has(key)) {
+          return false;
+        }
+        seen.add(key);
+        return true;
+      });
+    }
+
+    function contentStyleOf(loupe) {
+      const contentNode = loupe
+        .findAll((node) => node.type === 'AnimatedView')
+        .find(
+          (node) =>
+            node.props.testID === undefined &&
+            Array.isArray(node.props.style) &&
+            node.props.style.some((s) => s && Array.isArray(s.transform))
+        );
+      expect(contentNode).toBeTruthy();
+      return contentNode.props.style[2];
+    }
+
+    function mirrorBarStyles(loupe, testID) {
+      const root = firstLoupeNode(loupe, (node) => node.props.testID === testID);
+      return dedupeStyles(
+        root
+          .findAll(
+            (node) =>
+              !Array.isArray(node.props.style) &&
+              node.props.style &&
+              Array.isArray(node.props.style.transform)
+          )
+          .map((node) => node.props.style)
+      );
+    }
+
+    it('guess stroke mirrors live ink + corridor edge lines into the loupe (no fat band)', () => {
+      const renderer = renderShape();
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-ink').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-left').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-right').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-band')).toHaveLength(0);
+    });
+
+    it('anchors the glass: frame = loupeLayout(origin + rawPoint), content = loupeContentTransform(rawPoint)', () => {
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const frameStyle = loupe.props.style[2];
+      const expectedFrame = loupeLayout({
+        anchor: { x: 20 + stroke[1].x, y: 280 + stroke[1].y },
+        screen: { width: 360, height: 800 },
+      });
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
+
+      const contentStyle = contentStyleOf(loupe);
+      const expectedContent = loupeContentTransform({ anchor: stroke[1] });
+      expect(contentStyle.transform[0].translateX.__getValue()).toBe(expectedContent.translateX);
+      expect(contentStyle.transform[1].translateY.__getValue()).toBe(expectedContent.translateY);
+    });
+
+    it('aligns the mirrored ink at zoom: wrapper scale + latest-point bar land at the glass centre (LSP pin)', () => {
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const wrapper = firstLoupeNode(
+        loupe,
+        (node) =>
+          Array.isArray(node.props.style) &&
+          node.props.style.some((s) => s && s.transformOrigin === 'top left')
+      );
+      const wrapperStyle = wrapper.props.style.find((s) => s && s.transformOrigin === 'top left');
+      expect(wrapperStyle.transform).toEqual([{ scale: LOUPE_ZOOM }]);
+      expect(wrapperStyle.width).toBe(shapeDims.width);
+      expect(wrapperStyle.height).toBe(shapeDims.height);
+
+      // The mirrored ink's LAST bar spans stroke[0]→stroke[1]; its far
+      // endpoint IS the stroke's latest image-px point. Under the D9
+      // arithmetic (wrapper 'top left' scale) it must land at the glass
+      // centre: point × zoom + content translate == diameter / 2.
+      const bars = mirrorBarStyles(loupe, 'game.picture.trace-ink');
+      expect(bars.length).toBeGreaterThan(0);
+      const bar = bars[bars.length - 1];
+      const dx = stroke[1].x - stroke[0].x;
+      const dy = stroke[1].y - stroke[0].y;
+      const length = Math.hypot(dx, dy);
+      const centerX = bar.left + bar.width / 2;
+      const centerY = bar.top + bar.height / 2;
+      const endX = centerX + (dx / length) * (bar.width / 2);
+      const endY = centerY + (dy / length) * (bar.width / 2);
+      const contentStyle = contentStyleOf(loupe);
+      const translateX = contentStyle.transform[0].translateX.__getValue();
+      const translateY = contentStyle.transform[1].translateY.__getValue();
+      expect(endX * LOUPE_ZOOM + translateX).toBeCloseTo(LOUPE_DIAMETER_PX / 2);
+      expect(endY * LOUPE_ZOOM + translateY).toBeCloseTo(LOUPE_DIAMETER_PX / 2);
+    });
+
+    it('loupe corridor edges use the IMAGE-space tolerance distance, not the screen band width (units pin)', () => {
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const distance = shapeTolerancePx(
+        guessShapeProps.imageWidth,
+        guessShapeProps.imageHeight
+      );
+      expect(distance).toBe(50);
+      const { left, right } = offsetPolyline(stroke, distance);
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+
+      const leftBars = mirrorBarStyles(loupe, 'game.picture.trace-corridor-edge-left');
+      expect(leftBars).toContainEqual(traceSegmentStyle(left[0], left[1], 1));
+      const rightBars = mirrorBarStyles(loupe, 'game.picture.trace-corridor-edge-right');
+      expect(rightBars).toContainEqual(traceSegmentStyle(right[0], right[1], 1));
+
+      // The screen-px band width (corridorBandWidthPx at style 320) belongs to
+      // the full-size band ONLY — the loupe edges are thin 1px lines offset by
+      // the image-space tolerance, not bars of the band width.
+      const screenBandWidth = corridorBandWidthPx(
+        { imageWidth: guessShapeProps.imageWidth, imageHeight: guessShapeProps.imageHeight },
+        shapeDims.width,
+        shapeDims.height,
+        SHAPE_TOLERANCE_RATIO
+      );
+      expect(screenBandWidth).not.toBe(distance);
+      expect(leftBars.every((style) => style.height !== screenBandWidth)).toBe(true);
+      expect(rightBars.every((style) => style.height !== screenBandWidth)).toBe(true);
+    });
+
+    it('lift hides the loupe and the graded reveal still appears (existing behavior intact)', () => {
+      outlineMatchScore.mockReturnValue(0.87);
+      isWinningTrace.mockReturnValue(true);
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).not.toThrow();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(null);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+
+      act(() => {
+        shapeCanvasProps(renderer).onOutlineChange([
+          { x: 0.2, y: 0.2 },
+          { x: 0.8, y: 0.2 },
+          { x: 0.5, y: 0.8 },
+          { x: 0.2, y: 0.2 },
+        ]);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).not.toThrow();
+    });
+
+    it('commits the mirror coarse-gated (≤9 commits over a 96px stroke) while reports arrive at the ~4px cadence', () => {
+      const renderer = renderShape();
+      const props = shapeCanvasProps(renderer);
+
+      // 96px stroke reported at the ≥4px decimation cadence: 25 anchors
+      // (stroke start + 24 decimated commits).
+      const points = [];
+      for (let x = 100; x <= 196; x += 4) {
+        points.push({ x, y: 200 });
+      }
+      expect(points.length).toBe(25);
+
+      // One act per report: on-device each report is its own event tick, so
+      // each commit re-renders the mirror separately (batching would collapse
+      // the renders and hide the cadence).
+      mockTraceCorridorEdges.mockClear();
+      points.forEach((point, index) => {
+        act(() => {
+          props.onStrokeUpdate({
+            anchor: point,
+            renderPoints: points.slice(0, index + 1),
+          });
+        });
+      });
+
+      let commits = 0;
+      let previousLength = 0;
+      for (const call of mockTraceCorridorEdges.mock.calls) {
+        const length = (call[0].trace ?? []).length;
+        if (length > previousLength) {
+          commits++;
+        }
+        previousLength = length;
+      }
+      expect(commits).toBeGreaterThan(1);
+      expect(commits).toBeLessThanOrEqual(96 / 12 + 1);
+    });
+
+    it('hide shape stroke mirrors ink only into the loupe (no band, no edges)', () => {
+      const renderer = renderShape({
+        guess: false,
+        outline: null,
+        hiddenOutline: undefined,
+        imageWidth: undefined,
+        imageHeight: undefined,
+      });
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-ink').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-band')).toHaveLength(0);
+      expect(
+        loupe.findAll(
+          (node) =>
+            typeof node.props.testID === 'string' &&
+            node.props.testID.startsWith('game.picture.trace-corridor-edge')
+        )
+      ).toHaveLength(0);
+    });
+
+    it('never mirrors the hidden outline into the loupe during a guess stroke (leak guard)', () => {
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const leaked = loupe.findAll(
+        (node) => typeof node.props.testID === 'string' && /outline/.test(node.props.testID)
+      );
+      expect(leaked).toHaveLength(0);
     });
   });
 });

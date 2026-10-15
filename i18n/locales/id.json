@@ -403,7 +403,10 @@
       "shapeClearLabel": "Hapus garis tepi",
       "shapeRedrawLabel": "Gambar ulang garis tepi",
       "shapeTooSimple": "Garis tepi terlalu sederhana — gambar bentuk tertutup di sekitar lokasinya",
-      "shapeConfirmLabel": "Konfirmasi garis tepi"
+      "shapeConfirmLabel": "Konfirmasi garis tepi",
+      "traceWin": "Tepat sekali!",
+      "traceLoseScore": "Garis tepimu meleset dari lokasinya — coba lagi",
+      "traceLoseLengthCap": "Garis tepi terlalu panjang — gambar hanya di sekitar lokasinya"
     }
   },
   "groups": {

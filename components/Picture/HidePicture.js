@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress } from '../../utils/targetLocation';
+import { handlePicturePress, buildSelectionFromPixels } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
@@ -101,6 +101,26 @@ export default function HidePicture({
     };
   };
 
+  // Precision-pan placement (press-hold): px arrive pre-clamped to the image
+  // (ShowPicture), so only the shared selection pipeline runs here. The E2E
+  // tap path (buildE2EPictureSelection) stays on handlePress.
+  const handlePointPlaced = (point) => {
+    if (isShapeMode) {
+      return;
+    }
+    const { location, target } = buildSelectionFromPixels({
+      locationX: point.x,
+      locationY: point.y,
+      screenWidth,
+      screenHeight,
+      imageDimensionStyle,
+    });
+    if (location && target) {
+      setTouchLocation(location);
+      setTarget(target);
+    }
+  };
+
   const renderModePicker = () => {
     return (
       <View style={styles.modePicker} testID="game.picture.mode-picker">
@@ -131,6 +151,7 @@ export default function HidePicture({
         isPortrait={imageIsPortrait}
         touchLocation={touchLocation}
         handlePress={handlePress}
+        onPointPlaced={handlePointPlaced}
         target={target}
         handleIconPress={handleIconPress}
         showModal={showModal}
