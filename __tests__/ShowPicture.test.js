@@ -186,6 +186,13 @@ function findByTestID(renderer, testID) {
   return renderer.root.findByProps({ testID });
 }
 
+// D4 persistent mount: a hidden loupe stays in the tree — hidden = the hook's
+// frameStyle opacity 0, never an unmount.
+function expectLoupeHidden(renderer) {
+  const loupe = findByTestID(renderer, 'game.picture.loupe');
+  expect(loupe.props.style[2].opacity).toBe(0);
+}
+
 function findAllByType(renderer, type) {
   return renderer.root.findAllByType(type);
 }
@@ -632,7 +639,7 @@ describe('ShowPicture', () => {
 
       expect(onPointPlaced).toHaveBeenCalledTimes(1);
       expect(onPointPlaced).toHaveBeenCalledWith({ x: 140, y: 260 });
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
 
       // The placed marker persists: the parent applies the onPointPlaced
       // payload (selection px + target) and the target wrap keeps rendering.
@@ -728,10 +735,10 @@ describe('ShowPicture', () => {
       });
 
       expect(onPointPlaced).toHaveBeenCalledWith({ x: 100, y: 200 });
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
     });
 
-    it('quick tap keeps placing through the Pressable and never mounts the loupe', () => {
+    it('quick tap keeps placing through the Pressable and keeps the loupe hidden', () => {
       const onPointPlaced = jest.fn();
       const renderer = renderHidePoint({ onPointPlaced });
       fireHidePointLayouts(renderer);
@@ -745,7 +752,7 @@ describe('ShowPicture', () => {
 
       expect(baseProps.handlePress).toHaveBeenCalledTimes(1);
       expect(onPointPlaced).not.toHaveBeenCalled();
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
     });
 
     it('fast swipe never activates the precision pan; the surface classifier still receives its gesture', () => {
@@ -767,7 +774,7 @@ describe('ShowPicture', () => {
       });
 
       expect(onPointPlaced).not.toHaveBeenCalled();
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
 
       act(() => {
         panCallback(surfacePanRecord(), 'onEnd')({ translationX: 70, translationY: 2 }, true);
@@ -794,7 +801,7 @@ describe('ShowPicture', () => {
 
       const precision = precisionPanRecord();
       expect(precision).toBeTruthy();
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
     });
 
     it('point loupe content mirrors nothing: zoomed image + built-in cursor only', () => {
@@ -843,7 +850,7 @@ describe('ShowPicture', () => {
         { x: 20, y: 280, width: 320, height: 480 }
       );
 
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
 
       act(() => {
         renderer.update(<ShowPicture {...props} onTargetDragPosition={{ x: 210, y: 310 }} />);
@@ -874,7 +881,7 @@ describe('ShowPicture', () => {
       act(() => {
         renderer.update(<ShowPicture {...props} onTargetDragPosition={null} />);
       });
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
     });
   });
 
@@ -980,9 +987,20 @@ describe('ShowPicture', () => {
       );
     }
 
+    it('keeps the canvas onStrokeUpdate prop identity stable across host re-renders (banked e250d6e useCallback pin)', () => {
+      const renderer = renderShape();
+      const handlerAtMount = shapeCanvasProps(renderer).onStrokeUpdate;
+
+      act(() => {
+        renderer.update(<ShowPicture {...guessShapeProps} />);
+      });
+
+      expect(shapeCanvasProps(renderer).onStrokeUpdate).toBe(handlerAtMount);
+    });
+
     it('guess stroke mirrors live ink + corridor edge lines into the loupe (no fat band)', () => {
       const renderer = renderShape();
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
 
       act(() => {
         shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
@@ -993,6 +1011,28 @@ describe('ShowPicture', () => {
       expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-left').length).toBeGreaterThan(0);
       expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-right').length).toBeGreaterThan(0);
       expect(loupeNodesByTestID(loupe, 'game.picture.trace-band')).toHaveLength(0);
+    });
+
+    it('bounds the mirrored ink to the trailing window: bars render for FEWER segments than the full stroke', () => {
+      const renderer = renderShape();
+
+      // 240px-spread polyline (25 points): far more than the 160px glass window.
+      const longStroke = [];
+      for (let x = 10; x <= 250; x += 10) {
+        longStroke.push({ x, y: 200 });
+      }
+      expect(longStroke.length).toBe(25);
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate({
+          anchor: longStroke[longStroke.length - 1],
+          renderPoints: longStroke,
+        });
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const fullSegments = longStroke.length - 1;
+      expect(mirrorBarStyles(loupe, 'game.picture.trace-ink').length).toBeLessThan(fullSegments);
     });
 
     it('anchors the glass: frame = loupeLayout(origin + rawPoint), content = loupeContentTransform(rawPoint)', () => {
@@ -1104,7 +1144,7 @@ describe('ShowPicture', () => {
       act(() => {
         shapeCanvasProps(renderer).onStrokeUpdate(null);
       });
-      expect(() => findByTestID(renderer, 'game.picture.loupe')).toThrow();
+      expectLoupeHidden(renderer);
 
       act(() => {
         shapeCanvasProps(renderer).onOutlineChange([

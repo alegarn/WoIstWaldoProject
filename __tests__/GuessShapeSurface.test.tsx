@@ -162,7 +162,7 @@ function lastTraceCorridorProps(): Record<string, unknown> {
 }
 
 function findShapePan(): Record<string, any> {
-  const pan = [...mockPanGestures].reverse().find((g) => g.onStartHandler);
+  const pan = [...mockPanGestures].reverse().find((g) => g.onBeginHandler);
   if (!pan) {
     throw new Error('no shape draw Pan gesture is attached to the rendered surface');
   }
@@ -174,11 +174,11 @@ async function fireShapePan(
   pan: Record<string, any> = findShapePan()
 ) {
   await act(async () => {
-    pan.onStartHandler({ x: vertices[0].x, y: vertices[0].y });
+    pan.onBeginHandler({ x: vertices[0].x, y: vertices[0].y });
     for (const vertex of vertices.slice(1)) {
       pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
     }
-    pan.onEndHandler({}, true);
+    pan.onFinalizeHandler({}, true);
   });
 }
 
@@ -187,7 +187,7 @@ async function startStroke(
   pan: Record<string, any> = findShapePan()
 ) {
   await act(async () => {
-    pan.onStartHandler({ x: vertices[0].x, y: vertices[0].y });
+    pan.onBeginHandler({ x: vertices[0].x, y: vertices[0].y });
     for (const vertex of vertices.slice(1)) {
       pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
     }
@@ -311,7 +311,7 @@ describe('GuessShapeSurface', () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
     await act(async () => {
-      pan.onEndHandler({}, true);
+      pan.onFinalizeHandler({}, true);
     });
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
     expect(onOutlineChange).toHaveBeenLastCalledWith(NORMALIZED_STROKE);
@@ -412,9 +412,22 @@ describe('GuessShapeSurface', () => {
     });
 
     await act(async () => {
-      findShapePan().onEndHandler({}, true);
+      findShapePan().onFinalizeHandler({}, true);
     });
     expect(onStrokeUpdate).toHaveBeenLastCalledWith(null);
+  });
+
+  it('keeps the lift-handler (onOutlineChange) identity stable across two mirror commits (no gesture-object churn)', async () => {
+    const { rerender } = render(<GuessShapeSurface {...baseProps} />);
+
+    await startStroke(STROKE_VERTICES);
+    const handlerAfterFirstCommit = lastShapeCanvasProps().onOutlineChange;
+
+    rerender(<GuessShapeSurface {...baseProps} />);
+    await startStroke(STROKE_VERTICES);
+    const handlerAfterSecondCommit = lastShapeCanvasProps().onOutlineChange;
+
+    expect(handlerAfterSecondCommit).toBe(handlerAfterFirstCommit);
   });
 
   it('renders the corridor band finger-true from the live stroke (no offset)', async () => {

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { FC, ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 
@@ -75,30 +75,33 @@ const GuessShapeSurface: FC<GuessShapeSurfaceProps> = ({
   // Single lift-time scoring call site (LOCKED 4-param signature): turn the
   // lifted normalized outline into a reveal, then forward to the parent LAST
   // so the confirm modal opens after the reveal state commits.
-  const handleLift = (next: Point[] | null) => {
-    if (!next) {
-      setReveal(null);
-      onOutlineChange?.(null);
-      return;
-    }
-    const hidden = hiddenOutline ?? [];
-    const params = {
-      hiddenShape: hidden,
-      guessShape: next,
-      imageWidth: imageWidth ?? 0,
-      imageHeight: imageHeight ?? 0,
-    };
-    const score = outlineMatchScore(params);
-    const win = isWinningTrace(params);
-    const capFailed =
-      outlineLengthInImageSpace(next, imageWidth ?? 0, imageHeight ?? 0) >
-      MAX_LENGTH_RATIO * outlineLengthInImageSpace(hidden, imageWidth ?? 0, imageHeight ?? 0);
-    setReveal({
-      outcome: win ? 'win' : capFailed ? 'loseLengthCap' : 'loseScore',
-      scorePercent: Math.round(score * 100),
-    });
-    onOutlineChange?.(next);
-  };
+  const handleLift = useCallback(
+    (next: Point[] | null) => {
+      if (!next) {
+        setReveal(null);
+        onOutlineChange?.(null);
+        return;
+      }
+      const hidden = hiddenOutline ?? [];
+      const params = {
+        hiddenShape: hidden,
+        guessShape: next,
+        imageWidth: imageWidth ?? 0,
+        imageHeight: imageHeight ?? 0,
+      };
+      const score = outlineMatchScore(params);
+      const win = isWinningTrace(params);
+      const capFailed =
+        outlineLengthInImageSpace(next, imageWidth ?? 0, imageHeight ?? 0) >
+        MAX_LENGTH_RATIO * outlineLengthInImageSpace(hidden, imageWidth ?? 0, imageHeight ?? 0);
+      setReveal({
+        outcome: win ? 'win' : capFailed ? 'loseLengthCap' : 'loseScore',
+        scorePercent: Math.round(score * 100),
+      });
+      onOutlineChange?.(next);
+    },
+    [hiddenOutline, imageWidth, imageHeight, onOutlineChange]
+  );
 
   return (
     <View style={StyleSheet.absoluteFill} testID="game.picture.guess-shape-surface">

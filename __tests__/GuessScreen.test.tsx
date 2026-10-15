@@ -34,7 +34,7 @@ type PanHandler = (event: { translationX?: number; translationY?: number }, succ
 type ShapePanHandler = (event: { x?: number; y?: number }) => void;
 
 type MockGesture = {
-  onBeginHandler?: PanHandler;
+  onBeginHandler?: PanHandler & ShapePanHandler;
   onStartHandler?: ShapePanHandler;
   onUpdateHandler?: PanHandler & ShapePanHandler;
   onEndHandler?: PanHandler;
@@ -390,19 +390,19 @@ async function confirmGuess(handle: ScreenHandle) {
   await flush();
 }
 
-// Fires the ShapeCanvas draw recognizer (the captured Pan registering onStart)
+// Fires the ShapeCanvas draw recognizer (the captured Pan registering onBegin)
 // the way the native gesture layer would, then confirms in the validation modal.
 async function confirmShapeGuess(handle: ScreenHandle) {
-  const shapePan = [...mockPanGestures].reverse().find((g) => g.onStartHandler);
-  if (!shapePan?.onStartHandler) {
+  const shapePan = [...mockPanGestures].reverse().find((g) => g.onBeginHandler);
+  if (!shapePan?.onBeginHandler) {
     throw new Error('no shape draw Pan gesture captured');
   }
   await act(async () => {
-    shapePan.onStartHandler?.({ x: 40, y: 40 });
+    shapePan.onBeginHandler?.({ x: 40, y: 40 });
     shapePan.onUpdateHandler?.({ x: 120, y: 40 });
     shapePan.onUpdateHandler?.({ x: 120, y: 120 });
     shapePan.onUpdateHandler?.({ x: 40, y: 120 });
-    shapePan.onEndHandler?.({}, true);
+    shapePan.onFinalizeHandler?.({}, true);
   });
   await act(async () => {
     fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));

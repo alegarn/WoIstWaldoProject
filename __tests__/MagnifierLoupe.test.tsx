@@ -76,7 +76,6 @@ function baseProps(
   overrides: Partial<MagnifierLoupeProps> = {},
 ): MagnifierLoupeProps {
   return {
-    visible: true,
     frameStyle: fixture.frameStyle,
     contentStyle: fixture.contentStyle,
     zoom: LOUPE_ZOOM,
@@ -108,12 +107,22 @@ function findAllByStyle(
 }
 
 describe('MagnifierLoupe', () => {
-  it('renders nothing when visible=false', () => {
+  it('stays mounted when hidden: present, opacity 0 via the hook frameStyle, pointerEvents none (D4)', () => {
     const fixture = buildFixture();
-    render(<MagnifierLoupe {...baseProps(fixture, { visible: false })} />);
+    render(
+      <MagnifierLoupe
+        {...baseProps(fixture, {
+          // Hidden visibility rides the hook's frameStyle (opacity 0) — the
+          // component's only job is to never unmount and to thread it through.
+          frameStyle: { ...fixture.frameStyle, opacity: 0 },
+        })}
+      />
+    );
 
-    expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
-    expect(screen.toJSON()).toBeNull();
+    expect(screen.queryByTestId('game.picture.loupe')).not.toBeNull();
+    const loupe = screen.getByTestId('game.picture.loupe');
+    expect(styleOf(loupe).opacity).toBe(0);
+    expect(loupe.props.pointerEvents).toBe('none');
   });
 
   it('renders the clipped circle with a centred crosshair cursor when visible', () => {
@@ -138,6 +147,14 @@ describe('MagnifierLoupe', () => {
     expect(cursorStyle.position).toBe('absolute');
     expect(cursorStyle.left).toBe(LOUPE_DIAMETER_PX / 2 - LOUPE_CURSOR_SIZE_PX / 2);
     expect(cursorStyle.top).toBe(LOUPE_DIAMETER_PX / 2 - LOUPE_CURSOR_SIZE_PX / 2);
+  });
+
+  it('keeps elevation off the frame (Android shadow re-raster per invalidation, V3/D3)', () => {
+    const fixture = buildFixture();
+    render(<MagnifierLoupe {...baseProps(fixture)} />);
+
+    const frameStyle = styleOf(screen.getByTestId('game.picture.loupe'));
+    expect(frameStyle.elevation).toBeUndefined();
   });
 
   it('renders the zoomed image with the passed uri and imageDimensionStyle × zoom', () => {

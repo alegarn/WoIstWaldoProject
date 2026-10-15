@@ -177,6 +177,71 @@ describe('TraceInk', () => {
       expect(renderBar).toHaveBeenCalledTimes(2);
     });
 
+    it('keeps untouched segments on their CACHED style objects when a point is appended (append-only cache: only the new segment is rebuilt)', () => {
+      const first = render(
+        <TraceInk points={SQUARE_POINTS.slice(0, 3)} />
+      );
+      const before = screen
+        .getByTestId('game.picture.trace-ink')
+        .props.children.map((bar: any) => bar.props.style);
+
+      first.rerender(<TraceInk points={SQUARE_POINTS} />);
+
+      const children =
+        screen.getByTestId('game.picture.trace-ink').props.children;
+      expect(children.length).toBe(3);
+      expect(children[0].props.style).toBe(before[0]);
+      expect(children[1].props.style).toBe(before[1]);
+      expect(children[2].props.style).not.toBe(before[0]);
+      expect(children[2].props.style).not.toBe(before[1]);
+    });
+
+    it('builds every segment after an empty mount receives its first polyline (empty-cache append)', () => {
+      const first = render(<TraceInk points={[]} />);
+
+      first.rerender(<TraceInk points={SQUARE_POINTS} />);
+
+      const children =
+        screen.getByTestId('game.picture.trace-ink').props.children;
+      expect(children.length).toBe(3);
+      expect(children[0].props.style).toEqual(
+        traceSegmentStyle(SQUARE_POINTS[0], SQUARE_POINTS[1])
+      );
+    });
+
+    it('rebuilds the whole cache for a brand-new stroke that is not a prefix extension (all styles fresh, values correct)', () => {
+      const firstStroke = [
+        { x: 20, y: 20 },
+        { x: 180, y: 20 },
+        { x: 180, y: 380 },
+      ];
+      const secondStroke = [
+        { x: 40, y: 40 },
+        { x: 160, y: 40 },
+        { x: 160, y: 360 },
+      ];
+      const first = render(<TraceInk points={firstStroke} />);
+      const before = screen
+        .getByTestId('game.picture.trace-ink')
+        .props.children.map((bar: any) => bar.props.style);
+
+      first.rerender(<TraceInk points={secondStroke} />);
+
+      const children =
+        screen.getByTestId('game.picture.trace-ink').props.children;
+      expect(children.length).toBe(2);
+      for (const staleStyle of before) {
+        expect(children[0].props.style).not.toBe(staleStyle);
+        expect(children[1].props.style).not.toBe(staleStyle);
+      }
+      expect(children[0].props.style).toEqual(
+        traceSegmentStyle(secondStroke[0], secondStroke[1])
+      );
+      expect(children[1].props.style).toEqual(
+        traceSegmentStyle(secondStroke[1], secondStroke[2])
+      );
+    });
+
     it('recomputes value-equal styles for untouched segments when a point is appended (only 1 new bar)', () => {
       const first = render(
         <TraceInk points={SQUARE_POINTS.slice(0, 3)} />

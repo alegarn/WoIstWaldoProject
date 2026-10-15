@@ -85,6 +85,7 @@ jest.mock('expo-screen-orientation', () => ({
 }));
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import HidePicture from '../components/Picture/HidePicture';
@@ -155,13 +156,13 @@ describe('HidePicture', () => {
     );
   }
 
-  // The ShapeCanvas draw recognizer: registers onStart WITHOUT the precision
+  // The ShapeCanvas draw recognizer: registers onBegin WITHOUT the precision
   // long-press gate and WITHOUT any failOffsetY chain (the sidebar pan and
-  // the surface classifier both chain failOffsetY and register no onStart).
+  // the surface classifier both chain failOffsetY and register no onBegin).
   function findShapePan() {
     return [...mockPanRecords].reverse().find(
       (record) =>
-        record.calls.some((c) => c.method === 'onStart') &&
+        record.calls.some((c) => c.method === 'onBegin') &&
         !record.calls.some((c) => c.method === 'activateAfterLongPress') &&
         !record.calls.some((c) => c.method === 'failOffsetY')
     );
@@ -176,11 +177,11 @@ describe('HidePicture', () => {
       throw new Error('no shape draw Pan gesture is attached to the rendered surface');
     }
     await act(async () => {
-      panCallback(pan, 'onStart')({ x: vertices[0].x, y: vertices[0].y });
+      panCallback(pan, 'onBegin')({ x: vertices[0].x, y: vertices[0].y });
       for (const vertex of vertices.slice(1)) {
         panCallback(pan, 'onUpdate')({ x: vertex.x, y: vertex.y });
       }
-      panCallback(pan, 'onEnd')({}, true);
+      panCallback(pan, 'onFinalize')({}, true);
     });
   }
 
@@ -338,7 +339,12 @@ describe('HidePicture', () => {
         panCallback(precision, 'onEnd')({ x: 140, y: 180 }, true);
       });
 
-      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      // D4 persistent mount: the loupe hides (opacity 0), it never unmounts.
+      // RNTL hands back the host node, whose style may be the raw array OR
+      // Animated's flattened copy — flatten handles both.
+      const loupe = screen.queryByTestId('game.picture.loupe');
+      expect(loupe).not.toBeNull();
+      expect(StyleSheet.flatten(loupe.props.style).opacity).toBe(0);
       // The placed point persists: the precision pan payload fed the same
       // selection pipeline as a tap, so the marker (clear-hide icon) renders.
       expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
