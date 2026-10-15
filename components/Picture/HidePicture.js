@@ -7,6 +7,7 @@ import { handlePicturePress, buildSelectionFromPixels } from '../../utils/target
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
+import RetractableSidebar from '../UI/RetractableSidebar';
 
 import { setImageDimensions } from '../../utils/imageDimensions';
 import TutorialOverlay from '../UI/TutorialOverlay';
@@ -123,21 +124,26 @@ export default function HidePicture({
 
   const renderModePicker = () => {
     return (
-      <View style={styles.modePicker} testID="game.picture.mode-picker">
-        <Text style={styles.modeLabel}>{t('hide.modeLabel')}</Text>
-        {MODE_OPTIONS.map(({ value, labelKey }) => (
-          <Pressable
-            key={value}
-            onPress={() => handleModeSelect(value)}
-            style={[styles.modeChip, mode === value && styles.modeChipSelected]}
-            testID={`game.picture.mode-chip-${value}`}
-          >
-            <Text style={[styles.modeChipText, mode === value && styles.modeChipTextSelected]}>
-              {t(labelKey)}
-            </Text>
-          </Pressable>
-        ))}
-      </View>
+      <RetractableSidebar
+        initiallyOpen
+        testIDPrefix="game.picture.mode-sidebar"
+        accessibilityLabel={t('hide.modeLabel')}>
+        <View style={styles.modePanelContent} testID="game.picture.mode-picker">
+          <Text style={styles.modeLabel}>{t('hide.modeLabel')}</Text>
+          {MODE_OPTIONS.map(({ value, labelKey }) => (
+            <Pressable
+              key={value}
+              onPress={() => handleModeSelect(value)}
+              style={[styles.modeChip, mode === value && styles.modeChipSelected]}
+              testID={`game.picture.mode-chip-${value}`}
+            >
+              <Text style={[styles.modeChipText, mode === value && styles.modeChipTextSelected]}>
+                {t(labelKey)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </RetractableSidebar>
     );
   };
 
@@ -223,47 +229,42 @@ export default function HidePicture({
   if (!showFilter) {
     return(
       <>
-        {renderModePicker()}
         {renderPicture()}
+        {renderModePicker()}
       </>
     );
   };
 };
 
 const styles = StyleSheet.create({
-  modePicker: {
-    position: 'absolute',
-    top: 48,
-    alignSelf: 'center',
-    zIndex: 10,
+  modePanelContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 16,
-    backgroundColor: GlobalStyle.color.scrim,
+    padding: 12,
   },
   modeLabel: {
-    color: GlobalStyle.color.onSurface,
+    color: GlobalStyle.color.primaryColor900,
     fontSize: 14,
+    fontWeight: 'bold',
   },
   modeChip: {
     paddingVertical: 6,
     paddingHorizontal: 14,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: GlobalStyle.color.onSurface,
+    borderColor: '#CCC',
   },
   modeChipSelected: {
     backgroundColor: GlobalStyle.color.primaryColor500,
     borderColor: GlobalStyle.color.primaryColor500,
   },
   modeChipText: {
-    color: GlobalStyle.color.onSurface,
+    color: GlobalStyle.color.primaryColor900,
     fontSize: 14,
   },
   modeChipTextSelected: {
+    color: GlobalStyle.color.onSurface,
     fontWeight: 'bold',
   },
 });

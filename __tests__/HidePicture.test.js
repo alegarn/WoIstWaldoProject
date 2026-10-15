@@ -1,65 +1,66 @@
 // HidePicture behavior suite.
 //
 // Renders the REAL subtree (HidePicture → GameInstructions / ShowPicture /
-// ShapeCanvas / CenteredModal, real image-dimension and outline math) and
-// drives it through user-visible interactions: the instructions Start button,
-// the mode chips, the ShapeCanvas draw recognizer, the surface tap, and the
-// confirm-modal buttons.
+// RetractableSidebar / ShapeCanvas / CenteredModal, real image-dimension and
+// outline math) and drives it through user-visible interactions: the
+// instructions Start button, the mode chips, the ShapeCanvas draw recognizer,
+// the sidebar retract pan, the surface tap, and the confirm-modal buttons.
 //
 // Only system boundaries are mocked:
-// - react-native-gesture-handler (native gestures; Pan handler chains are
-//   captured so tests can fire the same callbacks the native layer would)
+// - react-native Animated (timing applied synchronously so sidebar
+//   translateX.__getValue() is deterministic without timers)
+// - react-native-gesture-handler (native gestures; Pan chains are captured as
+//   Proxy arg-recording records so tests can fire the same callbacks the
+//   native layer would AND assert config args like failOffsetY)
 // - @react-native-vector-icons/ionicons (native font component)
 // - expo-screen-orientation (native; exercised by the real utils/orientation)
 // Everything else runs REAL. Assertions target rendered output: testIDs and
 // the SetInstructions navigation payload.
 
-const mockPanGestures = [];
+const mockPanRecords = [];
+
+jest.mock('react-native', () => {
+  const actualRN = jest.requireActual('react-native');
+  actualRN.Animated.timing = (value, config) => ({
+    start: (callback) => {
+      if (typeof config?.toValue !== 'undefined' && value?.setValue) {
+        value.setValue(config.toValue);
+      }
+      callback?.();
+    },
+  });
+  // Start the pulse child once; never re-iterate (a sync timing would make a
+  // real loop recurse infinitely).
+  actualRN.Animated.loop = (animation) => ({
+    start: (callback) => animation?.start?.(callback),
+    stop: () => animation?.stop?.(),
+    reset: () => animation?.reset?.(),
+  });
+  return actualRN;
+});
 
 jest.mock('react-native-gesture-handler', () => {
   const React = jest.requireActual('react');
 
-  function makePan() {
-    const gesture = {};
-    mockPanGestures.push(gesture);
-    gesture.activeOffsetX = () => gesture;
-    gesture.activeOffsetY = () => gesture;
-    gesture.failOffsetX = () => gesture;
-    gesture.failOffsetY = () => gesture;
-    gesture.enabled = () => gesture;
-    gesture.activateAfterLongPress = (arg) => {
-      gesture.activateAfterLongPressArg = arg;
-      return gesture;
+  function makeChainablePan() {
+    const record = { __type: 'pan', calls: [] };
+    const handler = {
+      get(_target, prop) {
+        if (prop === '__type' || prop === 'calls') return record[prop];
+        if (prop === 'then') return undefined;
+        return (...args) => {
+          record.calls.push({ method: prop, args });
+          return proxy;
+        };
+      },
     };
-    gesture.hitSlop = (arg) => {
-      gesture.hitSlopArg = arg;
-      return gesture;
-    };
-    gesture.onStart = (cb) => {
-      gesture.onStartHandler = cb;
-      return gesture;
-    };
-    gesture.onBegin = (cb) => {
-      gesture.onBeginHandler = cb;
-      return gesture;
-    };
-    gesture.onUpdate = (cb) => {
-      gesture.onUpdateHandler = cb;
-      return gesture;
-    };
-    gesture.onEnd = (cb) => {
-      gesture.onEndHandler = cb;
-      return gesture;
-    };
-    gesture.onFinalize = (cb) => {
-      gesture.onFinalizeHandler = cb;
-      return gesture;
-    };
-    return gesture;
+    const proxy = new Proxy(record, handler);
+    mockPanRecords.push(record);
+    return proxy;
   }
 
   return {
-    Gesture: { Pan: makePan },
+    Gesture: { Pan: () => makeChainablePan() },
     GestureDetector: ({ children }) => React.createElement(React.Fragment, null, children),
     GestureHandlerRootView: ({ children }) => React.createElement(React.Fragment, null, children),
   };
@@ -84,7 +85,7 @@ jest.mock('expo-screen-orientation', () => ({
 }));
 
 import React from 'react';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import HidePicture from '../components/Picture/HidePicture';
 import { E2E_SHAPE_POLYGON } from '../utils/e2eMode';
@@ -128,13 +129,42 @@ describe('HidePicture', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     setE2EMode(false);
-    mockPanGestures.length = 0;
+    mockPanRecords.length = 0;
   });
 
-  // The ShapeCanvas draw recognizer is the only captured Pan that registers
-  // onStart.
+  function panCallback(record, method) {
+    const call = record?.calls.find((c) => c.method === method);
+    if (!call) {
+      throw new Error(`pan never registered ${method}`);
+    }
+    return call.args[0];
+  }
+
+  // D4 discrimination: the sidebar Pan is the only captured Pan that chains
+  // failOffsetY([-40, 40]) (bidirectional array) — the ShowPicture surface
+  // classifier chains failOffsetY(10) (scalar).
+  function findSidebarPan() {
+    return mockPanRecords.find((record) =>
+      record.calls.some(
+        (c) =>
+          c.method === 'failOffsetY' &&
+          Array.isArray(c.args[0]) &&
+          c.args[0][0] === -40 &&
+          c.args[0][1] === 40
+      )
+    );
+  }
+
+  // The ShapeCanvas draw recognizer: registers onStart WITHOUT the precision
+  // long-press gate and WITHOUT any failOffsetY chain (the sidebar pan and
+  // the surface classifier both chain failOffsetY and register no onStart).
   function findShapePan() {
-    return [...mockPanGestures].reverse().find((g) => g.onStartHandler);
+    return [...mockPanRecords].reverse().find(
+      (record) =>
+        record.calls.some((c) => c.method === 'onStart') &&
+        !record.calls.some((c) => c.method === 'activateAfterLongPress') &&
+        !record.calls.some((c) => c.method === 'failOffsetY')
+    );
   }
 
   // Fires the ShapeCanvas draw recognizer the way the native Pan layer would:
@@ -146,11 +176,11 @@ describe('HidePicture', () => {
       throw new Error('no shape draw Pan gesture is attached to the rendered surface');
     }
     await act(async () => {
-      pan.onStartHandler({ x: vertices[0].x, y: vertices[0].y });
+      panCallback(pan, 'onStart')({ x: vertices[0].x, y: vertices[0].y });
       for (const vertex of vertices.slice(1)) {
-        pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
+        panCallback(pan, 'onUpdate')({ x: vertex.x, y: vertex.y });
       }
-      pan.onEndHandler({}, true);
+      panCallback(pan, 'onEnd')({}, true);
     });
   }
 
@@ -170,6 +200,42 @@ describe('HidePicture', () => {
     expect(screen.queryByTestId('game.picture.mode-picker')).not.toBeNull();
     expect(screen.queryByTestId('game.picture.mode-chip-shape')).not.toBeNull();
     expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+  });
+
+  it('renders the mode chips inside the retractable sidebar panel (pill removed)', async () => {
+    const screen = await renderToPicture();
+
+    const panel = screen.getByTestId('game.picture.mode-sidebar.panel');
+
+    expect(screen.getAllByTestId('game.picture.mode-chip-point')).toHaveLength(1);
+    expect(within(panel).getByTestId('game.picture.mode-picker')).not.toBeNull();
+    expect(within(panel).getByTestId('game.picture.mode-chip-point')).not.toBeNull();
+    expect(within(panel).getByTestId('game.picture.mode-chip-shape')).not.toBeNull();
+  });
+
+  describe('mode sidebar', () => {
+    it('starts open, retracts via the sidebar pan, reopens, and keeps the selected mode', async () => {
+      const screen = await renderToPicture();
+
+      expect(screen.queryByTestId('game.picture.mode-sidebar.handle-open')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+
+      const sidebarPan = findSidebarPan();
+      expect(sidebarPan).toBeTruthy();
+      await act(async () => {
+        panCallback(sidebarPan, 'onEnd')({ translationX: 60, translationY: 0 }, true);
+      });
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-sidebar.handle-open'));
+
+      expect(screen.queryByTestId('game.picture.mode-sidebar.handle-open')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+    });
   });
 
   describe('shape mode (hide)', () => {
@@ -243,11 +309,14 @@ describe('HidePicture', () => {
 
   describe('point precision placement (press-hold)', () => {
     // The precision Pan is identified BY its activateAfterLongPress call —
-    // the surface classifier and the ShapeCanvas draw Pan never chain it.
+    // the surface classifier, the ShapeCanvas draw Pan and the sidebar pan
+    // never chain it.
     function findPrecisionPan() {
-      return [...mockPanGestures]
+      return [...mockPanRecords]
         .reverse()
-        .find((g) => g.activateAfterLongPressArg !== undefined);
+        .find((record) =>
+          record.calls.some((c) => c.method === 'activateAfterLongPress')
+        );
     }
 
     it('press-hold-drag-release places the point and dismisses the loupe (marker persists)', async () => {
@@ -255,18 +324,18 @@ describe('HidePicture', () => {
 
       const precision = findPrecisionPan();
       expect(precision).toBeTruthy();
-      expect(precision.activateAfterLongPressArg).toBe(LOUPE_LONG_PRESS_MS);
+      expect(panCallback(precision, 'activateAfterLongPress')).toBe(LOUPE_LONG_PRESS_MS);
 
       await act(async () => {
-        precision.onBeginHandler({ x: 100, y: 200 });
-        precision.onStartHandler({ x: 100, y: 200 });
-        precision.onUpdateHandler({ x: 140, y: 180 });
+        panCallback(precision, 'onBegin')({ x: 100, y: 200 });
+        panCallback(precision, 'onStart')({ x: 100, y: 200 });
+        panCallback(precision, 'onUpdate')({ x: 140, y: 180 });
       });
 
       expect(screen.queryByTestId('game.picture.loupe')).not.toBeNull();
 
       await act(async () => {
-        precision.onEndHandler({ x: 140, y: 180 }, true);
+        panCallback(precision, 'onEnd')({ x: 140, y: 180 }, true);
       });
 
       expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
