@@ -59,7 +59,10 @@ function buildFixture(): Fixture {
     frameY,
     contentX,
     contentY,
-    frameStyle: { position: 'absolute', left: frameX, top: frameY, opacity: 1 },
+    frameStyle: {
+      transform: [{ translateX: frameX }, { translateY: frameY }],
+      opacity: 1,
+    },
     contentStyle: {
       transform: [{ translateX: contentX }, { translateY: contentY }],
     },
@@ -157,12 +160,17 @@ describe('MagnifierLoupe', () => {
     const frameStyle = styleOf(loupe);
     expect(readValue(fixture.frameX)).toBe(fixture.expectedFrame.left);
     expect(readValue(fixture.frameY)).toBe(fixture.expectedFrame.top);
-    expect(frameStyle.left).toBe(fixture.expectedFrame.left);
-    expect(frameStyle.top).toBe(fixture.expectedFrame.top);
+    expect(frameStyle.transform).toEqual([
+      { translateX: fixture.expectedFrame.left },
+      { translateY: fixture.expectedFrame.top },
+    ]);
 
-    const contentNodes = findAllByStyle(loupe, (style) =>
-      Array.isArray(style.transform) &&
-      style.transform.some((t: any) => 'translateX' in t),
+    const contentNodes = findAllByStyle(
+      loupe,
+      (style) =>
+        Array.isArray(style.transform) &&
+        style.transform.some((t: any) => 'translateX' in t) &&
+        !('opacity' in style),
     );
     expect(contentNodes).toHaveLength(1);
     const contentStyle = styleOf(contentNodes[0]);
@@ -189,7 +197,7 @@ describe('MagnifierLoupe', () => {
       fixture.frameX.setValue(10);
       fixture.contentX.setValue(-1);
     });
-    expect(styleOf(loupe).left).toBe(10);
+    expect(styleOf(loupe).transform[0]).toEqual({ translateX: 10 });
     expect(styleOf(contentNodes[0]).transform[0]).toEqual({ translateX: -1 });
 
     // Deterministic alignment arithmetic: a child drawn at the image anchor
@@ -201,7 +209,9 @@ describe('MagnifierLoupe', () => {
       glassCentreX,
     );
     rerender(<MagnifierLoupe {...baseProps(fixture)} />);
-    expect(styleOf(screen.getByTestId('game.picture.loupe')).left).toBe(10);
+    expect(styleOf(screen.getByTestId('game.picture.loupe')).transform[0]).toEqual({
+      translateX: 10,
+    });
   });
 
   it('carries no outline-like secret prop and ignores unknown extra props (ISP)', () => {

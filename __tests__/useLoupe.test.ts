@@ -46,8 +46,8 @@ function animatedValues(): {
   contentY: Animated.Value;
 } {
   return {
-    frameX: captured!.frameStyle.left,
-    frameY: captured!.frameStyle.top,
+    frameX: captured!.frameStyle.transform[0].translateX,
+    frameY: captured!.frameStyle.transform[1].translateY,
     contentX: captured!.contentStyle.transform[0].translateX,
     contentY: captured!.contentStyle.transform[1].translateY,
   };
@@ -172,6 +172,93 @@ describe('useLoupe', () => {
       expect(readValue(frameY)).toBe(0);
       expect(readValue(contentX)).toBe(0);
       expect(readValue(contentY)).toBe(0);
+    });
+  });
+
+  describe('reapply (layout self-heal)', () => {
+    it('re-runs the report conversion with the CURRENT origin/dims (no new pointer event)', () => {
+      renderer = renderProbe();
+
+      act(() => {
+        captured!.originRef.current = ORIGIN;
+        captured!.dimsRef.current = DIMS;
+        captured!.report(IMAGE_ANCHOR);
+      });
+
+      const NEXT_ORIGIN = { x: 33, y: 0 };
+      const NEXT_DIMS = { width: 800, height: 360 };
+      const { frameX, frameY, contentX, contentY } = animatedValues();
+
+      act(() => {
+        captured!.originRef.current = NEXT_ORIGIN;
+        captured!.dimsRef.current = NEXT_DIMS;
+        captured!.reapply();
+      });
+
+      const expectedFrame = loupeLayout({
+        anchor: {
+          x: NEXT_ORIGIN.x + IMAGE_ANCHOR.x,
+          y: NEXT_ORIGIN.y + IMAGE_ANCHOR.y,
+        },
+        screen: NEXT_DIMS,
+      });
+      const expectedContent = loupeContentTransform({ anchor: IMAGE_ANCHOR });
+
+      expect(readValue(frameX)).toBe(expectedFrame.left);
+      expect(readValue(frameY)).toBe(expectedFrame.top);
+      expect(readValue(contentX)).toBe(expectedContent.translateX);
+      expect(readValue(contentY)).toBe(expectedContent.translateY);
+    });
+
+    it('is a no-op when no report() has happened yet (values unchanged)', () => {
+      renderer = renderProbe();
+
+      const { frameX, frameY, contentX, contentY } = animatedValues();
+
+      act(() => {
+        captured!.reapply();
+      });
+
+      expect(readValue(frameX)).toBe(0);
+      expect(readValue(frameY)).toBe(0);
+      expect(readValue(contentX)).toBe(0);
+      expect(readValue(contentY)).toBe(0);
+    });
+
+    it('no-ops after hide() (hide resets the stored anchor)', () => {
+      renderer = renderProbe();
+
+      act(() => {
+        captured!.originRef.current = ORIGIN;
+        captured!.dimsRef.current = DIMS;
+        captured!.report(IMAGE_ANCHOR);
+        captured!.hide();
+      });
+
+      const { frameX, frameY, contentX, contentY } = animatedValues();
+
+      act(() => {
+        captured!.reapply();
+      });
+
+      expect(readValue(frameX)).toBe(0);
+      expect(readValue(frameY)).toBe(0);
+      expect(readValue(contentX)).toBe(0);
+      expect(readValue(contentY)).toBe(0);
+    });
+
+    it('keeps the render count flat across reapply() calls', () => {
+      renderer = renderProbe();
+      expect(renderCount).toBe(1);
+
+      act(() => {
+        captured!.report(IMAGE_ANCHOR);
+        for (let i = 0; i < 25; i += 1) {
+          captured!.reapply();
+        }
+      });
+
+      expect(renderCount).toBe(1);
     });
   });
 

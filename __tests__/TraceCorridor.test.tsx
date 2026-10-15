@@ -8,10 +8,16 @@
 // Nothing is mocked: the component is pure react-native (no RNGH), i18n is
 // already initialized to 'en' by jest.setup.js (and the component uses none).
 
-import React from 'react';
+import React, { memo } from 'react';
+import { View } from 'react-native';
 import { render, screen } from '@testing-library/react-native';
 
-import TraceCorridor from '../components/Picture/TraceCorridor';
+import TraceCorridor, {
+  areBandSegmentPropsEqual,
+  TraceCorridorSegment,
+  type BandSegmentStyle,
+} from '../components/Picture/TraceCorridor';
+import { traceSegmentStyle } from '../components/Picture/TraceInk';
 import { GlobalStyle } from '../constants/theme';
 
 type CorridorProps = React.ComponentProps<typeof TraceCorridor>;
@@ -109,5 +115,98 @@ describe('TraceCorridor', () => {
     expect(style.top).toBeCloseTo((start.y + end.y) / 2 - BAND_WIDTH / 2, 6);
     expect(style.transform).toEqual([{ rotate: `${angle}deg` }]);
     expect(style.position).toBe('absolute');
+  });
+
+  describe('memo effectiveness', () => {
+    // Same polyline→bar math as the band's own helper (plus the band-only
+    // translucency), rebuilt fresh per commit the way parents do.
+    const bandSegmentStyle = (
+      start: { x: number; y: number },
+      end: { x: number; y: number }
+    ): BandSegmentStyle => ({
+      ...traceSegmentStyle(start, end, BAND_WIDTH)!,
+      opacity: 0.25,
+    });
+
+    it('compares band segment styles by value (the memo gate)', () => {
+      const styleA = bandSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
+      const styleA2 = bandSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
+      const styleB = bandSegmentStyle({ x: 0, y: 0 }, { x: 10, y: 0 });
+
+      expect(areBandSegmentPropsEqual({ style: styleA }, { style: styleA })).toBe(true);
+      expect(areBandSegmentPropsEqual({ style: styleA }, { style: styleA2 })).toBe(true);
+      expect(areBandSegmentPropsEqual({ style: styleA }, { style: styleB })).toBe(false);
+      expect(
+        areBandSegmentPropsEqual(
+          { style: styleA },
+          { style: { ...styleA, opacity: 0.5 } }
+        )
+      ).toBe(false);
+    });
+
+    it('wires the value comparator into the memoized band bar component', () => {
+      const memoTag = (TraceCorridorSegment as any).$$typeof;
+      expect(memoTag).toBe(Symbol.for('react.memo'));
+      expect((TraceCorridorSegment as any).compare).toBe(
+        areBandSegmentPropsEqual
+      );
+    });
+
+    it('blocks re-renders of previously-rendered bars when a point is appended (only the new bar renders)', () => {
+      const renderBar = jest.fn(({ style }: { style: BandSegmentStyle }) => (
+        <View style={style} />
+      ));
+      const MemoDouble = memo(renderBar, areBandSegmentPropsEqual);
+      const threePointStyles = [
+        bandSegmentStyle(SQUARE_TRACE[0], SQUARE_TRACE[1]),
+        bandSegmentStyle(SQUARE_TRACE[1], SQUARE_TRACE[2]),
+      ];
+      const fourPointStyles = [
+        bandSegmentStyle(SQUARE_TRACE[0], SQUARE_TRACE[1]),
+        bandSegmentStyle(SQUARE_TRACE[1], SQUARE_TRACE[2]),
+        bandSegmentStyle(SQUARE_TRACE[2], SQUARE_TRACE[3]),
+      ];
+
+      const { rerender } = render(
+        <>
+          <MemoDouble style={threePointStyles[0]} />
+          <MemoDouble style={threePointStyles[1]} />
+        </>
+      );
+      expect(renderBar).toHaveBeenCalledTimes(2);
+
+      // Appending a point rebuilds every style object per commit; only the
+      // NEW bar's render function may fire.
+      rerender(
+        <>
+          <MemoDouble style={fourPointStyles[0]} />
+          <MemoDouble style={fourPointStyles[1]} />
+          <MemoDouble style={fourPointStyles[2]} />
+        </>
+      );
+      expect(renderBar).toHaveBeenCalledTimes(3);
+    });
+
+    it('recomputes value-equal styles for untouched band segments when a point is appended', () => {
+      const first = render(
+        <TraceCorridor trace={SQUARE_TRACE.slice(0, 3)} bandWidth={BAND_WIDTH} />
+      );
+      const before = screen
+        .getByTestId('game.picture.trace-band')
+        .props.children.map((bar: any) => bar.props.style);
+
+      first.rerender(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
+
+      const children =
+        screen.getByTestId('game.picture.trace-band').props.children;
+      expect(children.length).toBe(4);
+      // Untouched segments keep their exact geometry values, so the memo
+      // comparator (proven above) blocks their re-render; the auto-close
+      // preview now spans a different pair (diagonal → left edge).
+      expect(children[0].props.style).toEqual(before[0]);
+      expect(children[1].props.style).toEqual(before[1]);
+      expect(children[2].props.style).not.toEqual(before[0]);
+      expect(children[3].props.style).not.toEqual(before[2]);
+    });
   });
 });

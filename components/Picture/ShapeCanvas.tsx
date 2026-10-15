@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
 import {
+  clampToImage,
   isDrawableOutline,
   normalizeOutline,
   simplifyOutline,
@@ -30,16 +31,6 @@ type ShapeCanvasProps = {
   renderBand?: (renderPoints: Point[]) => ReactNode;
 };
 
-// px-space collection owner: raw pointer coordinates can leave the image
-// rect, so every collected point is clamped to [0, w] × [0, h] before it
-// reaches the trace, the pipeline, or storage.
-function clampToImage(point: Point, imageWidth: number, imageHeight: number): Point {
-  return {
-    x: Math.min(Math.max(point.x, 0), imageWidth),
-    y: Math.min(Math.max(point.y, 0), imageHeight),
-  };
-}
-
 const ShapeCanvas: FC<ShapeCanvasProps> = ({
   imageDimensionStyle,
   outline,
@@ -49,14 +40,19 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
   renderBand,
 }) => {
   const { t } = useTranslation();
-  const [rawPoints, setRawPoints] = useState<Point[]>([]);
+  const [committedPoints, setCommittedPoints] = useState<Point[]>([]);
   const [degenerate, setDegenerate] = useState(false);
-  // Judged geometry: EVERY raw finger point lands here — decimation below is
-  // render-only, so the storage pipeline never sees a thinned stroke.
+  // Three distinct stores:
+  // - `committedPoints` state (this line): the DECIMATED committed polyline —
+  //   drives the canvas render, the render band, and mirrors each commit to
+  //   the loupe via `onStrokeUpdate`.
+  // - `rawPointsRef` (below): judged geometry — EVERY raw finger point lands
+  //   here, append-always; decimation is render-only, so the storage pipeline
+  //   never sees a thinned stroke.
+  // - `committedPointsRef` (below): render commit gate anchor (plan D5) —
+  //   the last committed point a new raw point must clear by
+  //   MIN_STROKE_STEP_PX to commit.
   const rawPointsRef = useRef<Point[]>([]);
-  // Render commit gate (plan D5): the decimated polyline that state/reports
-  // expose — a point commits only when it moved ≥ MIN_STROKE_STEP_PX from
-  // the last committed point.
   const committedPointsRef = useRef<Point[]>([]);
 
   const { width: imageWidth, height: imageHeight } = imageDimensionStyle;
@@ -74,14 +70,14 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
   // Auto-close preview stays the CALLER's job: built via the shared bar-style
   // builder and composed into TraceInk (which is auto-close-free).
   const autoClosePreviewStyle = useMemo(() => {
-    if (rawPoints.length < 3) {
+    if (committedPoints.length < 3) {
       return null;
     }
     return traceSegmentStyle(
-      rawPoints[rawPoints.length - 1],
-      rawPoints[0]
+      committedPoints[committedPoints.length - 1],
+      committedPoints[0]
     );
-  }, [rawPoints]);
+  }, [committedPoints]);
 
   // Storage pipeline owner: raw px → simplify → normalize → round to 3
   // decimals before leaving the component, so every consumer (hide storage,
@@ -90,7 +86,7 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
     const points = rawPointsRef.current;
     rawPointsRef.current = [];
     committedPointsRef.current = [];
-    setRawPoints([]);
+    setCommittedPoints([]);
     if (points.length < 2) {
       onStrokeUpdate?.(null);
       return;
@@ -115,7 +111,7 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
         );
         rawPointsRef.current = [point];
         committedPointsRef.current = [point];
-        setRawPoints([point]);
+        setCommittedPoints([point]);
         onStrokeUpdate?.({ anchor: point, renderPoints: [point] });
       })
       .onUpdate((event) => {
@@ -134,7 +130,7 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
         if (step >= MIN_STROKE_STEP_PX) {
           const renderPoints = [...committed, point];
           committedPointsRef.current = renderPoints;
-          setRawPoints(renderPoints);
+          setCommittedPoints(renderPoints);
           onStrokeUpdate?.({ anchor: point, renderPoints });
         }
       })
@@ -152,14 +148,14 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
             testID="game.picture.shape-outline"
           />
         )}
-        {renderBand && rawPoints.length >= 2 && (
+        {renderBand && committedPoints.length >= 2 && (
           <View style={[StyleSheet.absoluteFill, styles.layer]}>
-            {renderBand(rawPoints)}
+            {renderBand(committedPoints)}
           </View>
         )}
-        {rawPoints.length >= 2 && (
+        {committedPoints.length >= 2 && (
           <TraceInk
-            points={rawPoints}
+            points={committedPoints}
             previewStyle={autoClosePreviewStyle}
             testID="game.picture.shape-trace"
           />

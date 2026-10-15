@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, View, Pressable, StyleSheet, ImageBackground } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { useTranslation } from 'react-i18next';
@@ -57,19 +57,20 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
 
   // D8: the ROOT container measures the container dims (screen space for the
   // frame clamp); the styles.pressable View below measures the root-relative
-  // image origin. Ref writes only — no re-render on layout.
+  // image origin. Unconditional ref writes — an async orientation lock can
+  // re-layout the tree AFTER the first measure, and the SECOND layout carries
+  // the true dims/origin. Ref writes are re-render-free; reapply() then
+  // repositions an in-flight loupe (no new pointer event, no setState).
   const handleContainerLayout = (event) => {
-    if (loupe.dimsRef.current == null) {
-      const { width, height } = event.nativeEvent.layout;
-      loupe.dimsRef.current = { width, height };
-    }
+    const { width, height } = event.nativeEvent.layout;
+    loupe.dimsRef.current = { width, height };
+    loupeRef.current.reapply();
   };
 
   const handleImageOriginLayout = (event) => {
-    if (loupe.originRef.current == null) {
-      const { x, y } = event.nativeEvent.layout;
-      loupe.originRef.current = { x, y };
-    }
+    const { x, y } = event.nativeEvent.layout;
+    loupe.originRef.current = { x, y };
+    loupeRef.current.reapply();
   };
 
   // Guess-side point drag: useTargetDrag (hosted by GuessPicture) threads the
@@ -255,7 +256,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
   const [shapeLoupePoints, setShapeLoupePoints] = useState(null);
   const lastMirrorAnchorRef = useRef(null);
 
-  const handleStrokeUpdate = (info) => {
+  const handleStrokeUpdate = useCallback((info) => {
     if (!info) {
       lastMirrorAnchorRef.current = null;
       setShapeLoupePoints(null);
@@ -275,7 +276,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
       lastMirrorAnchorRef.current = info.anchor;
       setShapeLoupePoints(info.renderPoints);
     }
-  };
+  }, []);
 
   // Point-mode loupe content (D4): the cursor is built into MagnifierLoupe,
   // so point modes mirror NOTHING; shape mode mirrors the live ink (both

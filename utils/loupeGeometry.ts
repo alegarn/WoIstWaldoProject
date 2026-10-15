@@ -1,7 +1,6 @@
-export interface Point {
-  x: number;
-  y: number;
-}
+import type { Point } from './shapeGeometry';
+
+export type { Point };
 
 export const LOUPE_ZOOM = 2.5;
 export const LOUPE_DIAMETER_PX = 120;
@@ -10,8 +9,6 @@ export const MIN_STROKE_STEP_PX = 4;
 export const LOUPE_LONG_PRESS_MS = 200;
 export const LOUPE_CURSOR_SIZE_PX = 12;
 export const LOUPE_MIRROR_STEP_PX = 12;
-
-export type LoupeClampedFrom = 'none' | 'top' | 'bottom' | 'left' | 'right';
 
 interface LoupeLayoutParams {
   anchor: Point;
@@ -39,14 +36,10 @@ interface LoupeContentTransformParams {
  * NOTE: when a host falls back to unmeasured dimensions, the "screen" is the
  * image box rather than the real container — a benign pre-measure state, since
  * the layout is recomputed on every reported move once real dims arrive.
- *
- * When both axes clamp simultaneously the vertical edge wins in the returned
- * `clampedFrom` (top before bottom before left before right).
  */
 export function loupeLayout(params: LoupeLayoutParams): {
   left: number;
   top: number;
-  clampedFrom: LoupeClampedFrom;
 } {
   const { anchor, screen } = params;
   const diameter = params.diameter ?? LOUPE_DIAMETER_PX;
@@ -59,17 +52,9 @@ export function loupeLayout(params: LoupeLayoutParams): {
   const centerX = Math.min(Math.max(desiredX, radius), screen.width - radius);
   const centerY = Math.min(Math.max(desiredY, radius), screen.height - radius);
 
-  let clampedFrom: LoupeClampedFrom = 'none';
-  if (centerY !== desiredY) {
-    clampedFrom = desiredY < centerY ? 'top' : 'bottom';
-  } else if (centerX !== desiredX) {
-    clampedFrom = desiredX < centerX ? 'left' : 'right';
-  }
-
   return {
     left: centerX - radius,
     top: centerY - radius,
-    clampedFrom,
   };
 }
 

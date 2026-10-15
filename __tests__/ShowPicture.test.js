@@ -623,8 +623,8 @@ describe('ShowPicture', () => {
         anchor: { x: 20 + 140, y: 280 + 260 },
         screen: { width: 360, height: 800 },
       });
-      expect(frameStyle.left.__getValue()).toBe(expectedFrame.left);
-      expect(frameStyle.top.__getValue()).toBe(expectedFrame.top);
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
 
       act(() => {
         panCallback(record, 'onEnd')({ x: 140, y: 260 }, true);
@@ -655,6 +655,58 @@ describe('ShowPicture', () => {
         );
       });
       expect(() => findByTestID(renderer, 'game.picture.hide-target-wrap')).not.toThrow();
+    });
+
+    // Orientation-lock regression: the async orientation lock re-layouts the
+    // tree AFTER the first measure, so the SECOND onLayout pair carries the
+    // true dims/origin. The old write-once guards discarded it and an
+    // in-flight loupe stayed mispositioned for the whole mount. The ref
+    // writes must be unconditional and must self-heal the loupe without a
+    // new pointer event.
+    it('second onLayout wins and self-heals an in-flight loupe (no further gesture events)', () => {
+      const renderer = renderHidePoint({});
+      fireLayouts(
+        renderer,
+        { width: 360, height: 800 },
+        { x: 20, y: 280, width: 320, height: 480 }
+      );
+
+      const record = precisionPanRecord();
+      act(() => {
+        panCallback(record, 'onBegin')({ x: 140, y: 260 });
+      });
+      act(() => {
+        panCallback(record, 'onStart')({ x: 140, y: 260 });
+      });
+      act(() => {
+        panCallback(record, 'onUpdate')({ x: 140, y: 260 });
+      });
+
+      const beforeFrame = loupeLayout({
+        anchor: { x: 20 + 140, y: 280 + 260 },
+        screen: { width: 360, height: 800 },
+      });
+
+      // Orientation swap: container 800×360, image origin (33,0). NO gesture
+      // events after this — the layout pass alone must reposition the loupe.
+      fireLayouts(
+        renderer,
+        { width: 800, height: 360 },
+        { x: 33, y: 0, width: 320, height: 480 }
+      );
+
+      const afterFrame = loupeLayout({
+        anchor: { x: 33 + 140, y: 0 + 260 },
+        screen: { width: 800, height: 360 },
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      const frameStyle = loupe.props.style[2];
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(afterFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(afterFrame.top);
+      // Bug pin: the old guard kept the stale pre-orientation position.
+      expect(afterFrame.left).not.toBe(beforeFrame.left);
+      expect(afterFrame.top).not.toBe(beforeFrame.top);
     });
 
     it('hold without move places at the touch-down point on release', () => {
@@ -803,13 +855,14 @@ describe('ShowPicture', () => {
         anchor: { x: 20 + 210, y: 280 + 310 },
         screen: { width: 360, height: 800 },
       });
-      expect(frameStyle.left.__getValue()).toBe(expectedFrame.left);
-      expect(frameStyle.top.__getValue()).toBe(expectedFrame.top);
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
 
       const contentNode = loupe
         .findAll((node) => node.type === 'AnimatedView')
         .find(
           (node) =>
+            node.props.testID === undefined &&
             Array.isArray(node.props.style) &&
             node.props.style.some((s) => s && Array.isArray(s.transform))
         );
@@ -905,6 +958,7 @@ describe('ShowPicture', () => {
         .findAll((node) => node.type === 'AnimatedView')
         .find(
           (node) =>
+            node.props.testID === undefined &&
             Array.isArray(node.props.style) &&
             node.props.style.some((s) => s && Array.isArray(s.transform))
         );
@@ -954,8 +1008,8 @@ describe('ShowPicture', () => {
         anchor: { x: 20 + stroke[1].x, y: 280 + stroke[1].y },
         screen: { width: 360, height: 800 },
       });
-      expect(frameStyle.left.__getValue()).toBe(expectedFrame.left);
-      expect(frameStyle.top.__getValue()).toBe(expectedFrame.top);
+      expect(frameStyle.transform[0].translateX.__getValue()).toBe(expectedFrame.left);
+      expect(frameStyle.transform[1].translateY.__getValue()).toBe(expectedFrame.top);
 
       const contentStyle = contentStyleOf(loupe);
       const expectedContent = loupeContentTransform({ anchor: stroke[1] });

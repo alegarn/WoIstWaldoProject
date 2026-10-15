@@ -114,6 +114,8 @@ export default function MagnifierLoupe({
 const styles = StyleSheet.create({
   frame: {
     position: 'absolute',
+    left: 0,
+    top: 0,
     // iOS shadow* + Android elevation (shadow props are iOS-only).
     // PERF (F6 ladder step 1): if the playtest shows jank from elevation
     // raster on the per-frame-translated frame, first fallback is border-only
