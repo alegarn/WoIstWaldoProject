@@ -400,6 +400,7 @@
       "guessImageLabel": "Gambar tebakan",
       "hideImageLabel": "Gambar penyembunyian",
       "shapeSurfaceLabel": "Gambar garis tepi di sekitar tempat persembunyian",
+      "modeCueLabel": "Mode bentuk: gambar garis tepi",
       "shapeClearLabel": "Hapus garis tepi",
       "shapeRedrawLabel": "Gambar ulang garis tepi",
       "shapeTooSimple": "Garis tepi terlalu sederhana — gambar bentuk tertutup di sekitar lokasinya",

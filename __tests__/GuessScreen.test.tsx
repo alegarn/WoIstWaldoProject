@@ -206,6 +206,7 @@ import { AppState, Image } from 'react-native';
 import { act, cleanup, fireEvent, render, RenderAPI } from '@testing-library/react-native';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
+import GuessPictureBase from '../components/Picture/GuessPicture';
 import ShowFailure from '../components/Results/ShowFailure';
 import { AuthContext } from '../store/auth-context';
 import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
@@ -1752,5 +1753,50 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
     expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:shape')).toBeNull();
     expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).toBe('1');
+  });
+});
+
+describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan 3a)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
+    applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
+    fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
+    useFakeAnimationTimers();
+    setE2EMode(false);
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    cleanup();
+    jest.clearAllTimers();
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+    setE2EMode(false);
+  });
+
+  function renderedGuessPicture(handle: ScreenHandle) {
+    return handle.screen.UNSAFE_getByType(
+      GuessPictureBase as unknown as React.ComponentType<Record<string, unknown>>,
+    );
+  }
+
+  it('forwards the raw route filterMode to GuessPicture, unnormalized', async () => {
+    const handle = renderGuessScreen(baseParams({ filterMode: 'shape' }));
+    await flush();
+
+    expect(renderedGuessPicture(handle).props.filterMode).toBe('shape');
+  });
+
+  it('forwards the route filterMode raw: absent stays absent (GuessPicture owns normalization)', async () => {
+    const handle = renderGuessScreen(baseParams());
+    await flush();
+
+    expect(renderedGuessPicture(handle).props.filterMode).toBeUndefined();
   });
 });

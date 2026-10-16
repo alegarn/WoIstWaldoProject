@@ -401,6 +401,7 @@
       "guessImageLabel": "Ratebild",
       "hideImageLabel": "Versteckbild",
       "shapeSurfaceLabel": "Zeichne einen Umriss um das Versteck",
+      "modeCueLabel": "Formmodus: Zeichne den Umriss",
       "shapeClearLabel": "Umriss löschen",
       "shapeRedrawLabel": "Umriss neu zeichnen",
       "shapeTooSimple": "Umriss zu einfach — zeichne eine geschlossene Form um die Stelle",

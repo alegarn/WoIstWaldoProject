@@ -400,6 +400,7 @@
       "guessImageLabel": "推測画像",
       "hideImageLabel": "隠し画像",
       "shapeSurfaceLabel": "隠した場所の周りをなぞってください",
+      "modeCueLabel": "なぞるモード：線をなぞってください",
       "shapeClearLabel": "線を消す",
       "shapeRedrawLabel": "もう一度なぞる",
       "shapeTooSimple": "線が簡単すぎます — 場所を囲む閉じた形をなぞってください",

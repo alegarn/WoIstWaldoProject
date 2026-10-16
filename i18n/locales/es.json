@@ -401,6 +401,7 @@
       "guessImageLabel": "Imagen para adivinar",
       "hideImageLabel": "Imagen para esconder",
       "shapeSurfaceLabel": "Dibuja un contorno alrededor del escondite",
+      "modeCueLabel": "Modo forma: dibuja el contorno",
       "shapeClearLabel": "Borrar el contorno",
       "shapeRedrawLabel": "Volver a dibujar el contorno",
       "shapeTooSimple": "Contorno demasiado simple — dibuja una forma cerrada alrededor del lugar",

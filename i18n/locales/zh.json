@@ -400,6 +400,7 @@
       "guessImageLabel": "猜测图片",
       "hideImageLabel": "隐藏图片",
       "shapeSurfaceLabel": "在藏匿处周围画一个轮廓",
+      "modeCueLabel": "圈画模式：绘制轮廓",
       "shapeClearLabel": "清除轮廓",
       "shapeRedrawLabel": "重新绘制轮廓",
       "shapeTooSimple": "轮廓太简单——请在藏匿点周围画一个闭合的形状",
