@@ -1,5 +1,5 @@
-import { memo, useMemo } from 'react';
-import type { FC } from 'react';
+import { memo, useMemo, useRef } from 'react';
+import type { FC, ReactElement } from 'react';
 import { StyleSheet, View, type ViewStyle } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
@@ -107,8 +107,21 @@ type TraceInkProps = {
   previewStyle?: TraceSegmentStyle | ViewStyle | null;
 };
 
+type SegmentStylesCache = {
+  points: Point[];
+  strokeWidth: number | undefined;
+  color: string | undefined;
+  segmentStyles: Array<TraceSegmentStyle | null>;
+};
+
 // Thin polyline renderer: N points become N−1 memoized rotated View bars.
-// Pure presentational — no gesture, no judgment, no auto-close.
+// Pure presentational — no gesture, no judgment, no auto-close. Segment
+// styles are cached append-only (D5): a commit that only APPENDS points to
+// the cached stroke reuses every cached style object and runs the segment
+// builder for the NEW segments alone; a rebuild triggers on style-prop
+// change, non-growth, or boundary-point identity mismatch (boundary
+// sampling only — earlier-point mutation is not detected and has no
+// current producer).
 const TraceInk: FC<TraceInkProps> = ({
   points,
   strokeWidth,
@@ -116,10 +129,35 @@ const TraceInk: FC<TraceInkProps> = ({
   testID = TRACE_INK_TEST_ID,
   previewStyle,
 }) => {
+  const cacheRef = useRef<SegmentStylesCache | null>(null);
+
   const segments = useMemo(() => {
-    const rendered = [];
-    for (let i = 0; i < points.length - 1; i++) {
-      const style = traceSegmentStyle(points[i], points[i + 1], strokeWidth, color);
+    const cached = cacheRef.current;
+    const isAppend =
+      !!cached &&
+      cached.strokeWidth === strokeWidth &&
+      cached.color === color &&
+      points.length > cached.points.length &&
+      (cached.points.length === 0 ||
+        points[cached.points.length - 1] ===
+          cached.points[cached.points.length - 1]);
+
+    const segmentStyles =
+      isAppend && cached ? cached.segmentStyles : [];
+    const firstNewIndex = segmentStyles.length;
+    for (let i = firstNewIndex; i < points.length - 1; i++) {
+      segmentStyles[i] = traceSegmentStyle(
+        points[i],
+        points[i + 1],
+        strokeWidth,
+        color
+      );
+    }
+    cacheRef.current = { points, strokeWidth, color, segmentStyles };
+
+    const rendered: ReactElement[] = [];
+    for (let i = 0; i < segmentStyles.length; i++) {
+      const style = segmentStyles[i];
       if (style) {
         rendered.push(<TraceInkSegment key={`segment-${i}`} style={style} />);
       }

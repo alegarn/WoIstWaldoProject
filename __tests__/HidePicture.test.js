@@ -85,6 +85,7 @@ jest.mock('expo-screen-orientation', () => ({
 }));
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import HidePicture from '../components/Picture/HidePicture';
@@ -155,13 +156,13 @@ describe('HidePicture', () => {
     );
   }
 
-  // The ShapeCanvas draw recognizer: registers onStart WITHOUT the precision
+  // The ShapeCanvas draw recognizer: registers onBegin WITHOUT the precision
   // long-press gate and WITHOUT any failOffsetY chain (the sidebar pan and
-  // the surface classifier both chain failOffsetY and register no onStart).
+  // the surface classifier both chain failOffsetY and register no onBegin).
   function findShapePan() {
     return [...mockPanRecords].reverse().find(
       (record) =>
-        record.calls.some((c) => c.method === 'onStart') &&
+        record.calls.some((c) => c.method === 'onBegin') &&
         !record.calls.some((c) => c.method === 'activateAfterLongPress') &&
         !record.calls.some((c) => c.method === 'failOffsetY')
     );
@@ -176,11 +177,38 @@ describe('HidePicture', () => {
       throw new Error('no shape draw Pan gesture is attached to the rendered surface');
     }
     await act(async () => {
-      panCallback(pan, 'onStart')({ x: vertices[0].x, y: vertices[0].y });
+      panCallback(pan, 'onBegin')({ x: vertices[0].x, y: vertices[0].y });
       for (const vertex of vertices.slice(1)) {
         panCallback(pan, 'onUpdate')({ x: vertex.x, y: vertex.y });
       }
-      panCallback(pan, 'onEnd')({}, true);
+      panCallback(pan, 'onFinalize')({}, true);
+    });
+  }
+
+  // The hide-side precision Pan is identified BY its activateAfterLongPress
+  // call — the surface classifier, the ShapeCanvas draw Pan and the sidebar
+  // pan never chain it.
+  function findPrecisionPan() {
+    return [...mockPanRecords]
+      .reverse()
+      .find((record) =>
+        record.calls.some((c) => c.method === 'activateAfterLongPress')
+      );
+  }
+
+  // Fires the precision press-hold placement Pan the way the native layer
+  // would: begin, long-press activation start, drag update, release (places
+  // the point through the shared selection pipeline).
+  async function firePrecisionPan(from = { x: 100, y: 200 }, to = { x: 140, y: 180 }) {
+    const pan = findPrecisionPan();
+    if (!pan) {
+      throw new Error('no precision placement Pan gesture is attached to the rendered surface');
+    }
+    await act(async () => {
+      panCallback(pan, 'onBegin')({ x: from.x, y: from.y });
+      panCallback(pan, 'onStart')({ x: from.x, y: from.y });
+      panCallback(pan, 'onUpdate')({ x: to.x, y: to.y });
+      panCallback(pan, 'onEnd')({ x: to.x, y: to.y }, true);
     });
   }
 
@@ -235,6 +263,64 @@ describe('HidePicture', () => {
 
       fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+    });
+  });
+
+  describe('mode switching (point ↔ shape)', () => {
+    it('clears the placed point marker when switching from point to shape mode', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+
+      expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+    });
+
+    it('keeps the stale point out of the shape-mode confirm payload after the switch', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(confirmModalQuery(screen)).toBeNull();
+
+      await fireShapePan(STROKE_VERTICES);
+      expect(confirmModalQuery(screen)).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+
+      expect(baseProps.navigation.navigate).toHaveBeenCalledTimes(1);
+      expect(baseProps.navigation.navigate).toHaveBeenCalledWith('SetInstructions', expect.objectContaining({
+        mode: 'shape',
+        shape: NORMALIZED_STROKE,
+        touchLocation: null,
+        target: null,
+      }));
+    });
+
+    it('does not resurrect the marker when switching back to point mode; a fresh point can be placed', async () => {
+      const screen = await renderToPicture();
+
+      await firePrecisionPan();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+
+      fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
+      expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
+
+      await firePrecisionPan();
+      expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
+      expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
     });
   });
 
@@ -308,17 +394,6 @@ describe('HidePicture', () => {
   });
 
   describe('point precision placement (press-hold)', () => {
-    // The precision Pan is identified BY its activateAfterLongPress call —
-    // the surface classifier, the ShapeCanvas draw Pan and the sidebar pan
-    // never chain it.
-    function findPrecisionPan() {
-      return [...mockPanRecords]
-        .reverse()
-        .find((record) =>
-          record.calls.some((c) => c.method === 'activateAfterLongPress')
-        );
-    }
-
     it('press-hold-drag-release places the point and dismisses the loupe (marker persists)', async () => {
       const screen = await renderToPicture();
 
@@ -338,7 +413,12 @@ describe('HidePicture', () => {
         panCallback(precision, 'onEnd')({ x: 140, y: 180 }, true);
       });
 
-      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      // D4 persistent mount: the loupe hides (opacity 0), it never unmounts.
+      // RNTL hands back the host node, whose style may be the raw array OR
+      // Animated's flattened copy — flatten handles both.
+      const loupe = screen.queryByTestId('game.picture.loupe');
+      expect(loupe).not.toBeNull();
+      expect(StyleSheet.flatten(loupe.props.style).opacity).toBe(0);
       // The placed point persists: the precision pan payload fed the same
       // selection pipeline as a tap, so the marker (clear-hide icon) renders.
       expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();

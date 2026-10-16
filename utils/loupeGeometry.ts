@@ -9,6 +9,29 @@ export const MIN_STROKE_STEP_PX = 4;
 export const LOUPE_LONG_PRESS_MS = 200;
 export const LOUPE_CURSOR_SIZE_PX = 12;
 export const LOUPE_MIRROR_STEP_PX = 12;
+export const LOUPE_MIRROR_WINDOW_PX = 160;
+
+export const windowPolyline = (
+  points: Point[],
+  anchor: Point,
+  radiusPx: number
+): Point[] => {
+  if (points.length < 2) {
+    return points;
+  }
+
+  let lastFarIdx = -1;
+  for (let i = points.length - 1; i >= 0; i--) {
+    const dx = points[i].x - anchor.x;
+    const dy = points[i].y - anchor.y;
+    if (dx * dx + dy * dy > radiusPx * radiusPx) {
+      lastFarIdx = i;
+      break;
+    }
+  }
+
+  return points.slice(Math.min(lastFarIdx + 1, points.length - 2));
+};
 
 interface LoupeLayoutParams {
   anchor: Point;

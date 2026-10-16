@@ -11,7 +11,6 @@ import {
 import { LOUPE_CURSOR_SIZE_PX } from '../../utils/loupeGeometry';
 
 export type MagnifierLoupeProps = {
-  visible: boolean;
   /** Animated position/opacity styles from the hook (container-space frame). */
   frameStyle: StyleProp<Animated.WithAnimatedValue<ViewStyle>>;
   /** Animated translate styles from the hook (image-space content window). */
@@ -27,8 +26,10 @@ const CURSOR_THICKNESS_PX = 2;
 
 // Dumb presentational circle (D2): receives animated styles from `useLoupe`,
 // computes NOTHING positional itself — math lives in utils/loupeGeometry + hook.
+// Persistent mount (D4): NEVER returns null — hidden = the hook frameStyle's
+// opacity 0 + pointerEvents 'none'. Accepted costs: texture residency; the
+// first-mount decode/layout happens at screen open (point modes included).
 export default function MagnifierLoupe({
-  visible,
   frameStyle,
   contentStyle,
   zoom,
@@ -37,10 +38,6 @@ export default function MagnifierLoupe({
   imageDimensionStyle,
   children,
 }: MagnifierLoupeProps) {
-  if (!visible) {
-    return null;
-  }
-
   return (
     <Animated.View
       testID="game.picture.loupe"
@@ -116,16 +113,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
-    // iOS shadow* + Android elevation (shadow props are iOS-only).
-    // PERF (F6 ladder step 1): if the playtest shows jank from elevation
-    // raster on the per-frame-translated frame, first fallback is border-only
-    // or `renderToHardwareTextureAndroid` on this frame container — before any
-    // code change.
+    // iOS-only shadow props (Android `elevation` removed: shadow re-raster on
+    // the per-frame-translated frame while tracing). Jank persists on device →
+    // tunables ladder: mirror 12→20 → stroke 4→6 → Reanimated ADR.
     shadowColor: '#000000',
     shadowOpacity: 0.3,
     shadowRadius: 6,
     shadowOffset: { width: 0, height: 2 },
-    elevation: 6,
   },
   glass: {
     overflow: 'hidden',

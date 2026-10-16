@@ -88,7 +88,7 @@ const IMAGE_WIDTH = 200;
 const IMAGE_HEIGHT = 400;
 
 function findDrawPan(): Record<string, any> {
-  const pan = [...mockPanGestures].reverse().find((g) => g.onEndHandler);
+  const pan = [...mockPanGestures].reverse().find((g) => g.onBeginHandler);
   if (!pan) {
     throw new Error('no draw Pan gesture is attached to the rendered canvas');
   }
@@ -98,18 +98,18 @@ function findDrawPan(): Record<string, any> {
 async function fireStroke(points: Array<{ x: number; y: number }>) {
   const pan = findDrawPan();
   await act(async () => {
-    pan.onStartHandler(points[0]);
+    pan.onBeginHandler(points[0]);
     for (const point of points.slice(1)) {
       pan.onUpdateHandler(point);
     }
-    pan.onEndHandler({});
+    pan.onFinalizeHandler({});
   });
 }
 
 async function driveLiveStroke(points: Array<{ x: number; y: number }>) {
   const pan = findDrawPan();
   await act(async () => {
-    pan.onStartHandler(points[0]);
+    pan.onBeginHandler(points[0]);
     for (const point of points.slice(1)) {
       pan.onUpdateHandler(point);
     }
@@ -186,7 +186,7 @@ describe('ShapeCanvas', () => {
     const pan = findDrawPan();
 
     await act(async () => {
-      pan.onStartHandler({ x: 20, y: 20 });
+      pan.onBeginHandler({ x: 20, y: 20 });
       pan.onUpdateHandler({ x: 180, y: 20 });
       pan.onUpdateHandler({ x: 180, y: 380 });
     });
@@ -272,7 +272,7 @@ describe('ShapeCanvas', () => {
     const pan = findDrawPan();
 
     await act(async () => {
-      pan.onStartHandler({ x: -50, y: -50 });
+      pan.onBeginHandler({ x: -50, y: -50 });
       pan.onUpdateHandler({ x: 250, y: -50 });
       pan.onUpdateHandler({ x: 250, y: 450 });
     });
@@ -415,7 +415,7 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler({ x: 20, y: 100 });
+        pan.onBeginHandler({ x: 20, y: 100 });
       });
 
       expect(onStrokeUpdate).toHaveBeenCalledTimes(1);
@@ -427,6 +427,43 @@ describe('ShapeCanvas', () => {
   });
 
   describe('onStrokeUpdate reporting', () => {
+    it('commits the clamped touch-down point at finger-down (onBegin, before any movement)', async () => {
+      const onStrokeUpdate = jest.fn();
+      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+
+      await act(async () => {
+        findDrawPan().onBeginHandler?.({ x: 20, y: 100 });
+      });
+
+      expect(onStrokeUpdate).toHaveBeenCalledTimes(1);
+      expect(onStrokeUpdate).toHaveBeenCalledWith({
+        anchor: { x: 20, y: 100 },
+        renderPoints: [{ x: 20, y: 100 }],
+      });
+    });
+
+    it('pairs an unactivated finger-down with onFinalize: loupe cleared, no outline judged', async () => {
+      const onStrokeUpdate = jest.fn();
+      const onOutlineChange = jest.fn();
+      render(
+        <ShapeCanvas
+          {...baseProps}
+          onOutlineChange={onOutlineChange}
+          onStrokeUpdate={onStrokeUpdate}
+        />
+      );
+      const pan = findDrawPan();
+
+      await act(async () => {
+        pan.onBeginHandler?.({ x: 20, y: 100 });
+        pan.onFinalizeHandler?.();
+      });
+
+      expect(onStrokeUpdate).toHaveBeenLastCalledWith(null);
+      expect(onOutlineChange).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('game.picture.shape-trace')).toBeNull();
+    });
+
     it('fires {anchor, renderPoints} on start and on decimated commits, anchor = latest RAW point', async () => {
       const onStrokeUpdate = jest.fn();
       const onOutlineChange = jest.fn();
@@ -440,7 +477,7 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler({ x: 10, y: 10 }); // commit 1 (start)
+        pan.onBeginHandler({ x: 10, y: 10 }); // commit 1 (start)
         pan.onUpdateHandler({ x: 13, y: 10 }); // 3px below gate — raw only
         pan.onUpdateHandler({ x: 10, y: 14 }); // 4px from committed → commit 2
       });
@@ -476,10 +513,10 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler(raw[0]);
+        pan.onBeginHandler(raw[0]);
         pan.onUpdateHandler(raw[1]);
         pan.onUpdateHandler(raw[2]);
-        pan.onEndHandler({});
+        pan.onFinalizeHandler({});
       });
 
       expect(onOutlineChange).toHaveBeenCalledTimes(1);
@@ -499,10 +536,10 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler({ x: 20, y: 20 });
+        pan.onBeginHandler({ x: 20, y: 20 });
         pan.onUpdateHandler({ x: 180, y: 20 });
         pan.onUpdateHandler({ x: 180, y: 380 });
-        pan.onEndHandler({});
+        pan.onFinalizeHandler({});
       });
 
       expect(onOutlineChange).toHaveBeenCalledTimes(1);
@@ -521,7 +558,7 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler({ x: 20, y: 100 });
+        pan.onBeginHandler({ x: 20, y: 100 });
         pan.onUpdateHandler({ x: 32, y: 100 });
       });
 
@@ -537,8 +574,8 @@ describe('ShapeCanvas', () => {
       const pan = findDrawPan();
 
       await act(async () => {
-        pan.onStartHandler({ x: 20, y: 100 });
-        pan.onEndHandler({});
+        pan.onBeginHandler({ x: 20, y: 100 });
+        pan.onFinalizeHandler({});
       });
 
       expect(onStrokeUpdate).toHaveBeenLastCalledWith(null);
@@ -595,7 +632,7 @@ describe('ShapeCanvas', () => {
     const pan = findDrawPan();
 
     await act(async () => {
-      pan.onStartHandler({ x: 20, y: 100 });
+      pan.onBeginHandler({ x: 20, y: 100 });
     });
     expect(screen.queryByTestId('test.band-marker')).toBeNull();
 

@@ -20,6 +20,8 @@ import {
   LOUPE_DIAMETER_PX,
   LOUPE_LONG_PRESS_MS,
   LOUPE_MIRROR_STEP_PX,
+  LOUPE_MIRROR_WINDOW_PX,
+  windowPolyline,
 } from '../../utils/loupeGeometry';
 import { clampToImage } from '../../utils/shapeGeometry';
 import { shapeTolerancePx } from '../../utils/shapeMatch';
@@ -249,9 +251,11 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
   }, [guess, shapeMode, onPointPlaced, imageDimensionStyle?.width, imageDimensionStyle?.height]);
 
   // Shape-mode loupe mirror (D4/E2): the host builds the glass content from
-  // the committed stroke points. The MIRROR-COMMIT GATE (§7 budget 2b) keeps
-  // the frame on EVERY report (animated, zero re-render) but commits the
-  // content re-render only when the anchor moved ≥ LOUPE_MIRROR_STEP_PX
+  // the committed stroke points, TRIMMED to the trailing window around the
+  // anchor (D6) so mirror cost stays O(window) as the stroke grows — ink AND
+  // corridor edges consume the same slice. The MIRROR-COMMIT GATE (§7 budget
+  // 2b) keeps the frame on EVERY report (animated, zero re-render) but commits
+  // the content re-render only when the anchor moved ≥ LOUPE_MIRROR_STEP_PX
   // since the last mirror commit.
   const [shapeLoupePoints, setShapeLoupePoints] = useState(null);
   const lastMirrorAnchorRef = useRef(null);
@@ -274,7 +278,9 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
         LOUPE_MIRROR_STEP_PX
     ) {
       lastMirrorAnchorRef.current = info.anchor;
-      setShapeLoupePoints(info.renderPoints);
+      setShapeLoupePoints(
+        windowPolyline(info.renderPoints, info.anchor, LOUPE_MIRROR_WINDOW_PX)
+      );
     }
   }, []);
 
@@ -395,7 +401,6 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
       </GestureDetector>
 
       <MagnifierLoupe
-        visible={loupe.visible}
         frameStyle={loupe.frameStyle}
         contentStyle={loupe.contentStyle}
         zoom={LOUPE_ZOOM}

@@ -106,6 +106,7 @@ jest.mock('../utils/shapeMatch', () => ({
 }));
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 
 import GuessPicture from '../components/Picture/GuessPicture';
@@ -159,9 +160,10 @@ describe('GuessPicture', () => {
   }
 
   // The ShapeCanvas draw recognizer is the only captured Pan that registers
-  // onStart (point target registers onBegin, surface swipe only onEnd).
+  // onBegin in shape mode (point target pans only mount in point mode; the
+  // surface swipe registers only onEnd).
   function findShapePan() {
-    return [...mockPanGestures].reverse().find((g) => g.onStartHandler);
+    return [...mockPanGestures].reverse().find((g) => g.onBeginHandler);
   }
 
   // Fires the ShapeCanvas draw recognizer the way the native Pan layer would:
@@ -173,11 +175,11 @@ describe('GuessPicture', () => {
       throw new Error('no shape draw Pan gesture is attached to the rendered surface');
     }
     await act(async () => {
-      pan.onStartHandler({ x: vertices[0].x, y: vertices[0].y });
+      pan.onBeginHandler({ x: vertices[0].x, y: vertices[0].y });
       for (const vertex of vertices.slice(1)) {
         pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
       }
-      pan.onEndHandler({}, true);
+      pan.onFinalizeHandler({}, true);
     });
   }
 
@@ -206,6 +208,44 @@ describe('GuessPicture', () => {
 
   function confirmModalQuery(screen) {
     return screen.queryByTestId('game.picture.guess-modal.confirm');
+  }
+
+  // D4 persistent mount: a hidden loupe stays in the tree — hidden = the
+  // hook's frameStyle opacity 0, never an unmount. RNTL hands back the host
+  // node, whose style may be the raw array OR Animated's flattened copy —
+  // flatten handles both.
+  function expectLoupeHidden(screen) {
+    const loupe = screen.queryByTestId('game.picture.loupe');
+    expect(loupe).not.toBeNull();
+    expect(StyleSheet.flatten(loupe.props.style).opacity).toBe(0);
+  }
+
+  // Rotated segment bars (TraceInk-style: plain style objects carrying a
+  // transform) under the `testID` node within (or equal to) the `root`
+  // element. Styles are deduped — react-test-renderer findAll can return
+  // alternate-fiber ghosts for the same logical node.
+  function barStylesWithin(root, testID) {
+    const seen = new Set();
+    const bars = [];
+    const nodes =
+      root.props.testID === testID
+        ? [root]
+        : root.findAll((candidate) => candidate.props.testID === testID);
+    for (const node of nodes) {
+      for (const segment of node.findAll(
+        (child) =>
+          !Array.isArray(child.props.style) &&
+          child.props.style &&
+          Array.isArray(child.props.style.transform)
+      )) {
+        const key = JSON.stringify(segment.props.style);
+        if (!seen.has(key)) {
+          seen.add(key);
+          bars.push(segment.props.style);
+        }
+      }
+    }
+    return bars;
   }
 
   async function renderToPicture(overrides = {}) {
@@ -306,7 +346,7 @@ describe('GuessPicture', () => {
 
       const screen = await renderToPicture();
 
-      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      expectLoupeHidden(screen);
 
       await fireTargetPan({ begin: true, update: { translationX: 10, translationY: 0 } });
 
@@ -314,7 +354,7 @@ describe('GuessPicture', () => {
 
       await fireTargetPan({ begin: true, finalize: { translationX: 10, translationY: 0 } });
 
-      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      expectLoupeHidden(screen);
     });
 
     it('a tap below the threshold opens the modal and never leaves the loupe visible', async () => {
@@ -325,7 +365,7 @@ describe('GuessPicture', () => {
       await fireTargetPan({ begin: true, finalize: { translationX: 2, translationY: 2 } });
 
       expect(confirmModalQuery(screen)).not.toBeNull();
-      expect(screen.queryByTestId('game.picture.loupe')).toBeNull();
+      expectLoupeHidden(screen);
     });
   });
 
@@ -608,7 +648,7 @@ describe('GuessPicture', () => {
 
       const pan = findShapePan();
       await act(async () => {
-        pan.onStartHandler({ x: STROKE_VERTICES[0].x, y: STROKE_VERTICES[0].y });
+        pan.onBeginHandler({ x: STROKE_VERTICES[0].x, y: STROKE_VERTICES[0].y });
         for (const vertex of STROKE_VERTICES.slice(1)) {
           pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
         }
@@ -618,7 +658,7 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
       await act(async () => {
-        pan.onEndHandler({}, true);
+        pan.onFinalizeHandler({}, true);
       });
 
       expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
@@ -627,6 +667,42 @@ describe('GuessPicture', () => {
 
       fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
       expect(toAdScreen).toHaveBeenCalledTimes(1);
+    });
+
+    it('mirrors only the trailing window into the loupe while the full-size trace keeps every bar (D6 pin)', async () => {
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE });
+
+      // Long stroke across the 320×240 surface: 39 committed points (8px
+      // cadence clears MIN_STROKE_STEP_PX=4), a 304px spread — far beyond the
+      // 160px glass window.
+      const pan = findShapePan();
+      const vertices = [];
+      for (let x = 8; x <= 312; x += 8) {
+        vertices.push({ x, y: 120 });
+      }
+      expect(vertices.length).toBe(39);
+
+      // Mid-stroke pin: no finalize — the live mirror must already be bounded.
+      await act(async () => {
+        pan.onBeginHandler({ x: vertices[0].x, y: vertices[0].y });
+        for (const vertex of vertices.slice(1)) {
+          pan.onUpdateHandler({ x: vertex.x, y: vertex.y });
+        }
+      });
+
+      const fullBars = barStylesWithin(
+        screen.getByTestId('game.picture.shape-trace'),
+        'game.picture.shape-trace'
+      ).length;
+      const loupe = screen.getByTestId('game.picture.loupe');
+      const mirroredBars = barStylesWithin(loupe, 'game.picture.trace-ink').length;
+
+      expect(fullBars).toBeGreaterThan(mirroredBars);
+      expect(mirroredBars).toBeGreaterThan(0);
+
+      await act(async () => {
+        pan.onFinalizeHandler({}, true);
+      });
     });
 
     it('ships the normalized drawn outline to toAdScreen on confirm', async () => {

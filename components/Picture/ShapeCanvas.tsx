@@ -42,7 +42,8 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
   const { t } = useTranslation();
   const [committedPoints, setCommittedPoints] = useState<Point[]>([]);
   const [degenerate, setDegenerate] = useState(false);
-  // Three distinct stores:
+  // Three distinct stores, seeded by the pan's onBegin (finger-down) and
+  // closed by its onFinalize (lift OR unactivated tap):
   // - `committedPoints` state (this line): the DECIMATED committed polyline —
   //   drives the canvas render, the render band, and mirrors each commit to
   //   the loupe via `onStrokeUpdate`.
@@ -79,6 +80,16 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
     );
   }, [committedPoints]);
 
+  const clampedStrokePoint = (event: { x: number; y: number }) =>
+    clampToImage({ x: event.x, y: event.y }, imageWidth, imageHeight);
+
+  const commitStrokePoint = (point: Point) => {
+    const renderPoints = [...committedPointsRef.current, point];
+    committedPointsRef.current = renderPoints;
+    setCommittedPoints(renderPoints);
+    onStrokeUpdate?.({ anchor: point, renderPoints });
+  };
+
   // Storage pipeline owner: raw px → simplify → normalize → round to 3
   // decimals before leaving the component, so every consumer (hide storage,
   // guess match, e2e shims) sees the same normalized [0,1] space.
@@ -99,28 +110,28 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
     onStrokeUpdate?.(null);
   };
 
+  // RNGH Pan lifecycle mapping: .onBegin fires at pure finger-down —
+  // activation needs ~10dp of travel, so .onStart can never fire at
+  // touch-down. .onFinalize fires on END/FAIL/CANCEL, including a tap that
+  // never activated, so it always pairs the begin commit and clears the
+  // loupe (a tap-without-move may flash the loupe ~1-2 frames — accepted).
   const drawPan = useMemo(() => {
     const pan = Gesture.Pan().enabled(!disabled);
     return pan
-      .onStart((event) => {
+      .onBegin((event) => {
+        // Touch-down: seed the raw store and commit the first point so the
+        // loupe appears immediately, before any movement.
         setDegenerate(false);
-        const point = clampToImage(
-          { x: event.x, y: event.y },
-          imageWidth,
-          imageHeight
-        );
+        const point = clampedStrokePoint(event);
         rawPointsRef.current = [point];
-        committedPointsRef.current = [point];
-        setCommittedPoints([point]);
-        onStrokeUpdate?.({ anchor: point, renderPoints: [point] });
+        commitStrokePoint(point);
       })
       .onUpdate((event) => {
-        const point = clampToImage(
-          { x: event.x, y: event.y },
-          imageWidth,
-          imageHeight
-        );
-        rawPointsRef.current = [...rawPointsRef.current, point];
+        // Movement: every raw point lands in the judged ref; only points
+        // clearing the MIN_STROKE_STEP_PX gate past the last committed
+        // point reach the render commit above.
+        const point = clampedStrokePoint(event);
+        rawPointsRef.current.push(point);
         const committed = committedPointsRef.current;
         const lastCommitted = committed[committed.length - 1];
         const step = Math.hypot(
@@ -128,13 +139,12 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
           point.y - lastCommitted.y
         );
         if (step >= MIN_STROKE_STEP_PX) {
-          const renderPoints = [...committed, point];
-          committedPointsRef.current = renderPoints;
-          setCommittedPoints(renderPoints);
-          onStrokeUpdate?.({ anchor: point, renderPoints });
+          commitStrokePoint(point);
         }
       })
-      .onEnd(() => {
+      .onFinalize(() => {
+        // Always runs (END/FAIL/CANCEL, even never-activated): an
+        // unactivated tap holds a single-point stroke → null-only clear.
         finalizeStroke();
       });
   }, [disabled, imageWidth, imageHeight, onOutlineChange, onStrokeUpdate]);

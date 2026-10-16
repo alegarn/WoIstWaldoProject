@@ -6,9 +6,12 @@ import {
   LOUPE_LONG_PRESS_MS,
   LOUPE_CURSOR_SIZE_PX,
   LOUPE_MIRROR_STEP_PX,
+  LOUPE_MIRROR_WINDOW_PX,
   loupeLayout,
   loupeContentTransform,
+  windowPolyline,
 } from '../utils/loupeGeometry';
+import type { Point } from '../utils/shapeGeometry';
 
 describe('loupeGeometry', () => {
   describe('constants', () => {
@@ -81,4 +84,60 @@ describe('loupeGeometry', () => {
       expect(transform.translateY).toBe(60 - 200 * 2.5);
     });
   });
+
+  describe('windowPolyline', () => {
+    const line10 = (): Point[] =>
+      Array.from({ length: 10 }, (_, i) => ({ x: i * 10, y: 0 }));
+
+    it('keeps only the trailing points within radiusPx of the anchor', () => {
+      const points = line10();
+      const anchor = points[9];
+
+      const result = windowPolyline(points, anchor, 35);
+
+      expect(result).toEqual([
+        { x: 60, y: 0 },
+        { x: 70, y: 0 },
+        { x: 80, y: 0 },
+        { x: 90, y: 0 },
+      ]);
+    });
+
+    it('extends the slice to the end for a mid-polyline anchor', () => {
+      const points = line10();
+      const anchor = points[4];
+
+      const result = windowPolyline(points, anchor, 35);
+
+      expect(result).toEqual([
+        { x: 80, y: 0 },
+        { x: 90, y: 0 },
+      ]);
+      expect(result[result.length - 1]).toEqual(points[points.length - 1]);
+    });
+
+    it('returns the whole polyline when every point is within radiusPx', () => {
+      const points = line10();
+      const anchor = points[9];
+
+      const result = windowPolyline(points, anchor, 500);
+
+      expect(result).toEqual(points);
+    });
+
+    it('returns a single-point input unchanged', () => {
+      const points = [{ x: 42, y: 7 }];
+
+      expect(windowPolyline(points, points[0], 35)).toEqual([{ x: 42, y: 7 }]);
+    });
+
+    it('returns empty output for empty input', () => {
+      expect(windowPolyline([], { x: 0, y: 0 }, 35)).toEqual([]);
+    });
+
+    it('pins the mirror window constant', () => {
+      expect(LOUPE_MIRROR_WINDOW_PX).toBe(160);
+    });
+  });
 });
+
