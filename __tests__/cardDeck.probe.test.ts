@@ -98,7 +98,7 @@ function mockCursorServer(batches: Card[][]) {
       return { isError: false, reason: 'empty', images: [] };
     }
     if (opts?.persistCursor !== false) {
-      await saveLastImageUuid(served[served.length - 1].pictureId, 'all', filters?.language, filters?.scope ?? null);
+      await saveLastImageUuid(served[served.length - 1].pictureId, 'all', filters?.language, filters?.scope ?? null, filters?.mode);
     }
     return { isError: false, images: served };
   });
@@ -119,19 +119,19 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const b2 = batch('played-', 2);
     const b3 = batch('fresh-', 3);
     const store = mockStore({
-      'lastImageUuid:all:fr': 'row-5-cursor',
+      'lastImageUuid:all:fr:any': 'row-5-cursor',
       'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
     });
     mockCursorServer([batch('old-', 5), b2, b3]);
     // The stored cursor must be the tail of batch 1 for the server mock.
     const b1 = batch('old-', 5);
-    store.set('lastImageUuid:all:fr', b1[4].pictureId);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
 
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'unplayed' });
-    expect(store.get('lastImageUuid:all:fr')).toBe(b3[2].pictureId);
-    const deck = JSON.parse(store.get('imageList:all:fr') ?? '[]');
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b3[2].pictureId);
+    const deck = JSON.parse(store.get('imageList:all:fr:any') ?? '[]');
     expect(pictureIds(deck)).toEqual(pictureIds(b3));
     expect(Array.from(store.keys()).every((key) => !key.startsWith('servingCycle:'))).toBe(true);
     expect(
@@ -145,19 +145,19 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
       'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
     });
     const b1 = batch('old-', 5);
-    store.set('lastImageUuid:all:fr', b1[4].pictureId);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
     mockCursorServer([b1, b2]);
 
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'exhausted' });
-    expect(store.get('lastImageUuid:all:fr')).toBe(b2[1].pictureId);
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b2[1].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
   it('public sentinel: cleared before fetching, and the served batch persists a real cursor', async () => {
     const store = mockStore({
-      'lastImageUuid:all:fr': '__public_feed_end__',
+      'lastImageUuid:all:fr:any': '__public_feed_end__',
     });
     const b1 = batch('head-', 3);
     mockCursorServer([b1]);
@@ -165,14 +165,14 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'unplayed' });
-    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr');
-    expect(store.get('lastImageUuid:all:fr')).toBe(b1[2].pictureId);
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr:any');
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[2].pictureId);
   });
 
   it('private sentinel: cleared under the group-scoped key, and the served batch persists a real group cursor', async () => {
     const scope = { kind: 'private', groupId: 'g-1' };
     const store = mockStore({
-      'groupFeed:g-1:game:all:fr:cursor': '__private_feed_end__',
+      'groupFeed:g-1:game:all:fr:any:cursor': '__private_feed_end__',
     });
     const b1 = batch('priv-', 3);
     mockCursorServer([b1]);
@@ -180,22 +180,22 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
 
     expect(result).toEqual({ status: 'unplayed' });
-    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('groupFeed:g-1:game:all:fr:cursor');
-    expect(store.get('groupFeed:g-1:game:all:fr:cursor')).toBe(b1[2].pictureId);
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('groupFeed:g-1:game:all:fr:any:cursor');
+    expect(store.get('groupFeed:g-1:game:all:fr:any:cursor')).toBe(b1[2].pictureId);
   });
 
   it('fetch error → indeterminate, cursor untouched, no deck write', async () => {
     const b1 = batch('old-', 5);
     const store = mockStore({
-      'lastImageUuid:all:fr': b1[4].pictureId,
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
     });
     mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
 
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'network' });
-    expect(store.get('lastImageUuid:all:fr')).toBe(b1[4].pictureId);
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[4].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
   it('PROBE_MAX_BATCHES all-played batches → indeterminate probe-cap (fail open)', async () => {
@@ -209,13 +209,13 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'probe-cap' });
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
   it('Task 1b: a played-out terminal batch maps to indeterminate (never exhausted → no cycle reset, no played-set wipe)', async () => {
     const b1 = batch('old-', 5);
     const store = mockStore({
-      'lastImageUuid:all:fr': b1[4].pictureId,
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
       'playedPictureIds:public:fr': JSON.stringify(pictureIds(batch('played-', 5))),
     });
     mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
@@ -223,15 +223,15 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
 
     expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
-    expect(store.get('lastImageUuid:all:fr')).toBe(b1[4].pictureId);
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[4].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
   it('Task 6d: private scope played-out maps to indeterminate too (no startNewServingCycle, played set kept)', async () => {
     const scope = { kind: 'private', groupId: 'g-1' };
     const playedGroup = batch('gplayed-', 5);
     const store = mockStore({
-      'groupFeed:g-1:game:all:fr:cursor': 'g-cursor-5',
+      'groupFeed:g-1:game:all:fr:any:cursor': 'g-cursor-5',
       'playedPictureIds:group:g-1:fr': JSON.stringify(pictureIds(playedGroup)),
     });
     mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
@@ -252,13 +252,13 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
       'playedPictureIds:public:fr': JSON.stringify(['other-played']),
     });
     const b1 = batch('old-', 5);
-    store.set('lastImageUuid:all:fr', b1[4].pictureId);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
     mockCursorServer([b1, [justPlayed, { pictureId: 'other-played', imageFile: 'file:///cache/other.jpg' }]]);
 
     const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS, excludePictureId: 'just-played' });
 
     expect(result).toEqual({ status: 'exhausted' });
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
   it('private scope: group "all" namespace deck write + group-scoped cursor, no public bleed', async () => {
@@ -269,7 +269,7 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
       'playedPictureIds:group:g-1:fr': JSON.stringify(pictureIds(b2)),
     });
     const b1 = batch('gold-', 5);
-    store.set('groupFeed:g-1:game:all:fr:cursor', b1[4].pictureId);
+    store.set('groupFeed:g-1:game:all:fr:any:cursor', b1[4].pictureId);
     mockCursorServer([b1, b2, b3]);
 
     const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
@@ -277,14 +277,14 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(result).toEqual({ status: 'unplayed' });
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-1',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       {
         images: b3.map((card, i) => ({ ...card, listId: i + 1 })),
         nextCursor: null,
       },
     );
-    expect(store.get('groupFeed:g-1:game:all:fr:cursor')).toBe(b3[2].pictureId);
-    expect(store.has('lastImageUuid:all:fr')).toBe(false);
-    expect(store.has('imageList:all:fr')).toBe(false);
+    expect(store.get('groupFeed:g-1:game:all:fr:any:cursor')).toBe(b3[2].pictureId);
+    expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 });

@@ -29,7 +29,9 @@ export default function ShowFailure({ navigation, route }) {
     listId,
     category,
     language,
-    scope
+    scope,
+    mode,
+    shape
   } = route?.params;
 
   const isPrivateScope = scope?.kind === 'private';
@@ -72,6 +74,11 @@ export default function ShowFailure({ navigation, route }) {
       listId: listId,
       category: category,
       language: language,
+      // Shape mode survives the retry: the re-mounted card must render the
+      // shape surface with the card's STORED outline (hidden `shape`), the
+      // same threading as GuessScreen.toAdScreen's sharedParams. Point cards
+      // carry no mode key — params stay byte-identical.
+      ...(mode === 'shape' ? { mode, shape } : {}),
     };
 
     if (isPrivateScope) {

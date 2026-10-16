@@ -1,30 +1,44 @@
 import  { useState, useLayoutEffect } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { handleImageOrientation } from "../../utils/orientation";
-import { handlePicturePress } from '../../utils/targetLocation';
+import { handlePicturePress, buildSelectionFromPixels } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
 import GameInstructions from '../Instructions/GameInstructions';
+import RetractableSidebar from '../UI/RetractableSidebar';
 
 import { setImageDimensions } from '../../utils/imageDimensions';
 import TutorialOverlay from '../UI/TutorialOverlay';
-import { buildE2EPictureSelection, getE2EHideLocation, isE2EMode } from '../../utils/e2eMode';
+import { buildE2EPictureSelection, E2E_SHAPE_POLYGON, getE2EHideLocation, isE2EMode } from '../../utils/e2eMode';
+import { GlobalStyle } from '../../constants/theme';
+
+const MODE_OPTIONS = [
+  { value: 'point', labelKey: 'hide.modePoint' },
+  { value: 'shape', labelKey: 'hide.modeShape' },
+];
 
 
-export default function HidePicture({ 
-  navigation, 
-  uri, 
-  imageIsPortrait, 
-  imageWidth, 
-  imageHeight, 
-  screenDimensions, 
+export default function HidePicture({
+  navigation,
+  uri,
+  imageIsPortrait,
+  imageWidth,
+  imageHeight,
+  screenDimensions,
   isTutorial,
   scope }) {
 
+  const { t } = useTranslation();
   const [showFilter, setShowFilter] = useState(true);
+  const [mode, setMode] = useState('point');
+  const [outline, setOutline] = useState(null);
   const [touchLocation, setTouchLocation] = useState(null);
   const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);
+
+  const isShapeMode = mode === 'shape';
 
   const screenWidth = screenDimensions.width;
   const screenHeight = screenDimensions.height;
@@ -42,7 +56,41 @@ export default function HidePicture({
     setShowFilter(false);
   };
 
+  const handleModeSelect = (nextMode) => {
+    setMode(nextMode);
+    if (nextMode !== 'shape') {
+      setOutline(null);
+      return;
+    }
+    // Mode-switch reset contract, both directions: entering point mode drops
+    // the shape outline; entering shape mode drops a placed point. Leaving
+    // the stale artifact mounted would keep its control interactive over the
+    // new surface and leak it into the confirm payload.
+    setTouchLocation(null);
+    setTarget(null);
+    if (isE2EMode()) {
+      applyOutline(E2E_SHAPE_POLYGON.map((point) => ({ ...point })));
+    }
+  };
+
+  // Shape surface output: a drawable outline auto-opens the confirm modal
+  // (the only opener in shape mode — the clear-hide icon needs a point
+  // selection); a null (degenerate/redraw) just clears it.
+  const applyOutline = (nextOutline) => {
+    setOutline(nextOutline);
+    if (nextOutline) {
+      setShowModal(true);
+    }
+  };
+
+  const handleOutlineChange = (nextOutline) => {
+    applyOutline(nextOutline);
+  };
+
   const handlePress = (event) => {
+    if (isShapeMode) {
+      return;
+    }
     const selection = isE2EMode()
       ? buildE2EPictureSelection({
           screenWidth,
@@ -60,6 +108,51 @@ export default function HidePicture({
     };
   };
 
+  // Precision-pan placement (press-hold): px arrive pre-clamped to the image
+  // (ShowPicture), so only the shared selection pipeline runs here. The E2E
+  // tap path (buildE2EPictureSelection) stays on handlePress.
+  const handlePointPlaced = (point) => {
+    if (isShapeMode) {
+      return;
+    }
+    const { location, target } = buildSelectionFromPixels({
+      locationX: point.x,
+      locationY: point.y,
+      screenWidth,
+      screenHeight,
+      imageDimensionStyle,
+    });
+    if (location && target) {
+      setTouchLocation(location);
+      setTarget(target);
+    }
+  };
+
+  const renderModePicker = () => {
+    return (
+      <RetractableSidebar
+        initiallyOpen
+        testIDPrefix="game.picture.mode-sidebar"
+        accessibilityLabel={t('hide.modeLabel')}>
+        <View style={styles.modePanelContent} testID="game.picture.mode-picker">
+          <Text style={styles.modeLabel}>{t('hide.modeLabel')}</Text>
+          {MODE_OPTIONS.map(({ value, labelKey }) => (
+            <Pressable
+              key={value}
+              onPress={() => handleModeSelect(value)}
+              style={[styles.modeChip, mode === value && styles.modeChipSelected]}
+              testID={`game.picture.mode-chip-${value}`}
+            >
+              <Text style={[styles.modeChipText, mode === value && styles.modeChipTextSelected]}>
+                {t(labelKey)}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      </RetractableSidebar>
+    );
+  };
+
   const renderPicture = () => {
     return (
       <ShowPicture
@@ -70,12 +163,14 @@ export default function HidePicture({
         isPortrait={imageIsPortrait}
         touchLocation={touchLocation}
         handlePress={handlePress}
+        onPointPlaced={handlePointPlaced}
         target={target}
         handleIconPress={handleIconPress}
         showModal={showModal}
         handleConfirm={handleConfirm}
         onCancel={onCancel}
         imageDimensionStyle={imageDimensionStyle}
+        {...(isShapeMode ? { shapeMode: true, outline: outline, onOutlineChange: handleOutlineChange } : {})}
         />
     );
   }
@@ -97,6 +192,7 @@ export default function HidePicture({
       target: target,
       imageDimensionStyle: imageDimensionStyle,
       isTutorial: isTutorial,
+      ...(isShapeMode ? { mode: mode, shape: outline } : {}),
     };
 
     if (scope?.kind === 'private') {
@@ -138,7 +234,43 @@ export default function HidePicture({
 
   if (!showFilter) {
     return(
-      renderPicture()
+      <>
+        {renderPicture()}
+        {renderModePicker()}
+      </>
     );
   };
 };
+
+const styles = StyleSheet.create({
+  modePanelContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    padding: 12,
+  },
+  modeLabel: {
+    color: GlobalStyle.color.primaryColor900,
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
+  modeChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#CCC',
+  },
+  modeChipSelected: {
+    backgroundColor: GlobalStyle.color.primaryColor500,
+    borderColor: GlobalStyle.color.primaryColor500,
+  },
+  modeChipText: {
+    color: GlobalStyle.color.primaryColor900,
+    fontSize: 14,
+  },
+  modeChipTextSelected: {
+    color: GlobalStyle.color.onSurface,
+    fontWeight: 'bold',
+  },
+});

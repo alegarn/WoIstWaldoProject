@@ -69,6 +69,8 @@ export interface E2EHiddenGuessPayloadArgs {
   hiddenLocation?: unknown;
   screenHeight?: unknown;
   screenWidth?: unknown;
+  mode?: unknown;
+  shape?: unknown;
 }
 
 export interface E2EHiddenGuessPayload {
@@ -81,7 +83,11 @@ export interface E2EHiddenGuessPayload {
   hiddenLocation?: unknown;
   screenHeight?: unknown;
   screenWidth?: unknown;
+  mode?: unknown;
+  shape?: unknown;
 }
+
+export type E2EShapeVariant = 'hit' | 'miss';
 
 export interface E2ERankingRow {
   rank: string;
@@ -143,6 +149,7 @@ export function buildE2ECategories(): E2ECategory[];
 export function getE2EAdDelayMs(): number;
 export function getE2EHideLocation(): E2ELocation;
 export function getE2EIncorrectHideLocation(): E2ELocation;
+export function getE2EShapeOutline(variant: E2EShapeVariant): E2ELocation[];
 export function buildE2EPictureSelection({ screenWidth, screenHeight, imageDimensionStyle, relativeLocation }: {
   screenWidth: number;
   screenHeight: number;
@@ -154,12 +161,16 @@ export function buildE2EHideRouteParams({ screenWidth, screenHeight, isTutorial 
   screenHeight: number;
   isTutorial?: boolean;
 }): E2EHideRouteParams;
-export function buildE2EGuessCards(): (ImageModel & { hiddenLocation: E2ELocation })[];
+export function buildE2EGuessCards(): (ImageModel & {
+  hiddenLocation: E2ELocation;
+  mode: string;
+  shape: null;
+})[];
 export function buildE2EHiddenGuessPayload(args: E2EHiddenGuessPayloadArgs): E2EHiddenGuessPayload;
 export function buildE2EGuessCardFromPayload(
   payload: Record<string, unknown>,
   options?: { listId?: number },
-): (ImageModel & { hiddenLocation: unknown }) | null;
+): (ImageModel & { hiddenLocation: unknown; mode: string; shape: unknown }) | null;
 export function buildE2ERankingRows(): E2ERankingRow[];
 export function buildE2ERankingResponse(args?: {
   after?: unknown;

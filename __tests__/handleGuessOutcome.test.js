@@ -42,11 +42,11 @@ import {
   __cacheList as cacheList,
 } from 'expo-file-system';
 
-import { applySuccessSideEffects } from '../utils/handleGuessOutcome';
+import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { getPending } from '../utils/sessionScoreStore';
 import { getPlayedPictureIds } from '../utils/playedPictureIds';
 
-const DECK_KEY = 'imageList:animals:en';
+const DECK_KEY = 'imageList:animals:en:any';
 const PLAYED_PUBLIC_KEY = 'playedPictureIds:public:en';
 const PLAYED_GROUP_KEY = 'playedPictureIds:group:g-3:en';
 
@@ -220,5 +220,49 @@ describe('applySuccessSideEffects', () => {
     expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual(['pic-1']);
     expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
     expect(deletedFiles).not.toEqual(expect.arrayContaining([expect.stringContaining('pic-1.jpg')]));
+  });
+});
+
+describe('Task C6/D3: filter-mode threading', () => {
+  const ANY_DECK_KEY = 'imageList:animals:en:any';
+  const SHAPE_DECK_KEY = 'imageList:animals:en:shape';
+
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('a win under an active filter removes the card from the MODE-segmented deck only', async () => {
+    const deck = [
+      { listId: 1, pictureId: 'pic-1', imageFile: 'file:///img.png' },
+      { listId: 2, pictureId: 'pic-2', imageFile: 'file:///cache/pic-2.jpg' },
+    ];
+    await AsyncStorage.setItem(ANY_DECK_KEY, JSON.stringify(deck));
+    await AsyncStorage.setItem(SHAPE_DECK_KEY, JSON.stringify(deck));
+
+    await applySuccessSideEffects({ ...baseArgs, mode: 'shape' });
+
+    expect(JSON.parse(await AsyncStorage.getItem(SHAPE_DECK_KEY))).toEqual([
+      expect.objectContaining({ pictureId: 'pic-2' }),
+    ]);
+    expect(JSON.parse(await AsyncStorage.getItem(ANY_DECK_KEY))).toHaveLength(2);
+  });
+
+  it('resolveNextGuessParams reads the mode-segmented deck beside language', async () => {
+    await AsyncStorage.setItem(SHAPE_DECK_KEY, JSON.stringify([
+      { listId: 1, pictureId: 'shape-1', imageFile: 'file:///cache/shape-1.jpg' },
+    ]));
+
+    const result = await resolveNextGuessParams({
+      category: { key: 'animals' },
+      language: 'en',
+      mode: 'shape',
+      scope: { kind: 'public' },
+    });
+
+    expect(result?.params?.pictureId).toBe('shape-1');
   });
 });

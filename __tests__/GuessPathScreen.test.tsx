@@ -96,6 +96,8 @@ jest.mock('../utils/storageDatum', () => ({
   getPreferredLanguage: (...args: unknown[]) => mockGetPreferredLanguage(...args),
   getSessionLanguageFilter: (...args: unknown[]) => mockGetSessionLanguageFilter(...args),
   saveSessionLanguageFilter: (...args: unknown[]) => mockSaveSessionLanguageFilter(...args),
+  getSessionModeFilter: (...args: unknown[]) => mockGetSessionModeFilter(...args),
+  saveSessionModeFilter: (...args: unknown[]) => mockSaveSessionModeFilter(...args),
 }));
 
 jest.mock('../utils/e2eMode', () => ({
@@ -137,6 +139,8 @@ const mockGetCategories = jest.fn();
 const mockGetPreferredLanguage = jest.fn();
 const mockGetSessionLanguageFilter = jest.fn();
 const mockSaveSessionLanguageFilter = jest.fn();
+const mockGetSessionModeFilter = jest.fn();
+const mockSaveSessionModeFilter = jest.fn();
 const mockIsE2EMode = jest.fn();
 const mockCreateGroupCategory = jest.fn();
 const mockUpdateGroupCategory = jest.fn();
@@ -225,6 +229,8 @@ describe('GuessPathScreen', () => {
     mockGetPreferredLanguage.mockResolvedValue(null);
     mockGetSessionLanguageFilter.mockResolvedValue(null);
     mockSaveSessionLanguageFilter.mockResolvedValue(undefined);
+    mockGetSessionModeFilter.mockResolvedValue(null);
+    mockSaveSessionModeFilter.mockResolvedValue(undefined);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     emitCategoriesViaStore([]);
     navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
@@ -292,6 +298,13 @@ describe('GuessPathScreen', () => {
   function getDetailsButtonProps(): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.details'
+    );
+    return call?.[0];
+  }
+
+  function getModeButtonProps(): MockIconButtonProps | undefined {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === 'guess-path.button.mode'
     );
     return call?.[0];
   }
@@ -387,6 +400,7 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
       language: 'any',
+      mode: 'any',
     });
   });
 
@@ -409,6 +423,7 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
       language: 'fr',
+      mode: 'any',
     });
   });
 
@@ -433,6 +448,7 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
       language: 'any',
+      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 6, locked: false },
     });
@@ -486,6 +502,7 @@ describe('GuessPathScreen', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
       language: 'any',
+      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 7, locked: false },
     });
@@ -620,6 +637,85 @@ describe('GuessPathScreen', () => {
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
         .children
     ).toBe('fr');
+  });
+
+  it('renders the mode filter button beside the language filter with the openModeFilter label', async () => {
+    await renderScreen();
+
+    const modeButton = getModeButtonProps();
+
+    expect(modeButton).toBeDefined();
+    expect(modeButton!.accessibilityLabel).toBe('Open mode filter');
+  });
+
+  it('opens the mode filter modal when the mode button is tapped', async () => {
+    const renderer = await renderScreen();
+
+    expect(() =>
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode' })
+    ).toThrow();
+
+    await act(async () => {
+      getModeButtonProps()!.onPress();
+    });
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode.option.shape' })
+    ).toBeTruthy();
+  });
+
+  it('reflects the resolved mode sentinel (any) in the hidden probe while nothing is stored', async () => {
+    const renderer = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode.current' }).props
+        .children
+    ).toBe('any');
+  });
+
+  it('reflects the persisted session mode filter in the hidden probe', async () => {
+    mockGetSessionModeFilter.mockResolvedValue('shape');
+
+    const renderer = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode.current' }).props
+        .children
+    ).toBe('shape');
+  });
+
+  it('persists the selected mode, updates the probe, and threads mode into navigation', async () => {
+    const renderer = await renderScreen();
+
+    await act(async () => {
+      getModeButtonProps()!.onPress();
+    });
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode.option.shape' }).props.onPress();
+      await flushEffects();
+    });
+
+    expect(mockSaveSessionModeFilter).toHaveBeenCalledWith('shape');
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.mode.current' }).props
+        .children
+    ).toBe('shape');
+
+    const natureCard = getCardPropsByKey('nature')!;
+
+    await act(async () => {
+      natureCard.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
+      language: 'any',
+      mode: 'shape',
+    });
   });
 
   it('keeps the e2e home button available on the category screen', async () => {

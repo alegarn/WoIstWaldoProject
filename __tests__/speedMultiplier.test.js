@@ -1,5 +1,6 @@
 import {
   SPEED_BONUS_THRESHOLD_MS,
+  SHAPE_SPEED_BONUS_THRESHOLD_MS,
   SPEED_WINDOW_MS,
   SPEED_MULTIPLIER_BASE,
   SPEED_MULTIPLIER_FAST,
@@ -16,6 +17,7 @@ describe('speedMultiplier', () => {
       expect(SPEED_WINDOW_MS).toBe(5000);
       expect(SPEED_MULTIPLIER_BASE).toBe(1);
       expect(SPEED_MULTIPLIER_FAST).toBe(2);
+      expect(SHAPE_SPEED_BONUS_THRESHOLD_MS).toBe(10000);
     });
   });
 
@@ -32,6 +34,21 @@ describe('speedMultiplier', () => {
 
     it('clamps negative elapsed to 0 (bonus applies)', () => {
       expect(computeMultiplier(-100)).toBe(2);
+    });
+
+    it('keeps the point-mode default at the 5000 boundary', () => {
+      expect(computeMultiplier(4999)).toBe(2);
+      expect(computeMultiplier(5000)).toBe(1);
+    });
+
+    it('applies the shape window at the 10000 boundary', () => {
+      expect(computeMultiplier(9999, SHAPE_SPEED_BONUS_THRESHOLD_MS)).toBe(2);
+      expect(computeMultiplier(10000, SHAPE_SPEED_BONUS_THRESHOLD_MS)).toBe(1);
+    });
+
+    it('separates the two windows between 5s and 10s', () => {
+      expect(computeMultiplier(6000)).toBe(1);
+      expect(computeMultiplier(6000, SHAPE_SPEED_BONUS_THRESHOLD_MS)).toBe(2);
     });
   });
 

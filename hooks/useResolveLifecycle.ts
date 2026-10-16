@@ -20,6 +20,8 @@ type GuessCategory = { id?: string; key?: string };
 type ResolveArgs = {
   category?: GuessCategory;
   language?: string;
+  // Session filter mode (D8) — NEVER named `mode`, which is the card's mode.
+  filterMode?: string;
   currentListId?: number;
   currentPictureId?: string;
   isTutorial?: boolean;
@@ -31,6 +33,8 @@ type SideEffectArgs = {
   listId?: number;
   categoryKey?: string;
   language?: string;
+  // Session filter mode (D8) — keys the played-card deck removal namespace.
+  filterMode?: string;
   imageFile?: string;
   pictureId?: string;
   scope?: AdScope;
@@ -162,6 +166,7 @@ export function useResolveLifecycle({
     const { next, reason } = await resolveNextCardWithServerFallback({
       category: resolveArgs.category,
       language: resolveArgs.language,
+      mode: resolveArgs.filterMode,
       currentListId: resolveArgs.currentListId,
       currentPictureId: resolveArgs.currentPictureId,
       isTutorial: resolveArgs.isTutorial,
@@ -214,6 +219,7 @@ export function useResolveLifecycle({
       listId: sideEffectArgs.listId,
       categoryKey: sideEffectArgs.categoryKey,
       language: sideEffectArgs.language,
+      mode: sideEffectArgs.filterMode,
       imageFile: sideEffectArgs.imageFile,
       pictureId: sideEffectArgs.pictureId,
       scope: sideEffectArgs.scope,

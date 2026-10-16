@@ -1,0 +1,92 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Shape-mode guess failure flow. Assumes the app is already launched, connected
+# to Metro, logged in, and sitting on HomeScreen. Run auth-boot-login.yml ONCE
+# first, then run hide-shape-to-guess.yml to create the shape saved payload this
+# flow asserts. Do NOT re-launch the app in this flow (it breaks the Metro
+# connection).
+# In E2E mode, long-pressing the guess surface seeds the deterministic MISS
+# outline (disjoint from the saved shape) and auto-opens the confirm modal.
+# The loss path stays text-only: ResultScreen replaces the picture, no success
+# overlay. Env vars: none.
+# Example: maestro test .maestro/guess-shape-failure.yml
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.hide
+- tapOn:
+    id: home.button.guess
+- extendedWaitUntil:
+    visible:
+      id: guess-path.category.card.all
+    timeout: 10000
+- tapOn:
+    id: guess-path.category.card.all
+- extendedWaitUntil:
+    visible:
+      id: guess-path.button.start
+    timeout: 10000
+- tapOn:
+    id: guess-path.button.start
+- extendedWaitUntil:
+    visible:
+      id: guess-path.card.1
+    timeout: 10000
+- assertVisible:
+    id: guess-path.card.1
+- assertVisible:
+    id: guess-path.card.saved
+- swipe:
+    elementIds:
+      - guess-path.card.1
+    direction: RIGHT
+- extendedWaitUntil:
+    visible:
+      id: game.instructions.guess.overlay
+    timeout: 10000
+- tapOn:
+    id: game.instructions.guess.overlay
+- extendedWaitUntil:
+    visible:
+      id: game.picture.shape-surface
+    timeout: 10000
+- assertVisible:
+    id: game.picture.shape-surface
+- assertVisible:
+    id: game.picture.shape-enigma
+- assertVisible:
+    id: game.picture.shape-exit
+# E2E shim: surface long press seeds the MISS outline and auto-opens the modal.
+- longPressOn:
+    id: game.picture.guess-surface
+- extendedWaitUntil:
+    visible:
+      id: game.picture.guess-modal.confirm
+    timeout: 5000
+- assertVisible:
+    text: "Confirm outline"
+- tapOn:
+    id: game.picture.guess-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: result.screen.failure
+    timeout: 10000
+- assertVisible:
+    id: result.screen.failure
+- assertVisible:
+    id: result.button.home
+- assertVisible:
+    id: result.button.retry
+- assertVisible:
+    id: result.button.next
+- tapOn:
+    id: result.button.next
+- extendedWaitUntil:
+    visible:
+      id: game.instructions.guess.overlay
+    timeout: 10000
+- runFlow: "_shared/return_home.yaml"

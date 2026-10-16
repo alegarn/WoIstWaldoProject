@@ -94,6 +94,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
     imageDimensionStyle,
     isTutorial,
     scope,
+    mode,
+    shape,
   } = route?.params;
 
   const context = useContext(AuthContext);
@@ -195,6 +197,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
 
   const onCancelGoBack = () => {
     const params = { uri, imageWidth, imageHeight, screenHeight, screenWidth, isPortrait, isTutorial };
+    if (mode === 'shape') {
+      params.mode = mode;
+      params.shape = shape;
+    }
     if (isPrivateScope) {
       params.scope = scope;
     }
@@ -216,10 +222,10 @@ export default function SetInstructionsScreen({ navigation, route }) {
       screenWidth: screenWidth,
       description: description,
       isPortrait: isPortrait,
-      xLocation: touchLocation.x,
-      yLocation: touchLocation.y,
+      ...(touchLocation ? { xLocation: touchLocation.x, yLocation: touchLocation.y } : {}),
       language: language,
       ...scopeCategoryInfos,
+      ...(mode === 'shape' ? { mode: mode, shape: shape } : {}),
     };
 
     setIsLoading(true);
@@ -272,12 +278,12 @@ export default function SetInstructionsScreen({ navigation, route }) {
         imageHeight,
         imageWidth,
         isPortrait,
-        hiddenLocation: {
-          x: touchLocation.x,
-          y: touchLocation.y,
-        },
+        hiddenLocation: touchLocation
+          ? { x: touchLocation.x, y: touchLocation.y }
+          : null,
         screenHeight,
         screenWidth,
+        ...(mode === 'shape' ? { mode: mode, shape: shape } : {}),
       })
     );
   };
@@ -403,7 +409,9 @@ export default function SetInstructionsScreen({ navigation, route }) {
             selectedCategory={selectedCategory}
             onCategorySelect={handleCategorySelect}
           />
-          <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
+          {target && (
+            <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
+          )}
         </ImageBackground>
         {
           showModal &&

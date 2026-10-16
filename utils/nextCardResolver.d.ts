@@ -15,6 +15,7 @@ export interface ResolverCategory {
 export interface ResolveNextCardArgs {
   category?: ResolverCategory | null;
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   scope?: unknown;
   currentPictureId?: string;

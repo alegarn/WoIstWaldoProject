@@ -34,10 +34,10 @@ jest.mock('react-native-gesture-handler', () => {
   const makePan = () => {
     const gesture = {};
     mockPanGestures.push(gesture);
-    for (const chain of ['activeOffsetX', 'activeOffsetY', 'failOffsetX', 'failOffsetY', 'enabled']) {
+    for (const chain of ['activeOffsetX', 'activeOffsetY', 'failOffsetX', 'failOffsetY', 'enabled', 'activateAfterLongPress']) {
       gesture[chain] = () => gesture;
     }
-    for (const cb of ['onBegin', 'onUpdate', 'onEnd', 'onFinalize']) {
+    for (const cb of ['onBegin', 'onStart', 'onUpdate', 'onEnd', 'onFinalize']) {
       gesture[cb] = (handler) => {
         gesture[`${cb}Handler`] = handler;
         return gesture;
@@ -214,7 +214,7 @@ describe('private scope games', () => {
 
     async function seedGroupDeck(cards) {
       // Key shape from services/groups/groupFeedCache (categoryId, language).
-      await AsyncStorage.setItem('groupFeed:g-123:cat-1:fr', JSON.stringify(cards));
+      await AsyncStorage.setItem('groupFeed:g-123:cat-1:fr:any', JSON.stringify(cards));
     }
 
     async function confirmGuess(screen) {

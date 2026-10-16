@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Esperar que outra pessoa envie novas imagens",
     "emptyWaitUploadsHint": " - Esperar que outra pessoa envie novas imagens",
     "noDescription": "Sem descrição",
+    "shapeInstructions": "Desenhe o contorno que acha que corresponde à forma escondida",
+    "shapeEnigmaLabel": "Reabrir o enigma",
+    "shapeExitLabel": "Sair",
     "card": {
       "open": "Abrir",
       "swipeableLabel": "Cartão deslizável {{id}}",
@@ -200,8 +203,15 @@
       "deleteCategories": "Excluir categorias",
       "closeManageCategories": "Fechar gerenciamento de categorias",
       "openLanguageFilter": "Abrir filtro de idioma",
+      "openModeFilter": "Abrir filtro de modo",
       "editThumbnailLabel": "Editar miniatura de {{name}}",
       "deleteCategoryLabel": "Excluir {{name}}"
+    },
+    "modeFilter": {
+      "label": "Modo",
+      "any": "Qualquer modo",
+      "point": "Ponto",
+      "shape": "Contorno"
     },
     "exitMenu": {
       "closeExitPanel": "Fechar painel de saída",
@@ -347,7 +357,10 @@
     "unexpectedError": "Erro inesperado",
     "tryAgainLater": "Tente novamente mais tarde",
     "invalidTypeTitle": "Tipo de imagem inválido",
-    "invalidTypeMessage": "Selecione um tipo de imagem válido (png, jpg ou jpeg)"
+    "invalidTypeMessage": "Selecione um tipo de imagem válido (png, jpg ou jpeg)",
+    "modeLabel": "Modo",
+    "modePoint": "Ponto",
+    "modeShape": "Contorno"
   },
   "hideInstructions": {
     "describeLabel": "Descreva o ponto oculto",
@@ -386,7 +399,16 @@
       "guessSurfaceLabel": "Superfície da imagem de adivinhação",
       "hideSurfaceLabel": "Superfície da imagem de esconder",
       "guessImageLabel": "Imagem de adivinhação",
-      "hideImageLabel": "Imagem de esconder"
+      "hideImageLabel": "Imagem de esconder",
+      "shapeSurfaceLabel": "Desenhe um contorno à volta do esconderijo",
+      "modeCueLabel": "Modo forma: desenhe o contorno",
+      "shapeClearLabel": "Limpar o contorno",
+      "shapeRedrawLabel": "Voltar a desenhar o contorno",
+      "shapeTooSimple": "Contorno demasiado simples — desenhe uma forma fechada à volta do local",
+      "shapeConfirmLabel": "Confirmar o contorno",
+      "traceWin": "Acertou em cheio!",
+      "traceLoseScore": "O teu contorno não cobre o local — tenta outra vez",
+      "traceLoseLengthCap": "Contorno demasiado longo — desenha apenas à volta do local"
     }
   },
   "groups": {

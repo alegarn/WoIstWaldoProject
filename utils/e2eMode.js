@@ -11,6 +11,28 @@ const E2E_GUESS_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_HIDE_LOCATION = { x: 0.58, y: 0.46 };
 const E2E_INCORRECT_HIDE_LOCATION = { x: 0.18, y: 0.18 };
 
+export const E2E_SHAPE_POLYGON = [
+  { x: 0.5, y: 0.3 },
+  { x: 0.7, y: 0.5 },
+  { x: 0.5, y: 0.7 },
+  { x: 0.3, y: 0.5 },
+  { x: 0.5, y: 0.3 },
+];
+export const E2E_SHAPE_GUESS_HIT = [
+  { x: 0.51, y: 0.31 },
+  { x: 0.71, y: 0.51 },
+  { x: 0.51, y: 0.71 },
+  { x: 0.31, y: 0.51 },
+  { x: 0.51, y: 0.31 },
+];
+export const E2E_SHAPE_GUESS_MISS = [
+  { x: 0.18, y: 0.06 },
+  { x: 0.3, y: 0.18 },
+  { x: 0.18, y: 0.3 },
+  { x: 0.06, y: 0.18 },
+  { x: 0.18, y: 0.06 },
+];
+
 const E2E_GUESS_CARD_CATEGORY = { id: 'e2e-cat-nature', key: 'nature', name: 'Nature' };
 const E2E_GUESS_CARD_LANGUAGE = 'en';
 const E2E_GUESS_CARD_AVERAGE_RATING = 4.5;
@@ -175,6 +197,11 @@ export function getE2EIncorrectHideLocation() {
   return E2E_INCORRECT_HIDE_LOCATION;
 }
 
+export function getE2EShapeOutline(variant) {
+  const source = variant === 'hit' ? E2E_SHAPE_GUESS_HIT : E2E_SHAPE_GUESS_MISS;
+  return source.map((vertex) => ({ ...vertex }));
+}
+
 export function buildE2EPictureSelection({ screenWidth, screenHeight, imageDimensionStyle, relativeLocation }) {
   return handlePicturePress({
     event: {
@@ -224,6 +251,8 @@ export function buildE2EGuessCards() {
     ),
   );
   card.hiddenLocation = hiddenLocation;
+  card.mode = 'point';
+  card.shape = null;
   return [card];
 }
 
@@ -236,6 +265,8 @@ export function buildE2EHiddenGuessPayload({
   hiddenLocation,
   screenHeight,
   screenWidth,
+  mode,
+  shape,
 }) {
   return {
     uri,
@@ -247,6 +278,8 @@ export function buildE2EHiddenGuessPayload({
     hiddenLocation,
     screenHeight,
     screenWidth,
+    ...(mode !== undefined ? { mode } : {}),
+    ...(shape !== undefined ? { shape } : {}),
   };
 }
 
@@ -280,6 +313,8 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
     },
   );
   card.hiddenLocation = payload.hiddenLocation;
+  card.mode = payload.mode ?? 'point';
+  card.shape = payload.shape ?? null;
   return card;
 }
 

@@ -1,0 +1,113 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Shape-mode hide flow. Assumes the app is already launched, connected to Metro,
+# logged in, and sitting on HomeScreen. Run auth-boot-login.yml ONCE first to
+# establish the session. Do NOT re-launch the app in this flow (it breaks the
+# Metro connection).
+# Picks shape mode first: in E2E mode the shape chip auto-seeds the outline
+# from the deterministic E2E_SHAPE_POLYGON shim (no traced gestures) and the
+# app auto-opens the shape confirm modal (same as a real drawable outline).
+# A successful save persists the E2E hidden-guess payload with mode=shape for
+# the guess-shape-* flows. Env vars: none.
+# Example: maestro test .maestro/hide-shape-to-guess.yml
+#
+# All steps are testID-driven.
+
+- extendedWaitUntil:
+    visible:
+      id: home.button.hide
+    timeout: 10000
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
+- tapOn:
+    id: home.button.hide
+- extendedWaitUntil:
+    visible:
+      id: image-picker.button.select-image
+    timeout: 10000
+- tapOn:
+    id: image-picker.button.select-image
+- extendedWaitUntil:
+    visible:
+      id: game.instructions.hide.overlay
+    timeout: 10000
+- tapOn:
+    id: game.instructions.hide.overlay
+- extendedWaitUntil:
+    visible:
+      id: game.picture.hide-surface
+    timeout: 10000
+# Pick shape mode: in e2e mode this auto-seeds the outline from E2E_SHAPE_POLYGON
+# and auto-opens the shape confirm modal.
+- tapOn:
+    id: game.picture.mode-chip-shape
+- extendedWaitUntil:
+    visible:
+      id: game.picture.shape-outline
+    timeout: 5000
+- assertVisible:
+    id: game.picture.shape-surface
+- assertVisible:
+    id: game.picture.shape-outline
+- extendedWaitUntil:
+    visible:
+      id: game.picture.hide-modal.confirm
+    timeout: 5000
+- assertVisible:
+    text: "Confirm outline"
+- tapOn:
+    id: game.picture.hide-modal.confirm
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.input.description
+    timeout: 10000
+# Step describe -> language
+- tapOn:
+    id: set-instructions.button.next
+# At language step: explicitly select English to avoid racing the async default-language load.
+# handleNext blocks while language is null, so we set it ourselves before advancing.
+- extendedWaitUntil:
+    visible:
+      id: setInstructions.language.button
+    timeout: 5000
+- tapOn:
+    id: setInstructions.language.button
+- extendedWaitUntil:
+    visible:
+      id: setInstructions.language.option.en
+    timeout: 5000
+- tapOn:
+    id: setInstructions.language.option.en
+# Modal auto-closes on select; language='en' set -> safe to advance to category step
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.button.next
+    timeout: 5000
+- tapOn:
+    id: set-instructions.button.next
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.button.confirm-description
+    timeout: 5000
+- tapOn:
+    id: set-instructions.button.confirm-description
+- extendedWaitUntil:
+    visible:
+      id: set-instructions.confirm-modal.confirm
+    timeout: 5000
+- tapOn:
+    id: set-instructions.confirm-modal.confirm
+# Confirm saves the e2e bridge payload (mode=shape + seeded outline) and resets to HomeScreen.
+- extendedWaitUntil:
+    visible:
+      id: home.button.guess
+    timeout: 10000
+- assertVisible:
+    id: home.button.hide
+- assertVisible:
+    id: home.button.guess
+- assertVisible:
+    id: home.button.ranking
+- runFlow: "_shared/return_home.yaml"

@@ -70,6 +70,8 @@ describe('frontend smoke invariants', () => {
       screenHeight: 640,
       screenWidth: 320,
       listId: 9,
+      mode: 'point',
+      shape: null,
     });
   });
 });

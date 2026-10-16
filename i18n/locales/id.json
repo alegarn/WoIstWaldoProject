@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Menunggu orang lain mengunggah gambar baru",
     "emptyWaitUploadsHint": " - Menunggu orang lain mengunggah gambar baru",
     "noDescription": "Tidak ada deskripsi",
+    "shapeInstructions": "Gambar garis tepi yang menurutmu sesuai dengan bentuk tersembunyi",
+    "shapeEnigmaLabel": "Buka lagi enigma",
+    "shapeExitLabel": "Keluar",
     "card": {
       "open": "Buka",
       "swipeableLabel": "Kartu yang bisa digeser {{id}}",
@@ -200,8 +203,15 @@
       "deleteCategories": "Hapus kategori",
       "closeManageCategories": "Tutup kelola kategori",
       "openLanguageFilter": "Buka filter bahasa",
+      "openModeFilter": "Buka filter mode",
       "editThumbnailLabel": "Edit gambar mini {{name}}",
       "deleteCategoryLabel": "Hapus {{name}}"
+    },
+    "modeFilter": {
+      "label": "Mode",
+      "any": "Mode apa saja",
+      "point": "Titik",
+      "shape": "Bentuk"
     },
     "exitMenu": {
       "closeExitPanel": "Tutup panel keluar",
@@ -346,7 +356,10 @@
     "unexpectedError": "Kesalahan tak terduga",
     "tryAgainLater": "Silakan coba lagi nanti",
     "invalidTypeTitle": "Jenis gambar tidak valid",
-    "invalidTypeMessage": "Pilih jenis gambar yang valid (png, jpg atau jpeg)"
+    "invalidTypeMessage": "Pilih jenis gambar yang valid (png, jpg atau jpeg)",
+    "modeLabel": "Mode",
+    "modePoint": "Titik",
+    "modeShape": "Bentuk"
   },
   "hideInstructions": {
     "describeLabel": "Jelaskan titik tersembunyi",
@@ -385,7 +398,16 @@
       "guessSurfaceLabel": "Permukaan gambar tebakan",
       "hideSurfaceLabel": "Permukaan gambar penyembunyian",
       "guessImageLabel": "Gambar tebakan",
-      "hideImageLabel": "Gambar penyembunyian"
+      "hideImageLabel": "Gambar penyembunyian",
+      "shapeSurfaceLabel": "Gambar garis tepi di sekitar tempat persembunyian",
+      "modeCueLabel": "Mode bentuk: gambar garis tepi",
+      "shapeClearLabel": "Hapus garis tepi",
+      "shapeRedrawLabel": "Gambar ulang garis tepi",
+      "shapeTooSimple": "Garis tepi terlalu sederhana — gambar bentuk tertutup di sekitar lokasinya",
+      "shapeConfirmLabel": "Konfirmasi garis tepi",
+      "traceWin": "Tepat sekali!",
+      "traceLoseScore": "Garis tepimu meleset dari lokasinya — coba lagi",
+      "traceLoseLengthCap": "Garis tepi terlalu panjang — gambar hanya di sekitar lokasinya"
     }
   },
   "groups": {

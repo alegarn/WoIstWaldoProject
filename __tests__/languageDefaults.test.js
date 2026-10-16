@@ -2,6 +2,7 @@ import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { resolveDefaultLanguage, resolveUiLocale } from '../utils/languageDefaults';
+import { ANY_FILTER } from '../utils/sessionFilter';
 
 describe('resolveDefaultLanguage', () => {
   const originalDateTimeFormat = Intl.DateTimeFormat;
@@ -92,13 +93,15 @@ describe('resolveUiLocale', () => {
 });
 
 describe('guess screens language namespace', () => {
+  // Constants may hold the literal or reference the shared ANY_FILTER sentinel
+  // (utils/sessionFilter) — both must resolve to 'any'.
   function readStringConstant(relativePath, name) {
     const sourcePath = resolve(__dirname, '..', ...relativePath.split('/'));
     const source = readFileSync(sourcePath, 'utf8');
-    const match = source.match(new RegExp(`const\\s+${name}\\s*=\\s*'([^']+)'`));
+    const match = source.match(new RegExp(`const\\s+${name}\\s*=\\s*(?:'([^']+)'|ANY_FILTER);`));
 
     expect(match).toBeDefined();
-    return match[1];
+    return match[1] ?? ANY_FILTER;
   }
 
   it("feed-screen default language === path-screen navigation fallback ('any')", () => {

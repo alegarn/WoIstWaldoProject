@@ -13,6 +13,7 @@ export interface ApplySuccessSideEffectsArgs {
   listId?: number;
   categoryKey?: string | null;
   language?: string | null;
+  mode?: string | null;
   imageFile?: string | null;
   pictureId?: string | null;
   scope?: unknown;
@@ -26,6 +27,7 @@ export interface ApplySuccessSideEffectsArgs {
 export interface ResolveNextGuessParamsArgs {
   category?: { id?: string | number | null; key?: string } | null;
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   isTutorial?: boolean;
   scope?: unknown;
@@ -45,7 +47,7 @@ export interface ResolveNextGuessParamsResult {
  *
  * @returns {Promise<void>}
  */
-export async function applySuccessSideEffects({ listId, categoryKey, language, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }: ApplySuccessSideEffectsArgs): Promise<void> {
+export async function applySuccessSideEffects({ listId, categoryKey, language, mode, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }: ApplySuccessSideEffectsArgs): Promise<void> {
   await bufferScore({
     guessId: mintGuessId(),
     imageName: pictureId,
@@ -62,7 +64,7 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
 
   try {
     addPlayedPictureId(pictureId, language, scope).catch(() => {});
-    await removeImageFromList(listId as number, categoryKey, language);
+    await removeImageFromList(listId as number, categoryKey, language, mode);
     await deleteImageFromStorage(imageFile);
     // Task 2b: public-only played-orphan sweep (private-* cache files are
     // owned by purgeAllPrivateCaches).
@@ -82,8 +84,8 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, i
  *
  * @returns {Promise<{params: Record<string, unknown>}|null>}
  */
-export async function resolveNextGuessParams({ category, language, currentListId, isTutorial, scope, currentPictureId }: ResolveNextGuessParamsArgs): Promise<ResolveNextGuessParamsResult | null> {
-  const result = await resolveNextCard({ category, language, currentListId, scope, currentPictureId });
+export async function resolveNextGuessParams({ category, language, mode, currentListId, isTutorial, scope, currentPictureId }: ResolveNextGuessParamsArgs): Promise<ResolveNextGuessParamsResult | null> {
+  const result = await resolveNextCard({ category, language, mode, currentListId, scope, currentPictureId });
   if (!result || !result.card) return null;
 
   const card = result.card as Record<string, unknown>;

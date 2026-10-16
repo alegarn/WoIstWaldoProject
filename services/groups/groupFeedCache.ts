@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
+import { normalizeLanguage, normalizeMode } from '../../utils/sessionFilter';
 import { clearAllGroupHubCaches } from './groupHubCache';
 
 export type CachedFeedImage = {
@@ -13,12 +14,12 @@ export type CachedFeedImage = {
 const PREFIX = 'groupFeed';
 const EXHAUSTED_PREFIX = 'groupFeedExhausted';
 
-function groupFeedListKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
+function groupFeedListKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  return `${PREFIX}:${groupId}:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 }
 
-function groupFeedCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  return `${groupFeedListKey(groupId, categoryKey, language)}:cursor`;
+function groupFeedCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  return `${groupFeedListKey(groupId, categoryKey, language, mode)}:cursor`;
 }
 
 /**
@@ -28,12 +29,12 @@ function groupFeedCursorKey(groupId: string | number, categoryKey?: string | nul
  * match the servingCycle group-branch clear (`groupFeed:<gid>:*:<lang>:cursor`)
  * so a cycle transition wipes it together with the other group cursors.
  */
-function groupGameCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${language || 'any'}:cursor`;
+function groupGameCursorKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  return `${PREFIX}:${groupId}:game:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}:cursor`;
 }
 
-function groupFeedExhaustedKey(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${language || 'any'}`;
+function groupFeedExhaustedKey(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  return `${EXHAUSTED_PREFIX}:${groupId}:${categoryKey || 'all'}:${normalizeLanguage(language)}:${normalizeMode(mode)}`;
 }
 
 export { groupFeedListKey, groupFeedCursorKey, groupGameCursorKey, groupFeedExhaustedKey };
@@ -59,12 +60,13 @@ function deleteFileIfPresent(uri: string) {
 
 export async function readGroupFeedCache(
   groupId: string | number,
-  { categoryId, language }: { categoryId?: string | null; language?: string | null } = {}
+  { categoryId, language, mode }: { categoryId?: string | null; language?: string | null; mode?: string | null } = {}
 ): Promise<{ images: CachedFeedImage[]; nextCursor: string | null } | null> {
   const categoryKey = categoryId || 'all';
-  const languageKey = language || 'any';
-  const listKey = groupFeedListKey(groupId, categoryKey, languageKey);
-  const cursorKey = groupFeedCursorKey(groupId, categoryKey, languageKey);
+  const languageKey = normalizeLanguage(language);
+  const modeKey = normalizeMode(mode);
+  const listKey = groupFeedListKey(groupId, categoryKey, languageKey, modeKey);
+  const cursorKey = groupFeedCursorKey(groupId, categoryKey, languageKey, modeKey);
 
   const stored = await AsyncStorage.getItem(listKey);
   if (!stored) {
@@ -101,18 +103,19 @@ export async function readGroupFeedCache(
 
 export async function writeGroupFeedCache(
   groupId: string | number,
-  { categoryId, language }: { categoryId?: string | null; language?: string | null } = {},
+  { categoryId, language, mode }: { categoryId?: string | null; language?: string | null; mode?: string | null } = {},
   { images, nextCursor }: { images?: CachedFeedImage[]; nextCursor?: string | null } = {}
 ) {
   const categoryKey = categoryId || 'all';
-  const languageKey = language || 'any';
+  const languageKey = normalizeLanguage(language);
+  const modeKey = normalizeMode(mode);
 
   await AsyncStorage.setItem(
-    groupFeedListKey(groupId, categoryKey, languageKey),
+    groupFeedListKey(groupId, categoryKey, languageKey, modeKey),
     JSON.stringify(Array.isArray(images) ? images : []),
   );
   await AsyncStorage.setItem(
-    groupFeedCursorKey(groupId, categoryKey, languageKey),
+    groupFeedCursorKey(groupId, categoryKey, languageKey, modeKey),
     JSON.stringify({ nextCursor: nextCursor ?? null }),
   );
 }
@@ -137,16 +140,16 @@ export async function clearAllGroupFeedCaches() {
   }
 }
 
-export async function markGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  await AsyncStorage.setItem(groupFeedExhaustedKey(groupId, categoryKey, language), '1');
+export async function markGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  await AsyncStorage.setItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode), '1');
 }
 
-export async function isGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  return (await AsyncStorage.getItem(groupFeedExhaustedKey(groupId, categoryKey, language))) === '1';
+export async function isGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  return (await AsyncStorage.getItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode))) === '1';
 }
 
-export async function clearGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null) {
-  await AsyncStorage.removeItem(groupFeedExhaustedKey(groupId, categoryKey, language));
+export async function clearGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
+  await AsyncStorage.removeItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode));
 }
 
 export async function clearAllGroupFeedExhaustedMarkers() {

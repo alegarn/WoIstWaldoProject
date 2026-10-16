@@ -31,12 +31,15 @@
 // AsyncStorage state, and navigation calls.
 
 type PanHandler = (event: { translationX?: number; translationY?: number }, success?: boolean) => void;
+type ShapePanHandler = (event: { x?: number; y?: number }) => void;
 
 type MockGesture = {
-  onBeginHandler?: PanHandler;
-  onUpdateHandler?: PanHandler;
+  onBeginHandler?: PanHandler & ShapePanHandler;
+  onStartHandler?: ShapePanHandler;
+  onUpdateHandler?: PanHandler & ShapePanHandler;
   onEndHandler?: PanHandler;
   onFinalizeHandler?: PanHandler;
+  hitSlopArg?: unknown;
 };
 
 // Captured Pan gestures. Tests fire the same callbacks the native gesture
@@ -56,6 +59,14 @@ jest.mock('react-native-gesture-handler', () => {
     gesture.failOffsetX = () => gesture;
     gesture.failOffsetY = () => gesture;
     gesture.enabled = () => gesture;
+    gesture.hitSlop = (arg: unknown) => {
+      gesture.hitSlopArg = arg;
+      return gesture;
+    };
+    gesture.onStart = (cb: ShapePanHandler) => {
+      gesture.onStartHandler = cb;
+      return gesture;
+    };
     gesture.onBegin = (cb: PanHandler) => {
       gesture.onBeginHandler = cb;
       return gesture;
@@ -74,12 +85,25 @@ jest.mock('react-native-gesture-handler', () => {
     };
     return gesture;
   };
+  // Shape-mode edge double-tap (ShowPicture): handlers stored under tap keys
+  // so the Pan helpers below (find by onEndHandler/onBeginHandler) keep
+  // resolving the Pan recognizers only.
+  const makeTap = () => {
+    const gesture: Record<string, unknown> = {};
+    mockPanGestures.push(gesture as MockGesture);
+    gesture.numberOfTaps = () => gesture;
+    gesture.onEnd = (cb: PanHandler) => {
+      gesture.onEndTapHandler = cb;
+      return gesture;
+    };
+    return gesture;
+  };
   return {
     GestureHandlerRootView: ({ children }: { children: React.ReactNode }) =>
       React.createElement('GestureHandlerRootView', null, children),
     GestureDetector: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-    Gesture: { Pan: makePan },
+    Gesture: { Pan: makePan, Tap: makeTap },
   };
 });
 
@@ -169,15 +193,29 @@ jest.mock('../utils/nextCardAdvancer', () => {
   };
 });
 
+// Shape matcher boundary: the pure corridor math is covered by shapeMatch.test.ts;
+// here tests control the outcome to pin the toAdScreen shape BRANCH (win/lose,
+// args, 10s speed window) while point mode keeps the real isOnTarget path.
+jest.mock('../utils/shapeMatch', () => ({
+  ...jest.requireActual('../utils/shapeMatch'),
+  isWinningTrace: jest.fn(),
+}));
+
 import React from 'react';
 import { AppState, Image } from 'react-native';
 import { act, cleanup, fireEvent, render, RenderAPI } from '@testing-library/react-native';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
+import GuessPictureBase from '../components/Picture/GuessPicture';
+import ShowFailure from '../components/Results/ShowFailure';
 import { AuthContext } from '../store/auth-context';
 import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 import { fetchCardBatch } from '../services/cardDeck';
+import { isWinningTrace } from '../utils/shapeMatch';
+
+const actualShapeMatch = jest.requireActual('../utils/shapeMatch') as typeof import('../utils/shapeMatch');
+const isWinningTraceMock = isWinningTrace as jest.MockedFunction<typeof isWinningTrace>;
 
 const applySuccessSideEffectsMock = applySuccessSideEffects as jest.MockedFunction<typeof applySuccessSideEffects>;
 const resolveNextGuessParamsMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
@@ -264,16 +302,16 @@ function serveSuccessiveNextCards() {
   });
 }
 
-function deckKey(categoryKey: string, language: string): string {
-  return `imageList:${categoryKey}:${language}`;
+function deckKey(categoryKey: string, language: string, mode = 'any'): string {
+  return `imageList:${categoryKey}:${language}:${mode}`;
 }
 
-async function seedDeck(categoryKey: string, language: string, cards: Array<Record<string, unknown>>) {
-  await AsyncStorage.setItem(deckKey(categoryKey, language), JSON.stringify(cards));
+async function seedDeck(categoryKey: string, language: string, cards: Array<Record<string, unknown>>, mode = 'any') {
+  await AsyncStorage.setItem(deckKey(categoryKey, language, mode), JSON.stringify(cards));
 }
 
-async function storedDeck(categoryKey: string, language: string): Promise<Array<Record<string, unknown>>> {
-  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language));
+async function storedDeck(categoryKey: string, language: string, mode = 'any'): Promise<Array<Record<string, unknown>>> {
+  const raw = await AsyncStorage.getItem(deckKey(categoryKey, language, mode));
   return raw ? (JSON.parse(raw) as Array<Record<string, unknown>>) : [];
 }
 
@@ -366,6 +404,26 @@ async function confirmGuess(handle: ScreenHandle) {
   await flush();
 }
 
+// Fires the ShapeCanvas draw recognizer (the captured Pan registering onBegin)
+// the way the native gesture layer would, then confirms in the validation modal.
+async function confirmShapeGuess(handle: ScreenHandle) {
+  const shapePan = [...mockPanGestures].reverse().find((g) => g.onBeginHandler);
+  if (!shapePan?.onBeginHandler) {
+    throw new Error('no shape draw Pan gesture captured');
+  }
+  await act(async () => {
+    shapePan.onBeginHandler?.({ x: 40, y: 40 });
+    shapePan.onUpdateHandler?.({ x: 120, y: 40 });
+    shapePan.onUpdateHandler?.({ x: 120, y: 120 });
+    shapePan.onUpdateHandler?.({ x: 40, y: 120 });
+    shapePan.onFinalizeHandler?.({}, true);
+  });
+  await act(async () => {
+    fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
+  });
+  await flush();
+}
+
 // The real SuccessOverlay auto-fires onDone when its animation completes; step
 // frames until it does.
 async function dismissWinOverlay(handle: ScreenHandle, maxMs = 10000) {
@@ -438,6 +496,7 @@ describe('GuessScreen', () => {
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
     useFakeAnimationTimers();
     setE2EMode(false);
     jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
@@ -526,6 +585,26 @@ describe('GuessScreen', () => {
       );
       expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+    });
+
+    it('retrying a failed point card re-serves the card with the point params unchanged', async () => {
+      const navigation = makeNav();
+      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
+
+      await confirmGuess(handle);
+
+      const resultParams = navigation.replace.mock.calls[0][1] as Record<string, unknown>;
+
+      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      await act(async () => {
+        fireEvent.press(failure.getByTestId('result.button.retry'));
+      });
+
+      const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
+      expect(retryParams).toMatchObject({ pictureId: 'image-1', isTutorial: false });
+      expect(retryParams).not.toHaveProperty('mode');
+      expect(retryParams).not.toHaveProperty('shape');
+      failure.unmount();
     });
 
     it('a miss in a private group keeps the group context on the result screen', async () => {
@@ -654,14 +733,14 @@ describe('GuessScreen', () => {
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
       // The empty server fetch marked the category exhausted while advancing.
-      await expect(AsyncStorage.getItem('exhaustedCategory:nature:fr')).resolves.toBe('1');
+      await expect(AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).resolves.toBe('1');
 
       await act(async () => {
         fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
       });
       await flush();
 
-      expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr')).toBeNull();
+      expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).toBeNull();
       expect(navigation.navigate).toHaveBeenCalledWith('GuessPathScreen', {});
     });
 
@@ -1416,5 +1495,308 @@ describe('GuessScreen', () => {
       expect(navigation.setParams).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).toBeNull();
     });
+  });
+
+  describe('shape mode (guess)', () => {
+    // Hidden shape as stored on the card (normalized [0,1], closed).
+    const HIDDEN_SHAPE = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    function shapeParams(overrides: Record<string, unknown> = {}) {
+      return baseParams({ mode: 'shape', shape: HIDDEN_SHAPE, ...overrides });
+    }
+
+    it('a matching shape outline plays the win animation via isWinningTrace, not isOnTarget', async () => {
+      isWinningTraceMock.mockReturnValue(true);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      // The surface's lift-time reveal consumes the first call; the LAST call
+      // is the screen's toAdScreen verdict — pinned to the LOCKED 4-param
+      // image-space signature (no screenWidth/screenHeight, resolution d).
+      const screenCallArgs = isWinningTraceMock.mock.lastCall?.[0];
+      expect(screenCallArgs).toMatchObject({
+        hiddenShape: HIDDEN_SHAPE,
+        imageWidth: 800,
+        imageHeight: 1200,
+      });
+      expect(Object.keys(screenCallArgs ?? {}).sort()).toEqual([
+        'guessShape',
+        'hiddenShape',
+        'imageHeight',
+        'imageWidth',
+      ]);
+      expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+      expect(navigation.replace).not.toHaveBeenCalled();
+    });
+
+    it('a disjoint shape outline ends the round on the text-only failure screen', async () => {
+      isWinningTraceMock.mockReturnValue(false);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledWith(
+        'ResultScreen',
+        expect.objectContaining({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE, pictureId: 'image-1' }),
+      );
+      expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
+      expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+    });
+
+    it('retrying a failed shape card re-serves the shape surface with the stored outline', async () => {
+      isWinningTraceMock.mockReturnValue(false);
+      const navigation = makeNav();
+      const handle = renderGuessScreen(shapeParams(), navigation);
+
+      await confirmShapeGuess(handle);
+
+      const resultParams = navigation.replace.mock.calls[0][1] as Record<string, unknown>;
+      expect(resultParams).toMatchObject({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE });
+
+      // The real navigator renders the failure screen with the ResultScreen
+      // params; pressing Retry replaces back onto GuessScreen.
+      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      await act(async () => {
+        fireEvent.press(failure.getByTestId('result.button.retry'));
+      });
+
+      const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
+      expect(retryParams).toMatchObject({ mode: 'shape', shape: HIDDEN_SHAPE });
+      failure.unmount();
+
+      // The retried card renders the shape surface and the win check matches
+      // against the STORED outline, not the failed guess outline. Retry params
+      // carry no skipInstructions (same as a point retry), so the mount opens
+      // on the instructions filter — dismiss it like the player would.
+      isWinningTraceMock.mockReturnValue(true);
+      const retried = renderGuessScreen(retryParams);
+      await act(async () => {
+        fireEvent.press(retried.screen.getByTestId('game.instructions.guess.start'));
+      });
+      expect(retried.screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+
+      await confirmShapeGuess(retried);
+
+      expect(isWinningTraceMock).toHaveBeenCalledWith(expect.objectContaining({ hiddenShape: HIDDEN_SHAPE }));
+      expect(isWinningTraceMock.mock.lastCall?.[0]).toMatchObject({ hiddenShape: HIDDEN_SHAPE });
+      expect(retried.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+    });
+
+    it('a shape find past the 5s point window but under 10s still earns the ×2 bonus', async () => {
+      isWinningTraceMock.mockReturnValue(true);
+      const handle = renderGuessScreen(shapeParams());
+
+      // Reading grace (3s) holds the chrono; 9s on the clock is ~6s elapsed —
+      // over the 5s point window, inside the 10s shape window.
+      await advance(9000);
+      await confirmShapeGuess(handle);
+
+      expect(handle.screen.getByTestId('guess.success.speed-badge')).toBeTruthy();
+      expect(handle.screen.getByText('×2')).toBeTruthy();
+    });
+
+    it('a shape find over the 10s window earns no bonus', async () => {
+      isWinningTraceMock.mockReturnValue(true);
+      const handle = renderGuessScreen(shapeParams());
+
+      await advance(14000);
+      await confirmShapeGuess(handle);
+
+      expect(handle.screen.queryByTestId('guess.success.speed-badge')).toBeNull();
+      expect(handle.screen.getByText('+1')).toBeTruthy();
+    });
+
+    it('a shape card without image dimensions consults isWinningTrace with 0×0 and loses deterministically', async () => {
+      const navigation = makeNav();
+      const handle = renderGuessScreen(
+        shapeParams({ imageWidth: undefined, imageHeight: undefined }),
+        navigation,
+      );
+
+      await confirmShapeGuess(handle);
+
+      // Real isWinningTrace runs (reset impl): zero dimensions are a defined
+      // losing verdict in the pure layer — no crash, no NaN path.
+      expect(isWinningTraceMock).toHaveBeenCalledWith(expect.objectContaining({
+        hiddenShape: HIDDEN_SHAPE,
+        imageWidth: 0,
+        imageHeight: 0,
+      }));
+      const screenCallArgs = isWinningTraceMock.mock.lastCall?.[0];
+      expect(Object.keys(screenCallArgs ?? {}).sort()).toEqual([
+        'guessShape',
+        'hiddenShape',
+        'imageHeight',
+        'imageWidth',
+      ]);
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledWith(
+        'ResultScreen',
+        expect.objectContaining({ onTarget: false, mode: 'shape', shape: HIDDEN_SHAPE }),
+      );
+      expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
+    });
+
+    it('a point-mode card never consults isWinningTrace', async () => {
+      const handle = renderGuessScreen(baseParams());
+
+      await confirmGuess(handle);
+
+      expect(isWinningTraceMock).not.toHaveBeenCalled();
+      expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
+    });
+  });
+});
+
+describe('GuessScreen session filter threading (D8 filterMode)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
+    applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
+    fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
+    useFakeAnimationTimers();
+    setE2EMode(false);
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    cleanup();
+    jest.clearAllTimers();
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+    setE2EMode(false);
+  });
+
+  it('the win-advance resolve carries filterMode as mode — NEVER the card route mode', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    expect(resolveNextCardWithServerFallbackMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'shape' }),
+    );
+    expect(resolveNextCardWithServerFallbackMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'point' }),
+    );
+  });
+
+  it('the played-card side effects key on filterMode, not the card mode', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    expect(applySuccessSideEffectsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'shape' }),
+    );
+    expect(applySuccessSideEffectsMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ mode: 'point' }),
+    );
+  });
+
+  it('the deck-ahead warmer reads the filter-mode deck namespace', async () => {
+    serveSuccessiveNextCards();
+    await seedDeck('nature', 'fr', [
+      { listId: 4, pictureId: 'ahead-1', imageFile: 'file:///ahead-1.jpg' },
+      { listId: 5, pictureId: 'ahead-2', imageFile: 'file:///ahead-2.jpg' },
+    ], 'shape');
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await flush();
+
+    expect(renderedImageUris(handle.screen)).toContain('file:///ahead-1.jpg');
+  });
+
+  it('the win prefetch runs against the filter-mode namespace', async () => {
+    serveSuccessiveNextCards();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+
+    await playWinCycle(handle);
+
+    const prefetchCall = fetchCardBatchMock.mock.calls.find(
+      (call) => (call[0] as { categoryKey?: string }).categoryKey === 'nature',
+    );
+    expect(prefetchCall).toBeTruthy();
+    expect((prefetchCall![0] as { mode?: string }).mode).toBe('shape');
+  });
+
+  it('"Switch category" clears only the filter-mode exhausted marker', async () => {
+    resolveNextGuessParamsMock.mockResolvedValue(null);
+    await AsyncStorage.setItem('exhaustedCategory:nature:fr:shape', '1');
+    await AsyncStorage.setItem('exhaustedCategory:nature:fr:any', '1');
+    const navigation = makeNav();
+    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }), navigation);
+
+    await confirmGuess(handle);
+    await dismissWinOverlay(handle);
+
+    await act(async () => {
+      fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
+    });
+    await flush();
+
+    expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:shape')).toBeNull();
+    expect(await AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).toBe('1');
+  });
+});
+
+describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan 3a)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
+    applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
+    fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
+    isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
+    useFakeAnimationTimers();
+    setE2EMode(false);
+    jest.spyOn(AppState, 'addEventListener').mockImplementation(() => ({ remove: jest.fn() }) as any);
+  });
+
+  afterEach(async () => {
+    await act(async () => {
+      await Promise.resolve();
+    });
+    cleanup();
+    jest.clearAllTimers();
+    jest.restoreAllMocks();
+    jest.useRealTimers();
+    setE2EMode(false);
+  });
+
+  function renderedGuessPicture(handle: ScreenHandle) {
+    return handle.screen.UNSAFE_getByType(
+      GuessPictureBase as unknown as React.ComponentType<Record<string, unknown>>,
+    );
+  }
+
+  it('forwards the raw route filterMode to GuessPicture, unnormalized', async () => {
+    const handle = renderGuessScreen(baseParams({ filterMode: 'shape' }));
+    await flush();
+
+    expect(renderedGuessPicture(handle).props.filterMode).toBe('shape');
+  });
+
+  it('forwards the route filterMode raw: absent stays absent (GuessPicture owns normalization)', async () => {
+    const handle = renderGuessScreen(baseParams());
+    await flush();
+
+    expect(renderedGuessPicture(handle).props.filterMode).toBeUndefined();
   });
 });

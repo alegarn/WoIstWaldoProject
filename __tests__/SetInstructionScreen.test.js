@@ -856,6 +856,120 @@ describe('SetInstructionScreen', () => {
     expect(imagesInfos).not.toHaveProperty('categoryKey');
   });
 
+  it('keeps point-mode uploads free of mode and shape keys when route params omit them', async () => {
+    await renderScreen();
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledTimes(1);
+
+    const [{ imageInfos }] = imageUploader.mock.calls[0];
+    expect(imageInfos).not.toHaveProperty('mode');
+    expect(imageInfos).not.toHaveProperty('shape');
+
+    await act(async () => {
+      getHideDescriptionProps().onCancel();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'HideScreen',
+      expect.not.objectContaining({ mode: expect.anything(), shape: expect.anything() })
+    );
+  });
+
+  it('threads mode and shape into the public upload payload in shape mode', async () => {
+    const shapeOutline = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    await renderScreen({ params: { mode: 'shape', shape: shapeOutline } });
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledWith({
+      imageInfos: expect.objectContaining({
+        mode: 'shape',
+        shape: shapeOutline,
+        categoryKey: null,
+      }),
+      context: expect.any(Object),
+    });
+  });
+
+  it('threads mode and shape into the private upload payload in shape mode', async () => {
+    const shapeOutline = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    emitCategoriesViaStore(privateCategoriesFixture);
+
+    await renderScreen({
+      params: { scope: privateScope, mode: 'shape', shape: shapeOutline },
+    });
+
+    await act(async () => {
+      mockHideDescription.mock.calls[0][0].onSubmit('Look near the river');
+    });
+
+    await act(async () => {
+      await getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(imageUploader).toHaveBeenCalledWith({
+      imageInfos: expect.objectContaining({
+        mode: 'shape',
+        shape: shapeOutline,
+        categoryId: null,
+      }),
+      context: expect.any(Object),
+      scope: privateScope,
+    });
+  });
+
+  it('round-trips mode and shape when going back from the instructions screen', async () => {
+    const shapeOutline = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    await renderScreen({ params: { mode: 'shape', shape: shapeOutline } });
+
+    await act(async () => {
+      getHideDescriptionProps().onCancel();
+    });
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'HideScreen',
+      expect.objectContaining({ mode: 'shape', shape: shapeOutline })
+    );
+  });
+
   it('lets e2e mode bypass the language requirement while still rendering the selectors', async () => {
     isE2EMode.mockReturnValue(true);
     getPreferredLanguage.mockResolvedValue(null);

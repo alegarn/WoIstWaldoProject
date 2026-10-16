@@ -161,6 +161,9 @@
     "emptyWaitUploadHint": " - Attendre que quelqu'un d'autre téléverse de nouvelles images",
     "emptyWaitUploadsHint": " - Attendre que quelqu'un d'autre téléverse de nouvelles images",
     "noDescription": "Aucune description",
+    "shapeInstructions": "Dessinez le contour qui correspond, selon vous, à la forme cachée",
+    "shapeEnigmaLabel": "Rouvrir l'énigme",
+    "shapeExitLabel": "Quitter",
     "card": {
       "open": "Ouvrir",
       "swipeableLabel": "Carte balayable {{id}}",
@@ -200,8 +203,15 @@
       "deleteCategories": "Supprimer les catégories",
       "closeManageCategories": "Fermer la gestion des catégories",
       "openLanguageFilter": "Ouvrir le filtre de langue",
+      "openModeFilter": "Ouvrir le filtre de mode",
       "editThumbnailLabel": "Modifier la miniature de {{name}}",
       "deleteCategoryLabel": "Supprimer {{name}}"
+    },
+    "modeFilter": {
+      "label": "Mode",
+      "any": "N'importe quel mode",
+      "point": "Point",
+      "shape": "Contour"
     },
     "exitMenu": {
       "closeExitPanel": "Fermer le panneau de sortie",
@@ -347,7 +357,10 @@
     "unexpectedError": "Erreur inattendue",
     "tryAgainLater": "Veuillez réessayer plus tard",
     "invalidTypeTitle": "Type d'image invalide",
-    "invalidTypeMessage": "Veuillez sélectionner un type d'image valide (png, jpg ou jpeg)"
+    "invalidTypeMessage": "Veuillez sélectionner un type d'image valide (png, jpg ou jpeg)",
+    "modeLabel": "Mode",
+    "modePoint": "Point",
+    "modeShape": "Contour"
   },
   "hideInstructions": {
     "describeLabel": "Décrire l'endroit caché",
@@ -386,7 +399,16 @@
       "guessSurfaceLabel": "Surface de l'image à deviner",
       "hideSurfaceLabel": "Surface de l'image à cacher",
       "guessImageLabel": "Image à deviner",
-      "hideImageLabel": "Image à cacher"
+      "hideImageLabel": "Image à cacher",
+      "shapeSurfaceLabel": "Dessinez un contour autour de la cachette",
+      "modeCueLabel": "Mode forme : dessinez le contour",
+      "shapeClearLabel": "Effacer le contour",
+      "shapeRedrawLabel": "Redessiner le contour",
+      "shapeTooSimple": "Contour trop simple — dessinez une forme fermée autour de la cachette",
+      "shapeConfirmLabel": "Confirmer le contour",
+      "traceWin": "Dans le mille !",
+      "traceLoseScore": "Votre contour rate la cachette — réessayez",
+      "traceLoseLengthCap": "Contour trop long — dessinez juste autour de la cachette"
     }
   },
   "groups": {

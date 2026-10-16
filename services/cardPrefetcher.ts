@@ -7,6 +7,7 @@ import { fetchCardBatch, appendCardBatch } from './cardDeck';
  */
 import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
+import { ANY_FILTER } from '../utils/sessionFilter';
 
 // Refill when only 3 cards remain — combined with NextCardImageWarmer decode prefetch, the user never waits for cold decode or server round-trip.
 export const LOW_CARD_THRESHOLD = 4;
@@ -27,6 +28,7 @@ export interface PrefetchParams {
   categoryKey: string;
   categoryId?: string | number | null;
   language?: string | null;
+  mode?: string | null;
   scope?: unknown;
   authContext: unknown;
   currentListId?: number;
@@ -62,12 +64,12 @@ function scopeGroupId(scope: unknown): string | undefined {
   return undefined;
 }
 
-function dedupKey(categoryKey: string, language: string | null | undefined, scope: unknown): string {
-  return `${categoryKey}:${language ?? 'any'}:${scopeGroupId(scope) ?? 'public'}`;
+function dedupKey(categoryKey: string, language: string | null | undefined, mode: string | null | undefined, scope: unknown): string {
+  return `${categoryKey}:${language ?? ANY_FILTER}:${mode ?? ANY_FILTER}:${scopeGroupId(scope) ?? 'public'}`;
 }
 
-function warmKey(language: string | null | undefined, scope: unknown): string {
-  return `${language ?? 'any'}:${scopeGroupId(scope) ?? 'public'}`;
+function warmKey(language: string | null | undefined, mode: string | null | undefined, scope: unknown): string {
+  return `${language ?? ANY_FILTER}:${mode ?? ANY_FILTER}:${scopeGroupId(scope) ?? 'public'}`;
 }
 
 /**
@@ -78,9 +80,9 @@ function warmKey(language: string | null | undefined, scope: unknown): string {
  * prefetch (PB4 / T2.7 Option A).
  */
 export function getPrefetchScopeKey(
-  args: Pick<PrefetchParams, 'categoryKey' | 'language' | 'scope'>,
+  args: Pick<PrefetchParams, 'categoryKey' | 'language' | 'mode' | 'scope'>,
 ): string {
-  return dedupKey(args.categoryKey, args.language, args.scope);
+  return dedupKey(args.categoryKey, args.language, args.mode, args.scope);
 }
 
 /**
@@ -99,6 +101,7 @@ export async function prefetchIfLow({
   categoryKey,
   categoryId,
   language,
+  mode,
   scope,
   authContext,
   currentListId,
@@ -107,7 +110,7 @@ export async function prefetchIfLow({
     return;
   }
 
-  const dk = dedupKey(categoryKey, language, scope);
+  const dk = dedupKey(categoryKey, language, mode, scope);
   const existing = inFlight.get(dk);
   if (existing) {
     return existing;
@@ -119,6 +122,7 @@ export async function prefetchIfLow({
       ...(categoryId != null ? { id: categoryId } : {}),
     },
     language,
+    mode,
     currentListId,
     scope,
   });
@@ -143,7 +147,7 @@ export async function prefetchIfLow({
     let skipCategoryFetch = false;
     if (categoryKey !== 'all') {
       try {
-        skipCategoryFetch = await isCategoryExhausted(categoryKey, language, scope);
+        skipCategoryFetch = await isCategoryExhausted(categoryKey, language, scope, mode);
       } catch {
         skipCategoryFetch = false;
       }
@@ -155,6 +159,7 @@ export async function prefetchIfLow({
           categoryKey,
           categoryId,
           language,
+          mode,
           scope,
           authContext,
         });
@@ -166,6 +171,7 @@ export async function prefetchIfLow({
             categoryKey,
             categoryId,
             language,
+            mode,
             scope,
           });
           appendedCount = cards.length;
@@ -187,7 +193,7 @@ export async function prefetchIfLow({
           // `categoryKey !== 'all'` only. Both sites use the SAME helper;
           // first-wins is defense-in-depth. Keep this comment in sync with
           // nextCardAdvancer.ts:144-156.
-          await markCategoryExhausted(categoryKey, language, scope).catch(() => {});
+          await markCategoryExhausted(categoryKey, language, scope, mode).catch(() => {});
         }
       } catch (e) {
         console.warn('[cardPrefetcher] prefetch failed', dk, e);
@@ -201,7 +207,7 @@ export async function prefetchIfLow({
     // side-effect gated on `count < ALL_WARM_THRESHOLD`.
     if (categoryKey !== 'all' && count + appendedCount < TARGET_BATCH_SIZE) {
       const target = TARGET_BATCH_SIZE - (count + appendedCount);
-      warmAllDeckIfNeeded({ language, scope, authContext, target });
+      warmAllDeckIfNeeded({ language, mode, scope, authContext, target });
     }
   })();
 
@@ -228,6 +234,7 @@ export async function prefetchIfLow({
  */
 export async function warmAllDeckIfNeeded({
   language,
+  mode,
   scope,
   authContext,
   currentListId,
@@ -237,7 +244,7 @@ export async function warmAllDeckIfNeeded({
     return;
   }
 
-  const wk = warmKey(language, scope);
+  const wk = warmKey(language, mode, scope);
   const existing = allWarming.get(wk);
   if (existing) {
     return existing;
@@ -246,6 +253,7 @@ export async function warmAllDeckIfNeeded({
   const count = await getRemainingDeckCount({
     category: { key: 'all' },
     language,
+    mode,
     currentListId,
     scope,
   });
@@ -263,6 +271,7 @@ export async function warmAllDeckIfNeeded({
       const r = await fetchCardBatch({
         categoryKey: 'all',
         language,
+        mode,
         scope,
         authContext,
       });
@@ -273,6 +282,7 @@ export async function warmAllDeckIfNeeded({
           cards,
           categoryKey: 'all',
           language,
+          mode,
           scope,
         });
       }

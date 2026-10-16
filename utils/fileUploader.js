@@ -51,6 +51,8 @@ const exportPictureData = async ({ imagesInfos, context }) => {
       y_location: imagesInfos.yLocation,
       language: imagesInfos.language,
       category_key: imagesInfos.categoryKey,
+      ...(imagesInfos.mode !== undefined ? { mode: imagesInfos.mode } : {}),
+      ...(imagesInfos.shape !== undefined ? { shape: imagesInfos.shape } : {}),
 
       /* file_type, file_size */
     },
@@ -78,6 +80,8 @@ async function exportPrivatePictureData({ imageInfos, context, groupId, contentL
     xLocation: imageInfos.xLocation,
     yLocation: imageInfos.yLocation,
     language: imageInfos.language,
+    mode: imageInfos.mode,
+    shape: imageInfos.shape,
   });
 
   if (response.status !== 200 && response.status !== 201) {
@@ -161,6 +165,8 @@ export async function imageUploader({ imageInfos, context, scope }) {
       yLocation: imageInfos.yLocation,
       language: imageInfos.language,
       categoryKey: imageInfos.categoryKey,
+      mode: imageInfos.mode,
+      shape: imageInfos.shape,
     },
     context: context
   });

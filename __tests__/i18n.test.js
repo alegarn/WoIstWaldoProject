@@ -94,6 +94,18 @@ describe('locale files', () => {
     }
   });
 
+  it('ships the graded-reveal outcome strings for every LANGUAGES code', () => {
+    for (const { code } of LANGUAGES) {
+      const file = resolve(__dirname, '..', 'i18n', 'locales', `${code}.json`);
+      const parsed = JSON.parse(readFileSync(file, 'utf8'));
+
+      for (const key of ['traceWin', 'traceLoseScore', 'traceLoseLengthCap']) {
+        expect(typeof parsed.game?.picture?.[key]).toBe('string');
+        expect(parsed.game.picture[key].length).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it('registers a translation bundle for every LANGUAGES code', () => {
     for (const { code } of LANGUAGES) {
       expect(i18n.hasResourceBundle(code, 'translation')).toBe(true);

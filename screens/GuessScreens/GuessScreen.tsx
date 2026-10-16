@@ -5,7 +5,8 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import AdInterstitial from '../../components/Ads/AdInterstitial';
 import GuessExitSwipeMenu from '../../components/Guess/GuessExitSwipeMenu';
-import GuessPictureDefault from "../../components/Picture/GuessPicture";
+import GuessPicture from "../../components/Picture/GuessPicture";
+import type { ToAdScreenArgs } from "../../components/Picture/GuessPicture";
 import NextCardImageWarmer from '../../components/Picture/NextCardImageWarmer';
 import SuccessOverlay from '../../components/Guess/SuccessOverlay';
 import TutorialOverlayDefault from '../../components/UI/TutorialOverlay';
@@ -14,10 +15,13 @@ import GuessAdvanceLoader from '../../components/Guess/GuessAdvanceLoader';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
 import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
+import { isWinningTrace } from '../../utils/shapeMatch';
+import type { Point } from '../../utils/shapeGeometry';
 import { isE2EMode } from '../../utils/e2eMode';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { getNextImagesForScope, clearExhaustedCategory } from '../../utils/storageDatum';
-import { computeMultiplier, SPEED_MULTIPLIER_BASE } from '../../utils/speedMultiplier';
+import { normalizeMode } from '../../utils/sessionFilter';
+import { computeMultiplier, SPEED_MULTIPLIER_BASE, SHAPE_SPEED_BONUS_THRESHOLD_MS } from '../../utils/speedMultiplier';
 import { computePoints } from '../../utils/guessPoints';
 import { useAdvanceStateMachine } from '../../hooks/useAdvanceStateMachine';
 import { useResolveLifecycle } from '../../hooks/useResolveLifecycle';
@@ -32,15 +36,8 @@ import type { ActiveGroupAdContext } from '../../services/billing/adPolicy';
 
 type HiddenLocation = { x: number; y: number };
 type GuessCategory = { id?: string; key?: string };
-
-type TargetInfos = {
-  location: { x: number; y: number };
-  hiddenLocation: HiddenLocation;
-  screenWidth: number;
-  screenHeight: number;
-  target?: unknown;
-  elapsedMs?: number;
-};
+type ImageMode = 'point' | 'shape';
+type ShapeOutline = Point[];
 
 type GuessRouteParams = {
   imageFile?: string;
@@ -50,10 +47,15 @@ type GuessRouteParams = {
   imageWidth?: number;
   isPortrait?: boolean;
   hiddenLocation?: HiddenLocation;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
   listId?: number;
   isTutorial?: boolean;
   category?: GuessCategory;
   language?: string;
+  // Session filter mode (D8) — travels as filterMode, NEVER `mode`, which is
+  // the CARD's mode. Absent → 'any' = today's unfiltered behavior.
+  filterMode?: string;
   scope?: AdScope;
   activeGroup?: ActiveGroupAdContext | null;
   skipInstructions?: boolean;
@@ -78,6 +80,8 @@ type SharedParams = {
   imageWidth?: number;
   isPortrait?: boolean;
   hiddenLocation?: HiddenLocation;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
   screenHeight: number;
   screenWidth: number;
   listId?: number;
@@ -92,40 +96,21 @@ type GuessScreenProps = {
   route: { params: GuessRouteParams };
 };
 
-type GuessPictureComponent = FC<{
-  navigation?: GuessNavigation;
-  imageFile?: string;
-  pictureId?: string;
-  description?: string;
-  imageIsPortrait?: boolean;
-  imageHeight?: number;
-  imageWidth?: number;
-  hiddenLocation?: HiddenLocation;
-  screenDimensions?: { width?: number; height?: number };
-  toAdScreen?: (targetInfos: TargetInfos) => Promise<void> | void;
-  skipInstructions?: boolean;
-  pulseTarget?: boolean;
-  onInteract?: () => void;
-  disabled?: boolean;
-  onEdgeSwipe?: () => void;
-}>;
-
 type TutorialOverlayComponent = FC<{
   screen?: string;
   isPortrait?: boolean;
 }>;
 
-// GuessPicture.js and TutorialOverlay.js are .js deps with prop signatures inferred
-// narrower than the props the original screen legitimately passes (e.g. `navigation`,
-// `pictureId` are passed through to GuessPicture; TutorialOverlay omits instructionsPosition/
-// onPress which the .js destructures but treats as optional at runtime). Cast to local
-// structural types that mirror what this screen actually passes — behavior preserved.
-const GuessPicture = GuessPictureDefault as unknown as GuessPictureComponent;
+// TutorialOverlay is a .tsx dep whose inferred prop signature is narrower than
+// what this screen legitimately passes; cast to a local structural type that
+// mirrors what the screen actually passes — behavior preserved. (Its own
+// cleanup is out of scope for the shape-mode-cue plan.)
 const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComponent;
 
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, listId, isTutorial, category, language, scope, activeGroup, skipInstructions } = route.params;
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, filterMode, scope, activeGroup, skipInstructions } = route.params;
+  const sessionFilterMode = normalizeMode(filterMode);
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -197,6 +182,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     resolveArgs: {
       category,
       language,
+      filterMode: sessionFilterMode,
       currentListId: listId,
       currentPictureId: pictureId,
       isTutorial,
@@ -207,6 +193,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       listId,
       categoryKey: category?.key,
       language,
+      filterMode: sessionFilterMode,
       imageFile,
       pictureId,
       scope,
@@ -251,6 +238,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     if (category?.key === 'all') return;
     warmAllDeckIfNeeded({
       language,
+      mode: sessionFilterMode,
       scope,
       authContext,
     }).catch(() => {});
@@ -299,6 +287,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     getNextImagesForScope({
       category,
       language,
+      mode: sessionFilterMode,
       currentListId: listId,
       scope,
       limit: 7,
@@ -329,6 +318,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       categoryKey: category?.key || 'all',
       ...(isPrivate ? { categoryId: category?.id } : {}),
       language,
+      mode: sessionFilterMode,
       scope,
       authContext,
       currentListId: listId,
@@ -352,14 +342,35 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     navigation.replace('ResultScreen', sharedParams);
   }
 
-  async function toAdScreen(targetInfos: TargetInfos) {
-    const onTarget = isOnTarget(targetInfos);
-    const multiplier = computeMultiplier(targetInfos?.elapsedMs ?? 0);
+  async function toAdScreen(args: ToAdScreenArgs) {
+    // Shape branch (plan H5): hidden `shape` (storage, normalized [0,1]) vs the
+    // guess outline drawn on the F surface, matched by isWinningTrace in IMAGE
+    // space only (score ≥ 0.9 + length cap) — screen size never influences the
+    // verdict. The speed bonus uses the 10s shape window. Point mode keeps
+    // isOnTarget + the 5s window byte-identical.
+    const isShapeMode = mode === 'shape';
+    const onTarget = isShapeMode
+      ? isWinningTrace({
+          hiddenShape: shape ?? [],
+          guessShape: args.shape ?? [],
+          imageWidth: imageWidth ?? 0,
+          imageHeight: imageHeight ?? 0,
+        })
+      : isOnTarget({
+          ...args,
+          // .js dep reads hiddenLocation as required; the point-mode path
+          // always has it (GuessScreen forwards the route param).
+          hiddenLocation: args.hiddenLocation!,
+        });
+    const multiplier = isShapeMode
+      ? computeMultiplier(args?.elapsedMs ?? 0, SHAPE_SPEED_BONUS_THRESHOLD_MS)
+      : computeMultiplier(args?.elapsedMs ?? 0);
     const sharedParams: SharedParams = {
       onTarget, imageFile: uri, pictureId, description,
       imageHeight, imageWidth, isPortrait, hiddenLocation,
       screenHeight, screenWidth, listId, isTutorial,
       category, language, scope,
+      ...(isShapeMode ? { mode, shape } : {}),
     };
     if (!onTarget) {
       applyFailurePath(sharedParams);
@@ -422,7 +433,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // category+scope so re-entering re-queries the server (handles newly
     // uploaded images since the category was marked empty). Fire-and-forget —
     // navigation proceeds without waiting; the next mount re-queries fresh.
-    clearExhaustedCategory(category?.key, language, scope).catch(() => {});
+    clearExhaustedCategory(category?.key, language, scope, sessionFilterMode).catch(() => {});
     navigation.navigate('GuessPathScreen', isPrivate ? { scope } : {});
   }
 
@@ -462,6 +473,10 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       imageHeight={imageHeight}
       imageWidth={imageWidth}
       hiddenLocation={hiddenLocation}
+      mode={mode}
+      shape={shape}
+      // Raw route value — GuessPicture owns normalization (cue gating).
+      filterMode={filterMode}
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
       skipInstructions={skipInstructions}

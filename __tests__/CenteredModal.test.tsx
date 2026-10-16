@@ -91,4 +91,24 @@ describe('CenteredModal', () => {
     expect(renderer.root.findByProps({ testID: 'modal.confirm' }).props.disabled).toBe(true);
     expect(renderer.root.findByProps({ testID: 'modal.close' }).props.disabled).toBeUndefined();
   });
+
+  it('gives the shape-confirm buttons wrapping padded spacing so they never clip', async () => {
+    const renderer = await renderModal('Do you want to validate this ?', {
+      confirmLabel: 'Confirm outline',
+      cancelLabel: 'Redraw outline',
+    });
+
+    const confirmButton = renderer.root.findByProps({ testID: 'modal.confirm' });
+    const cancelButton = renderer.root.findByProps({ testID: 'modal.close' });
+
+    const confirmSpace = confirmButton.parent!;
+    const cancelSpace = cancelButton.parent!;
+    expect(confirmSpace.props.style).toEqual(expect.objectContaining({ paddingHorizontal: 10, paddingVertical: 5 }));
+    expect(cancelSpace.props.style).toEqual(expect.objectContaining({ paddingHorizontal: 10, paddingVertical: 5 }));
+
+    const buttonContainer = confirmSpace.parent!;
+    expect(buttonContainer.props.style).toEqual(
+      expect.objectContaining({ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10 })
+    );
+  });
 });

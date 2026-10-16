@@ -36,6 +36,7 @@ function isPrivateScope(scope: unknown): boolean {
 export type AdvancerArgs = {
   category?: { id?: string | number | null; key?: string } | null;
   language?: string | null;
+  mode?: string | null;
   currentListId?: number;
   currentPictureId?: string;
   isTutorial?: boolean;
@@ -98,6 +99,7 @@ async function foregroundTopUp(
   const inFlight = getInFlightPrefetch(getPrefetchScopeKey({
     categoryKey,
     language: args.language,
+    mode: args.mode,
     scope: args.scope,
   }));
   if (inFlight) {
@@ -114,7 +116,7 @@ async function foregroundTopUp(
   // real category (the 'all' deck is the Tier 3/4 fallback and must stay live
   // so newly-uploaded images surface). On hit, returns 'empty' so control
   // flows straight to the Tier 3 'all' cross-fallback below.
-  if (!isHeadReplay && categoryKey !== 'all' && await isCategoryExhausted(categoryKey, args.language, args.scope)) {
+  if (!isHeadReplay && categoryKey !== 'all' && await isCategoryExhausted(categoryKey, args.language, args.scope, args.mode)) {
     return { ok: false, reason: 'empty' };
   }
 
@@ -127,6 +129,7 @@ async function foregroundTopUp(
     const rechecked = await resolveNextGuessParams({
       category: args.category,
       language: args.language,
+      mode: args.mode,
       currentListId: args.currentListId,
       currentPictureId: args.currentPictureId,
       isTutorial: args.isTutorial,
@@ -145,6 +148,7 @@ async function foregroundTopUp(
     const fetchArgs: Parameters<typeof fetchCardBatch>[0] = {
       categoryKey,
       language: args.language,
+      mode: args.mode,
       scope: args.scope,
       authContext: args.authContext,
       ...(isPrivateScope(args.scope) ? { categoryId: args.category?.id } : {}),
@@ -169,7 +173,7 @@ async function foregroundTopUp(
       // Tier-4 head path). Both sites use the SAME helper; first-wins is
       // defense-in-depth. Keep this comment in sync with the prefetcher site.
       if (r?.reason !== 'played-out' && !isHeadReplay && categoryKey !== 'all') {
-        await markCategoryExhausted(categoryKey, args.language, args.scope).catch(() => {});
+        await markCategoryExhausted(categoryKey, args.language, args.scope, args.mode).catch(() => {});
       }
       return { ok: false, reason: 'empty' };
     }
@@ -178,6 +182,7 @@ async function foregroundTopUp(
       categoryKey,
       ...(isPrivateScope(args.scope) ? { categoryId: args.category?.id } : {}),
       language: args.language,
+      mode: args.mode,
       scope: args.scope,
     });
     return { ok: true, appended: r.images.length };
@@ -192,6 +197,7 @@ async function foregroundTopUp(
 export async function resolveNextCardWithServerFallback({
   category,
   language,
+  mode,
   currentListId,
   currentPictureId,
   isTutorial,
@@ -199,7 +205,7 @@ export async function resolveNextCardWithServerFallback({
   authContext,
 }: AdvancerArgs): Promise<ResolveNextCardResult> {
   const categoryKey = category?.key || 'all';
-  const resolveArgs = { category, language, currentListId, currentPictureId, isTutorial, scope };
+  const resolveArgs = { category, language, mode, currentListId, currentPictureId, isTutorial, scope };
   const topUpArgs: AdvancerArgs = { ...resolveArgs, authContext };
 
   // Tier 1 — local deck.
@@ -224,7 +230,7 @@ export async function resolveNextCardWithServerFallback({
 
   // Tier 3 — for a real category, cross-fall-back to the warmed 'all' deck.
   if (categoryKey !== 'all') {
-    await warmAllDeckIfNeeded({ language, scope, authContext, currentListId }).catch(() => {});
+    await warmAllDeckIfNeeded({ language, mode, scope, authContext, currentListId }).catch(() => {});
     next = await resolveNextGuessParams(resolveArgs);
     if (next) return { next, reason: 'ok' };
   }
@@ -265,6 +271,7 @@ export async function resolveNextCardWithServerFallback({
     // advance time, so it is excluded from the probe's unplayed check only.
     const probe = await probeAllPoolForUnplayed({
       language,
+      mode,
       scope,
       authContext,
       excludePictureId: currentPictureId,

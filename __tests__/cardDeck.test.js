@@ -6,8 +6,8 @@ jest.mock('../utils/storageDatum', () => {
     getLastImageUuid: jest.fn(),
     storeImageList: jest.fn(),
     updateImageList: jest.fn(),
-    clearExhaustedCategory: jest.fn((categoryKey, language, scope) =>
-      actual.clearExhaustedCategory(categoryKey, language, scope)),
+    clearExhaustedCategory: jest.fn((categoryKey, language, scope, mode) =>
+      actual.clearExhaustedCategory(categoryKey, language, scope, mode)),
   };
 });
 
@@ -25,7 +25,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
 import { clearGroupCategoryExhausted, readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
-import { appendCardBatch, fetchCardBatch, persistCardBatch, removeCardFromGroupDeck } from '../services/cardDeck';
+import { appendCardBatch, fetchCardBatch, persistCardBatch, probeAllPoolForUnplayed, removeCardFromGroupDeck } from '../services/cardDeck';
 
 const realUpdateImageList = jest.requireActual('../utils/storageDatum').updateImageList;
 
@@ -42,7 +42,7 @@ describe('appendCardBatch', () => {
 
     await appendCardBatch({ cards, categoryKey: 'city', categoryId: 7, language: 'fr', scope: { kind: 'public' } });
 
-    expect(updateImageList).toHaveBeenCalledWith(cards, 'city', 'fr');
+    expect(updateImageList).toHaveBeenCalledWith(cards, 'city', 'fr', 'any');
     expect(writeGroupFeedCache).not.toHaveBeenCalled();
     expect(readGroupFeedCache).not.toHaveBeenCalled();
   });
@@ -62,10 +62,10 @@ describe('appendCardBatch', () => {
       scope: { kind: 'private', groupId: 'g-3' },
     });
 
-    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr' });
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr', mode: 'any' });
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: 7, language: 'fr' },
+      { categoryId: 7, language: 'fr', mode: 'any' },
       { images: [{ listId: 1 }, { listId: 2 }, { listId: 3 }, { listId: 4 }], nextCursor: 'cursor-1' },
     );
     expect(updateImageList).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('appendCardBatch', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       { images: [{ listId: 5 }], nextCursor: null },
     );
   });
@@ -106,7 +106,7 @@ describe('appendCardBatch', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: 7, language: 'fr' },
+      { categoryId: 7, language: 'fr', mode: 'any' },
       { images: [{ listId: 1 }, { listId: 2 }], nextCursor: { page: 2 } },
     );
   });
@@ -136,7 +136,7 @@ describe('appendCardBatch', () => {
 
     await appendCardBatch({ cards, categoryKey: 'all', scope: { kind: 'public' } });
 
-    expect(updateImageList).toHaveBeenCalledWith(cards, 'all', 'any');
+    expect(updateImageList).toHaveBeenCalledWith(cards, 'all', 'any', 'any');
 
     readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
     await appendCardBatch({
@@ -145,10 +145,10 @@ describe('appendCardBatch', () => {
       scope: { kind: 'private', groupId: 'g-9' },
     });
 
-    expect(readGroupFeedCache).toHaveBeenLastCalledWith('g-9', { categoryId: undefined, language: 'any' });
+    expect(readGroupFeedCache).toHaveBeenLastCalledWith('g-9', { categoryId: undefined, language: 'any', mode: 'any' });
     expect(writeGroupFeedCache).toHaveBeenLastCalledWith(
       'g-9',
-      { categoryId: undefined, language: 'any' },
+      { categoryId: undefined, language: 'any', mode: 'any' },
       { images: cards, nextCursor: null },
     );
   });
@@ -164,10 +164,10 @@ describe('appendCardBatch', () => {
       scope: { kind: 'private', groupId: 'g-3' },
     });
 
-    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: undefined, language: 'fr' });
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: undefined, language: 'fr', mode: 'any' });
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       expect.objectContaining({ images: [{ listId: 1 }] }),
     );
   });
@@ -186,7 +186,7 @@ describe('appendCardBatch', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       {
         images: [
           { listId: 1 },
@@ -284,7 +284,7 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       {
         images: [
           { listId: 1, pictureId: 'card-A' },
@@ -314,7 +314,7 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       {
         images: [
           { listId: 1, pictureId: 'card-A' },
@@ -345,7 +345,7 @@ describe('appendCardBatch pictureId dedup (RC10/T4.3)', () => {
 
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       {
         images: [
           { listId: 5, pictureId: 'card-A' },
@@ -411,10 +411,10 @@ describe('removeCardFromGroupDeck (Fix 1 D1 private path)', () => {
       listId: 2,
     });
 
-    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr' });
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr', mode: 'any' });
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: 7, language: 'fr' },
+      { categoryId: 7, language: 'fr', mode: 'any' },
       { images: [{ listId: 1 }, { listId: 3 }], nextCursor: { page: 2 } },
     );
   });
@@ -506,7 +506,7 @@ describe('exhausted-marker invalidation (Fix 1)', () => {
       scope: { kind: 'public' },
     });
 
-    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' }, 'any');
   });
 
   it('persistCardBatch non-empty non-"all" clears marker', async () => {
@@ -517,7 +517,7 @@ describe('exhausted-marker invalidation (Fix 1)', () => {
       scope: { kind: 'public' },
     });
 
-    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' });
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' }, 'any');
   });
 
   it('categoryKey "all" never clears', async () => {
@@ -563,8 +563,8 @@ describe('exhausted-marker invalidation (Fix 1)', () => {
       scope: { kind: 'private', groupId: 'g-3' },
     });
 
-    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'private', groupId: 'g-3' });
-    expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-3', 'city', 'fr');
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'private', groupId: 'g-3' }, 'any');
+    expect(clearGroupCategoryExhausted).toHaveBeenCalledWith('g-3', 'city', 'fr', 'any');
   });
 
   it('clear failure does not reject the append (Fix 3: resolves the updateImageList deck)', async () => {
@@ -579,7 +579,7 @@ describe('exhausted-marker invalidation (Fix 1)', () => {
       }),
     ).resolves.toEqual([]);
 
-    expect(updateImageList).toHaveBeenCalledWith([{ listId: 1 }], 'city', 'fr');
+    expect(updateImageList).toHaveBeenCalledWith([{ listId: 1 }], 'city', 'fr', 'any');
   });
 });
 
@@ -603,7 +603,7 @@ describe('appendCardBatch played-set filter (Fix 2b)', () => {
     });
 
     expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:public:fr');
-    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr');
+    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr', 'any');
 
     jest.clearAllMocks();
     updateImageList.mockResolvedValue([]);
@@ -621,7 +621,7 @@ describe('appendCardBatch played-set filter (Fix 2b)', () => {
     expect(AsyncStorage.getItem).toHaveBeenCalledWith('playedPictureIds:group:g-3:fr');
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: 7, language: 'fr' },
+      { categoryId: 7, language: 'fr', mode: 'any' },
       { images: [{ pictureId: 'fresh-2', listId: 1 }], nextCursor: null },
     );
   });
@@ -636,7 +636,7 @@ describe('appendCardBatch played-set filter (Fix 2b)', () => {
       scope: { kind: 'public' },
     });
 
-    expect(updateImageList).toHaveBeenCalledWith([{ listId: 9 }, { pictureId: 'fresh-1' }], 'city', 'fr');
+    expect(updateImageList).toHaveBeenCalledWith([{ listId: 9 }, { pictureId: 'fresh-1' }], 'city', 'fr', 'any');
   });
 
   it('played-set read failure does not reject the append (cards pass through)', async () => {
@@ -651,7 +651,7 @@ describe('appendCardBatch played-set filter (Fix 2b)', () => {
       }),
     ).resolves.toEqual([]);
 
-    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr');
+    expect(updateImageList).toHaveBeenCalledWith([{ pictureId: 'fresh-1' }], 'city', 'fr', 'any');
   });
 });
 
@@ -678,7 +678,7 @@ describe('batch return contracts (Fix 3)', () => {
       { pictureId: 'a', listId: 1 },
       { pictureId: 'b', listId: 2 },
       { pictureId: 'c', listId: 3 },
-    ], 'all', 'fr');
+    ], 'all', 'fr', 'any');
 
     await expect(persistCardBatch({
       cards: [{ pictureId: 'p' }],
@@ -689,7 +689,7 @@ describe('batch return contracts (Fix 3)', () => {
     })).resolves.toEqual([{ pictureId: 'p', listId: 1 }]);
     expect(writeGroupFeedCache).toHaveBeenCalledWith(
       'g-3',
-      { categoryId: undefined, language: 'fr' },
+      { categoryId: undefined, language: 'fr', mode: 'any' },
       { images: [{ pictureId: 'p', listId: 1 }], nextCursor: null },
     );
   });
@@ -773,7 +773,7 @@ describe('fetchCardBatch', () => {
       authContext: { token: 't' },
     });
 
-    expect(getLastImageUuid).toHaveBeenCalledWith('cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-1' });
+    expect(getLastImageUuid).toHaveBeenCalledWith('cat-private-uuid', 'fr', { kind: 'private', groupId: 'g-1' }, 'any');
     expect(getImages.mock.calls[0][2]).toMatchObject({ category_id: 'cat-private-uuid' });
   });
 
@@ -1018,6 +1018,109 @@ describe('fetchCardBatch head-replay detection (Fix 2a)', () => {
       'explicit-uuid',
       { token: 't' },
       expect.objectContaining({ category_key: 'nature' }),
+    );
+  });
+});
+
+describe('mode filter threading (D3/D7)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+    updateImageList.mockResolvedValue([]);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+    readGroupFeedCache.mockResolvedValue(null);
+  });
+
+  it('resolveServerMode strips "any" server-bound; real modes pass through (both scopes, single choke point)', async () => {
+    await fetchCardBatch({
+      categoryKey: 'nature', language: 'fr', mode: 'shape', scope: { kind: 'public' }, authContext: { token: 't' },
+    });
+    expect(getImages.mock.calls[0][2].mode).toBe('shape');
+
+    await fetchCardBatch({
+      categoryKey: 'cat-uuid', categoryId: 'cat-uuid', language: 'fr', mode: 'point', scope: { kind: 'private', groupId: 'g-1' }, authContext: { token: 't' },
+    });
+    expect(getImages.mock.calls[1][2].mode).toBe('point');
+
+    await fetchCardBatch({
+      categoryKey: 'nature', language: 'fr', mode: 'any', scope: { kind: 'public' }, authContext: { token: 't' },
+    });
+    expect(getImages.mock.calls[2][2].mode).toBeUndefined();
+    expect(getImages.mock.calls[2][2].mode).not.toBe('any');
+  });
+
+  it('fetchCardBatch keys the persisted cursor read on the filter mode beside lang/scope', async () => {
+    await fetchCardBatch({
+      categoryKey: 'cat-uuid', categoryId: 'cat-uuid', language: 'fr', mode: 'shape', scope: { kind: 'private', groupId: 'g-1' }, authContext: { token: 't' },
+    });
+
+    expect(getLastImageUuid).toHaveBeenCalledWith('cat-uuid', 'fr', { kind: 'private', groupId: 'g-1' }, 'shape');
+  });
+
+  it('concurrent fetches for DIFFERENT filter modes do not collapse onto one in-flight promise (§7 dedup row)', async () => {
+    let resolveShape;
+    getImages.mockImplementationOnce(() => new Promise((resolve) => { resolveShape = resolve; }));
+    getImages.mockResolvedValueOnce({ isError: false, images: [] });
+
+    const shapeFetch = fetchCardBatch({
+      categoryKey: 'nature', language: 'fr', mode: 'shape', scope: { kind: 'public' }, authContext: { token: 't' },
+    });
+    const pointFetch = fetchCardBatch({
+      categoryKey: 'nature', language: 'fr', mode: 'point', scope: { kind: 'public' }, authContext: { token: 't' },
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(getImages).toHaveBeenCalledTimes(2);
+
+    resolveShape({ isError: false, images: [] });
+    await Promise.all([shapeFetch, pointFetch]);
+  });
+
+  it('append/persist chains forward the filter mode into the deck writers (public + private)', async () => {
+    await appendCardBatch({ cards: [{ listId: 1 }], categoryKey: 'city', language: 'fr', mode: 'shape', scope: { kind: 'public' } });
+    expect(updateImageList).toHaveBeenCalledWith([{ listId: 1 }], 'city', 'fr', 'shape');
+    expect(clearExhaustedCategory).toHaveBeenCalledWith('city', 'fr', { kind: 'public' }, 'shape');
+
+    readGroupFeedCache.mockResolvedValueOnce({ images: [], nextCursor: null });
+    await appendCardBatch({
+      cards: [{ listId: 1 }], categoryKey: 'all', categoryId: 'all', language: 'fr', mode: 'shape', scope: { kind: 'private', groupId: 'g-3' },
+    });
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: undefined, language: 'fr', mode: 'shape' });
+    expect(writeGroupFeedCache).toHaveBeenLastCalledWith(
+      'g-3',
+      { categoryId: undefined, language: 'fr', mode: 'shape' },
+      expect.anything(),
+    );
+
+    await persistCardBatch({ cards: [{ listId: 1 }], categoryKey: 'city', language: 'fr', mode: 'point', scope: { kind: 'public' } });
+    expect(storeImageList).toHaveBeenCalledWith(expect.anything(), 'city', 'fr', 'point');
+  });
+
+  it('removeCardFromGroupDeck read-modify-write keys on the filter mode (played-card resurrection guard)', async () => {
+    readGroupFeedCache.mockResolvedValueOnce({ images: [{ listId: 1 }, { listId: 2 }], nextCursor: 'c-1' });
+
+    await removeCardFromGroupDeck({ groupId: 'g-3', categoryId: 7, language: 'fr', listId: 2, mode: 'shape' });
+
+    expect(readGroupFeedCache).toHaveBeenCalledWith('g-3', { categoryId: 7, language: 'fr', mode: 'shape' });
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-3',
+      { categoryId: 7, language: 'fr', mode: 'shape' },
+      { images: [{ listId: 1 }], nextCursor: 'c-1' },
+    );
+  });
+
+  it('probeAllPoolForUnplayed threads the mode into its cursor read, sentinel clear, and internal fetch', async () => {
+    getImages.mockResolvedValueOnce({ isError: false, images: [{ pictureId: 'unplayed-1' }] });
+
+    await probeAllPoolForUnplayed({ language: 'fr', mode: 'shape', scope: { kind: 'public' }, authContext: { token: 't' } });
+
+    expect(getLastImageUuid).toHaveBeenCalledWith('all', 'fr', { kind: 'public' }, 'shape');
+    expect(getImages).toHaveBeenCalledWith(
+      null,
+      { token: 't' },
+      expect.objectContaining({ mode: 'shape' }),
     );
   });
 });
