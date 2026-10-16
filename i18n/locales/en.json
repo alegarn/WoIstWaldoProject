@@ -401,6 +401,7 @@
       "guessImageLabel": "Guess picture image",
       "hideImageLabel": "Hide picture image",
       "shapeSurfaceLabel": "Draw an outline around the hiding spot",
+      "modeCueLabel": "Shape mode: draw the outline",
       "shapeClearLabel": "Clear outline",
       "shapeRedrawLabel": "Redraw outline",
       "shapeTooSimple": "Outline too simple — draw a closed shape around the spot",

@@ -53,7 +53,7 @@ const HANDLE_SWIPE_FAIL_Y = 10;
 // point-mode priority (up beats right → enigma wins).
 const DOUBLE_TAP_EDGE_ZONE_PX = 48;
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition, surfaceOverlay }) {
   const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
@@ -398,6 +398,8 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
           <EnigmaOverlay description={description} screenHeight={imageDimensionStyle.height} isOpen={enigmaOpen} onClose={handleEnigmaClose}/>
         ) : null }
       </ImageBackground>
+
+      {shapeMode && guess && surfaceOverlay}
 
       {shapeMode && (
         guess ? (

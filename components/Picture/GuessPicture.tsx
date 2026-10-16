@@ -1,5 +1,5 @@
 import { useState, useLayoutEffect, useMemo } from 'react';
-import type { FC } from 'react';
+import type { FC, ReactNode } from 'react';
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -17,11 +17,13 @@ import {
   isE2EMode,
 } from '../../utils/e2eMode';
 import { SHAPE_SPEED_BONUS_THRESHOLD_MS, SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
+import { ANY_FILTER, normalizeMode } from '../../utils/sessionFilter';
 import { GlobalStyle } from '../../constants/theme';
 import { useReadingGrace } from '../../hooks/useReadingGrace';
 import { useSpeedTimer } from '../../hooks/useSpeedTimer';
 import { useTargetDrag } from '../../hooks/useTargetDrag';
 import type { Point } from '../../utils/shapeGeometry';
+import ModeCue from './ModeCue';
 
 type ImageMode = 'point' | 'shape';
 type ShapeOutline = Point[];
@@ -46,7 +48,7 @@ type ImageDimensionStyle = { width: number; height: number };
 type HiddenLocation = { x: number; y: number };
 type Selection = { location: SelectionLocation; target: SelectionTarget };
 
-type ToAdScreenArgs = {
+export type ToAdScreenArgs = {
   location: SelectionLocation | null;
   hiddenLocation?: HiddenLocation;
   screenWidth: number;
@@ -57,7 +59,7 @@ type ToAdScreenArgs = {
   shape?: ShapeOutline | null;
 };
 
-type GuessPictureProps = {
+export type GuessPictureProps = {
   navigation?: unknown;
   imageFile?: string;
   pictureId?: string;
@@ -70,6 +72,9 @@ type GuessPictureProps = {
   // the F drawing surface; `shape` is the hidden normalized outline.
   mode?: ImageMode;
   shape?: ShapeOutline | null;
+  // Session MODE filter (raw route value, unnormalized): gates the Mode Cue —
+  // shown only for shape cards in a feed that normalizes to 'any'.
+  filterMode?: string;
   screenDimensions: { width: number; height: number };
   toAdScreen?: (args: ToAdScreenArgs) => void | Promise<void>;
   skipInstructions?: boolean;
@@ -96,6 +101,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
   hiddenLocation,
   mode,
   shape,
+  filterMode,
   screenDimensions,
   toAdScreen,
   skipInstructions,
@@ -106,6 +112,10 @@ const GuessPicture: FC<GuessPictureProps> = ({
 }) => {
   const { t } = useTranslation();
   const isShapeMode = mode === 'shape';
+  // Mode Cue (shape-mode-cue plan): shape card + feed filter normalizing to
+  // 'any' + never in E2E mode (Maestro stays deterministic). GuessPicture owns
+  // the gating; ShowPicture just renders the generic surface overlay node.
+  const showModeCue = isShapeMode && normalizeMode(filterMode) === ANY_FILTER && !isE2EMode();
 
   const [dismissed, setDismissed] = useState(false);
   const showFilter = !skipInstructions && !dismissed;
@@ -302,6 +312,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
         imageHeight={imageHeight}
         enigmaOpen={isShapeMode ? shapeEnigmaOpen : undefined}
         onTargetDragPosition={isShapeMode ? undefined : dragPosition}
+        surfaceOverlay={showModeCue ? <ModeCue imageDimensionStyle={imageDimensionStyle} /> : undefined}
       />
     );
   };

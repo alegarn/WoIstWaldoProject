@@ -1437,4 +1437,58 @@ describe('ShowPicture', () => {
       expect(leaked).toHaveLength(0);
     });
   });
+
+  describe('surface overlay slot (shape-mode-cue plan 3a)', () => {
+    // The slot is a generic node: ShowPicture must render whatever it is
+    // given, in the shape surface layer. A bare host element pins placement
+    // structurally without importing the (unwired) ModeCue concept.
+    const OVERLAY_TEST_ID = 'cue-surface-overlay-marker';
+
+    function overlayNode() {
+      return React.createElement('View', { testID: OVERLAY_TEST_ID });
+    }
+
+    function hasOverlay(renderer) {
+      return renderer.root.findAll((node) => node.props.testID === OVERLAY_TEST_ID);
+    }
+
+    it('renders the surfaceOverlay node in the shape surface layer on the guess side', () => {
+      const renderer = renderShowPicture({
+        shapeMode: true,
+        guess: true,
+        touchLocation: null,
+        target: null,
+        outline: null,
+        onOutlineChange: jest.fn(),
+        hiddenOutline: [
+          { x: 0.1, y: 0.1 },
+          { x: 0.9, y: 0.1 },
+          { x: 0.5, y: 0.9 },
+          { x: 0.1, y: 0.1 },
+        ],
+        imageWidth: 1000,
+        imageHeight: 1000,
+        surfaceOverlay: overlayNode(),
+      });
+
+      // Structural placement: the overlay lives INSIDE the surface Pressable
+      // (the shape surface layer stacking above the enigma panel), not as a
+      // detached later sibling of the whole picture.
+      const surface = findByTestID(renderer, 'game.picture.guess-surface');
+      expect(surface.findAll((node) => node.props.testID === OVERLAY_TEST_ID).length).toBeGreaterThan(0);
+      expect(hasOverlay(renderer)).toHaveLength(1);
+    });
+
+    it('never renders the surfaceOverlay on the hide side (guess-only contract)', () => {
+      const renderer = renderShowPicture({
+        shapeMode: true,
+        guess: false,
+        outline: [{ x: 0.2, y: 0.3 }],
+        onOutlineChange: jest.fn(),
+        surfaceOverlay: overlayNode(),
+      });
+
+      expect(hasOverlay(renderer)).toHaveLength(0);
+    });
+  });
 });

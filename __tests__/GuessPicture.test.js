@@ -108,11 +108,12 @@ jest.mock('../utils/shapeMatch', () => ({
 
 import React from 'react';
 import { StyleSheet } from 'react-native';
-import { act, fireEvent, render } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 
 import GuessPicture from '../components/Picture/GuessPicture';
 import { getE2EShapeOutline } from '../utils/e2eMode';
 import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
+import i18n from '../i18n';
 
 // Real setImageDimensions (landscape 640×480 onto a 320×640 screen) resolves
 // the picture surface to 320×240; the target is min(w,h) * 0.05 = 16 and its
@@ -821,6 +822,106 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.shape-enigma')).toBeNull();
       expect(screen.queryByTestId('game.picture.shape-exit')).toBeNull();
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+    });
+  });
+
+  describe('mode cue gating (shape-mode-cue plan 3a)', () => {
+    const HIDDEN_SHAPE = [
+      { x: 0.5, y: 0.3 },
+      { x: 0.7, y: 0.5 },
+      { x: 0.5, y: 0.7 },
+      { x: 0.3, y: 0.5 },
+      { x: 0.5, y: 0.3 },
+    ];
+
+    const cueLabel = () => i18n.t('game.picture.modeCueLabel');
+
+    let cueClockMs = 0;
+    let cueFrameSpy;
+    let cueClockSpy;
+
+    // ModeCue completes ≈360ms after mount on the JS animation driver, which
+    // eases on Date.now() — jest fake timers do NOT fake Date. Harness pinned
+    // to the suite precedent (ModeCue.test.tsx / GuessScreen.test.tsx): fake
+    // timers + a manual clock + a 16ms rAF shim stepped in lockstep so the
+    // completion state update fires INSIDE act().
+    function useCueAnimationTimers() {
+      jest.useFakeTimers();
+      cueClockMs = 0;
+      cueClockSpy = jest.spyOn(Date, 'now').mockImplementation(() => cueClockMs);
+      cueFrameSpy = jest
+        .spyOn(globalThis, 'requestAnimationFrame')
+        .mockImplementation((cb) => setTimeout(() => cb(cueClockMs), 16));
+    }
+
+    async function drainCueAnimations() {
+      for (let elapsed = 0; elapsed < 600; elapsed += 16) {
+        cueClockMs += 16;
+        await act(async () => {
+          jest.advanceTimersByTime(16);
+        });
+      }
+    }
+
+    beforeEach(() => {
+      // The outer beforeEach pins E2E mode TRUE; cue positives must disable
+      // it explicitly or they would fail for the wrong reason.
+      setE2EMode(false);
+      useCueAnimationTimers();
+    });
+
+    afterEach(() => {
+      // Unmount while animations are frozen, restore the clock, drop queued
+      // frames — nothing leaks onto real timers.
+      cleanup();
+      cueFrameSpy.mockRestore();
+      cueClockSpy.mockRestore();
+      jest.clearAllTimers();
+      jest.useRealTimers();
+    });
+
+    function cueQuery(screen) {
+      return screen.queryByLabelText(cueLabel());
+    }
+
+    it('shape card with session filter any renders the mode cue and unmounts it once faded', async () => {
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, filterMode: 'any' });
+
+      expect(cueQuery(screen)).not.toBeNull();
+
+      await drainCueAnimations();
+
+      expect(cueQuery(screen)).toBeNull();
+    });
+
+    it('shape card with filterMode absent normalizes to any and renders the mode cue', async () => {
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE });
+
+      expect(cueQuery(screen)).not.toBeNull();
+
+      await drainCueAnimations();
+
+      expect(cueQuery(screen)).toBeNull();
+    });
+
+    it('shape card with session filter pinned to shape renders no mode cue', async () => {
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, filterMode: 'shape' });
+
+      expect(cueQuery(screen)).toBeNull();
+    });
+
+    it('point mode renders no mode cue', async () => {
+      const screen = await renderToPicture({ filterMode: 'any' });
+
+      expect(cueQuery(screen)).toBeNull();
+    });
+
+    it('e2e mode renders no mode cue even for a shape card in an any feed', async () => {
+      setE2EMode(true);
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, filterMode: 'any' });
+
+      expect(cueQuery(screen)).toBeNull();
     });
   });
 });
