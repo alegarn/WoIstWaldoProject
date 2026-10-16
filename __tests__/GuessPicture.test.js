@@ -56,11 +56,12 @@ jest.mock('react-native-gesture-handler', () => {
       gesture.onFinalizeHandler = cb;
       return gesture;
     };
+    gesture.numberOfTaps = () => gesture;
     return gesture;
   }
 
   return {
-    Gesture: { Pan: makePan },
+    Gesture: { Pan: makePan, Tap: makePan },
     GestureDetector: ({ children }) => React.createElement(React.Fragment, null, children),
     GestureHandlerRootView: ({ children }) => React.createElement(React.Fragment, null, children),
   };
@@ -768,8 +769,19 @@ describe('GuessPicture', () => {
       }));
     });
 
-    it('renders explicit enigma and exit controls; exit fires onEdgeSwipe', async () => {
+    it('in real (non-e2e) mode renders no explicit enigma/exit controls', async () => {
       setE2EMode(false);
+      const onEdgeSwipe = jest.fn();
+
+      const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, onEdgeSwipe });
+
+      expect(screen.queryByTestId('game.picture.shape-enigma')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-exit')).toBeNull();
+      expect(screen.queryByTestId('guess.enigma.panel')).toBeNull();
+    });
+
+    it('in e2e mode renders explicit enigma and exit controls; exit fires onEdgeSwipe', async () => {
+      setE2EMode(true);
       const onEdgeSwipe = jest.fn();
 
       const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, onEdgeSwipe });
@@ -783,8 +795,8 @@ describe('GuessPicture', () => {
       expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
     });
 
-    it('re-opens the enigma from the explicit control after closing it', async () => {
-      setE2EMode(false);
+    it('in e2e mode re-opens the enigma from the explicit control after closing it', async () => {
+      setE2EMode(true);
 
       // skipInstructions=true renders the picture directly (no Start button).
       const screen = render(
