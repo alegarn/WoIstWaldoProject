@@ -465,6 +465,47 @@ describe('services/groups', () => {
         { headers: AUTH_HEADERS, params: { after: 'cursor-1', limit: 10 } }
       );
     });
+
+    it('fetchPrivateLeaderboard forwards the board param into the request config', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [], next_cursor: null, has_more: false },
+      });
+
+      await fetchPrivateLeaderboard(CONTEXT, { groupId: 'g-3', board: 'shape', limit: 20 });
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-3/leaderboard/',
+        { headers: AUTH_HEADERS, params: { board: 'shape', limit: 20 } }
+      );
+    });
+
+    it('fetchPrivateLeaderboardNext forwards the board param into the request config', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [], next_cursor: null, has_more: false },
+      });
+
+      await fetchPrivateLeaderboardNext(CONTEXT, { groupId: 'g-3', after: 'cursor-1', board: 'point', limit: 10 });
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-3/leaderboard/',
+        { headers: AUTH_HEADERS, params: { after: 'cursor-1', board: 'point', limit: 10 } }
+      );
+    });
+
+    it('fetchPrivateLeaderboard omits the board param when not provided', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [], next_cursor: null, has_more: false },
+      });
+
+      await fetchPrivateLeaderboard(CONTEXT, { groupId: 'g-3', limit: 20 });
+
+      const config = axios.get.mock.calls[0][1];
+      expect(config.params).toEqual({ limit: 20 });
+      expect(config.params).not.toHaveProperty('board');
+    });
   });
 
   describe('groupUploadApi', () => {

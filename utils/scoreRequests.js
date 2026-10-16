@@ -113,7 +113,7 @@ export async function submitScoreBatch({ items, context }) {
     .catch(() => false);
 }
 
-export async function getRankingData(context, { scope, top, window, page, after, limit } = {}) {
+export async function getRankingData(context, { scope, top, window, page, after, limit, board } = {}) {
   if (isE2EMode()) {
     const e2eData = buildE2ERankingResponse({ after, limit, scope, page });
     return { status: 200, data: e2eData };
@@ -121,9 +121,9 @@ export async function getRankingData(context, { scope, top, window, page, after,
 
   if (isPrivateScope(scope)) {
     if (after) {
-      return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit });
+      return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit, board });
     }
-    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, limit });
+    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, limit, board });
   }
 
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
@@ -137,6 +137,7 @@ export async function getRankingData(context, { scope, top, window, page, after,
   if (page) params.page = page;
   if (after) params.after = after;
   if (limit) params.limit = limit;
+  if (board) params.board = board;
 
   const config = {
     headers: headers,

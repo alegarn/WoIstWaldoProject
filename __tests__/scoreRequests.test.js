@@ -16,10 +16,16 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
 }));
 
+jest.mock('../services/groups/groupLeaderboardApi', () => ({
+  fetchPrivateLeaderboard: jest.fn(),
+  fetchPrivateLeaderboardNext: jest.fn(),
+}));
+
 import axios from 'axios';
 
 import { getBackendHeaders, setHeaders } from '../utils/auth';
 import { buildE2ERankingRows, buildE2ERankingResponse, buildE2EUserScores, isE2EMode } from '../utils/e2eMode';
+import { fetchPrivateLeaderboard, fetchPrivateLeaderboardNext } from '../services/groups/groupLeaderboardApi';
 import { getRankingData, getUserScores, submitScoreBatch, updateUserScore } from '../utils/scoreRequests';
 
 describe('scoreRequests utilities', () => {
@@ -283,6 +289,93 @@ describe('scoreRequests utilities', () => {
         pagy: null,
       },
     });
+  });
+
+  it('forwards board and limit to the public ranking params', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'global', top: 10, window: 'weekly', board: 'point', limit: 20 }
+    );
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { scope: 'global', top: 10, window: 'weekly', board: 'point', limit: 20 },
+      }
+    );
+  });
+
+  it('does not send a board key when getRankingData is called without one', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData({ token: 'Bearer token' }, { scope: 'global', top: 10, window: 'weekly' });
+
+    const config = axios.get.mock.calls[0][1];
+    expect(config.params).toEqual({ scope: 'global', top: 10, window: 'weekly' });
+    expect(config.params).not.toHaveProperty('board');
+  });
+
+  describe('private scope leaderboard forwarding', () => {
+    it('forwards board and limit to fetchPrivateLeaderboard on the initial private fetch', async () => {
+      fetchPrivateLeaderboard.mockResolvedValue({ status: 200, data: { rows: [], nextCursor: null, hasMore: false } });
+
+      const context = { token: 'Bearer token' };
+      await getRankingData(context, { scope: { kind: 'private', groupId: 'g-9' }, board: 'point', limit: 20 });
+
+      expect(fetchPrivateLeaderboard).toHaveBeenCalledWith(context, { groupId: 'g-9', board: 'point', limit: 20 });
+      expect(fetchPrivateLeaderboardNext).not.toHaveBeenCalled();
+    });
+
+    it('forwards board and limit to fetchPrivateLeaderboardNext on a private cursor fetch', async () => {
+      fetchPrivateLeaderboardNext.mockResolvedValue({ status: 200, data: { rows: [], nextCursor: null, hasMore: false } });
+
+      const context = { token: 'Bearer token' };
+      await getRankingData(context, {
+        scope: { kind: 'private', groupId: 'g-9' },
+        after: 'cursor-1',
+        board: 'point',
+        limit: 20,
+      });
+
+      expect(fetchPrivateLeaderboardNext).toHaveBeenCalledWith(context, {
+        groupId: 'g-9',
+        after: 'cursor-1',
+        board: 'point',
+        limit: 20,
+      });
+      expect(fetchPrivateLeaderboard).not.toHaveBeenCalled();
+    });
+  });
+
+  it('keeps getUserScores params free of board and limit', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        total: { total_score: 3, total_hide_score: 0, total_guess_score: 3 },
+        hide_info: { hide_count: 0 },
+        guess_info: { guess_count: 3 },
+      },
+    });
+
+    await getUserScores({
+      username: 'waldo',
+      context: { token: 'Bearer token' },
+      scope: { kind: 'private', groupId: 'g-9' },
+    });
+
+    const config = axios.get.mock.calls[0][1];
+    expect(config.params).toEqual({ username: 'waldo', group_id: 'g-9' });
+    expect(config.params).not.toHaveProperty('board');
+    expect(config.params).not.toHaveProperty('limit');
   });
 
   it('maps getUserScores failures into a status and message without throwing', async () => {

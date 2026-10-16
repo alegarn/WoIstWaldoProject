@@ -114,6 +114,15 @@
     "totalGuessScore": "Punteggio totale indovinelli: {{value}}",
     "hiddenCount": "Numero di immagini nascoste: {{value}}",
     "guessedCount": "Numero di immagini indovinate: {{value}}",
+    "pointScore": "Punteggio punti: {{value}}",
+    "contourScore": "Punteggio contorno: {{value}}",
+    "pointGuessScore": "Punteggio indovinelli punti: {{value}}",
+    "shapeGuessScore": "Punteggio indovinelli contorno: {{value}}",
+    "pointHideScore": "Punteggio nascondino punti: {{value}}",
+    "shapeHideScore": "Punteggio nascondino contorno: {{value}}",
+    "detail": {
+      "title": "Dettagli di {{name}}"
+    },
     "authFailed": "{{message}}. Autenticazione non riuscita. Prova a riconnetterti. Non puoi ottenere una classifica.",
     "genericFailed": "{{message}}. Prova a riconnetterti. Non puoi ottenere una classifica."
   },
@@ -124,7 +133,17 @@
       "score": "Punti",
       "maxStreak": "Serie migliore",
       "others": "Altri",
-      "moreScores": "Mostra più punteggi per {{name}}"
+      "moreScores": "Mostra più punteggi per {{name}}",
+      "pointScore": "Punteggio punti",
+      "contourScore": "Punteggio contorno",
+      "youAreRanked": "Sei in posizione #{{rank}}",
+      "endOfRanking": "Fine della classifica",
+      "retry": "Riprova",
+      "board": {
+        "total": "Totale",
+        "point": "Punto",
+        "shape": "Contorno"
+      }
     },
     "uploadNotice": {
       "title": "Si nasconde lì?",

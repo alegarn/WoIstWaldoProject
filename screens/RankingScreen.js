@@ -1,11 +1,15 @@
-import { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { RANKING } from '../constants/ranking';
+import { BOARDS, columnsForBoard } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
+import { rgbaFromHex } from '../utils/privateGroupTheme';
 
 import TableComponent from '../components/UI/TableComponent';
+import BoardTabs from '../components/Ranking/BoardTabs';
+import CenteredModal from '../components/UI/CenteredModal';
+import Spinner from '../components/UI/Spinner';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 import { AuthContext } from '../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../store/privateGroupTheme-context';
@@ -15,17 +19,84 @@ import { useActiveGroup } from '../hooks/useActiveGroup';
 // Keeps memory stable on low-end devices while allowing deep browsing.
 // Old slices are evicted when the cap is exceeded (see fetchCursorPage).
 const RANKING_RESIDENT_ROW_CAP = 150;
+const RANKING_PAGE_LIMIT = 20;
+const RANKING_TOP = 10;
+const RANKING_WINDOW = 5;
+
+function scoreColumnFor(columns) {
+  return columns.find(
+    (column) => column.kind === 'score' || column.kind === 'score-emphasis'
+  );
+}
+
+function convertRankingRows(rows, columns, { renumber = false, baseRank = 0 } = {}) {
+  // Two-key row contract: `score` = normalized board score (plan D4); raw total_score/point_score/shape_score passthroughs feed TableComponent descriptor field reads.
+  const scoreColumn = scoreColumnFor(columns);
+  return (rows || []).map((row, index) => ({
+    rank: renumber ? baseRank + index + 1 : Number(row.rank),
+    name: row.username,
+    score: row[scoreColumn?.field],
+    maxStreak: Number(row.max_streak || 0),
+    others: "",
+    userId: row.user_id,
+    total_score: row.total_score,
+    point_score: row.point_score,
+    shape_score: row.shape_score,
+  }));
+}
+
+function appendSliceWithCap(prevSlices, incoming, cap) {
+  const next = [...prevSlices, incoming];
+  const totalRows = next.reduce((sum, slice) => sum + slice.length, 0);
+  if (totalRows <= cap) return next;
+  let kept = [];
+  let count = 0;
+  for (let i = next.length - 1; i >= 0; i--) {
+    if (count + next[i].length > cap && kept.length > 0) break;
+    kept.unshift(next[i]);
+    count += next[i].length;
+  }
+  return kept;
+}
+
+function buildDetailRows(scores) {
+  const total = scores?.total;
+  const hideInfo = scores?.hide_info;
+  const guessInfo = scores?.guess_info;
+  const rows = [
+    ['total_score', total?.total_score, 'ranking.totalScore'],
+    ['point_score', total?.point_score, 'ranking.pointScore'],
+    ['shape_score', total?.shape_score, 'ranking.contourScore'],
+    ['total_hide_score', total?.total_hide_score, 'ranking.totalHideScore'],
+    ['hide_count', hideInfo?.hide_count, 'ranking.hiddenCount'],
+    ['guess_count', guessInfo?.guess_count, 'ranking.guessedCount'],
+    ['total_point_guess_score', total?.total_point_guess_score, 'ranking.pointGuessScore'],
+    ['total_shape_guess_score', total?.total_shape_guess_score, 'ranking.shapeGuessScore'],
+    ['total_point_hide_score', total?.total_point_hide_score, 'ranking.pointHideScore'],
+    ['total_shape_hide_score', total?.total_shape_hide_score, 'ranking.shapeHideScore'],
+  ];
+  return rows
+    .filter(([, value]) => value != null)
+    .map(([field, value, labelKey]) => ({ field, label: labelKey, value }));
+}
 
 export default function RankingScreen({ route, navigation }) {
 
   const { t } = useTranslation();
 
+  const [board, setBoard] = useState('total');
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [me, setMe] = useState(null);
+  const [fetchError, setFetchError] = useState(null);
   const [mode, setMode] = useState('initial');
+  const [listEpoch, setListEpoch] = useState(0);
+  const [detail, setDetail] = useState(null);
   const fetchingRef = useRef(false);
+  const epochRef = useRef(0);
 
   const context = useContext(AuthContext);
   const routeScope = route?.params?.scope;
@@ -33,14 +104,25 @@ export default function RankingScreen({ route, navigation }) {
   const { scope: activeScope } = useActiveGroup();
   const rankingScope = isPrivate ? (routeScope ?? activeScope) : 'initial';
 
-  const tableHeaders = RANKING?.tableHeaders;
+  const columns = useMemo(() => columnsForBoard(board), [board]);
 
-  const displayRows = slices.flat();
+  const displayRows = useMemo(() => slices.flat(), [slices]);
 
-  const rankingDatum = displayRows.length > 0 ? {
-    tableHeaders: tableHeaders.slice(0, 4).concat(["Others"]),
-    tableScores: displayRows,
-  } : null;
+  const rankingDatum = useMemo(
+    () => (displayRows.length > 0 ? { board, columns, tableScores: displayRows } : null),
+    [displayRows, board, columns]
+  );
+
+  const handleError = useCallback((message, status) => {
+    if (status === 401) {
+      Alert.alert(t('auth.serverProblemTitle'), t('ranking.authFailed', { message }));
+      return;
+    }
+    if (status !== 200) {
+      Alert.alert(t('auth.serverProblemTitle'), t('ranking.genericFailed', { message }));
+      return;
+    }
+  }, [t]);
 
   const showSpecificDatum = useCallback(async (username) => {
     const response = await getUserScores({username, context: context, scope: rankingScope});
@@ -62,27 +144,11 @@ export default function RankingScreen({ route, navigation }) {
       Alert.alert(t('ranking.scoresUnavailable'), t('ranking.detailsUnavailable', { name: username }));
       return
     }
-    let infoString = '';
 
-    infoString += `${t('ranking.totalScore', { value: total.total_score })}\n`;
-    infoString += `${t('ranking.totalHideScore', { value: total.total_hide_score })}\n`;
-    infoString += `${t('ranking.totalGuessScore', { value: total.total_guess_score })}\n`;
-    infoString += `${t('ranking.hiddenCount', { value: hideInfo.hide_count })}\n`;
-    infoString += `${t('ranking.guessedCount', { value: guessInfo.guess_count })}\n`;
+    setDetail({ name: username, scores });
+  }, [context, rankingScope, t, handleError]);
 
-    Alert.alert(t('ranking.complementaryTitle', { name: username }), infoString);
-  }, [context, rankingScope, t]);
-
-  function handleError(message, status) {
-    if (status === 401) {
-      Alert.alert(t('auth.serverProblemTitle'), t('ranking.authFailed', { message }));
-      return
-    };
-    if (status !== 200) {
-      Alert.alert(t('auth.serverProblemTitle'), t('ranking.genericFailed', { message }));
-      return
-    };
-  };
+  const closeDetail = useCallback(() => setDetail(null), []);
 
   useEffect(() => {
     if (theme) {
@@ -96,87 +162,120 @@ export default function RankingScreen({ route, navigation }) {
     }
   }, [navigation, group?.name, theme?.primaryColor, theme?.headerTintColor, t]);
 
+  const isCurrentEpoch = (epoch) => epochRef.current === epoch;
 
+  const loadFirstPage = useCallback(async (nextBoard) => {
+    const epoch = ++epochRef.current;
+    setIsLoading(true);
+    setFetchError(null);
+    try {
+      const response = await getRankingData(context, {
+        scope: rankingScope,
+        top: RANKING_TOP,
+        window: RANKING_WINDOW,
+        limit: RANKING_PAGE_LIMIT,
+        board: nextBoard,
+      });
 
-  const handleRankingData = useCallback(async () => {
-    const response = await getRankingData(context, { scope: rankingScope, top: 10, window: 5 });
+      if (!isCurrentEpoch(epoch)) return;
 
-    if (response?.status !== 200) {
-      handleError(response?.message, response?.status);
-      return;
+      if (response?.status !== 200) {
+        setFetchError(response?.message ?? '');
+        return;
+      }
+
+      const { rows, nextCursor: cursor } = response.data;
+      setSlices([convertRankingRows(rows, columnsForBoard(nextBoard))]);
+      setNextCursor(cursor);
+      setHasMore(true);
+      setMode('initial');
+      setMe(response.data.me ?? null);
+    } catch (error) {
+      if (!isCurrentEpoch(epoch)) return;
+      setFetchError(error?.message ?? '');
+    } finally {
+      if (isCurrentEpoch(epoch)) setIsLoading(false);
     }
-
-    const { rows, nextCursor: cursor, hasMore: more } = response.data;
-    const converted = (rows || []).map((row) => ({
-      rank: Number(row.rank),
-      name: row.username,
-      score: row.total_score,
-      maxStreak: Number(row.max_streak || 0),
-      others: "",
-      userId: row.user_id,
-    }));
-
-    setSlices([converted]);
-    setNextCursor(cursor);
-    setHasMore(true);
-    setMode('initial');
-    return response;
   }, [context, rankingScope]);
 
   const fetchCursorPage = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
     fetchingRef.current = true;
     setIsLoading(true);
+    setFetchError(null);
 
+    const epoch = epochRef.current;
     const cursorParams = isPrivate
-      ? { scope: rankingScope, after: nextCursor }
-      : { after: nextCursor };
-    const response = await getRankingData(context, cursorParams);
+      ? { scope: rankingScope, after: nextCursor, limit: RANKING_PAGE_LIMIT, board }
+      : { after: nextCursor, limit: RANKING_PAGE_LIMIT, board };
 
-    if (response?.status !== 200) {
+    try {
+      const response = await getRankingData(context, cursorParams);
+
+      if (!isCurrentEpoch(epoch)) return;
+
+      if (response?.status !== 200) {
+        setFetchError(response?.message ?? '');
+        return;
+      }
+
+      const { rows, nextCursor: cursor, hasMore: more } = response.data;
+      const rawRows = rows || [];
+
+      setSlices(prev => {
+        const residentRows = prev.flat();
+        const converted = convertRankingRows(rawRows, columns, { renumber: true, baseRank: residentRows.length });
+        const finalConverted = mode === 'initial'
+          ? (() => {
+              const existingIds = new Set(residentRows.map(r => r.userId));
+              return converted.filter(r => !existingIds.has(r.userId));
+            })()
+          : converted;
+        return appendSliceWithCap(prev, finalConverted, RANKING_RESIDENT_ROW_CAP);
+      });
+      setNextCursor(cursor);
+      setHasMore(more !== false);
+      setMode('browse');
+    } catch (error) {
+      if (!isCurrentEpoch(epoch)) return;
+      setFetchError(error?.message ?? '');
+    } finally {
       fetchingRef.current = false;
-      setIsLoading(false);
-      handleError(response?.message, response?.status);
+      if (isCurrentEpoch(epoch)) setIsLoading(false);
+    }
+  }, [board, columns, context, hasMore, isPrivate, mode, nextCursor, rankingScope]);
+
+  const handleBoardSwitch = useCallback((nextBoard) => {
+    if (!BOARDS.includes(nextBoard) || nextBoard === board) return;
+    epochRef.current += 1;
+    setBoard(nextBoard);
+    setSlices([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setIsLoading(true);
+    setMode('initial');
+    setMe(null);
+    setFetchError(null);
+    setListEpoch(current => current + 1);
+  }, [board]);
+
+  const handleRefresh = useCallback(async () => {
+    setListEpoch(current => current + 1);
+    setIsRefreshing(true);
+    try {
+      await loadFirstPage(board);
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [board, loadFirstPage]);
+
+  const handleRetry = useCallback(() => {
+    if (displayRows.length > 0) {
+      fetchCursorPage();
       return;
     }
-
-    const { rows, nextCursor: cursor, hasMore: more } = response.data;
-    const baseRank = displayRows.length;
-    const converted = (rows || []).map((row, index) => ({
-      rank: baseRank + index + 1,
-      name: row.username,
-      score: row.total_score || row.totalScore,
-      maxStreak: Number(row.max_streak || 0),
-      others: "",
-      userId: row.user_id,
-    }));
-
-    const finalConverted = mode === 'initial'
-      ? (() => {
-          const existingIds = new Set(displayRows.map(r => r.userId));
-          return converted.filter(r => !existingIds.has(r.userId));
-        })()
-      : converted;
-
-    setSlices(prev => {
-      const next = [...prev, finalConverted];
-      const totalRows = next.reduce((sum, s) => sum + s.length, 0);
-      if (totalRows <= RANKING_RESIDENT_ROW_CAP) return next;
-      let kept = [];
-      let count = 0;
-      for (let i = next.length - 1; i >= 0; i--) {
-        if (count + next[i].length > RANKING_RESIDENT_ROW_CAP && kept.length > 0) break;
-        kept.unshift(next[i]);
-        count += next[i].length;
-      }
-      return kept;
-    });
-    setNextCursor(cursor);
-    setHasMore(more !== false);
-    setMode('browse');
-    fetchingRef.current = false;
-    setIsLoading(false);
-  }, [context, hasMore, nextCursor, displayRows.length, mode, rankingScope]);
+    loadFirstPage(board);
+  }, [board, displayRows.length, fetchCursorPage, loadFirstPage]);
 
   const handleEndReached = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
@@ -184,18 +283,101 @@ export default function RankingScreen({ route, navigation }) {
   }, [hasMore, fetchCursorPage]);
 
   useEffect(() => {
-    handleRankingData();
-  }, [handleRankingData])
+    loadFirstPage(board);
+  }, [loadFirstPage, board])
+
+  const accentColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
+  const chromeHairline = theme ? theme.hairlineStrong : rgbaFromHex(GlobalStyle.color.secondaryColor, 0.5);
+  const chromeText = theme ? theme.text : GlobalStyle.color.onSurface;
+
+  const detailRows = useMemo(() => (detail ? buildDetailRows(detail.scores) : []), [detail]);
 
   return (
     <PrivateGroupThemeProvider group={group}>
-      {rankingDatum ? (
-        <View style={styles.screen} testID="ranking.screen">
-          <TableComponent data={rankingDatum} onPress={showSpecificDatum} onEndReached={handleEndReached} />
+      <View style={styles.screen} testID="ranking.screen">
+        <ScrollView
+          style={styles.chrome}
+          contentContainerStyle={styles.chromeContent}
+        >
+          <BoardTabs activeBoard={board} onSelectBoard={handleBoardSwitch} />
+          {me ? (
+            <View style={[styles.meCard, { borderColor: chromeHairline }]} testID="ranking.meCard">
+              <Text style={[styles.meCardRank, { color: accentColor }]} testID="ranking.meCard.rank">
+                {t('ui.ranking.youAreRanked', { rank: me.rank })}
+              </Text>
+              {me.username ? (
+                <Text style={[styles.meCardName, { color: chromeText }]} testID="ranking.meCard.name">
+                  {me.username}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+        </ScrollView>
+        {rankingDatum || fetchError ? (
+          <TableComponent
+            key={listEpoch}
+            data={rankingDatum}
+            onPress={showSpecificDatum}
+            onEndReached={handleEndReached}
+            refreshing={isRefreshing}
+            onRefresh={handleRefresh}
+            refreshTint={accentColor}
+          />
+        ) : (
+          <LoadingOverlay message={t('ranking.loadingTable')}/>
+        )}
+        <View style={styles.footer} testID="ranking.footer">
+          {fetchError ? (
+            <>
+              <View testID="ranking.footer.error">
+                <Text style={styles.footerError}>
+                  {t('ranking.genericFailed', { message: fetchError })}
+                </Text>
+              </View>
+              <Pressable
+                style={styles.retryButton}
+                onPress={handleRetry}
+                testID="ranking.footer.retry"
+              >
+                <Text style={[styles.retryText, { color: accentColor }]}>{t('ui.ranking.retry')}</Text>
+              </Pressable>
+            </>
+          ) : isLoading && !isRefreshing ? (
+            <View testID="ranking.footer.spinner">
+              <Spinner />
+            </View>
+          ) : !hasMore ? (
+            <View testID="ranking.footer.end">
+              <Text style={styles.footerEnd}>{t('ui.ranking.endOfRanking')}</Text>
+            </View>
+          ) : null}
         </View>
-      ) : (
-        <LoadingOverlay message={t('ranking.loadingTable')}/>
-      )}
+        {detail ? (
+          <View testID="ranking.detail.modal">
+            <CenteredModal
+              isModalVisible={true}
+              onCancel={closeDetail}
+              singleButton={true}
+              testIDPrefix="ranking.detail.modal"
+            >
+              <View style={styles.detailBody}>
+                <Text style={[styles.detailTitle, { color: accentColor }]}>
+                  {t('ranking.detail.title', { name: detail.name })}
+                </Text>
+                {detailRows.map((row) => (
+                  <Text
+                    key={row.field}
+                    style={styles.detailRow}
+                    testID={`ranking.detail.field.${row.field}`}
+                  >
+                    {t(row.label, { value: row.value })}
+                  </Text>
+                ))}
+              </View>
+            </CenteredModal>
+          </View>
+        ) : null}
+      </View>
     </PrivateGroupThemeProvider>
   );
 };
@@ -204,5 +386,68 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: GlobalStyle.color.primaryColor800,
+  },
+  chrome: {
+    flexGrow: 0,
+  },
+  chromeContent: {
+    paddingBottom: 4,
+  },
+  meCard: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  meCardRank: {
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  meCardName: {
+    fontSize: 13,
+    marginTop: 2,
+  },
+  footer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  footerError: {
+    color: '#fff',
+    textAlign: 'center',
+    fontSize: 12,
+  },
+  retryButton: {
+    marginTop: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(160, 118, 249, 0.5)',
+    borderRadius: 8,
+  },
+  retryText: {
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  footerEnd: {
+    color: 'rgba(255, 255, 255, 0.55)',
+    fontSize: 12,
+  },
+  detailBody: {
+    width: '100%',
+  },
+  detailTitle: {
+    fontWeight: '700',
+    fontSize: 16,
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  detailRow: {
+    fontSize: 15,
+    paddingVertical: 3,
+    textAlign: 'center',
   },
 });

@@ -4,34 +4,46 @@ import { act, create } from 'react-test-renderer';
 
 import TableComponent from '../components/UI/TableComponent';
 import { GlobalStyle } from '../constants/theme';
+import { columnsForBoard } from '../constants/ranking';
 import { PrivateGroupThemeProvider } from '../store/privateGroupTheme-context';
 import { getPrivateGroupTheme } from '../utils/privateGroupTheme';
 
 describe('TableComponent', () => {
+  const totalRows = [
+    { rank: 1, name: 'waldo', total_score: 25, maxStreak: 7, others: '', userId: 'u-1' },
+    { rank: 2, name: 'odile', total_score: 14, maxStreak: 3, others: '', userId: 'u-2' },
+  ];
+
   const data = {
-    tableHeaders: ['Rank', 'Name', 'Score', 'Others'],
-    tableScores: [
-      { rank: 1, name: 'waldo', score: 25, others: '' },
-      { rank: 2, name: 'odile', score: 14, others: '' },
-    ],
+    columns: columnsForBoard('total'),
+    tableScores: totalRows,
   };
 
-  const dataFiveCol = {
-    tableHeaders: ['Rank', 'Name', 'Score', 'Max Streak', 'Others'],
-    tableScores: [
-      { rank: 1, name: 'waldo', score: 25, maxStreak: 7, others: '' },
-      { rank: 2, name: 'odile', score: 14, maxStreak: 3, others: '' },
-    ],
-  };
-
-  async function renderTable(dataOverride) {
+  async function renderTable(dataOverride, wrapper) {
     let renderer;
 
+    const table = <TableComponent data={dataOverride ?? data} onPress={jest.fn()} />;
+
     await act(async () => {
-      renderer = create(<TableComponent data={dataOverride ?? data} onPress={jest.fn()} />);
+      renderer = create(wrapper ? <wrapper>{table}</wrapper> : table);
     });
 
     return renderer;
+  }
+
+  function renderWithPrivateTheme(dataOverride, group) {
+    return renderTable(
+      dataOverride,
+      ({ children }) => (
+        <PrivateGroupThemeProvider group={group}>{children}</PrivateGroupThemeProvider>
+      )
+    );
+  }
+
+  function headerLabels(renderer, count) {
+    return Array.from({ length: count }, (_, index) =>
+      renderer.root.findByProps({ testID: `ranking.header.${index}` }).props.children
+    );
   }
 
   it('renders readable row text against the leaderboard background', async () => {
@@ -79,6 +91,28 @@ describe('TableComponent', () => {
     expect(flatList.props.removeClippedSubviews).toBeTruthy();
   });
 
+  it('threads the pull-to-refresh contract into the FlatList refresh control', async () => {
+    const onRefresh = jest.fn();
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <TableComponent data={data} onPress={jest.fn()} refreshing={true} onRefresh={onRefresh} refreshTint="#FFCC00" />
+      );
+    });
+
+    const refreshControl = renderer.root.findByType(FlatList).props.refreshControl;
+    expect(refreshControl.props.refreshing).toBe(true);
+    expect(refreshControl.props.onRefresh).toBe(onRefresh);
+    expect(refreshControl.props.tintColor).toBe('#FFCC00');
+  });
+
+  it('renders no refresh control when no onRefresh contract is provided', async () => {
+    const renderer = await renderTable();
+
+    expect(renderer.root.findByType(FlatList).props.refreshControl).toBeNull();
+  });
+
   it('uses the public palette container background when no private group theme is present', async () => {
     const renderer = await renderTable();
     const container = renderer.root.findByProps({ testID: 'ranking.table' });
@@ -106,38 +140,158 @@ describe('TableComponent', () => {
     expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
   });
 
-  it('renders one header cell per provided column', async () => {
+  it('renders one header cell per provided column descriptor', async () => {
     const renderer = await renderTable();
-    const headerLabels = ['Rank', 'Name', 'Score', 'Others'];
+    const labels = headerLabels(renderer, 5);
 
-    headerLabels.forEach((label, index) => {
-      const headerCell = renderer.root.findByProps({ testID: `ranking.header.${index}` });
-      expect(headerCell.props.children).toBe(label);
+    expect(labels).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
+  });
+
+  it('renders five cells per row including the maxStreak value and the Others button', async () => {
+    const renderer = await renderTable();
+
+    const rank = renderer.root.findByProps({ testID: 'ranking.row.1.rank' });
+    const name = renderer.root.findByProps({ testID: 'ranking.row.1.name' });
+    const score = renderer.root.findByProps({ testID: 'ranking.row.1.total_score' });
+    const maxStreak = renderer.root.findByProps({ testID: 'ranking.row.1.maxStreak' });
+    const more = renderer.root.findByProps({ testID: 'ranking.row.1.more' });
+
+    expect(rank.props.children).toBe(1);
+    expect(name.props.children).toBe('waldo');
+    expect(score.props.children).toBe(25);
+    expect(maxStreak.props.children).toBe(7);
+    expect(more).toBeDefined();
+  });
+
+  describe('per-board column descriptors', () => {
+    it('renders the total board headers Rank, Name, Score, Max Streak, Others', async () => {
+      const renderer = await renderTable();
+
+      expect(headerLabels(renderer, 5)).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
+    });
+
+    it('renders the point board headers Rank, Name, Point Score, Others from descriptors', async () => {
+      const renderer = await renderTable({
+        columns: columnsForBoard('point'),
+        tableScores: [
+          { rank: 1, name: 'waldo', point_score: 30, others: '', userId: 'u-1' },
+          { rank: 2, name: 'odile', point_score: 12, others: '', userId: 'u-2' },
+        ],
+      });
+
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Point Score', 'Others']);
+      expect(renderer.root.findByProps({ testID: 'ranking.row.1.point_score' }).props.children).toBe(30);
+    });
+
+    it('renders the shape board headers Rank, Name, Contour Score, Others from descriptors', async () => {
+      const renderer = await renderTable({
+        columns: columnsForBoard('shape'),
+        tableScores: [
+          { rank: 1, name: 'waldo', shape_score: 44, others: '', userId: 'u-1' },
+          { rank: 2, name: 'odile', shape_score: 21, others: '', userId: 'u-2' },
+        ],
+      });
+
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Contour Score', 'Others']);
+      expect(renderer.root.findByProps({ testID: 'ranking.row.1.shape_score' }).props.children).toBe(44);
+    });
+
+    it('falls back to the literal header string when the i18n key is not translated yet', async () => {
+      const columns = columnsForBoard('point').map((column) =>
+        column.kind === 'score-emphasis'
+          ? { ...column, i18nKey: 'ui.ranking.notDraftedYet' }
+          : column
+      );
+      const renderer = await renderTable({
+        columns,
+        tableScores: [{ rank: 1, name: 'waldo', point_score: 30, others: '', userId: 'u-1' }],
+      });
+
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Point Score', 'Others']);
+    });
+
+    it('renders the total board when only legacy header-string data is provided', async () => {
+      const renderer = await renderTable({
+        tableHeaders: ['Rank', 'Name', 'Score', 'Max Streak', 'Others'],
+        tableScores: totalRows,
+      });
+
+      expect(headerLabels(renderer, 5)).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
+      expect(renderer.root.findByProps({ testID: 'ranking.row.1.total_score' }).props.children).toBe(25);
     });
   });
 
-  describe('with five columns including Max Streak', () => {
-    it('renders the Max Streak header in the fourth position', async () => {
-      const renderer = await renderTable(dataFiveCol);
-      const maxStreakHeader = renderer.root.findByProps({ testID: 'ranking.header.3' });
+  describe('score-emphasis cells', () => {
+    it('renders the board-primary score bold, in the secondary color, slightly larger', async () => {
+      const renderer = await renderTable();
+      const baseScore = StyleSheet.flatten(
+        renderer.root.findByProps({ testID: 'ranking.row.1.total_score' }).props.style
+      );
+      const rendererPoint = await renderTable({
+        columns: columnsForBoard('point'),
+        tableScores: [{ rank: 1, name: 'waldo', point_score: 30, others: '', userId: 'u-1' }],
+      });
+      const emphasisScore = StyleSheet.flatten(
+        rendererPoint.root.findByProps({ testID: 'ranking.row.1.point_score' }).props.style
+      );
 
-      expect(maxStreakHeader.props.children).toBe('Max Streak');
+      expect(emphasisScore.color).toBe(GlobalStyle.color.secondaryColor);
+      expect(emphasisScore.fontWeight).toBe('700');
+      expect(emphasisScore.fontSize).toBeGreaterThan(baseScore.fontSize);
+    });
+  });
+
+  describe('key extraction', () => {
+    it('keys rows by userId with a rank-prefixed fallback stable across renumbering', async () => {
+      const renderer = await renderTable();
+      const keyExtractor = renderer.root.findByType(FlatList).props.keyExtractor;
+
+      expect(keyExtractor({ userId: 'u-9', rank: 4 })).toBe('u-9');
+      expect(keyExtractor({ rank: 4 })).toBe('rank-4');
+      expect(keyExtractor({ userId: 'u-9', rank: 1 })).toBe(keyExtractor({ userId: 'u-9', rank: 7 }));
+    });
+  });
+
+  describe('medal theme tokens', () => {
+    it('sources rank medal color and row tint from public GlobalStyle tokens', async () => {
+      const renderer = await renderTable();
+      const rankText = StyleSheet.flatten(
+        renderer.root.findByProps({ testID: 'ranking.row.1.rank' }).props.style
+      );
+      const rowOne = renderer.root.findByProps({ testID: 'ranking.row.1' });
+      const rankTwoText = StyleSheet.flatten(
+        renderer.root.findByProps({ testID: 'ranking.row.2.rank' }).props.style
+      );
+
+      expect(rankText.color).toBe(GlobalStyle.color.medalGold);
+      expect(StyleSheet.flatten(rowOne.props.style).backgroundColor).toBe(
+        GlobalStyle.color.medalGoldTint
+      );
+      expect(rankTwoText.color).toBe(GlobalStyle.color.medalSilver);
     });
 
-    it('renders five cells per row including the maxStreak value and the Others button', async () => {
-      const renderer = await renderTable(dataFiveCol);
+    it('lets a private group theme override the rendered medal row tint', async () => {
+      const group = { primary_color: '#198868', secondary_color: '#FFCC00' };
+      const expectedTheme = getPrivateGroupTheme({
+        primaryColor: '#198868',
+        secondaryColor: '#FFCC00',
+      });
+      let renderer;
 
-      const rank = renderer.root.findByProps({ testID: 'ranking.row.1.rank' });
-      const name = renderer.root.findByProps({ testID: 'ranking.row.1.name' });
-      const score = renderer.root.findByProps({ testID: 'ranking.row.1.score' });
-      const maxStreak = renderer.root.findByProps({ testID: 'ranking.row.1.maxStreak' });
-      const more = renderer.root.findByProps({ testID: 'ranking.row.1.more' });
+      await act(async () => {
+        renderer = create(
+          <PrivateGroupThemeProvider group={group}>
+            <TableComponent data={data} onPress={jest.fn()} />
+          </PrivateGroupThemeProvider>
+        );
+      });
 
-      expect(rank.props.children).toBe(1);
-      expect(name.props.children).toBe('waldo');
-      expect(score.props.children).toBe(25);
-      expect(maxStreak.props.children).toBe(7);
-      expect(more).toBeDefined();
+      const rowOne = renderer.root.findByProps({ testID: 'ranking.row.1' });
+
+      expect(StyleSheet.flatten(rowOne.props.style).backgroundColor).toBe(
+        expectedTheme.medalGoldTint
+      );
+      expect(expectedTheme.medalGoldTint).not.toBe(GlobalStyle.color.medalGoldTint);
     });
   });
 });

@@ -114,6 +114,15 @@
     "totalGuessScore": "Puntuación total de adivinanzas: {{value}}",
     "hiddenCount": "Número de imágenes escondidas: {{value}}",
     "guessedCount": "Número de imágenes adivinadas: {{value}}",
+    "pointScore": "Puntuación de puntos: {{value}}",
+    "contourScore": "Puntuación de contorno: {{value}}",
+    "pointGuessScore": "Puntuación de adivinanzas en punto: {{value}}",
+    "shapeGuessScore": "Puntuación de adivinanzas en contorno: {{value}}",
+    "pointHideScore": "Puntuación de escondite en punto: {{value}}",
+    "shapeHideScore": "Puntuación de escondite en contorno: {{value}}",
+    "detail": {
+      "title": "Detalles de {{name}}"
+    },
     "authFailed": "{{message}}. Tu autenticación falló. Intenta reconectarte. No puedes obtener una clasificación.",
     "genericFailed": "{{message}}. Intenta reconectarte. No puedes obtener una clasificación."
   },
@@ -124,7 +133,17 @@
       "score": "Puntos",
       "maxStreak": "Mejor racha",
       "others": "Otros",
-      "moreScores": "Mostrar más puntuaciones de {{name}}"
+      "moreScores": "Mostrar más puntuaciones de {{name}}",
+      "pointScore": "Puntuación de puntos",
+      "contourScore": "Puntuación de contorno",
+      "youAreRanked": "Estás en el #{{rank}}",
+      "endOfRanking": "Fin de la clasificación",
+      "retry": "Reintentar",
+      "board": {
+        "total": "Total",
+        "point": "Punto",
+        "shape": "Contorno"
+      }
     },
     "uploadNotice": {
       "title": "¿Se esconde ahí?",

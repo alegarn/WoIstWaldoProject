@@ -138,6 +138,8 @@ const E2E_IMAGE_DETAIL_FULL_DESCRIPTION = 'e2e full description';
 const E2E_IMAGE_DETAIL_AVERAGE_RATING = 4;
 const E2E_IMAGE_DETAIL_RATINGS_COUNT = 5;
 
+const E2E_RANKING_ME = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 };
+
 function attachE2EGuessCardMetadata(card, overrides = {}) {
   card.category = overrides.category ?? E2E_GUESS_CARD_CATEGORY;
   card.language = overrides.language ?? E2E_GUESS_CARD_LANGUAGE;
@@ -323,10 +325,17 @@ export function buildE2ERankingRows() {
     rank: String(row.rank),
     username: row.name,
     total_score: row.totalScore,
+    user_id: row.user_id,
+    total_point_guess_score: row.total_point_guess_score,
+    total_shape_guess_score: row.total_shape_guess_score,
+    total_point_hide_score: row.total_point_hide_score,
+    total_shape_hide_score: row.total_shape_hide_score,
+    point_score: row.point_score,
+    shape_score: row.shape_score,
   }));
 }
 
-export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
+export function buildE2ERankingResponse({ after, limit, scope, page, board } = {}) {
   const allRows = buildE2ERankingRows();
 
   if (page) {
@@ -334,7 +343,7 @@ export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
       rows: allRows,
       nextCursor: null,
       hasMore: false,
-      me: null,
+      me: E2E_RANKING_ME,
       meta: null,
       pagy: { count: allRows.length, pages: 1, page: 1 },
     };
@@ -345,7 +354,7 @@ export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
       rows: allRows.slice(5),
       nextCursor: 'e2e-cursor-next',
       hasMore: false,
-      me: null,
+      me: E2E_RANKING_ME,
       meta: null,
       pagy: null,
     };
@@ -353,7 +362,7 @@ export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
 
   return {
     rows: allRows.slice(0, 5),
-    me: { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 },
+    me: E2E_RANKING_ME,
     meta: { top: 3, window: 2 },
     nextCursor: null,
     hasMore: false,
@@ -370,6 +379,12 @@ export function buildE2EUserScores(username) {
       total_score: selectedRow.totalScore,
       total_hide_score: selectedRow.hideScore,
       total_guess_score: selectedRow.guessScore,
+      total_point_guess_score: selectedRow.total_point_guess_score,
+      total_shape_guess_score: selectedRow.total_shape_guess_score,
+      total_point_hide_score: selectedRow.total_point_hide_score,
+      total_shape_hide_score: selectedRow.total_shape_hide_score,
+      point_score: selectedRow.point_score,
+      shape_score: selectedRow.shape_score,
     },
     hide_info: {
       hide_count: selectedRow.hideWaldoCreatedCount,

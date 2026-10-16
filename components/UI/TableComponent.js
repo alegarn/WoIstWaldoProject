@@ -1,22 +1,11 @@
 import React, { useCallback, useMemo } from 'react';
-import { FlatList, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
+import { FlatList, RefreshControl, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import TableButton from './TableButton';
 import { GlobalStyle } from '../../constants/theme';
+import { columnsForBoard } from '../../constants/ranking';
 import { usePrivateGroupTheme } from '../../store/privateGroupTheme-context';
-
-const COLUMNS = [
-  { header: 'Rank',       field: 'rank',      flex: 0.7, kind: 'rank', key: 'ui.ranking.rank' },
-  { header: 'Name',       field: 'name',      flex: 1.6, kind: 'name', key: 'ui.ranking.name' },
-  { header: 'Score',      field: 'score',     flex: 1,   kind: 'score', key: 'ui.ranking.score' },
-  { header: 'Max Streak', field: 'maxStreak', flex: 1,   kind: 'text', key: 'ui.ranking.maxStreak' },
-  { header: 'Others',     field: 'others',    flex: 0.9, kind: 'button', key: 'ui.ranking.others' },
-];
-
-function getColumnDescriptor(header) {
-  return COLUMNS.find((column) => column.header === header);
-}
 
 function buildRankingMetrics(width, height) {
   return {
@@ -41,36 +30,41 @@ function buildRankingMetrics(width, height) {
   };
 }
 
-function getRankColor(rank) {
-  if (rank === 1) return '#FFD700';
-  if (rank === 2) return '#C8C8C8';
-  if (rank === 3) return '#CD7F32';
+function getRankColor(rank, medals) {
+  if (rank === 1) return medals.gold;
+  if (rank === 2) return medals.silver;
+  if (rank === 3) return medals.bronze;
   return '#fff';
 }
 
-function getRowBackground(rank) {
-  if (rank === 1) return 'rgba(255, 215, 0, 0.07)';
-  if (rank === 2) return 'rgba(200, 200, 200, 0.06)';
-  if (rank === 3) return 'rgba(205, 127, 50, 0.06)';
+function getRowBackground(rank, medals) {
+  if (rank === 1) return medals.goldTint;
+  if (rank === 2) return medals.silverTint;
+  if (rank === 3) return medals.bronzeTint;
   return rank % 2 === 0 ? 'rgba(255, 255, 255, 0.04)' : 'transparent';
+}
+
+function headerLabel(column, t) {
+  const translated = t(column.i18nKey);
+  return translated === column.i18nKey ? column.header : translated;
 }
 
 function cellTextStyle(kind, styles, rankColor) {
   if (kind === 'rank') return [styles.text, styles.big, { color: rankColor, fontWeight: 'bold' }];
   if (kind === 'name') return [styles.text, styles.name];
   if (kind === 'score') return [styles.text, styles.big, styles.score];
+  if (kind === 'score-emphasis') return [styles.text, styles.big, styles.score, styles.scoreEmphasis];
   return [styles.text];
 }
 
-const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics, styles, t }) {
-  const rankColor = getRankColor(row.rank);
-  const rowBackground = getRowBackground(row.rank);
+const RowItem = React.memo(function RowItem({ row, columns, onPressMore, metrics, styles, medalPalette, t }) {
+  const rankColor = getRankColor(row.rank, medalPalette);
+  const rowBackground = getRowBackground(row.rank, medalPalette);
   return (
     <View style={[styles.row, { backgroundColor: rowBackground }]} testID={`ranking.row.${row.rank}`}>
-      {headers.map((header, index) => {
-        const column = getColumnDescriptor(header);
-        const key = `${header}-${index}`;
-        if (column?.kind === 'button') {
+      {columns.map((column, index) => {
+        const key = `${column.field}-${index}`;
+        if (column.kind === 'button') {
           return (
             <View key={key} style={[styles.cell, { flex: column.flex }]}>
               <TableButton
@@ -85,13 +79,13 @@ const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics
           );
         }
         return (
-          <View key={key} style={[styles.cell, { flex: column?.flex ?? 1 }]}>
+          <View key={key} style={[styles.cell, { flex: column.flex }]}>
             <Text
-              style={cellTextStyle(column?.kind, styles, rankColor)}
+              style={cellTextStyle(column.kind, styles, rankColor)}
               numberOfLines={1}
-              testID={`ranking.row.${row.rank}.${column?.field ?? header}`}
+              testID={`ranking.row.${row.rank}.${column.field}`}
             >
-              {row[column?.field]}
+              {row[column.field]}
             </Text>
           </View>
         );
@@ -100,7 +94,7 @@ const RowItem = React.memo(function RowItem({ row, headers, onPressMore, metrics
   );
 });
 
-export default function TableComponent({ data, onPress, onEndReached }) {
+export default function TableComponent({ data, onPress, onEndReached, refreshing, onRefresh, refreshTint }) {
   const { width, height } = useWindowDimensions();
   const { t } = useTranslation();
   const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
@@ -109,6 +103,14 @@ export default function TableComponent({ data, onPress, onEndReached }) {
   const headBg = theme ? theme.insetDeep : GlobalStyle.color.primaryColor600;
   const scoreColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
   const headTextColor = theme ? theme.muted : '#c8b4ff';
+  const medals = useMemo(() => ({
+    gold: theme?.medalGold ?? GlobalStyle.color.medalGold,
+    silver: theme?.medalSilver ?? GlobalStyle.color.medalSilver,
+    bronze: theme?.medalBronze ?? GlobalStyle.color.medalBronze,
+    goldTint: theme?.medalGoldTint ?? GlobalStyle.color.medalGoldTint,
+    silverTint: theme?.medalSilverTint ?? GlobalStyle.color.medalSilverTint,
+    bronzeTint: theme?.medalBronzeTint ?? GlobalStyle.color.medalBronzeTint,
+  }), [theme]);
 
   const styles = useMemo(() => StyleSheet.create({
     container: {
@@ -164,9 +166,15 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       color: scoreColor,
       fontWeight: '700',
     },
+    scoreEmphasis: {
+      fontSize: metrics.textFontSize * 1.1,
+    },
   }), [metrics, containerBg, headBg, scoreColor, headTextColor]);
 
-  const headers = data?.tableHeaders || [];
+  const columns = useMemo(
+    () => data?.columns ?? columnsForBoard(data?.board),
+    [data?.columns, data?.board]
+  );
   const rows = data?.tableScores || [];
 
   const onPressMore = useCallback(
@@ -179,25 +187,27 @@ export default function TableComponent({ data, onPress, onEndReached }) {
   const renderHeader = useCallback(() => {
     return (
       <View style={styles.head} testID="ranking.header">
-        {headers.map((header, index) => {
-          const column = getColumnDescriptor(header);
-          return (
-            <View key={`${header}-${index}`} style={[styles.cell, { flex: column?.flex ?? 1 }]}>
-              <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
-                {column ? t(column.key) : header}
-              </Text>
-            </View>
-          );
-        })}
+        {columns.map((column, index) => (
+          <View key={`${column.field}-${index}`} style={[styles.cell, { flex: column.flex }]}>
+            <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
+              {headerLabel(column, t)}
+            </Text>
+          </View>
+        ))}
       </View>
     );
-  }, [headers, styles, t]);
+  }, [columns, styles, t]);
 
   const renderItem = useCallback(
     ({ item }) => {
-      return <RowItem row={item} headers={headers} onPressMore={onPressMore} metrics={metrics} styles={styles} t={t} />;
+      return <RowItem row={item} columns={columns} onPressMore={onPressMore} metrics={metrics} styles={styles} medalPalette={medals} t={t} />;
     },
-    [headers, onPressMore, metrics, styles, t]
+    [columns, onPressMore, metrics, styles, medals, t]
+  );
+
+  const keyExtractor = useCallback(
+    (item) => (item.userId != null ? String(item.userId) : `rank-${item.rank}`),
+    []
   );
 
   return (
@@ -205,7 +215,7 @@ export default function TableComponent({ data, onPress, onEndReached }) {
       <FlatList
         key={`${width}x${height}`}
         data={rows}
-        keyExtractor={(item) => String(item.rank)}
+        keyExtractor={keyExtractor}
         ListHeaderComponent={renderHeader}
         renderItem={renderItem}
         getItemLayout={(data, index) => ({
@@ -218,6 +228,15 @@ export default function TableComponent({ data, onPress, onEndReached }) {
         removeClippedSubviews // optional; remove if blank rows appear on low-end Android
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
+        refreshControl={
+          onRefresh ? (
+            <RefreshControl
+              refreshing={refreshing ?? false}
+              onRefresh={onRefresh}
+              tintColor={refreshTint}
+            />
+          ) : null
+        }
         maxToRenderPerBatch={5}
         updateCellsBatchingPeriod={100}
       />

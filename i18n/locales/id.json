@@ -114,6 +114,15 @@
     "totalGuessScore": "Skor tebak total: {{value}}",
     "hiddenCount": "Jumlah gambar tersembunyi: {{value}}",
     "guessedCount": "Jumlah gambar yang ditebak: {{value}}",
+    "pointScore": "Skor titik: {{value}}",
+    "contourScore": "Skor bentuk: {{value}}",
+    "pointGuessScore": "Skor tebak titik: {{value}}",
+    "shapeGuessScore": "Skor tebak bentuk: {{value}}",
+    "pointHideScore": "Skor sembunyi titik: {{value}}",
+    "shapeHideScore": "Skor sembunyi bentuk: {{value}}",
+    "detail": {
+      "title": "Detail {{name}}"
+    },
     "authFailed": "{{message}}. Autentikasi kamu gagal. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat.",
     "genericFailed": "{{message}}. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat."
   },
@@ -124,7 +133,17 @@
       "score": "Skor",
       "maxStreak": "Runtunan terpanjang",
       "others": "Lainnya",
-      "moreScores": "Tampilkan lebih banyak skor untuk {{name}}"
+      "moreScores": "Tampilkan lebih banyak skor untuk {{name}}",
+      "pointScore": "Skor titik",
+      "contourScore": "Skor bentuk",
+      "youAreRanked": "Kamu peringkat #{{rank}}",
+      "endOfRanking": "Akhir peringkat",
+      "retry": "Coba lagi",
+      "board": {
+        "total": "Total",
+        "point": "Titik",
+        "shape": "Bentuk"
+      }
     },
     "uploadNotice": {
       "title": "Apakah dia bersembunyi di sana?",

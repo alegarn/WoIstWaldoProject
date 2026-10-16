@@ -28,6 +28,7 @@ export type CenteredModalProps = {
   confirmLabel?: string;
   cancelLabel?: string;
   confirmDisabled?: boolean;
+  singleButton?: boolean;
 };
 
 export default function CenteredModal({
@@ -41,6 +42,7 @@ export default function CenteredModal({
   confirmLabel,
   cancelLabel,
   confirmDisabled,
+  singleButton,
 }: CenteredModalProps) {
   const { t } = useTranslation();
   const shouldRenderTextChild = typeof children === 'string' || typeof children === 'number';
@@ -61,15 +63,19 @@ export default function CenteredModal({
           }
 
           <View style={styles.buttonContainer}>
-          <View style={styles.space}>
-            <TypedButton
-              accessibilityLabel={t('common.confirm')}
-              onPress={onPress}
-              mode={Platform.OS === "ios" ? "flat" : null}
-              testID={confirmTestID || `${testIDPrefix}.confirm`}
-              disabled={confirmDisabled}
-              thin={true}>{confirmLabel || t('common.confirm')}</TypedButton>
-          </View>
+          {
+            !singleButton && (
+              <View style={styles.space}>
+                <TypedButton
+                  accessibilityLabel={t('common.confirm')}
+                  onPress={onPress}
+                  mode={Platform.OS === "ios" ? "flat" : null}
+                  testID={confirmTestID || `${testIDPrefix}.confirm`}
+                  disabled={confirmDisabled}
+                  thin={true}>{confirmLabel || t('common.confirm')}</TypedButton>
+              </View>
+            )
+          }
           <View style={styles.space}>
             <TypedButton
               accessibilityLabel={t('common.close')}

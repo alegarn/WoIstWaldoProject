@@ -114,6 +114,15 @@
     "totalGuessScore": "Score total de devinettes : {{value}}",
     "hiddenCount": "Nombre d'images cachées : {{value}}",
     "guessedCount": "Nombre d'images devinées : {{value}}",
+    "pointScore": "Score de points : {{value}}",
+    "contourScore": "Score de contour : {{value}}",
+    "pointGuessScore": "Score de devinettes en point : {{value}}",
+    "shapeGuessScore": "Score de devinettes en contour : {{value}}",
+    "pointHideScore": "Score de cache en point : {{value}}",
+    "shapeHideScore": "Score de cache en contour : {{value}}",
+    "detail": {
+      "title": "Détails de {{name}}"
+    },
     "authFailed": "{{message}}. Votre authentification a échoué. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement.",
     "genericFailed": "{{message}}. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement."
   },
@@ -124,7 +133,17 @@
       "score": "Score",
       "maxStreak": "Meilleure série",
       "others": "Autres",
-      "moreScores": "Afficher plus de scores pour {{name}}"
+      "moreScores": "Afficher plus de scores pour {{name}}",
+      "pointScore": "Score de points",
+      "contourScore": "Score de contour",
+      "youAreRanked": "Vous êtes #{{rank}}",
+      "endOfRanking": "Fin du classement",
+      "retry": "Réessayer",
+      "board": {
+        "total": "Total",
+        "point": "Point",
+        "shape": "Contour"
+      }
     },
     "uploadNotice": {
       "title": "Se cache-t-il là ?",

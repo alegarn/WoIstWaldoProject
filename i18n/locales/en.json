@@ -114,6 +114,15 @@
     "totalGuessScore": "Total Guess Score: {{value}}",
     "hiddenCount": "Hidden Images Count: {{value}}",
     "guessedCount": "Guessed Images Count: {{value}}",
+    "pointScore": "Point Score: {{value}}",
+    "contourScore": "Contour Score: {{value}}",
+    "pointGuessScore": "Point Guess Score: {{value}}",
+    "shapeGuessScore": "Shape Guess Score: {{value}}",
+    "pointHideScore": "Point Hide Score: {{value}}",
+    "shapeHideScore": "Shape Hide Score: {{value}}",
+    "detail": {
+      "title": "Details of {{name}}"
+    },
     "authFailed": "{{message}}. Your authentication failed. Try to reconnect. You canno't get a ranking.",
     "genericFailed": "{{message}}. Try to reconnect. You canno't get a ranking."
   },
@@ -124,7 +133,17 @@
       "score": "Score",
       "maxStreak": "Max Streak",
       "others": "Others",
-      "moreScores": "Show more scores for {{name}}"
+      "moreScores": "Show more scores for {{name}}",
+      "pointScore": "Point Score",
+      "contourScore": "Contour Score",
+      "youAreRanked": "You are #{{rank}}",
+      "endOfRanking": "End of ranking",
+      "retry": "Retry",
+      "board": {
+        "total": "Total",
+        "point": "Point",
+        "shape": "Contour"
+      }
     },
     "uploadNotice": {
       "title": "Is it hiding there ?",

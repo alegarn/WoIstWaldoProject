@@ -93,6 +93,13 @@ export interface E2ERankingRow {
   rank: string;
   username: string;
   total_score: number;
+  user_id: string;
+  total_point_guess_score: number;
+  total_shape_guess_score: number;
+  total_point_hide_score: number;
+  total_shape_hide_score: number;
+  point_score: number;
+  shape_score: number;
 }
 
 export interface E2ERankingMeRow {
@@ -112,7 +119,17 @@ export interface E2ERankingResponse {
 }
 
 export interface E2EUserScores {
-  total: { total_score: number; total_hide_score: number; total_guess_score: number };
+  total: {
+    total_score: number;
+    total_hide_score: number;
+    total_guess_score: number;
+    total_point_guess_score: number;
+    total_shape_guess_score: number;
+    total_point_hide_score: number;
+    total_shape_hide_score: number;
+    point_score: number;
+    shape_score: number;
+  };
   hide_info: { hide_count: number };
   guess_info: { guess_count: number };
 }
@@ -177,6 +194,7 @@ export function buildE2ERankingResponse(args?: {
   limit?: unknown;
   scope?: unknown;
   page?: unknown;
+  board?: unknown;
 }): E2ERankingResponse;
 export function buildE2EUserScores(username?: unknown): E2EUserScores;
 export function buildE2EImageRating(): E2EImageRating;

@@ -92,6 +92,13 @@ describe('CenteredModal', () => {
     expect(renderer.root.findByProps({ testID: 'modal.close' }).props.disabled).toBeUndefined();
   });
 
+  it('renders only the close button in singleButton mode', async () => {
+    const renderer = await renderModal('Do you want to validate this ?', { singleButton: true });
+
+    expect(renderer.root.findAllByProps({ testID: 'modal.confirm' })).toHaveLength(0);
+    expect(renderer.root.findByProps({ testID: 'modal.close' }).props.children).toBe('Close');
+  });
+
   it('gives the shape-confirm buttons wrapping padded spacing so they never clip', async () => {
     const renderer = await renderModal('Do you want to validate this ?', {
       confirmLabel: 'Confirm outline',
