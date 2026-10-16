@@ -323,7 +323,11 @@ const GuessPicture: FC<GuessPictureProps> = ({
   return (
     <>
       {renderPicture()}
-      {isShapeMode && (
+      {/* E2E-only: real usage re-opens the enigma / exits via the ShowPicture
+          edge double-tap; these explicit buttons stay so Maestro flows (and
+          the deterministic single-tap outline seeding that must fall through
+          to the surface) keep working untouched. */}
+      {isShapeMode && isE2EMode() && (
         <>
           <Pressable
             accessibilityLabel={t('guess.shapeEnigmaLabel')}

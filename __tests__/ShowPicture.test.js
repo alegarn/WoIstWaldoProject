@@ -8,6 +8,9 @@ const mockTraceCorridorEdges = jest.fn(() => null);
 let mockCapturedPanRecords;
 let mockCapturedPanRecord;
 let mockCapturedPan;
+let mockCapturedTapRecords;
+let mockCapturedTapRecord;
+let mockCapturedTap;
 
 jest.mock('react-native', () => {
   const React = require('react');
@@ -72,8 +75,8 @@ jest.mock('react-native', () => {
 jest.mock('react-native-gesture-handler', () => {
   const React = jest.requireActual('react');
 
-  function makeChainable() {
-    const record = { __type: 'pan', calls: [] };
+  function makeChainable(type = 'pan') {
+    const record = { __type: type, calls: [] };
     const handler = {
       get(_t, prop) {
         if (prop === '__type' || prop === 'calls') return record[prop];
@@ -86,14 +89,21 @@ jest.mock('react-native-gesture-handler', () => {
     };
     const proxy = new Proxy(record, handler);
     mockCapturedPanRecords.push(record);
-    mockCapturedPanRecord = record;
-    mockCapturedPan = proxy;
+    if (type === 'tap') {
+      mockCapturedTapRecords.push(record);
+      mockCapturedTapRecord = record;
+      mockCapturedTap = proxy;
+    } else {
+      mockCapturedPanRecord = record;
+      mockCapturedPan = proxy;
+    }
     return proxy;
   }
 
   return {
     Gesture: {
-      Pan: () => makeChainable(),
+      Pan: () => makeChainable('pan'),
+      Tap: () => makeChainable('tap'),
       Race: (...gs) => ({ __type: 'race', gestures: gs }),
       Exclusive: (...gs) => ({ __type: 'exclusive', gestures: gs }),
       Simultaneous: (...gs) => ({ __type: 'sim', gestures: gs }),
@@ -164,6 +174,7 @@ jest.mock('../utils/shapeMatch', () => ({
 
 import React from 'react';
 import { act, create } from 'react-test-renderer';
+import { StyleSheet } from 'react-native';
 
 import ShowPicture from '../components/Picture/ShowPicture';
 import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
@@ -201,6 +212,8 @@ function findAllByType(renderer, type) {
 // tests drive the two measured spaces manually — the ROOT container (screen
 // dims) and the styles.pressable View (root-relative image origin; the
 // ImageBackground's own onLayout would be parent-relative ≈(0,0) and unusable).
+// The image-sized view is picked by its numeric width style entry so the
+// full-screen shape double-tap wrapper (absoluteFill, no width) is skipped.
 function fireLayouts(
   renderer,
   container = { width: 360, height: 800 },
@@ -212,7 +225,11 @@ function fireLayouts(
   const root = views.find(
     (node) => !Array.isArray(node.props.style) && node.props.style?.flex === 1
   );
-  const pressable = views.find((node) => Array.isArray(node.props.style));
+  const pressable = views.find(
+    (node) =>
+      Array.isArray(node.props.style) &&
+      node.props.style.some((s) => s && typeof s.width === 'number')
+  );
   expect(root).toBeTruthy();
   expect(pressable).toBeTruthy();
   act(() => {
@@ -280,6 +297,9 @@ describe('ShowPicture', () => {
     mockCapturedPanRecords = [];
     mockCapturedPanRecord = undefined;
     mockCapturedPan = undefined;
+    mockCapturedTapRecords = [];
+    mockCapturedTapRecord = undefined;
+    mockCapturedTap = undefined;
   });
 
   it('wraps the picture surface in a GestureDetector carrying a single Pan surface-swipe gesture', () => {
@@ -440,13 +460,13 @@ describe('ShowPicture', () => {
     }
 
     function hasSurfacePanDisabled() {
-      return mockCapturedPanRecord.calls.some(
+      return surfacePanRecord().calls.some(
         (c) => c.method === 'enabled' && c.args[0] === false
       );
     }
 
     function getOnEnd() {
-      return mockCapturedPanRecord.calls.find((c) => c.method === 'onEnd').args[0];
+      return surfacePanRecord().calls.find((c) => c.method === 'onEnd').args[0];
     }
 
     it('renders no ShapeCanvas when shapeMode is absent (point mode untouched)', () => {
@@ -577,6 +597,189 @@ describe('ShowPicture', () => {
       expect(modalProps.cancelLabel).toBeUndefined();
       expect(modalProps.onCancel).toBe(baseProps.onCancel);
       expect(modalProps.onPress).toBe(baseProps.handleConfirm);
+    });
+  });
+
+  describe('shape edge double-tap (guess side)', () => {
+    // Shape guess fixture: image surface 320×240 centred at (20,280) inside a
+    // 360×800 screen. The two-tap recognizer hosts on a FULL-SCREEN wrapper,
+    // so the zones are SCREEN edges (image border or not): y >= 752
+    // (800-48) → enigma, x <= 48 → exit menu, corner → enigma (bottom
+    // classified first). Taps in the screen margins OUTSIDE the image must
+    // fire exactly like in-image taps; the wrapper dims arrive via onLayout.
+    const doubleTapProps = {
+      shapeMode: true,
+      guess: true,
+      touchLocation: null,
+      target: null,
+      imageDimensionStyle: { width: 320, height: 240 },
+      defaultOpen: false,
+    };
+    const SCREEN = { width: 360, height: 800 };
+
+    function doubleTapRecord() {
+      return mockCapturedTapRecords.find(
+        (record) =>
+          record.calls.some((c) => c.method === 'numberOfTaps' && c.args[0] === 2) &&
+          record.calls.some((c) => c.method === 'onEnd')
+      );
+    }
+
+    function doubleTapDetector(renderer) {
+      const record = doubleTapRecord();
+      if (!record) {
+        throw new Error('no two-tap recognizer is attached');
+      }
+      const detector = findAllByType(renderer, 'GestureDetector').find(
+        (d) => d.props.gesture === mockCapturedTap
+      );
+      return { record, detector };
+    }
+
+    function fireDoubleTap(event, success = true) {
+      const record = doubleTapRecord();
+      if (!record) {
+        throw new Error('no two-tap recognizer is attached');
+      }
+      const onEnd = record.calls.find((c) => c.method === 'onEnd').args[0];
+      act(() => {
+        onEnd(event, success);
+      });
+    }
+
+    function latestEnigmaProps() {
+      return mockEnigmaOverlay.mock.calls[mockEnigmaOverlay.mock.calls.length - 1][0];
+    }
+
+    // RN onLayout never fires under react-test-renderer: drive the
+    // full-screen detector host's layout manually (screen dims).
+    function fireScreenHostLayout(renderer) {
+      const host = findAllByType(renderer, 'View').find(
+        (node) =>
+          typeof node.props.onLayout === 'function' &&
+          Array.isArray(node.props.style) &&
+          node.props.style.includes(StyleSheet.absoluteFill)
+      );
+      expect(host).toBeTruthy();
+      act(() => {
+        host.props.onLayout({ nativeEvent: { layout: SCREEN } });
+      });
+    }
+
+    function renderDoubleTap(overrides = {}) {
+      const renderer = renderShowPicture({ ...doubleTapProps, ...overrides });
+      fireScreenHostLayout(renderer);
+      return renderer;
+    }
+
+    it('mounts the numberOfTaps(2) recognizer on a full-screen wrapper hosting the surface subtree', () => {
+      const renderer = renderShowPicture({ ...doubleTapProps, onEdgeSwipe: jest.fn() });
+
+      const { detector } = doubleTapDetector(renderer);
+      expect(detector).toBeTruthy();
+
+      // Full-screen host: absoluteFill wrapper, and the surface pan detector
+      // subtree lives INSIDE it; loupe/modal stay later siblings.
+      const wrapper = detector.children[0];
+      expect(Array.isArray(wrapper.props.style)).toBe(true);
+      expect(wrapper.props.style).toContain(StyleSheet.absoluteFill);
+      expect(
+        detector.findAll((node) => node.props.gesture === mockCapturedPan).length
+      ).toBeGreaterThan(0);
+    });
+
+    it('double tap near the bottom screen border opens the enigma even outside the image', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      // (180,780): bottom strip (780 >= 800-48) but BELOW the image rect
+      // (image bottom is 280+240=520) — the old image-space host missed it.
+      fireDoubleTap({ x: 180, y: 780 });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('double tap near the left screen border fires onEdgeSwipe even outside the image', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      // (10,400): left strip (10 <= 48) but LEFT of the image rect (image
+      // left is 20) — the old image-space host classified this as enigma.
+      fireDoubleTap({ x: 10, y: 400 });
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+      expect(latestEnigmaProps().isOpen).toBe(false);
+    });
+
+    it('in-image left-strip double tap still fires onEdgeSwipe (existing zone intact)', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      // (30,400): inside the image rect (20..340 × 280..520) and in the
+      // left strip — classification unchanged where the zones overlap.
+      fireDoubleTap({ x: 30, y: 400 });
+
+      expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
+      expect(latestEnigmaProps().isOpen).toBe(false);
+    });
+
+    it('corner double tap resolves to the enigma (bottom beats left, same priority as point mode)', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      fireDoubleTap({ x: 10, y: 790 });
+
+      expect(latestEnigmaProps().isOpen).toBe(true);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('double tap in the middle of the image does neither', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      fireDoubleTap({ x: 180, y: 400 });
+
+      expect(latestEnigmaProps().isOpen).toBe(false);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('double tap in the mid-screen margin below the image does nothing', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      // (180,600): outside the image (bottom 520) yet in NEITHER screen strip
+      // — screen-space classification must not over-trigger in the margins.
+      fireDoubleTap({ x: 180, y: 600 });
+
+      expect(latestEnigmaProps().isOpen).toBe(false);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('unsuccessful double tap does nothing', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe });
+
+      fireDoubleTap({ x: 180, y: 780 }, false);
+
+      expect(latestEnigmaProps().isOpen).toBe(false);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('double tap is inert while the confirm modal is shown', () => {
+      const onEdgeSwipe = jest.fn();
+      renderDoubleTap({ onEdgeSwipe, showModal: true });
+
+      fireDoubleTap({ x: 180, y: 780 });
+
+      expect(latestEnigmaProps().isOpen).toBe(false);
+      expect(onEdgeSwipe).not.toHaveBeenCalled();
+    });
+
+    it('point mode never builds the double-tap recognizer', () => {
+      renderShowPicture();
+
+      expect(doubleTapRecord()).toBeUndefined();
     });
   });
 

@@ -85,12 +85,25 @@ jest.mock('react-native-gesture-handler', () => {
     };
     return gesture;
   };
+  // Shape-mode edge double-tap (ShowPicture): handlers stored under tap keys
+  // so the Pan helpers below (find by onEndHandler/onBeginHandler) keep
+  // resolving the Pan recognizers only.
+  const makeTap = () => {
+    const gesture: Record<string, unknown> = {};
+    mockPanGestures.push(gesture as MockGesture);
+    gesture.numberOfTaps = () => gesture;
+    gesture.onEnd = (cb: PanHandler) => {
+      gesture.onEndTapHandler = cb;
+      return gesture;
+    };
+    return gesture;
+  };
   return {
     GestureHandlerRootView: ({ children }: { children: React.ReactNode }) =>
       React.createElement('GestureHandlerRootView', null, children),
     GestureDetector: ({ children }: { children: React.ReactNode }) =>
       React.createElement(React.Fragment, null, children),
-    Gesture: { Pan: makePan },
+    Gesture: { Pan: makePan, Tap: makeTap },
   };
 });
 

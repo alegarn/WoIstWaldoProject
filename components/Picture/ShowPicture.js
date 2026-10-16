@@ -45,6 +45,14 @@ const EDGE_SWIPE_FAIL_Y = 40;
 const HANDLE_SWIPE_ACTIVE_Y = -40;
 const HANDLE_SWIPE_FAIL_Y = 10;
 
+// Shape-mode double-tap zones (guess side): the surface swipe classifier is
+// suppressed whole-mode, so the enigma/exit affordances move to a two-tap
+// recognizer over the surface. A double tap within this many px of the bottom
+// edge opens the enigma; within it of the left edge opens the exit menu. The
+// bottom strip is classified FIRST so the bottom-left corner mirrors the
+// point-mode priority (up beats right → enigma wins).
+const DOUBLE_TAP_EDGE_ZONE_PX = 48;
+
 export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition }) {
   const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
@@ -250,6 +258,46 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [guess, shapeMode, onPointPlaced, imageDimensionStyle?.width, imageDimensionStyle?.height]);
 
+  // Shape-mode edge double-tap (guess side only): replaces the overlay
+  // buttons that used to occlude the image (the surface classifier is
+  // suppressed whole-mode while the draw Pan lives here). Built STRICTLY
+  // conditionally (shape+guess only) — point modes never carry a second
+  // recognizer, and taps without movement never trip the draw Pan while
+  // strokes with movement fail the tap (same documented-safe nesting as the
+  // surface classifier below). The detector hosts on a FULL-SCREEN wrapper
+  // (see render below), so the zone classification uses the WRAPPER dims
+  // measured via onLayout — screen edges, image border or not: bottom strip
+  // → enigma, left strip → exit menu, corner → enigma wins (classified
+  // first). While the confirm modal is up the tap is inert.
+  const screenDimsRef = useRef(null);
+  const handleScreenHostLayout = (event) => {
+    const { width, height } = event.nativeEvent.layout;
+    screenDimsRef.current = { width, height };
+  };
+
+  const shapeEdgeDoubleTap = useMemo(() => {
+    if (!shapeMode || !guess) {
+      return null;
+    }
+    return Gesture.Tap()
+      .numberOfTaps(2)
+      .onEnd((event, success) => {
+        if (!success || showModal) {
+          return;
+        }
+        const dims = screenDimsRef.current;
+        if (!dims) {
+          return;
+        }
+        if (event.y >= dims.height - DOUBLE_TAP_EDGE_ZONE_PX) {
+          setEnigmaOpen(true);
+        } else if (event.x <= DOUBLE_TAP_EDGE_ZONE_PX) {
+          onEdgeSwipe?.();
+        }
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shapeMode, guess, onEdgeSwipe, showModal]);
+
   // Shape-mode loupe mirror (D4/E2): the host builds the glass content from
   // the committed stroke points, TRIMMED to the trailing window around the
   // anchor (D6) so mirror cost stays O(window) as the stroke grows — ink AND
@@ -375,30 +423,52 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
     </Pressable>
   );
 
-  return (
-    <View style={styles.container} onLayout={handleContainerLayout}>
-      <GestureDetector gesture={surfaceSwipe}>
-        <View style={[styles.pressable, imageDimensionStyle]} onLayout={handleImageOriginLayout}>
-          {/* Nesting a Pan detector around the surface Pressable is the
-              documented-safe RNGH pattern: taps still fall through to onPress
-              (same mechanism as the target drag detector over the surface —
-              see hooks/useTargetDrag.ts:106-113). */}
-          {pointPrecisionPan ? (
-            <GestureDetector gesture={pointPrecisionPan}>{surface}</GestureDetector>
-          ) : (
-            surface
-          )}
+  // The image-sized subtree (draw surface + target). Hosted as-is in point
+  // modes; wrapped by the full-screen double-tap detector in shape+guess.
+  const pictureSubtree = (
+    <GestureDetector gesture={surfaceSwipe}>
+      <View style={[styles.pressable, imageDimensionStyle]} onLayout={handleImageOriginLayout}>
+        {/* Nesting a Pan detector around the surface Pressable is the
+            documented-safe RNGH pattern: taps still fall through to onPress
+            (same mechanism as the target drag detector over the surface —
+            see hooks/useTargetDrag.ts:106-113). */}
+        {pointPrecisionPan ? (
+          <GestureDetector gesture={pointPrecisionPan}>{surface}</GestureDetector>
+        ) : (
+          surface
+        )}
 
 {/* no cross, when guess, if null  */}
-          {targetGesture
-            ? (
-              <GestureDetector gesture={targetGesture}>
-                {targetWrap}
-              </GestureDetector>
-            )
-            : targetWrap}
-        </View>
-      </GestureDetector>
+        {targetGesture
+          ? (
+            <GestureDetector gesture={targetGesture}>
+              {targetWrap}
+            </GestureDetector>
+          )
+          : targetWrap}
+      </View>
+    </GestureDetector>
+  );
+
+  return (
+    <View style={styles.container} onLayout={handleContainerLayout}>
+      {shapeEdgeDoubleTap ? (
+        // Full-screen double-tap host (shape+guess only): taps must register
+        // near the SCREEN borders, not the image borders, so the recognizer
+        // hosts on an absoluteFill wrapper with the same center/align layout
+        // (the image stays centred). The loupe and modal below stay LATER
+        // siblings so their scrims keep intercepting touches above it.
+        <GestureDetector gesture={shapeEdgeDoubleTap}>
+          <View
+            style={[StyleSheet.absoluteFill, styles.pressable]}
+            onLayout={handleScreenHostLayout}
+          >
+            {pictureSubtree}
+          </View>
+        </GestureDetector>
+      ) : (
+        pictureSubtree
+      )}
 
       <MagnifierLoupe
         frameStyle={loupe.frameStyle}
