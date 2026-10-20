@@ -28,6 +28,10 @@ type ShapeCanvasProps = {
   onOutlineChange?: (outline: Point[] | null) => void;
   disabled?: boolean;
   onStrokeUpdate?: (info: StrokeUpdateInfo | null) => void;
+  // Finger-down seam: fires in the Pan's onBegin, BEFORE any point commit or
+  // band render — hosts (e.g. GuessShapeSurface's reveal) clear here instead
+  // of waiting for the ≥2-point band slot.
+  onStrokeBegin?: () => void;
   renderBand?: (renderPoints: Point[]) => ReactNode;
 };
 
@@ -37,6 +41,7 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
   onOutlineChange,
   disabled = false,
   onStrokeUpdate,
+  onStrokeBegin,
   renderBand,
 }) => {
   const { t } = useTranslation();
@@ -119,8 +124,10 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
     const pan = Gesture.Pan().enabled(!disabled);
     return pan
       .onBegin((event) => {
-        // Touch-down: seed the raw store and commit the first point so the
-        // loupe appears immediately, before any movement.
+        // Touch-down: host seam first (reveal clears etc.), then seed the raw
+        // store and commit the first point so the loupe appears immediately,
+        // before any movement.
+        onStrokeBegin?.();
         setDegenerate(false);
         const point = clampedStrokePoint(event);
         rawPointsRef.current = [point];
@@ -147,7 +154,7 @@ const ShapeCanvas: FC<ShapeCanvasProps> = ({
         // unactivated tap holds a single-point stroke → null-only clear.
         finalizeStroke();
       });
-  }, [disabled, imageWidth, imageHeight, onOutlineChange, onStrokeUpdate]);
+  }, [disabled, imageWidth, imageHeight, onOutlineChange, onStrokeUpdate, onStrokeBegin]);
 
   return (
     <GestureDetector gesture={drawPan}>

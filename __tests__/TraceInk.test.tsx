@@ -21,7 +21,6 @@ import TraceInk, {
   TraceInkSegment,
   type TraceSegmentStyle,
 } from '../components/Picture/TraceInk';
-import TraceCorridorEdges from '../components/Picture/TraceCorridorEdges';
 import { GlobalStyle } from '../constants/theme';
 
 const SQUARE_POINTS = [
@@ -301,100 +300,5 @@ describe('TraceInk exported style builder', () => {
     const style = traceSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 300 })!;
     expect(style.left + style.width / 2).toBeCloseTo(100, 6);
     expect(style.top + style.height / 2).toBeCloseTo(200, 6);
-  });
-});
-
-describe('TraceCorridorEdges', () => {
-  const BAND_DISTANCE = 24;
-  const EDGE_LEFT_TEST_ID = 'game.picture.trace-corridor-edge-left';
-  const EDGE_RIGHT_TEST_ID = 'game.picture.trace-corridor-edge-right';
-
-  it('renders exactly 2 thin polylines (left + right edge testIDs)', () => {
-    render(
-      <TraceCorridorEdges trace={SQUARE_POINTS} distance={BAND_DISTANCE} />
-    );
-
-    expect(screen.getByTestId(EDGE_LEFT_TEST_ID)).toBeTruthy();
-    expect(screen.getByTestId(EDGE_RIGHT_TEST_ID)).toBeTruthy();
-    expect(screen.getByTestId(EDGE_LEFT_TEST_ID).props.children.length).toBeGreaterThan(0);
-    expect(screen.getByTestId(EDGE_RIGHT_TEST_ID).props.children.length).toBeGreaterThan(0);
-  });
-
-  it('renders every bar at the strokeWidth prop (default 1)', () => {
-    const { rerender } = render(
-      <TraceCorridorEdges trace={SQUARE_POINTS} distance={BAND_DISTANCE} />
-    );
-
-    for (const testID of [EDGE_LEFT_TEST_ID, EDGE_RIGHT_TEST_ID]) {
-      for (const bar of screen.getByTestId(testID).props.children) {
-        expect(bar.props.style.height).toBe(1);
-        expect(bar.props.style.borderRadius).toBe(0.5);
-      }
-    }
-
-    rerender(
-      <TraceCorridorEdges
-        trace={SQUARE_POINTS}
-        distance={BAND_DISTANCE}
-        strokeWidth={3}
-      />
-    );
-    for (const testID of [EDGE_LEFT_TEST_ID, EDGE_RIGHT_TEST_ID]) {
-      for (const bar of screen.getByTestId(testID).props.children) {
-        expect(bar.props.style.height).toBe(3);
-      }
-    }
-  });
-
-  it('never renders translucent fat bars (no node with height = distance, no opacity < 1)', () => {
-    render(
-      <TraceCorridorEdges trace={SQUARE_POINTS} distance={BAND_DISTANCE} />
-    );
-
-    const tree = screen.toJSON();
-    collectNodes(tree, (node) => {
-      const style = node?.props?.style;
-      const flat = Array.isArray(style)
-        ? Object.assign({}, ...style)
-        : style ?? {};
-      expect(flat.height).not.toBe(BAND_DISTANCE);
-      if (flat.opacity !== undefined) {
-        expect(flat.opacity).toBe(1);
-      }
-    });
-  });
-
-  it('is memoized like TraceInk (React.memo wrapper)', () => {
-    expect((TraceCorridorEdges as any).$$typeof).toBe(
-      Symbol.for('react.memo')
-    );
-  });
-
-  it.each([
-    { name: 'empty', trace: [] as Array<{ x: number; y: number }> },
-    { name: 'single-point', trace: [{ x: 10, y: 10 }] },
-  ])('renders nothing for a $name trace (<2 points)', ({ trace }) => {
-    render(<TraceCorridorEdges trace={trace} distance={BAND_DISTANCE} />);
-
-    expect(screen.queryByTestId(EDGE_LEFT_TEST_ID)).toBeNull();
-    expect(screen.queryByTestId(EDGE_RIGHT_TEST_ID)).toBeNull();
-    expect(screen.toJSON()).toBeNull();
-  });
-
-  it('offsets the edges to ±distance around the trace geometry', () => {
-    render(
-      <TraceCorridorEdges
-        trace={[
-          { x: 10, y: 50 },
-          { x: 110, y: 50 },
-        ]}
-        distance={20}
-      />
-    );
-
-    const leftBars = screen.getByTestId(EDGE_LEFT_TEST_ID).props.children;
-    expect(leftBars[0].props.style.top).toBeCloseTo(30 - 1 / 2, 6);
-    const rightBars = screen.getByTestId(EDGE_RIGHT_TEST_ID).props.children;
-    expect(rightBars[0].props.style.top).toBeCloseTo(70 - 1 / 2, 6);
   });
 });

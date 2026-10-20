@@ -42,7 +42,7 @@ import {
   __cacheList as cacheList,
 } from 'expo-file-system';
 
-import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
+import { applySuccessSideEffects, bufferWinScore, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { getPending } from '../utils/sessionScoreStore';
 import { getPlayedPictureIds } from '../utils/playedPictureIds';
 
@@ -71,6 +71,64 @@ async function storedDeck() {
   return JSON.parse(await AsyncStorage.getItem(DECK_KEY));
 }
 
+async function bankWin(overrides = {}) {
+  await bufferWinScore({ pictureId: 'pic-1', scope: { kind: 'public' }, userId: 'user-1', ...overrides });
+}
+
+describe('bufferWinScore', () => {
+  async function bufferedScores() {
+    return getPending();
+  }
+
+  it('a plain win buffers a single score event with defaults: 1 point, streak 0, no multipliers', async () => {
+    await bankWin();
+
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 1,
+      streak: 0,
+      pictureId: 'pic-1',
+      userId: 'user-1',
+      scope: { kind: 'public' },
+      ts: expect.any(Number),
+      guessId: expect.stringMatching(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/),
+    }));
+    expect('multiplier' in scores[0]).toBe(false);
+    expect('streakMultiplier' in scores[0]).toBe(false);
+  });
+
+  it('a streaked, multiplied win buffers those bonuses on the score event', async () => {
+    await bankWin({ points: 2, multiplier: 2, streak: 5, streakMultiplier: 1.5 });
+
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 2,
+      multiplier: 2,
+      streak: 5,
+      streakMultiplier: 1.5,
+      pictureId: 'pic-1',
+      userId: 'user-1',
+    }));
+  });
+
+  it('a win with streak but no streak multiplier omits the streak multiplier', async () => {
+    await bankWin({ streak: 5 });
+
+    const [score] = await bufferedScores();
+    expect(score).toEqual(expect.objectContaining({ streak: 5 }));
+    expect('streakMultiplier' in score).toBe(false);
+  });
+
+  it('a private-group win buffers the imageId for group attribution', async () => {
+    await bankWin({ scope: { kind: 'private', groupId: 'g-3' } });
+
+    const [score] = await bufferedScores();
+    expect(score.imageId).toBe('pic-1');
+  });
+});
+
 describe('applySuccessSideEffects', () => {
   let consoleWarnSpy;
 
@@ -89,49 +147,18 @@ describe('applySuccessSideEffects', () => {
     return getPending();
   }
 
-  it('a plain win buffers a single score event with defaults: 1 point, streak 0, no multipliers', async () => {
+  it('cleans up without touching the score buffer', async () => {
+    await seedDeck();
     await applySuccessSideEffects(baseArgs);
 
-    const scores = await bufferedScores();
-    expect(scores).toHaveLength(1);
-    expect(scores[0]).toEqual(expect.objectContaining({
-      points: 1,
-      streak: 0,
-      pictureId: 'pic-1',
-      userId: 'user-1',
-      scope: { kind: 'public' },
-      ts: expect.any(Number),
-      guessId: expect.stringMatching(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/),
-    }));
-    expect('multiplier' in scores[0]).toBe(false);
-    expect('streakMultiplier' in scores[0]).toBe(false);
+    expect(await bufferedScores()).toHaveLength(0);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
   });
 
-  it('a streaked, multiplied win buffers those bonuses on the score event', async () => {
-    await applySuccessSideEffects({ ...baseArgs, points: 2, multiplier: 2, streak: 5, streakMultiplier: 1.5 });
-
-    const scores = await bufferedScores();
-    expect(scores).toHaveLength(1);
-    expect(scores[0]).toEqual(expect.objectContaining({
-      points: 2,
-      multiplier: 2,
-      streak: 5,
-      streakMultiplier: 1.5,
-      pictureId: 'pic-1',
-      userId: 'user-1',
-    }));
-  });
-
-  it('a win with streak but no streak multiplier omits the streak multiplier', async () => {
-    await applySuccessSideEffects({ ...baseArgs, streak: 5 });
-
-    const [score] = await bufferedScores();
-    expect(score).toEqual(expect.objectContaining({ streak: 5 }));
-    expect('streakMultiplier' in score).toBe(false);
-  });
-
-  it('a failed deck cleanup keeps the buffered score and stops the remaining cleanup', async () => {
+  it('a failed deck cleanup keeps the already-banked win and stops the remaining cleanup', async () => {
     await seedDeck();
+    await bankWin();
     const baseGetItem = AsyncStorage.getItem.getMockImplementation();
     AsyncStorage.getItem.mockImplementation(async (key) => {
       if (key === DECK_KEY) {
@@ -152,8 +179,9 @@ describe('applySuccessSideEffects', () => {
     expect(cacheList).not.toHaveBeenCalled();
   });
 
-  it('a failed played-set write stays silent and the rest of the win still applies', async () => {
+  it('a failed played-set write stays silent and the rest of the cleanup still applies', async () => {
     await seedDeck();
+    await bankWin();
     const baseSetItem = AsyncStorage.setItem.getMockImplementation();
     AsyncStorage.setItem.mockImplementation(async (key, value) => {
       if (String(key).startsWith('playedPictureIds')) {
@@ -203,13 +231,11 @@ describe('applySuccessSideEffects', () => {
     expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
     expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
     expect(cacheList).not.toHaveBeenCalled();
-
-    const [score] = await bufferedScores();
-    expect(score.imageId).toBe('pic-1');
   });
 
-  it('a failed orphan sweep keeps the win intact', async () => {
+  it('a failed orphan sweep keeps the already-banked win intact', async () => {
     await seedDeck();
+    await bankWin();
     cacheList.mockImplementationOnce(() => {
       throw new Error('cache list boom');
     });

@@ -232,11 +232,20 @@ jest.mock('../components/Guess/SuccessOverlay', () => {
 jest.mock('../components/Guess/GuessExhaustedPanel', () => {
   const React = require('react');
   const { Pressable, Text } = require('react-native');
-  return function MockGuessExhaustedPanel({ onLeave }) {
+  return function MockGuessExhaustedPanel({ onLeave, onSwitch }) {
     return React.createElement(
-      Pressable,
-      { testID: 'guess.exhausted.leave', onPress: onLeave },
-      React.createElement(Text, null, 'leave')
+      React.Fragment,
+      null,
+      React.createElement(
+        Pressable,
+        { testID: 'guess.exhausted.leave', onPress: onLeave },
+        React.createElement(Text, null, 'leave'),
+      ),
+      React.createElement(
+        Pressable,
+        { testID: 'guess.exhausted.switch', onPress: onSwitch },
+        React.createElement(Text, null, 'switch'),
+      ),
     );
   };
 });
@@ -299,6 +308,7 @@ import { Root } from '../App';
 import GuessScreen from '../screens/GuessScreens/GuessScreen';
 import AuthContextProvider, { AuthContext } from '../store/auth-context';
 import GuessFeedScreen from '../screens/GuessScreens/GuessFeedScreen';
+import GuessPathScreen from '../screens/GuessScreens/GuessPathScreen';
 import ShowFailure from '../components/Results/ShowFailure';
 import { bufferScore, getPending } from '../utils/sessionScoreStore';
 import { __resetForTests as resetPrefetcher } from '../services/cardPrefetcher';
@@ -755,13 +765,18 @@ describe('leaving through the exhausted panel', () => {
             name: 'GuessScreen',
             component: GuessScreen,
             options: { headerShown: false },
+          }),
+          React.createElement(Stack.Screen, {
+            name: 'GuessPathScreen',
+            component: GuessPathScreen,
+            options: { headerShown: false },
           })
         )
       );
     };
   }
 
-  it('sends the buffered score exactly once when the player leaves', async () => {
+  it('sends the seeded buffer plus the just-won card score exactly once when the player leaves', async () => {
     await seedPendingScore();
     const StackRoot = buildRealGuessStack({ homeTestId: 'real.home.go-feed' });
     const renderer = await actCreate(React.createElement(StackHost, { contextValue: authContextValue, Root: StackRoot }));
@@ -782,10 +797,67 @@ describe('leaving through the exhausted panel', () => {
     await press(renderer, 'guess.exhausted.leave');
     await act(async () => { await flushPromises(); });
 
+    // Win-time credit (bug-2 contract): the just-won card is banked even
+    // though the advance exhausted, and the leave flush sends BOTH the
+    // pre-seeded score and the win (seed first, win appended).
     const batches = sentScoreBatches();
     expect(batches).toHaveLength(1);
     expect(batches[0][1].batch.results).toEqual([
       { guess_id: 'g1', image_name: 'p1', points: 2, streak: 1 },
+      { guess_id: expect.any(String), image_name: 'img-1', points: 2, streak: 1 },
+    ]);
+    expect(await getPending()).toEqual([]);
+  });
+
+  it('a win on the last card alone is sent with its exact points when the player leaves', async () => {
+    const StackRoot = buildRealGuessStack({ homeTestId: 'real.home.go-feed' });
+    const renderer = await actCreate(React.createElement(StackHost, { contextValue: authContextValue, Root: StackRoot }));
+
+    await press(renderer, 'real.home.go-feed');
+    await press(renderer, 'guess-feed.stub.start-swipe');
+    await press(renderer, 'guess-feed.stub.swipe');
+    await press(renderer, 'guess.picture.tap');
+    await press(renderer, 'guess.overlay.done');
+    await act(async () => { await flushPromises(); });
+
+    expect(renderer.root.findByProps({ testID: 'guess.exhausted.leave' })).toBeDefined();
+    expect(sentScoreBatches()).toHaveLength(0);
+
+    await press(renderer, 'guess.exhausted.leave');
+    await act(async () => { await flushPromises(); });
+
+    // Fast win: ×2 speed × tier-1 streak → 2 points, streak 1.
+    const batches = sentScoreBatches();
+    expect(batches).toHaveLength(1);
+    expect(batches[0][1].batch.results).toEqual([
+      { guess_id: expect.any(String), image_name: 'img-1', points: 2, streak: 1 },
+    ]);
+    expect(await getPending()).toEqual([]);
+  });
+
+  it('a win on the last card alone is sent with its exact points when the player switches category', async () => {
+    const StackRoot = buildRealGuessStack({ homeTestId: 'real.home.go-feed' });
+    const renderer = await actCreate(React.createElement(StackHost, { contextValue: authContextValue, Root: StackRoot }));
+
+    await press(renderer, 'real.home.go-feed');
+    await press(renderer, 'guess-feed.stub.start-swipe');
+    await press(renderer, 'guess-feed.stub.swipe');
+    await press(renderer, 'guess.picture.tap');
+    await press(renderer, 'guess.overlay.done');
+    await act(async () => { await flushPromises(); });
+
+    expect(renderer.root.findByProps({ testID: 'guess.exhausted.switch' })).toBeDefined();
+    expect(sentScoreBatches()).toHaveLength(0);
+
+    // The switch pushes GuessPathScreen without unwinding a beforeRemove
+    // owner, so GuessScreen's direct exit flush is what sends the win.
+    await press(renderer, 'guess.exhausted.switch');
+    await act(async () => { await flushPromises(); });
+
+    const batches = sentScoreBatches();
+    expect(batches).toHaveLength(1);
+    expect(batches[0][1].batch.results).toEqual([
+      { guess_id: expect.any(String), image_name: 'img-1', points: 2, streak: 1 },
     ]);
     expect(await getPending()).toEqual([]);
   });
