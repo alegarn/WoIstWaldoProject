@@ -11,7 +11,6 @@ import ShapeCanvas from './ShapeCanvas';
 import GuessShapeSurface from './GuessShapeSurface';
 import MagnifierLoupe from './MagnifierLoupe';
 import TraceInk from './TraceInk';
-import TraceCorridorEdges from './TraceCorridorEdges';
 import { useLoupe } from '../../hooks/useLoupe';
 import { GlobalStyle } from '../../constants/theme';
 import { SPEED_WINDOW_MS } from '../../utils/speedMultiplier';
@@ -24,7 +23,6 @@ import {
   windowPolyline,
 } from '../../utils/loupeGeometry';
 import { clampToImage } from '../../utils/shapeGeometry';
-import { shapeTolerancePx } from '../../utils/shapeMatch';
 
 const PULSE_DURATION_MS = 1200;
 const PULSE_HALF_DURATION_MS = PULSE_DURATION_MS / 2;
@@ -53,7 +51,7 @@ const HANDLE_SWIPE_FAIL_Y = 10;
 // point-mode priority (up beats right → enigma wins).
 const DOUBLE_TAP_EDGE_ZONE_PX = 48;
 
-export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition, surfaceOverlay }) {
+export default function ShowPicture({ uri, guess, description, touchLocation, handlePress, handleLongPress, target, handleIconPress, showModal, handleConfirm,  onCancel, imageDimensionStyle, targetGesture, defaultOpen, onDescriptionClosed, onEdgeSwipe, pulseTarget = false, speedRingActive = false, speedDurationMs = SPEED_WINDOW_MS, shapeMode = false, outline = null, onOutlineChange, hiddenOutline, revealToken, imageWidth, imageHeight, enigmaOpen: enigmaOpenControl, onPointPlaced = undefined, onTargetDragPosition, surfaceOverlay }) {
   const { t } = useTranslation();
   const pulseScale = useRef(new Animated.Value(PULSE_SCALE_MIN)).current;
   const pulseOpacity = useRef(new Animated.Value(PULSE_OPACITY_MAX)).current;
@@ -300,11 +298,10 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
 
   // Shape-mode loupe mirror (D4/E2): the host builds the glass content from
   // the committed stroke points, TRIMMED to the trailing window around the
-  // anchor (D6) so mirror cost stays O(window) as the stroke grows — ink AND
-  // corridor edges consume the same slice. The MIRROR-COMMIT GATE (§7 budget
-  // 2b) keeps the frame on EVERY report (animated, zero re-render) but commits
-  // the content re-render only when the anchor moved ≥ LOUPE_MIRROR_STEP_PX
-  // since the last mirror commit.
+  // anchor (D6) so mirror cost stays O(window) as the stroke grows. The
+  // MIRROR-COMMIT GATE (§7 budget 2b) keeps the frame on EVERY report
+  // (animated, zero re-render) but commits the content re-render only when
+  // the anchor moved ≥ LOUPE_MIRROR_STEP_PX since the last mirror commit.
   const [shapeLoupePoints, setShapeLoupePoints] = useState(null);
   const lastMirrorAnchorRef = useRef(null);
 
@@ -333,21 +330,11 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
   }, []);
 
   // Point-mode loupe content (D4): the cursor is built into MagnifierLoupe,
-  // so point modes mirror NOTHING; shape mode mirrors the live ink (both
-  // sides) plus the corridor EDGE lines (guess only — never the fat band,
-  // never the hidden outline). Children render in image-px inside the
-  // loupe's scaled wrapper; the edges distance is the IMAGE-space tolerance.
-  const loupeContent = shapeMode ? (
-    <>
-      <TraceInk points={shapeLoupePoints ?? []} />
-      {guess ? (
-        <TraceCorridorEdges
-          trace={shapeLoupePoints ?? []}
-          distance={shapeTolerancePx(imageWidth ?? 0, imageHeight ?? 0)}
-        />
-      ) : null}
-    </>
-  ) : null;
+  // so point modes mirror NOTHING; shape mode mirrors the live ink ONLY —
+  // both sides (2026-10-20 amendment: corridor edge lines removed from the
+  // guess-side glass; the fat band and hidden outline never mirror either).
+  // Children render in image-px inside the loupe's scaled wrapper.
+  const loupeContent = shapeMode ? <TraceInk points={shapeLoupePoints ?? []} /> : null;
 
   // Redraw: clear the parent-owned outline and close the modal so a new
   // stroke can be drawn.
@@ -408,6 +395,7 @@ export default function ShowPicture({ uri, guess, description, touchLocation, ha
             outline={outline}
             onOutlineChange={onOutlineChange}
             hiddenOutline={hiddenOutline}
+            revealToken={revealToken}
             imageWidth={imageWidth}
             imageHeight={imageHeight}
             onStrokeUpdate={handleStrokeUpdate}

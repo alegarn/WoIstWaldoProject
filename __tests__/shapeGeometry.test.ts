@@ -8,16 +8,7 @@ import {
   outlineLengthInImageSpace,
   corridorBandWidthPx,
   clampToImage,
-  offsetPolyline,
 } from '../utils/shapeGeometry';
-
-function expectPointClose(
-  point: { x: number; y: number },
-  expected: { x: number; y: number }
-) {
-  expect(point.x).toBeCloseTo(expected.x, 6);
-  expect(point.y).toBeCloseTo(expected.y, 6);
-}
 
 describe('shapeGeometry', () => {
   describe('constants', () => {
@@ -339,80 +330,6 @@ describe('shapeGeometry', () => {
       expect(clampToImage({ x: 42, y: 17 }, 100, 80)).toEqual({
         x: 42,
         y: 17,
-      });
-    });
-  });
-
-  describe('offsetPolyline', () => {
-    it('offsets a straight horizontal polyline ±distance with left = traversal-up side', () => {
-      const { left, right } = offsetPolyline(
-        [
-          { x: 10, y: 50 },
-          { x: 110, y: 50 },
-        ],
-        20
-      );
-
-      expect(left).toHaveLength(2);
-      expectPointClose(left[0], { x: 10, y: 30 });
-      expectPointClose(left[1], { x: 110, y: 30 });
-      expect(right).toHaveLength(2);
-      expectPointClose(right[0], { x: 10, y: 70 });
-      expectPointClose(right[1], { x: 110, y: 70 });
-    });
-
-    it('joins a 90° corner with exact miter vertices on both sides', () => {
-      const { left, right } = offsetPolyline(
-        [
-          { x: 0, y: 0 },
-          { x: 100, y: 0 },
-          { x: 100, y: 100 },
-        ],
-        10
-      );
-
-      expect(left).toHaveLength(3);
-      expectPointClose(left[0], { x: 0, y: -10 });
-      expectPointClose(left[1], { x: 110, y: -10 });
-      expectPointClose(left[2], { x: 110, y: 100 });
-      expect(right).toHaveLength(3);
-      expectPointClose(right[0], { x: 0, y: 10 });
-      expectPointClose(right[1], { x: 90, y: 10 });
-      expectPointClose(right[2], { x: 90, y: 100 });
-    });
-
-    it('clamps a near-reversal spike miter to ≤ 2×distance from the vertex', () => {
-      const vertex = { x: 50, y: 0 };
-      const { left, right } = offsetPolyline(
-        [
-          { x: 0, y: 0 },
-          vertex,
-          { x: 1, y: 1 },
-        ],
-        10
-      );
-
-      for (const side of [left, right]) {
-        expect(side).toHaveLength(3);
-        for (const point of side) {
-          expect(Number.isFinite(point.x)).toBe(true);
-          expect(Number.isFinite(point.y)).toBe(true);
-        }
-        // Only the miter join at the vertex is clamped to the miter limit;
-        // the segment endpoints legitimately sit ±distance from their own
-        // path points.
-        const join = side[1];
-        expect(Math.hypot(join.x - vertex.x, join.y - vertex.y)).toBeLessThanOrEqual(
-          20 + 1e-9
-        );
-      }
-    });
-
-    it('returns empty sides for fewer than 2 points', () => {
-      expect(offsetPolyline([], 10)).toEqual({ left: [], right: [] });
-      expect(offsetPolyline([{ x: 3, y: 3 }], 10)).toEqual({
-        left: [],
-        right: [],
       });
     });
   });

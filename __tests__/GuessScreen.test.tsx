@@ -175,10 +175,13 @@ jest.mock('../services/cardDeck', () => {
   };
 });
 
-// Persistence side-effect boundary (score buffer + deck mutation + file
-// deletes). The recorded payload is the scoring contract.
+// Persistence side-effect boundary (win-score buffer + deck mutation + file
+// deletes). The recorded payload is the scoring contract: bufferWinScore is
+// the win-time credit (bug-2 contract), applySuccessSideEffects the
+// advance-gated cleanup.
 jest.mock('../utils/handleGuessOutcome', () => ({
   applySuccessSideEffects: jest.fn().mockResolvedValue(undefined),
+  bufferWinScore: jest.fn().mockResolvedValue(undefined),
   resolveNextGuessParams: jest.fn(),
 }));
 
@@ -209,7 +212,7 @@ import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
 import GuessPictureBase from '../components/Picture/GuessPicture';
 import ShowFailure from '../components/Results/ShowFailure';
 import { AuthContext } from '../store/auth-context';
-import { applySuccessSideEffects, resolveNextGuessParams } from '../utils/handleGuessOutcome';
+import { applySuccessSideEffects, bufferWinScore, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 import { fetchCardBatch } from '../services/cardDeck';
 import { isWinningTrace } from '../utils/shapeMatch';
@@ -218,6 +221,7 @@ const actualShapeMatch = jest.requireActual('../utils/shapeMatch') as typeof imp
 const isWinningTraceMock = isWinningTrace as jest.MockedFunction<typeof isWinningTrace>;
 
 const applySuccessSideEffectsMock = applySuccessSideEffects as jest.MockedFunction<typeof applySuccessSideEffects>;
+const bufferWinScoreMock = bufferWinScore as jest.MockedFunction<typeof bufferWinScore>;
 const resolveNextGuessParamsMock = resolveNextGuessParams as jest.MockedFunction<typeof resolveNextGuessParams>;
 const resolveNextCardWithServerFallbackMock = resolveNextCardWithServerFallback as jest.MockedFunction<
   typeof resolveNextCardWithServerFallback
@@ -494,6 +498,7 @@ describe('GuessScreen', () => {
     jest.clearAllMocks();
     resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    bufferWinScoreMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
     isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
@@ -585,6 +590,7 @@ describe('GuessScreen', () => {
       );
       expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+      expect(bufferWinScoreMock).not.toHaveBeenCalled();
     });
 
     it('retrying a failed point card re-serves the card with the point params unchanged', async () => {
@@ -626,6 +632,19 @@ describe('GuessScreen', () => {
 
       await playWinCycle(handle);
 
+      // Win-time credit (bug-2 contract): buffered once, with the win's speed
+      // and streak values.
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
+      expect(bufferWinScoreMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          pictureId: 'image-1',
+          points: 2,
+          multiplier: 2,
+          streak: 1,
+          streakMultiplier: 1.0,
+        }),
+      );
+      // Advance-gated cleanup runs once with the played-card coordinates.
       expect(applySuccessSideEffectsMock).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffectsMock).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -633,10 +652,6 @@ describe('GuessScreen', () => {
           categoryKey: 'nature',
           language: 'fr',
           pictureId: 'image-1',
-          points: 2,
-          multiplier: 2,
-          streak: 1,
-          streakMultiplier: 1.0,
         }),
       );
     });
@@ -645,8 +660,25 @@ describe('GuessScreen', () => {
       serveSuccessiveNextCards();
       const handle = renderGuessScreen(baseParams());
 
+      // Wins 3 and 6 park the cycle on the internal ad panel until it is
+      // dismissed; continuing applies the staged next card (the idle gate
+      // makes a mid-ad confirm a no-op instead of re-kicking the resolve).
+      async function continueAdIfShowing() {
+        const adContinue = handle.screen.queryByTestId('ad.internal.pro.continue');
+        if (!adContinue) return;
+        await act(async () => {
+          fireEvent.press(adContinue);
+        });
+        await flush();
+        const applied = handle.navigation.setParams.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
+        if (applied) {
+          await handle.rerenderWithParams(applied);
+        }
+      }
+
       for (let cycle = 1; cycle <= 6; cycle++) {
         await playWinCycle(handle);
+        await continueAdIfShowing();
       }
 
       // 7th win: the celebration pill reflects the newly reached tier…
@@ -655,8 +687,8 @@ describe('GuessScreen', () => {
 
       // …and the buffered score carries the post-increment values.
       await dismissWinOverlay(handle);
-      expect(applySuccessSideEffectsMock).toHaveBeenCalledTimes(7);
-      expect(applySuccessSideEffectsMock).toHaveBeenLastCalledWith(
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(7);
+      expect(bufferWinScoreMock).toHaveBeenLastCalledWith(
         expect.objectContaining({
           points: 6,
           multiplier: 2,
@@ -832,7 +864,9 @@ describe('GuessScreen', () => {
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).not.toBeNull();
       // Initial resolve + two retries; the third tick only exhausts.
       expect(resolveNextCardWithServerFallbackMock.mock.calls.length).toBe(3);
+      // No advance → no cleanup; but the win itself was banked at win time.
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
     });
 
     it('an empty category consults the all-deck fallback before giving up', async () => {
@@ -877,10 +911,15 @@ describe('GuessScreen', () => {
       expect(handle.screen.queryByTestId('guess.success.overlay')).toBeNull();
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).toBeNull();
 
-      // The recovered advance credits the success-time speed bonus.
+      // The win was banked once at win time with the success-time speed bonus;
+      // the recovered advance runs the cleanup exactly once.
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
+      expect(bufferWinScoreMock).toHaveBeenCalledWith(
+        expect.objectContaining({ multiplier: 2, streak: 1, points: 2 }),
+      );
       expect(applySuccessSideEffectsMock).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffectsMock).toHaveBeenCalledWith(
-        expect.objectContaining({ multiplier: 2, streak: 1, points: 2 }),
+        expect.objectContaining({ pictureId: 'image-1' }),
       );
 
       // No strand: the retry budget is done, nothing fires again.
@@ -918,7 +957,7 @@ describe('GuessScreen', () => {
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).not.toBeNull();
     });
 
-    it('backgrounding mid-resolve aborts the win: no score, no streak, no ad', async () => {
+    it('backgrounding mid-resolve keeps the win credit but skips cleanup and the ad', async () => {
       let settleResolve!: (v: { next: { params: Record<string, unknown> }; reason: 'ok' }) => void;
       resolveNextCardWithServerFallbackMock.mockReturnValue(
         new Promise((resolve) => {
@@ -941,6 +980,8 @@ describe('GuessScreen', () => {
       });
       await flush();
 
+      // Win-time credit already happened; the advance-gated cleanup never does.
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('ad.internal.pro.panel')).toBeNull();
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).not.toBeNull();
@@ -967,7 +1008,7 @@ describe('GuessScreen', () => {
       consoleErrorSpy.mockRestore();
     });
 
-    it('swiping home while the resolve is in flight aborts the win credit', async () => {
+    it('swiping home while the resolve is in flight keeps the win credit and skips cleanup', async () => {
       let settleResolve!: (v: { next: { params: Record<string, unknown> }; reason: 'ok' }) => void;
       resolveNextCardWithServerFallbackMock.mockReturnValue(
         new Promise((resolve) => {
@@ -985,10 +1026,11 @@ describe('GuessScreen', () => {
       });
       await flush();
 
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
     });
 
-    it('swiping home while the score awaits banks nothing and never shows the ad', async () => {
+    it('swiping home while the advance cleanup awaits never shows the ad or updates state after unmount', async () => {
       let finishSideEffects!: () => void;
       applySuccessSideEffectsMock.mockImplementation(
         () =>
@@ -1239,6 +1281,8 @@ describe('GuessScreen', () => {
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).not.toBeNull();
       expect(handle.screen.queryByTestId('ad.internal.pro.panel')).toBeNull();
       expect(applySuccessSideEffectsMock).toHaveBeenCalledTimes(2);
+      // The 3rd win (exhausted advance) is still banked at win time.
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(3);
     });
 
     it('a miss ends the round: the next game needs a fresh 3-win streak for an ad', async () => {
@@ -1488,12 +1532,35 @@ describe('GuessScreen', () => {
       await dismissWinOverlay(handle);
 
       // The resolve is still in flight: another confirm must not credit a
-      // second win or advance twice.
+      // second win, re-kick the resolve, or advance twice.
       await confirmGuess(handle);
 
+      // Exactly-once win credit (the applySuccessPath idle-gate); cleanup
+      // never fires because the resolve never settles.
+      expect(bufferWinScoreMock).toHaveBeenCalledTimes(1);
       expect(applySuccessSideEffectsMock).not.toHaveBeenCalled();
       expect(navigation.setParams).not.toHaveBeenCalled();
       expect(handle.screen.queryByTestId('guess-exhausted-panel')).toBeNull();
+    });
+
+    it('two pictureId-less cards colliding on listId still remount the card subtree (unique key)', async () => {
+      // No skipInstructions → the instructions filter is mount-state owned by
+      // the keyed GuessPicture subtree: it reappears only on a real remount.
+      const noInstructions = { skipInstructions: undefined };
+      const handle = renderGuessScreen(
+        baseParams({ pictureId: undefined, imageFile: 'file:///card-a.jpg', ...noInstructions }),
+      );
+      expect(handle.screen.queryByTestId('game.instructions.guess.start')).not.toBeNull();
+      await act(async () => {
+        fireEvent.press(handle.screen.getByTestId('game.instructions.guess.start'));
+      });
+      expect(handle.screen.queryByTestId('game.instructions.guess.start')).toBeNull();
+
+      // Win advance (setParams) to a pictureId-less card whose listId
+      // collides with the played card's — only the image differs.
+      await handle.rerenderWithParams({ imageFile: 'file:///card-b.jpg' });
+
+      expect(handle.screen.queryByTestId('game.instructions.guess.start')).not.toBeNull();
     });
   });
 
@@ -1663,6 +1730,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
     jest.clearAllMocks();
     resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    bufferWinScoreMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
     isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);
@@ -1761,6 +1829,7 @@ describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan
     jest.clearAllMocks();
     resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
     applySuccessSideEffectsMock.mockReset().mockResolvedValue(undefined);
+    bufferWinScoreMock.mockReset().mockResolvedValue(undefined);
     resolveNextCardWithServerFallbackMock.mockReset().mockImplementation(actualAdvancer.resolveNextCardWithServerFallback);
     fetchCardBatchMock.mockReset().mockResolvedValue({ isError: false, images: [] });
     isWinningTraceMock.mockReset().mockImplementation(actualShapeMatch.isWinningTrace);

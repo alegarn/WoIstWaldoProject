@@ -3,7 +3,6 @@ const mockIconButton = jest.fn(() => null);
 const mockSpeedRing = jest.fn(() => null);
 const mockCenteredModal = jest.fn(() => null);
 const mockShapeCanvas = jest.fn(() => null);
-const mockTraceCorridorEdges = jest.fn(() => null);
 
 let mockCapturedPanRecords;
 let mockCapturedPanRecord;
@@ -152,17 +151,6 @@ jest.mock('../components/Picture/ShapeCanvas', () => {
   };
 });
 
-// Loupe mirror content boundary: capture the corridor edges props the host
-// composes for the shape-mode glass while rendering the real component.
-jest.mock('../components/Picture/TraceCorridorEdges', () => {
-  const React = require('react');
-  const Actual = jest.requireActual('../components/Picture/TraceCorridorEdges').default;
-  return function MockTraceCorridorEdges(props) {
-    mockTraceCorridorEdges(props);
-    return React.createElement(Actual, props);
-  };
-});
-
 // Shape matcher boundary: the new guess-branch case lets the real
 // GuessShapeSurface run; its graded outcome is controlled here (pattern from
 // GuessScreen.test.tsx) while the hide-branch cases never touch scoring.
@@ -185,12 +173,6 @@ import {
   loupeContentTransform,
   loupeLayout,
 } from '../utils/loupeGeometry';
-import { SHAPE_TOLERANCE_RATIO, shapeTolerancePx } from '../utils/shapeMatch';
-import {
-  corridorBandWidthPx,
-  offsetPolyline,
-} from '../utils/shapeGeometry';
-import { traceSegmentStyle } from '../components/Picture/TraceInk';
 import { buildSelectionFromPixels } from '../utils/targetLocation';
 
 function findByTestID(renderer, testID) {
@@ -503,14 +485,15 @@ describe('ShowPicture', () => {
         { x: 0.5, y: 0.9 },
         { x: 0.1, y: 0.1 },
       ];
-      const renderer = renderShowPicture({
+      const surfaceOverrides = {
         shapeMode: true,
         outline: [{ x: 0.2, y: 0.3 }],
         onOutlineChange,
         hiddenOutline,
         imageWidth: 640,
         imageHeight: 480,
-      });
+      };
+      const renderer = renderShowPicture(surfaceOverrides);
 
       // The surface root replaces the bare branch.
       expect(() => findByTestID(renderer, 'game.picture.guess-shape-surface')).not.toThrow();
@@ -525,11 +508,17 @@ describe('ShowPicture', () => {
       expect(shapeCanvases[0].props.imageDimensionStyle).toEqual({ width: 200, height: 400 });
       expect(shapeCanvases[0].props.outline).toEqual([{ x: 0.2, y: 0.3 }]);
 
-      // hiddenOutline reached the surface: a lift reveals the graded overlay.
+      // hiddenOutline reached the surface: a lift scores it, but the graded
+      // overlay stays MASKED until the confirm token arrives (anti-leak).
       const surfaceProps =
         mockShapeCanvas.mock.calls[mockShapeCanvas.mock.calls.length - 1][0];
       act(() => {
         surfaceProps.onOutlineChange(hiddenOutline);
+      });
+      expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).toThrow();
+
+      act(() => {
+        renderer.update(<ShowPicture {...baseProps} {...surfaceOverrides} revealToken={1} />);
       });
       expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).not.toThrow();
     });
@@ -1201,7 +1190,7 @@ describe('ShowPicture', () => {
       expect(shapeCanvasProps(renderer).onStrokeUpdate).toBe(handlerAtMount);
     });
 
-    it('guess stroke mirrors live ink + corridor edge lines into the loupe (no fat band)', () => {
+    it('guess stroke mirrors live ink only into the loupe (no edge lines, no fat band)', () => {
       const renderer = renderShape();
       expectLoupeHidden(renderer);
 
@@ -1211,8 +1200,8 @@ describe('ShowPicture', () => {
 
       const loupe = findByTestID(renderer, 'game.picture.loupe');
       expect(loupeNodesByTestID(loupe, 'game.picture.trace-ink').length).toBeGreaterThan(0);
-      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-left').length).toBeGreaterThan(0);
-      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-right').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-left')).toHaveLength(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-corridor-edge-right')).toHaveLength(0);
       expect(loupeNodesByTestID(loupe, 'game.picture.trace-band')).toHaveLength(0);
     });
 
@@ -1300,41 +1289,7 @@ describe('ShowPicture', () => {
       expect(endY * LOUPE_ZOOM + translateY).toBeCloseTo(LOUPE_DIAMETER_PX / 2);
     });
 
-    it('loupe corridor edges use the IMAGE-space tolerance distance, not the screen band width (units pin)', () => {
-      const renderer = renderShape();
-
-      act(() => {
-        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
-      });
-
-      const distance = shapeTolerancePx(
-        guessShapeProps.imageWidth,
-        guessShapeProps.imageHeight
-      );
-      expect(distance).toBe(50);
-      const { left, right } = offsetPolyline(stroke, distance);
-      const loupe = findByTestID(renderer, 'game.picture.loupe');
-
-      const leftBars = mirrorBarStyles(loupe, 'game.picture.trace-corridor-edge-left');
-      expect(leftBars).toContainEqual(traceSegmentStyle(left[0], left[1], 1));
-      const rightBars = mirrorBarStyles(loupe, 'game.picture.trace-corridor-edge-right');
-      expect(rightBars).toContainEqual(traceSegmentStyle(right[0], right[1], 1));
-
-      // The screen-px band width (corridorBandWidthPx at style 320) belongs to
-      // the full-size band ONLY — the loupe edges are thin 1px lines offset by
-      // the image-space tolerance, not bars of the band width.
-      const screenBandWidth = corridorBandWidthPx(
-        { imageWidth: guessShapeProps.imageWidth, imageHeight: guessShapeProps.imageHeight },
-        shapeDims.width,
-        shapeDims.height,
-        SHAPE_TOLERANCE_RATIO
-      );
-      expect(screenBandWidth).not.toBe(distance);
-      expect(leftBars.every((style) => style.height !== screenBandWidth)).toBe(true);
-      expect(rightBars.every((style) => style.height !== screenBandWidth)).toBe(true);
-    });
-
-    it('lift hides the loupe and the graded reveal still appears (existing behavior intact)', () => {
+    it('lift hides the loupe, holds the graded reveal masked until the confirm token, then reveals', () => {
       outlineMatchScore.mockReturnValue(0.87);
       isWinningTrace.mockReturnValue(true);
       const renderer = renderShape();
@@ -1357,6 +1312,11 @@ describe('ShowPicture', () => {
           { x: 0.2, y: 0.2 },
         ]);
       });
+      expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).toThrow();
+
+      act(() => {
+        renderer.update(<ShowPicture {...baseProps} {...guessShapeProps} revealToken={1} />);
+      });
       expect(() => findByTestID(renderer, 'game.picture.trace-reveal')).not.toThrow();
     });
 
@@ -1374,8 +1334,10 @@ describe('ShowPicture', () => {
 
       // One act per report: on-device each report is its own event tick, so
       // each commit re-renders the mirror separately (batching would collapse
-      // the renders and hide the cadence).
-      mockTraceCorridorEdges.mockClear();
+      // the renders and hide the cadence). A commit is observed the public
+      // way: the mirrored ink's bar count grows inside the loupe.
+      let commits = 0;
+      let previousBars = 0;
       points.forEach((point, index) => {
         act(() => {
           props.onStrokeUpdate({
@@ -1383,17 +1345,18 @@ describe('ShowPicture', () => {
             renderPoints: points.slice(0, index + 1),
           });
         });
-      });
 
-      let commits = 0;
-      let previousLength = 0;
-      for (const call of mockTraceCorridorEdges.mock.calls) {
-        const length = (call[0].trace ?? []).length;
-        if (length > previousLength) {
+        const loupe = findByTestID(renderer, 'game.picture.loupe');
+        // TraceInk renders no root node for <2 points — the first report has
+        // no bars yet.
+        const bars = loupeNodesByTestID(loupe, 'game.picture.trace-ink').length
+          ? mirrorBarStyles(loupe, 'game.picture.trace-ink').length
+          : 0;
+        if (bars > previousBars) {
           commits++;
         }
-        previousLength = length;
-      }
+        previousBars = bars;
+      });
       expect(commits).toBeGreaterThan(1);
       expect(commits).toBeLessThanOrEqual(96 / 12 + 1);
     });
@@ -1435,6 +1398,25 @@ describe('ShowPicture', () => {
         (node) => typeof node.props.testID === 'string' && /outline/.test(node.props.testID)
       );
       expect(leaked).toHaveLength(0);
+    });
+
+    it('guess shape stroke mirrors ink only into the loupe (no band, no edges) — hide-side parity', () => {
+      const renderer = renderShape();
+
+      act(() => {
+        shapeCanvasProps(renderer).onStrokeUpdate(strokeUpdate);
+      });
+
+      const loupe = findByTestID(renderer, 'game.picture.loupe');
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-ink').length).toBeGreaterThan(0);
+      expect(loupeNodesByTestID(loupe, 'game.picture.trace-band')).toHaveLength(0);
+      expect(
+        loupe.findAll(
+          (node) =>
+            typeof node.props.testID === 'string' &&
+            node.props.testID.startsWith('game.picture.trace-corridor-edge')
+        )
+      ).toHaveLength(0);
     });
   });
 

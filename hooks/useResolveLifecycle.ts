@@ -7,7 +7,6 @@ import type { NextGuessResult } from '../utils/nextCardAdvancer';
 import { DEFAULT_RETRY_BUDGET } from '../utils/advanceState';
 import type { AdvanceEvent, AdvanceState } from '../utils/advanceState';
 import type { AdScope, ConsumeAdSlotResult } from '../utils/adCadence';
-import { resolveCorrectGuessOutcome } from '../utils/guessPoints';
 import type { AuthContextLike } from '../services/billing/entitlements';
 
 // Exponential retry cadence for the `warming` state (§5.3 + §8 risk row).
@@ -47,7 +46,6 @@ export type UseResolveLifecycleArgs = {
   dispatch: (event: AdvanceEvent) => void;
   advanceStateRef: RefObject<AdvanceState>;
   setAdPhase: (phase: AdPhase) => void;
-  currentStreak: number;
   onWin: () => void;
   resolveArgs: ResolveArgs;
   sideEffectArgs: SideEffectArgs;
@@ -62,7 +60,7 @@ export type UseResolveLifecycleArgs = {
 };
 
 export type UseResolveLifecycleResult = {
-  kickoffResolve: (multiplier: number) => void;
+  kickoffResolve: () => void;
   awaitResolve: () => Promise<void>;
   consumePendingNext: () => NonNullable<NextGuessResult> | null;
   handleAdDone: () => void;
@@ -81,14 +79,10 @@ export type UseResolveLifecycleResult = {
 // Owns the resolve-lifecycle machinery: the in-flight next-card Promise ref,
 // the staged pending-next ref consumed by both ad/non-ad RESOLVED dispatch
 // paths, the warming-retry timer + count, and the mountedRef abort guard.
-// `multiplier` is threaded explicitly through runResolveCycle → onAdvanceResolved
-// → scheduleRetry → runResolveCycle so the success-time value survives the
-// retry loop without a parallel multiplier mirror ref (§2.4 option c).
 export function useResolveLifecycle({
   dispatch,
   advanceStateRef,
   setAdPhase,
-  currentStreak,
   onWin,
   resolveArgs,
   sideEffectArgs,
@@ -103,13 +97,15 @@ export function useResolveLifecycle({
   // overlay never lands a setState-after-unmount when the trailing resolve
   // settles.
   const nextCardResolveRef = useRef<Promise<void> | null>(null);
-  // CONCERN #1 (post-implementation verification pass): PT6 cleanup nulls
-  // nextCardResolveRef but cannot cancel the in-flight runResolveCycle()
-  // Promise. When it settles post-unmount, onAdvanceResolved would fire
-  // applySuccessSideEffects → bufferScore (AsyncStorage) + removeImageFromList
-  // (deck mutation) + deleteImageFromStorage (file delete). User decision:
-  // ABORT the win-credit on swipe-home. Flipped to false in the PT6 cleanup
-  // below; checked at the top of onAdvanceResolved.
+  // WIN-CREDIT CONTRACT (bug-2 fix, reverses the old PB6/C1 abort decision):
+  // the score is buffered at WIN time in GuessScreen's applySuccessPath —
+  // BEFORE this resolve even starts — so a swipe-home/leave mid-advance or a
+  // last/only card (advance → exhausted) can no longer lose the win. PT6
+  // cleanup still nulls nextCardResolveRef on unmount and the mountedRef
+  // guard below stops the post-win side effects (deck mutation, file delete,
+  // ad/UI state) from firing after teardown; the credit itself already
+  // happened. Flipped to false in the PT6 cleanup below; checked at the top
+  // of onAdvanceResolved.
   const mountedRef = useRef(true);
   // C2 (ad-in-screen-overlay §4.4): holds the resolved next card so the
   // post-ad RESOLVED dispatch can fire from handleAdDone — the advance state
@@ -157,12 +153,11 @@ export function useResolveLifecycle({
 
   // Drives the advance state machine from a single resolve attempt. Called
   // initially by handleOverlayDone (state=advancing) and re-entered on each
-  // scheduled retry tick (state=warming). Side effects (streak commit, score
-  // buffer, ad cadence, setParams/navigation) fire ONLY on a successful
-  // resolve — see onAdvanceResolved (PB6). `multiplier` is threaded in (not
-  // read from a ref) so the retry-loop recovery credits the success-time
-  // multiplier even if state has since moved on.
-  async function runResolveCycle(multiplier: number) {
+  // scheduled retry tick (state=warming). Side effects (streak commit,
+  // advance cleanup, ad cadence, setParams/navigation) fire ONLY on a
+  // successful resolve — see onAdvanceResolved. The score is NOT credited
+  // here: it was banked at win time (GuessScreen applySuccessPath).
+  async function runResolveCycle() {
     const { next, reason } = await resolveNextCardWithServerFallback({
       category: resolveArgs.category,
       language: resolveArgs.language,
@@ -175,7 +170,7 @@ export function useResolveLifecycle({
     });
 
     if (next) {
-      await onAdvanceResolved(next, multiplier);
+      await onAdvanceResolved(next);
       return;
     }
 
@@ -185,7 +180,7 @@ export function useResolveLifecycle({
     // 'empty' | 'server' (and any unmapped reason) → FAILED_PERMANENT → exhausted.
     if (reason === 'network') {
       dispatch({ type: 'FAILED_TRANSIENT' });
-      scheduleRetry(multiplier);
+      scheduleRetry();
       return;
     }
     // F4 nit: terminal transition — drop any staged next so a
@@ -199,9 +194,12 @@ export function useResolveLifecycle({
     dispatch({ type: 'FAILED_PERMANENT' });
   }
 
-  // PB6: streak + score commit lives here — only on a successfully resolved
-  // next card. Pairs with the cadence rollback (no commit) on null advance.
-  async function onAdvanceResolved(next: NonNullable<NextGuessResult>, multiplier: number) {
+  // PB6 (revised by the bug-2 win-credit contract): advance-gated side
+  // effects — streak-state commit + best-effort cleanup — live here, only on
+  // a successfully resolved next card. Pairs with the cadence rollback (no
+  // commit) on null advance. The SCORE is not advance-gated anymore: it was
+  // banked at win time (GuessScreen applySuccessPath).
+  async function onAdvanceResolved(next: NonNullable<NextGuessResult>) {
     // A7 (Phase 2 review): the in-flight resolve may complete AFTER AppState
     // backgrounding forced FAILED_PERMANENT → `exhausted`. Without this guard,
     // onWin / applySuccessSideEffects / decideAdSlot / setAdPhase would all
@@ -211,9 +209,9 @@ export function useResolveLifecycle({
     if (advanceStateRef.current !== 'advancing' && advanceStateRef.current !== 'warming') return;
     // mountedRef guard: a swipe-home during SuccessOverlay nulls nextCardResolveRef
     // but does NOT cancel the in-flight Promise. applySuccessSideEffects mutates
-    // AsyncStorage + the local deck + the filesystem — those must NOT fire post-unmount.
+    // the local deck + the filesystem — those must NOT fire post-unmount. The
+    // score is safe regardless: it was banked at win time.
     if (!mountedRef.current) return;
-    const { nextStreak, nextTier, finalPoints } = resolveCorrectGuessOutcome({ multiplier, currentStreak });
     onWin();
     await applySuccessSideEffects({
       listId: sideEffectArgs.listId,
@@ -224,10 +222,6 @@ export function useResolveLifecycle({
       pictureId: sideEffectArgs.pictureId,
       scope: sideEffectArgs.scope,
       userId: sideEffectArgs.userId,
-      points: finalPoints,
-      multiplier,
-      streak: nextStreak,
-      streakMultiplier: nextTier.multiplier,
     });
 
     // Unmount can happen while the persistent side effects await. Bail before
@@ -278,10 +272,8 @@ export function useResolveLifecycle({
 
   // Schedule the next warming retry. Exponential backoff 1s/2s/4s. After the
   // budget is consumed, the final RETRY_TICK transitions the reducer to
-  // `exhausted` and we do not issue another resolve. `multiplier` is carried
-  // through to the retried runResolveCycle so the success-time value is used
-  // at recovery time (§2.4 option c — explicit arg, no mirror ref).
-  function scheduleRetry(multiplier: number) {
+  // `exhausted` and we do not issue another resolve.
+  function scheduleRetry() {
     retryCountRef.current += 1;
     const n = retryCountRef.current;
     const delay = RETRY_DELAYS_MS[n - 1] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
@@ -289,7 +281,7 @@ export function useResolveLifecycle({
       retryTimerRef.current = null;
       dispatch({ type: 'RETRY_TICK' });
       if (n < DEFAULT_RETRY_BUDGET) {
-        void runResolveCycle(multiplier);
+        void runResolveCycle();
       }
     }, delay);
   }
@@ -307,13 +299,13 @@ export function useResolveLifecycle({
     }
   }, [dispatch, setAdPhase]);
 
-  const kickoffResolve = (multiplier: number) => {
+  const kickoffResolve = () => {
     retryCountRef.current = 0;
     // F1 (G1): reset the deferred-ad flag at cycle start so a stale flag from
     // a prior win cannot leak across consecutive cycles. Belt-and-suspenders
     // alongside the advancing/warming tap-gate (disabled={state !== 'idle'}).
     adDeferredRef.current = false;
-    nextCardResolveRef.current = runResolveCycle(multiplier);
+    nextCardResolveRef.current = runResolveCycle();
   };
 
   const awaitResolve = async () => {
