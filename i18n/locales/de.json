@@ -121,7 +121,10 @@
     "pointHideScore": "Verstecken-Punkte (Punkt): {{value}}",
     "shapeHideScore": "Verstecken-Punkte (Umriss): {{value}}",
     "detail": {
-      "title": "Details von {{name}}"
+      "title": "Details von {{name}}",
+      "scoresTitle": "Punkte",
+      "activityTitle": "Aktivität",
+      "breakdownTitle": "Einzelwerte"
     },
     "authFailed": "{{message}}. Deine Authentifizierung ist fehlgeschlagen. Versuche, dich erneut zu verbinden. Du kannst keine Rangliste abrufen.",
     "genericFailed": "{{message}}. Versuche, dich erneut zu verbinden. Du kannst keine Rangliste abrufen."

@@ -121,7 +121,10 @@
     "pointHideScore": "Punteggio nascondino punti: {{value}}",
     "shapeHideScore": "Punteggio nascondino contorno: {{value}}",
     "detail": {
-      "title": "Dettagli di {{name}}"
+      "title": "Dettagli di {{name}}",
+      "scoresTitle": "Punteggi",
+      "activityTitle": "Attività",
+      "breakdownTitle": "Dettagli"
     },
     "authFailed": "{{message}}. Autenticazione non riuscita. Prova a riconnetterti. Non puoi ottenere una classifica.",
     "genericFailed": "{{message}}. Prova a riconnetterti. Non puoi ottenere una classifica."

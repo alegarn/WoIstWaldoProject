@@ -121,7 +121,10 @@
     "pointHideScore": "Puntuación de escondite en punto: {{value}}",
     "shapeHideScore": "Puntuación de escondite en contorno: {{value}}",
     "detail": {
-      "title": "Detalles de {{name}}"
+      "title": "Detalles de {{name}}",
+      "scoresTitle": "Puntuaciones",
+      "activityTitle": "Actividad",
+      "breakdownTitle": "Desglose"
     },
     "authFailed": "{{message}}. Tu autenticación falló. Intenta reconectarte. No puedes obtener una clasificación.",
     "genericFailed": "{{message}}. Intenta reconectarte. No puedes obtener una clasificación."

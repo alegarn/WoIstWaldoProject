@@ -13,7 +13,7 @@ function buildRankingMetrics(width, height) {
     containerPaddingTop: height * 0.04,
     containerPaddingBottom: height * 0.1,
 
-    headerHeight: height * 0.07,
+    headerHeight: height * 0.078,
     headerBorderRadius: height * 0.01,
     headerMarginBottom: height * 0.03,
     headerFontSize: height * 0.022,
@@ -135,8 +135,8 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
     headText: {
       color: headTextColor,
       fontSize: metrics.headerFontSize,
-      textTransform: 'uppercase',
-      letterSpacing: 1,
+      letterSpacing: 0.2,
+      textAlign: 'center',
       fontWeight: '700',
     },
     text: {
@@ -189,7 +189,13 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
       <View style={styles.head} testID="ranking.header">
         {columns.map((column, index) => (
           <View key={`${column.field}-${index}`} style={[styles.cell, { flex: column.flex }]}>
-            <Text style={[styles.text, styles.headText]} numberOfLines={1} testID={`ranking.header.${index}`}>
+            <Text
+              style={[styles.text, styles.headText]}
+              numberOfLines={2}
+              adjustsFontSizeToFit
+              minimumFontScale={0.65}
+              testID={`ranking.header.${index}`}
+            >
               {headerLabel(column, t)}
             </Text>
           </View>

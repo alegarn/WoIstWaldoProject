@@ -8,6 +8,7 @@ import { rgbaFromHex } from '../utils/privateGroupTheme';
 
 import TableComponent from '../components/UI/TableComponent';
 import BoardTabs from '../components/Ranking/BoardTabs';
+import UserScoreDetailContent from '../components/Ranking/UserScoreDetailContent';
 import CenteredModal from '../components/UI/CenteredModal';
 import Spinner from '../components/UI/Spinner';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
@@ -289,6 +290,7 @@ export default function RankingScreen({ route, navigation }) {
   const accentColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
   const chromeHairline = theme ? theme.hairlineStrong : rgbaFromHex(GlobalStyle.color.secondaryColor, 0.5);
   const chromeText = theme ? theme.text : GlobalStyle.color.onSurface;
+  const detailWash = rgbaFromHex(accentColor, 0.06);
 
   const detailRows = useMemo(() => (detail ? buildDetailRows(detail.scores) : []), [detail]);
 
@@ -361,18 +363,13 @@ export default function RankingScreen({ route, navigation }) {
               testIDPrefix="ranking.detail.modal"
             >
               <View style={styles.detailBody}>
-                <Text style={[styles.detailTitle, { color: accentColor }]}>
-                  {t('ranking.detail.title', { name: detail.name })}
-                </Text>
-                {detailRows.map((row) => (
-                  <Text
-                    key={row.field}
-                    style={styles.detailRow}
-                    testID={`ranking.detail.field.${row.field}`}
-                  >
-                    {t(row.label, { value: row.value })}
-                  </Text>
-                ))}
+                <UserScoreDetailContent
+                  name={detail.name}
+                  rows={detailRows}
+                  accentColor={accentColor}
+                  hairline={chromeHairline}
+                  wash={detailWash}
+                />
               </View>
             </CenteredModal>
           </View>
@@ -438,16 +435,5 @@ const styles = StyleSheet.create({
   },
   detailBody: {
     width: '100%',
-  },
-  detailTitle: {
-    fontWeight: '700',
-    fontSize: 16,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  detailRow: {
-    fontSize: 15,
-    paddingVertical: 3,
-    textAlign: 'center',
   },
 });

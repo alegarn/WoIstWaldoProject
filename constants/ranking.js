@@ -6,9 +6,9 @@
 export const RANKING_BOARD_COLUMNS = {
   total: [
     { board: 'total', header: 'Rank', field: 'rank', flex: 0.7, kind: 'rank', i18nKey: 'ui.ranking.rank' },
-    { board: 'total', header: 'Name', field: 'name', flex: 1.6, kind: 'name', i18nKey: 'ui.ranking.name' },
+    { board: 'total', header: 'Name', field: 'name', flex: 1.45, kind: 'name', i18nKey: 'ui.ranking.name' },
     { board: 'total', header: 'Score', field: 'total_score', flex: 1, kind: 'score', i18nKey: 'ui.ranking.score' },
-    { board: 'total', header: 'Max Streak', field: 'maxStreak', flex: 1, kind: 'text', i18nKey: 'ui.ranking.maxStreak' },
+    { board: 'total', header: 'Max Streak', field: 'maxStreak', flex: 1.15, kind: 'text', i18nKey: 'ui.ranking.maxStreak' },
     { board: 'total', header: 'Others', field: 'others', flex: 0.9, kind: 'button', i18nKey: 'ui.ranking.others' },
   ],
   point: [

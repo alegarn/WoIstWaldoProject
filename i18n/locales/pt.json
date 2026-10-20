@@ -121,7 +121,10 @@
     "pointHideScore": "Pontuação de esconder em ponto: {{value}}",
     "shapeHideScore": "Pontuação de esconder em contorno: {{value}}",
     "detail": {
-      "title": "Detalhes de {{name}}"
+      "title": "Detalhes de {{name}}",
+      "scoresTitle": "Pontuações",
+      "activityTitle": "Atividade",
+      "breakdownTitle": "Detalhes"
     },
     "authFailed": "{{message}}. Sua autenticação falhou. Tente reconectar. Você não pode obter uma classificação.",
     "genericFailed": "{{message}}. Tente reconectar. Você não pode obter uma classificação."

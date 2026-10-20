@@ -271,6 +271,49 @@ describe('RankingScreen', () => {
     expect(modalContent.findByProps({ testID: 'ranking.detail.field.total_shape_hide_score' }).props.children).toBe('Shape Hide Score: 4');
   });
 
+  it('renders the detail modal grouped into sectioned headers', async () => {
+    getRankingData.mockResolvedValue({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 25, user_id: 'u1' }],
+        nextCursor: null,
+        hasMore: false,
+      },
+    });
+    getUserScores.mockResolvedValue({
+      status: 200,
+      data: {
+        total: {
+          total_score: 25,
+          total_hide_score: 11,
+          point_score: 15,
+          shape_score: 10,
+          total_point_guess_score: 9,
+          total_shape_guess_score: 5,
+          total_point_hide_score: 7,
+          total_shape_hide_score: 4,
+        },
+        hide_info: {
+          hide_count: 4,
+        },
+        guess_info: {
+          guess_count: 6,
+        },
+      },
+    });
+
+    const renderer = await renderScreen();
+
+    await act(async () => {
+      await getTableProps().onPress('waldo');
+    });
+
+    const modalContent = renderer.root;
+    expect(modalContent.findByProps({ testID: 'ranking.detail.scoresTitle' }).props.children).toBe('Scores');
+    expect(modalContent.findByProps({ testID: 'ranking.detail.activityTitle' }).props.children).toBe('Activity');
+    expect(modalContent.findByProps({ testID: 'ranking.detail.breakdownTitle' }).props.children).toBe('Breakdown');
+  });
+
   it('renders only the fields present in the detail payload, skipping absent split fields', async () => {
     getRankingData.mockResolvedValue({
       status: 200,

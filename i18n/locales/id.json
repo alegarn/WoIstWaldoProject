@@ -121,7 +121,10 @@
     "pointHideScore": "Skor sembunyi titik: {{value}}",
     "shapeHideScore": "Skor sembunyi bentuk: {{value}}",
     "detail": {
-      "title": "Detail {{name}}"
+      "title": "Detail {{name}}",
+      "scoresTitle": "Skor",
+      "activityTitle": "Aktivitas",
+      "breakdownTitle": "Rincian"
     },
     "authFailed": "{{message}}. Autentikasi kamu gagal. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat.",
     "genericFailed": "{{message}}. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat."

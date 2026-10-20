@@ -241,6 +241,26 @@ describe('TableComponent', () => {
     });
   });
 
+  describe('header text fit', () => {
+    it('wraps header text on two lines with font auto-shrink', async () => {
+      const renderer = await renderTable();
+      const headerText = renderer.root.findByProps({ testID: 'ranking.header.1' });
+
+      expect(headerText.props.numberOfLines).toBe(2);
+      expect(headerText.props.adjustsFontSizeToFit).toBe(true);
+      expect(headerText.props.minimumFontScale).toBe(0.65);
+    });
+
+    it('styles header text without uppercase transform and with tight letterSpacing', async () => {
+      const renderer = await renderTable();
+      const headerText = renderer.root.findByProps({ testID: 'ranking.header.1' });
+      const flattened = StyleSheet.flatten(headerText.props.style);
+
+      expect(flattened.textTransform).toBeUndefined();
+      expect(flattened.letterSpacing).toBeLessThanOrEqual(0.5);
+    });
+  });
+
   describe('key extraction', () => {
     it('keys rows by userId with a rank-prefixed fallback stable across renumbering', async () => {
       const renderer = await renderTable();

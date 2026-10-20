@@ -121,7 +121,10 @@
     "pointHideScore": "Score de cache en point : {{value}}",
     "shapeHideScore": "Score de cache en contour : {{value}}",
     "detail": {
-      "title": "Détails de {{name}}"
+      "title": "Détails de {{name}}",
+      "scoresTitle": "Scores",
+      "activityTitle": "Activité",
+      "breakdownTitle": "Détails"
     },
     "authFailed": "{{message}}. Votre authentification a échoué. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement.",
     "genericFailed": "{{message}}. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement."
