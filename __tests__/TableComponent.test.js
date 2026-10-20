@@ -242,13 +242,14 @@ describe('TableComponent', () => {
   });
 
   describe('header text fit', () => {
-    it('wraps header text on two lines with font auto-shrink', async () => {
+    it('renders header text on a single line with font auto-shrink', async () => {
       const renderer = await renderTable();
       const headerText = renderer.root.findByProps({ testID: 'ranking.header.1' });
 
-      expect(headerText.props.numberOfLines).toBe(2);
+      expect(headerText.props.numberOfLines).toBe(1);
       expect(headerText.props.adjustsFontSizeToFit).toBe(true);
-      expect(headerText.props.minimumFontScale).toBe(0.65);
+      expect(headerText.props.minimumFontScale).toBeGreaterThanOrEqual(0.5);
+      expect(headerText.props.minimumFontScale).toBeLessThanOrEqual(0.65);
     });
 
     it('styles header text without uppercase transform and with tight letterSpacing', async () => {

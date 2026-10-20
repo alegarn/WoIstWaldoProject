@@ -191,9 +191,9 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
           <View key={`${column.field}-${index}`} style={[styles.cell, { flex: column.flex }]}>
             <Text
               style={[styles.text, styles.headText]}
-              numberOfLines={2}
+              numberOfLines={1}
               adjustsFontSizeToFit
-              minimumFontScale={0.65}
+              minimumFontScale={0.6}
               testID={`ranking.header.${index}`}
             >
               {headerLabel(column, t)}
