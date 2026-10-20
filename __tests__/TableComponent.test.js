@@ -170,7 +170,7 @@ describe('TableComponent', () => {
       expect(headerLabels(renderer, 5)).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
     });
 
-    it('renders the point board headers Rank, Name, Point Score, Others from descriptors', async () => {
+    it('renders the point board headers Rank, Name, Score, Others from descriptors', async () => {
       const renderer = await renderTable({
         columns: columnsForBoard('point'),
         tableScores: [
@@ -179,11 +179,11 @@ describe('TableComponent', () => {
         ],
       });
 
-      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Point Score', 'Others']);
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Score', 'Others']);
       expect(renderer.root.findByProps({ testID: 'ranking.row.1.point_score' }).props.children).toBe(30);
     });
 
-    it('renders the shape board headers Rank, Name, Contour Score, Others from descriptors', async () => {
+    it('renders the shape board headers Rank, Name, Score, Others from descriptors', async () => {
       const renderer = await renderTable({
         columns: columnsForBoard('shape'),
         tableScores: [
@@ -192,7 +192,7 @@ describe('TableComponent', () => {
         ],
       });
 
-      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Contour Score', 'Others']);
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Score', 'Others']);
       expect(renderer.root.findByProps({ testID: 'ranking.row.1.shape_score' }).props.children).toBe(44);
     });
 
