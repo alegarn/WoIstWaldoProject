@@ -146,6 +146,11 @@
         "total": "Total",
         "point": "Point",
         "shape": "Contour"
+      },
+      "period": {
+        "all": "All",
+        "week": "This week",
+        "day": "Today"
       }
     },
     "uploadNotice": {

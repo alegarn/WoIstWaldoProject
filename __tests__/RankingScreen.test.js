@@ -148,7 +148,7 @@ describe('RankingScreen', () => {
 
     expect(getRankingData).toHaveBeenCalledWith(
       contextValue,
-      { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total' }
+      { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
     );
     const data = getTableProps().data;
     expect(data.board).toBe('total');
@@ -591,7 +591,7 @@ describe('RankingScreen', () => {
       await getTableProps().onEndReached();
     });
 
-    expect(getRankingData).toHaveBeenCalledWith(contextValue, { after: 'c1', limit: 20, board: 'total' });
+    expect(getRankingData).toHaveBeenCalledWith(contextValue, { after: 'c1', limit: 20, board: 'total', period: 'all' });
 
     const tableScores = getTableProps().data.tableScores;
     expect(tableScores).toEqual([
@@ -626,7 +626,7 @@ describe('RankingScreen', () => {
       await getTableProps().onEndReached();
     });
 
-    expect(getRankingData).toHaveBeenCalledWith(contextValue, { after: 'c1', limit: 20, board: 'total' });
+    expect(getRankingData).toHaveBeenCalledWith(contextValue, { after: 'c1', limit: 20, board: 'total', period: 'all' });
 
     expect(Alert.alert).not.toHaveBeenCalled();
     expect(renderer.root.findAllByProps({ testID: 'ranking.footer.error' }).length).toBeGreaterThan(0);
@@ -651,7 +651,7 @@ describe('RankingScreen', () => {
       await renderer.root.findAllByProps({ testID: 'ranking.footer.retry' })[0].props.onPress();
     });
 
-    expect(getRankingData).toHaveBeenNthCalledWith(3, contextValue, { after: 'c1', limit: 20, board: 'total' });
+    expect(getRankingData).toHaveBeenNthCalledWith(3, contextValue, { after: 'c1', limit: 20, board: 'total', period: 'all' });
     expect(renderer.root.findAllByProps({ testID: 'ranking.footer.error' })).toHaveLength(0);
     expect(getTableProps().data.tableScores).toHaveLength(3);
   });
@@ -735,7 +735,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         3,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point' }
+        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point', period: 'all' }
       );
 
       expect(getTableProps().data.tableScores).toEqual([
@@ -749,7 +749,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         4,
         contextValue,
-        { after: 'p1', limit: 20, board: 'point' }
+        { after: 'p1', limit: 20, board: 'point', period: 'all' }
       );
       expect(getTableProps().data.tableScores).toHaveLength(2);
     });
@@ -853,7 +853,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         2,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total' }
+        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
       );
       expect(getTableProps().data.tableScores).toEqual([
         { rank: 1, name: 'waldo', score: 120, maxStreak: 0, others: '', userId: 'u1', total_score: 120 },
@@ -893,6 +893,236 @@ describe('RankingScreen', () => {
       expect(mockTableMounts.mock.calls.length).toBe(mountsBeforeRefresh + 1);
       expect(getTableProps().data.tableScores).toEqual([
         { rank: 1, name: 'waldo', score: 120, maxStreak: 0, others: '', userId: 'u1', total_score: 120 },
+      ]);
+    });
+  });
+
+  describe('period chips', () => {
+    it('renders the three period chips in public scope and defaults requests to period all', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: {
+          rows: [{ rank: '1', username: 'waldo', total_score: 25, user_id: 'u1' }],
+          nextCursor: null,
+          hasMore: false,
+        },
+      });
+
+      const renderer = await renderScreen();
+
+      ['all', 'week', 'day'].forEach((period) => {
+        expect(renderer.root.findAllByProps({ testID: `ranking.screen.period.${period}` }).length).toBeGreaterThan(0);
+      });
+      expect(getRankingData).toHaveBeenCalledWith(
+        contextValue,
+        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
+      );
+    });
+
+    it('refetches page 1 with the new period while keeping the active board', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'weekly', total_score: 55, user_id: 'w1' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.week' }).props.onPress('week');
+      });
+
+      expect(getRankingData).toHaveBeenNthCalledWith(
+        2,
+        contextValue,
+        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'week' }
+      );
+      expect(getTableProps().data.board).toBe('total');
+      expect(getTableProps().data.tableScores).toEqual([
+        { rank: 1, name: 'weekly', score: 55, maxStreak: 0, others: '', userId: 'w1', total_score: 55 },
+      ]);
+    });
+
+    it('shows the period score on the total board when server rows omit total_score', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{
+              rank: '1',
+              username: 'weekly',
+              score: 55,
+              point_score: 33,
+              shape_score: 22,
+              user_id: 'w1',
+            }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.week' }).props.onPress('week');
+      });
+
+      expect(getTableProps().data.board).toBe('total');
+      expect(getTableProps().data.tableScores).toEqual([
+        { rank: 1, name: 'weekly', maxStreak: 0, others: '', userId: 'w1', total_score: 55, point_score: 33, shape_score: 22 },
+      ]);
+    });
+
+    it('carries the active period on cursor page requests', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+            nextCursor: 'c1',
+            hasMore: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'weekly', total_score: 55, user_id: 'w1' }],
+            nextCursor: 'w1',
+            hasMore: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '2', username: 'odile', total_score: 80, user_id: 'u2' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.week' }).props.onPress('week');
+      });
+
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+
+      expect(getRankingData).toHaveBeenNthCalledWith(
+        3,
+        contextValue,
+        { after: 'w1', limit: 20, board: 'total', period: 'week' }
+      );
+      expect(getTableProps().data.tableScores).toEqual([
+        { rank: 1, name: 'weekly', score: 55, maxStreak: 0, others: '', userId: 'w1', total_score: 55 },
+        { rank: 2, name: 'odile', score: 80, maxStreak: 0, others: '', userId: 'u2', total_score: 80 },
+      ]);
+    });
+
+    it('hides the period chips in private scope', async () => {
+      mockUseActiveGroup.mockReturnValueOnce({
+        scope: { kind: 'private', groupId: 'g-1' },
+      });
+      mockUseGroupsHub.mockReturnValueOnce({
+        data: {
+          owned: [{
+            id: 'g-1',
+            name: 'My Group',
+            primary_color: '#198868',
+            secondary_color: '#FFCC00',
+          }],
+          joined: [],
+        },
+      });
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: [], nextCursor: null, hasMore: false },
+      });
+
+      const route = { params: { scope: { kind: 'private', groupId: 'g-1' } } };
+      let renderer;
+
+      await act(async () => {
+        renderer = create(
+          <AuthContext.Provider value={contextValue}>
+            <RankingScreen navigation={{ setOptions: jest.fn() }} route={route} />
+          </AuthContext.Provider>
+        );
+        await flushEffects();
+      });
+
+      ['all', 'week', 'day'].forEach((period) => {
+        expect(renderer.root.findAllByProps({ testID: `ranking.screen.period.${period}` })).toHaveLength(0);
+      });
+    });
+
+    it('discards a stale cursor response when the period is switched mid-flight', async () => {
+      let resolveCursor;
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+            nextCursor: 'c1',
+            hasMore: true,
+          },
+        })
+        .mockReturnValueOnce(new Promise((resolve) => { resolveCursor = resolve; }))
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'weekly', total_score: 55, user_id: 'w1' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        getTableProps().onEndReached();
+      });
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.week' }).props.onPress('week');
+      });
+
+      await act(async () => {
+        resolveCursor({
+          status: 200,
+          data: {
+            rows: [{ rank: '9', username: 'stale', total_score: 1, user_id: 'u3' }],
+            nextCursor: 'stale-c',
+            hasMore: true,
+          },
+        });
+      });
+      await act(async () => {});
+
+      expect(getTableProps().data.tableScores).toEqual([
+        { rank: 1, name: 'weekly', score: 55, maxStreak: 0, others: '', userId: 'w1', total_score: 55 },
       ]);
     });
   });
@@ -985,7 +1215,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         3,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point' }
+        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point', period: 'all' }
       );
       expect(getTableProps().data.board).toBe('point');
       expect(getTableProps().data.tableScores).toEqual([

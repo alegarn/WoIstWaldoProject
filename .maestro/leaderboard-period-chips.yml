@@ -1,0 +1,47 @@
+appId: com.alegarn.WoIstWaldoProject
+---
+# Public ranking period chips (plan 05 T5a). Assumes the session phase already
+# ran (auth-boot-login.yml) and the app sits on HomeScreen, like the other
+# feature flows. Requires EXPO_PUBLIC_E2E_MODE=true at bundle start/build.
+# CAVEAT: hide-to-guess-to-result.yml documents a pre-existing app crash when
+# navigating into RankingScreen from the guess path (expo-file-system
+# File.exists on a non-file URI); this flow enters from HomeScreen instead.
+# The shim is period-aware: rows and the me-card rank change per chip
+# (all -> "You are #3", week -> "You are #2", day -> "You are #1").
+- assertVisible:
+    id: home.button.ranking
+- tapOn:
+    id: home.button.ranking
+- extendedWaitUntil:
+    visible:
+      id: ranking.screen.board.total
+    timeout: 10000
+- assertVisible:
+    id: ranking.screen.period.all
+- assertVisible:
+    id: ranking.screen.period.week
+- assertVisible:
+    id: ranking.screen.period.day
+- assertVisible:
+    text: "You are #3"
+- tapOn:
+    id: ranking.screen.period.week
+- extendedWaitUntil:
+    visible:
+      text: "You are #2"
+    timeout: 10000
+- assertVisible:
+    id: ranking.screen.board.total
+- tapOn:
+    id: ranking.screen.period.day
+- extendedWaitUntil:
+    visible:
+      text: "You are #1"
+    timeout: 10000
+- tapOn:
+    id: ranking.screen.period.all
+- extendedWaitUntil:
+    visible:
+      text: "You are #3"
+    timeout: 10000
+- runFlow: "_shared/return_home.yaml"

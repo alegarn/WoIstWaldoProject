@@ -146,6 +146,11 @@
         "total": "Total",
         "point": "Titik",
         "shape": "Bentuk"
+      },
+      "period": {
+        "all": "Semua",
+        "week": "Minggu ini",
+        "day": "Hari ini"
       }
     },
     "uploadNotice": {

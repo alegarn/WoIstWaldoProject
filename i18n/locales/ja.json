@@ -146,6 +146,11 @@
         "total": "合計",
         "point": "ポイント",
         "shape": "なぞる"
+      },
+      "period": {
+        "all": "すべて",
+        "week": "今週",
+        "day": "今日"
       }
     },
     "uploadNotice": {

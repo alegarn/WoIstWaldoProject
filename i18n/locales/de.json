@@ -146,6 +146,11 @@
         "total": "Gesamt",
         "point": "Punkt",
         "shape": "Umriss"
+      },
+      "period": {
+        "all": "Gesamt",
+        "week": "Diese Woche",
+        "day": "Heute"
       }
     },
     "uploadNotice": {

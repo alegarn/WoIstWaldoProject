@@ -335,7 +335,16 @@ export function buildE2ERankingRows() {
   }));
 }
 
-export function buildE2ERankingResponse({ after, limit, scope, page, board } = {}) {
+// Plan-05 D6: the e2e shim is period-aware so the chips visibly change data.
+// Shorter windows expose fewer ranked rows and a better "me" rank — all
+// deterministic, no randomness.
+const E2E_RANKING_PERIOD_ROW_COUNTS = { all: 5, week: 3, day: 2 };
+const E2E_RANKING_PERIOD_ME_RANKS = { all: 3, week: 2, day: 1 };
+
+export function buildE2ERankingResponse({ after, limit, scope, page, board, period } = {}) {
+  const periodRowCount = E2E_RANKING_PERIOD_ROW_COUNTS[period] ?? E2E_RANKING_PERIOD_ROW_COUNTS.all;
+  const periodMeRank = E2E_RANKING_PERIOD_ME_RANKS[period] ?? E2E_RANKING_PERIOD_ME_RANKS.all;
+  const me = { ...E2E_RANKING_ME, rank: periodMeRank };
   const allRows = buildE2ERankingRows();
 
   if (page) {
@@ -343,7 +352,7 @@ export function buildE2ERankingResponse({ after, limit, scope, page, board } = {
       rows: allRows,
       nextCursor: null,
       hasMore: false,
-      me: E2E_RANKING_ME,
+      me,
       meta: null,
       pagy: { count: allRows.length, pages: 1, page: 1 },
     };
@@ -354,15 +363,15 @@ export function buildE2ERankingResponse({ after, limit, scope, page, board } = {
       rows: allRows.slice(5),
       nextCursor: 'e2e-cursor-next',
       hasMore: false,
-      me: E2E_RANKING_ME,
+      me,
       meta: null,
       pagy: null,
     };
   }
 
   return {
-    rows: allRows.slice(0, 5),
-    me: E2E_RANKING_ME,
+    rows: allRows.slice(0, periodRowCount),
+    me,
     meta: { top: 3, window: 2 },
     nextCursor: null,
     hasMore: false,

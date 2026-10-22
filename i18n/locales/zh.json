@@ -146,6 +146,11 @@
         "total": "总分",
         "point": "点选",
         "shape": "圈画"
+      },
+      "period": {
+        "all": "全部",
+        "week": "本周",
+        "day": "今天"
       }
     },
     "uploadNotice": {

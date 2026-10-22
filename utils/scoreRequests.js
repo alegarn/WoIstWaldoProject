@@ -113,9 +113,9 @@ export async function submitScoreBatch({ items, context }) {
     .catch(() => false);
 }
 
-export async function getRankingData(context, { scope, top, window, page, after, limit, board } = {}) {
+export async function getRankingData(context, { scope, top, window, page, after, limit, board, period } = {}) {
   if (isE2EMode()) {
-    const e2eData = buildE2ERankingResponse({ after, limit, scope, page });
+    const e2eData = buildE2ERankingResponse({ after, limit, scope, page, period });
     return { status: 200, data: e2eData };
   }
 
@@ -138,6 +138,7 @@ export async function getRankingData(context, { scope, top, window, page, after,
   if (after) params.after = after;
   if (limit) params.limit = limit;
   if (board) params.board = board;
+  if (period) params.period = period;
 
   const config = {
     headers: headers,

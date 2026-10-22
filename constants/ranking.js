@@ -29,6 +29,11 @@ export const RANKING_BOARD_COLUMNS = {
 // board switch guard (RankingScreen) and the tab list (BoardTabs).
 export const BOARDS = ['total', 'point', 'shape'];
 
+// Active time windows, in chip order (plan-05 D0: period=all|week|day,
+// default all). Single source of truth for the period switch guard
+// (RankingScreen) and the chip list (PeriodChips).
+export const PERIODS = ['all', 'week', 'day'];
+
 export function columnsForBoard(board) {
   return RANKING_BOARD_COLUMNS[board] ?? RANKING_BOARD_COLUMNS.total;
 }

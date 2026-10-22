@@ -324,6 +324,39 @@ describe('scoreRequests utilities', () => {
     expect(config.params).not.toHaveProperty('board');
   });
 
+  it('forwards period to the public ranking params', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'global', top: 10, window: 'weekly', board: 'point', period: 'week', limit: 20 }
+    );
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { scope: 'global', top: 10, window: 'weekly', board: 'point', period: 'week', limit: 20 },
+      }
+    );
+  });
+
+  it('does not send a period key when getRankingData is called without one', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData({ token: 'Bearer token' }, { scope: 'global', top: 10, window: 'weekly' });
+
+    const config = axios.get.mock.calls[0][1];
+    expect(config.params).toEqual({ scope: 'global', top: 10, window: 'weekly' });
+    expect(config.params).not.toHaveProperty('period');
+  });
+
   describe('private scope leaderboard forwarding', () => {
     it('forwards board and limit to fetchPrivateLeaderboard on the initial private fetch', async () => {
       fetchPrivateLeaderboard.mockResolvedValue({ status: 200, data: { rows: [], nextCursor: null, hasMore: false } });
@@ -447,6 +480,7 @@ describe('scoreRequests utilities', () => {
     const response = await getRankingData({ token: 'Bearer token' }, { scope: 'global' });
 
     expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: undefined, limit: undefined, scope: 'global', page: undefined });
+    expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,
       data: {
@@ -534,6 +568,7 @@ describe('scoreRequests utilities', () => {
     );
 
     expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: 'any-cursor', limit: 10, scope: undefined, page: undefined });
+    expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,
       data: {

@@ -146,6 +146,11 @@
         "total": "Total",
         "point": "Punto",
         "shape": "Contorno"
+      },
+      "period": {
+        "all": "Todo",
+        "week": "Esta semana",
+        "day": "Hoy"
       }
     },
     "uploadNotice": {

@@ -1,13 +1,14 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { BOARDS, columnsForBoard } from '../constants/ranking';
+import { BOARDS, PERIODS, columnsForBoard } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import { rgbaFromHex } from '../utils/privateGroupTheme';
 
 import TableComponent from '../components/UI/TableComponent';
 import BoardTabs from '../components/Ranking/BoardTabs';
+import PeriodChips from '../components/Ranking/PeriodChips';
 import UserScoreDetailContent from '../components/Ranking/UserScoreDetailContent';
 import CenteredModal from '../components/UI/CenteredModal';
 import Spinner from '../components/UI/Spinner';
@@ -40,7 +41,7 @@ function convertRankingRows(rows, columns, { renumber = false, baseRank = 0 } = 
     maxStreak: Number(row.max_streak || 0),
     others: "",
     userId: row.user_id,
-    total_score: row.total_score,
+    total_score: row.total_score ?? row.score,
     point_score: row.point_score,
     shape_score: row.shape_score,
   }));
@@ -86,6 +87,7 @@ export default function RankingScreen({ route, navigation }) {
   const { t } = useTranslation();
 
   const [board, setBoard] = useState('total');
+  const [period, setPeriod] = useState('all');
   const [slices, setSlices] = useState([]);
   const [nextCursor, setNextCursor] = useState(null);
   const [hasMore, setHasMore] = useState(true);
@@ -165,7 +167,7 @@ export default function RankingScreen({ route, navigation }) {
 
   const isCurrentEpoch = (epoch) => epochRef.current === epoch;
 
-  const loadFirstPage = useCallback(async (nextBoard) => {
+  const loadFirstPage = useCallback(async (nextBoard, nextPeriod) => {
     const epoch = ++epochRef.current;
     setIsLoading(true);
     setFetchError(null);
@@ -176,6 +178,7 @@ export default function RankingScreen({ route, navigation }) {
         window: RANKING_WINDOW,
         limit: RANKING_PAGE_LIMIT,
         board: nextBoard,
+        period: nextPeriod,
       });
 
       if (!isCurrentEpoch(epoch)) return;
@@ -208,7 +211,7 @@ export default function RankingScreen({ route, navigation }) {
     const epoch = epochRef.current;
     const cursorParams = isPrivate
       ? { scope: rankingScope, after: nextCursor, limit: RANKING_PAGE_LIMIT, board }
-      : { after: nextCursor, limit: RANKING_PAGE_LIMIT, board };
+      : { after: nextCursor, limit: RANKING_PAGE_LIMIT, board, period };
 
     try {
       const response = await getRankingData(context, cursorParams);
@@ -244,7 +247,7 @@ export default function RankingScreen({ route, navigation }) {
       fetchingRef.current = false;
       if (isCurrentEpoch(epoch)) setIsLoading(false);
     }
-  }, [board, columns, context, hasMore, isPrivate, mode, nextCursor, rankingScope]);
+  }, [board, columns, context, hasMore, isPrivate, mode, nextCursor, period, rankingScope]);
 
   const handleBoardSwitch = useCallback((nextBoard) => {
     if (!BOARDS.includes(nextBoard) || nextBoard === board) return;
@@ -260,23 +263,37 @@ export default function RankingScreen({ route, navigation }) {
     setListEpoch(current => current + 1);
   }, [board]);
 
+  const handlePeriodSwitch = useCallback((nextPeriod) => {
+    if (!PERIODS.includes(nextPeriod) || nextPeriod === period) return;
+    epochRef.current += 1;
+    setPeriod(nextPeriod);
+    setSlices([]);
+    setNextCursor(null);
+    setHasMore(false);
+    setIsLoading(true);
+    setMode('initial');
+    setMe(null);
+    setFetchError(null);
+    setListEpoch(current => current + 1);
+  }, [period]);
+
   const handleRefresh = useCallback(async () => {
     setListEpoch(current => current + 1);
     setIsRefreshing(true);
     try {
-      await loadFirstPage(board);
+      await loadFirstPage(board, period);
     } finally {
       setIsRefreshing(false);
     }
-  }, [board, loadFirstPage]);
+  }, [board, loadFirstPage, period]);
 
   const handleRetry = useCallback(() => {
     if (displayRows.length > 0) {
       fetchCursorPage();
       return;
     }
-    loadFirstPage(board);
-  }, [board, displayRows.length, fetchCursorPage, loadFirstPage]);
+    loadFirstPage(board, period);
+  }, [board, displayRows.length, fetchCursorPage, loadFirstPage, period]);
 
   const handleEndReached = useCallback(async () => {
     if (fetchingRef.current || !hasMore) return;
@@ -284,8 +301,8 @@ export default function RankingScreen({ route, navigation }) {
   }, [hasMore, fetchCursorPage]);
 
   useEffect(() => {
-    loadFirstPage(board);
-  }, [loadFirstPage, board])
+    loadFirstPage(board, period);
+  }, [loadFirstPage, board, period])
 
   const accentColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
   const chromeHairline = theme ? theme.hairlineStrong : rgbaFromHex(GlobalStyle.color.secondaryColor, 0.5);
@@ -302,6 +319,9 @@ export default function RankingScreen({ route, navigation }) {
           contentContainerStyle={styles.chromeContent}
         >
           <BoardTabs activeBoard={board} onSelectBoard={handleBoardSwitch} />
+          {!isPrivate ? (
+            <PeriodChips activePeriod={period} onSelectPeriod={handlePeriodSwitch} />
+          ) : null}
           {me ? (
             <View style={[styles.meCard, { borderColor: chromeHairline }]} testID="ranking.meCard">
               <Text style={[styles.meCardRank, { color: accentColor }]} testID="ranking.meCard.rank">

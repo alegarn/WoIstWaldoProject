@@ -445,6 +445,30 @@ describe('e2eMode helpers', () => {
       expect(shapeEnvelope.rows).toEqual(totalEnvelope.rows);
     });
 
+    it('returns a deterministic smaller window and adjusted me rank per period', () => {
+      const allEnvelope = buildE2ERankingResponse({ period: 'all' });
+      const defaultEnvelope = buildE2ERankingResponse();
+      const weekEnvelope = buildE2ERankingResponse({ period: 'week' });
+      const dayEnvelope = buildE2ERankingResponse({ period: 'day' });
+
+      expect(allEnvelope).toEqual(defaultEnvelope);
+      expect(weekEnvelope.rows).toHaveLength(3);
+      expect(dayEnvelope.rows).toHaveLength(2);
+      expect(weekEnvelope.rows).not.toEqual(allEnvelope.rows);
+
+      [allEnvelope, weekEnvelope, dayEnvelope].forEach((envelope) => {
+        envelope.rows.forEach((row) => {
+          expect(row.user_id).toMatch(/^e2e-user-/);
+          expect(row.total_score).toBe(row.point_score + row.shape_score);
+        });
+      });
+
+      expect(allEnvelope.me.rank).toBe(3);
+      expect(weekEnvelope.me.rank).toBe(2);
+      expect(dayEnvelope.me.rank).toBe(1);
+      expect(weekEnvelope.me).toEqual({ ...allEnvelope.me, rank: 2 });
+    });
+
     it('exposes the me payload in every e2e ranking envelope', () => {
       const me = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 };
 
