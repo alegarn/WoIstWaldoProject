@@ -121,7 +121,10 @@
     "pointHideScore": "隐藏点选分：{{value}}",
     "shapeHideScore": "隐藏圈画分：{{value}}",
     "detail": {
-      "title": "{{name}} 的详情"
+      "title": "{{name}} 的详情",
+      "scoresTitle": "得分",
+      "activityTitle": "活跃度",
+      "breakdownTitle": "明细"
     },
     "authFailed": "{{message}}。你的身份验证失败。请重新连接。无法获取排行榜。",
     "genericFailed": "{{message}}。请重新连接。无法获取排行榜。"
@@ -134,8 +137,8 @@
       "maxStreak": "最长连胜",
       "others": "其他",
       "moreScores": "显示 {{name}} 的更多分数",
-      "pointScore": "点选分",
-      "contourScore": "圈画分",
+      "pointScore": "分数",
+      "contourScore": "分数",
       "youAreRanked": "你是第{{rank}}名",
       "endOfRanking": "已到排行榜末尾",
       "retry": "重试",

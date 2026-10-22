@@ -121,7 +121,10 @@
     "pointHideScore": "Point Hide Score: {{value}}",
     "shapeHideScore": "Shape Hide Score: {{value}}",
     "detail": {
-      "title": "Details of {{name}}"
+      "title": "Details of {{name}}",
+      "scoresTitle": "Scores",
+      "activityTitle": "Activity",
+      "breakdownTitle": "Breakdown"
     },
     "authFailed": "{{message}}. Your authentication failed. Try to reconnect. You canno't get a ranking.",
     "genericFailed": "{{message}}. Try to reconnect. You canno't get a ranking."
@@ -134,8 +137,8 @@
       "maxStreak": "Max Streak",
       "others": "Others",
       "moreScores": "Show more scores for {{name}}",
-      "pointScore": "Point Score",
-      "contourScore": "Contour Score",
+      "pointScore": "Score",
+      "contourScore": "Score",
       "youAreRanked": "You are #{{rank}}",
       "endOfRanking": "End of ranking",
       "retry": "Retry",

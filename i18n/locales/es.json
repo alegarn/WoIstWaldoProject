@@ -121,7 +121,10 @@
     "pointHideScore": "Puntuación de escondite en punto: {{value}}",
     "shapeHideScore": "Puntuación de escondite en contorno: {{value}}",
     "detail": {
-      "title": "Detalles de {{name}}"
+      "title": "Detalles de {{name}}",
+      "scoresTitle": "Puntuaciones",
+      "activityTitle": "Actividad",
+      "breakdownTitle": "Desglose"
     },
     "authFailed": "{{message}}. Tu autenticación falló. Intenta reconectarte. No puedes obtener una clasificación.",
     "genericFailed": "{{message}}. Intenta reconectarte. No puedes obtener una clasificación."
@@ -134,8 +137,8 @@
       "maxStreak": "Mejor racha",
       "others": "Otros",
       "moreScores": "Mostrar más puntuaciones de {{name}}",
-      "pointScore": "Puntuación de puntos",
-      "contourScore": "Puntuación de contorno",
+      "pointScore": "Puntos",
+      "contourScore": "Puntos",
       "youAreRanked": "Estás en el #{{rank}}",
       "endOfRanking": "Fin de la clasificación",
       "retry": "Reintentar",

@@ -121,7 +121,10 @@
     "pointHideScore": "隠すポイントスコア: {{value}}",
     "shapeHideScore": "隠すなぞるスコア: {{value}}",
     "detail": {
-      "title": "{{name}} の詳細"
+      "title": "{{name}} の詳細",
+      "scoresTitle": "スコア",
+      "activityTitle": "アクティビティ",
+      "breakdownTitle": "内訳"
     },
     "authFailed": "{{message}}。認証に失敗しました。再接続してください。ランキングを取得できません。",
     "genericFailed": "{{message}}。再接続してください。ランキングを取得できません。"
@@ -134,8 +137,8 @@
       "maxStreak": "最大連続記録",
       "others": "その他",
       "moreScores": "{{name}} のスコアをもっと見る",
-      "pointScore": "ポイントスコア",
-      "contourScore": "なぞるスコア",
+      "pointScore": "スコア",
+      "contourScore": "スコア",
       "youAreRanked": "あなたは#{{rank}}位です",
       "endOfRanking": "ランキングの最後です",
       "retry": "再試行",

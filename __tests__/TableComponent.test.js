@@ -170,7 +170,7 @@ describe('TableComponent', () => {
       expect(headerLabels(renderer, 5)).toEqual(['Rank', 'Name', 'Score', 'Max Streak', 'Others']);
     });
 
-    it('renders the point board headers Rank, Name, Point Score, Others from descriptors', async () => {
+    it('renders the point board headers Rank, Name, Score, Others from descriptors', async () => {
       const renderer = await renderTable({
         columns: columnsForBoard('point'),
         tableScores: [
@@ -179,11 +179,11 @@ describe('TableComponent', () => {
         ],
       });
 
-      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Point Score', 'Others']);
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Score', 'Others']);
       expect(renderer.root.findByProps({ testID: 'ranking.row.1.point_score' }).props.children).toBe(30);
     });
 
-    it('renders the shape board headers Rank, Name, Contour Score, Others from descriptors', async () => {
+    it('renders the shape board headers Rank, Name, Score, Others from descriptors', async () => {
       const renderer = await renderTable({
         columns: columnsForBoard('shape'),
         tableScores: [
@@ -192,7 +192,7 @@ describe('TableComponent', () => {
         ],
       });
 
-      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Contour Score', 'Others']);
+      expect(headerLabels(renderer, 4)).toEqual(['Rank', 'Name', 'Score', 'Others']);
       expect(renderer.root.findByProps({ testID: 'ranking.row.1.shape_score' }).props.children).toBe(44);
     });
 
@@ -238,6 +238,27 @@ describe('TableComponent', () => {
       expect(emphasisScore.color).toBe(GlobalStyle.color.secondaryColor);
       expect(emphasisScore.fontWeight).toBe('700');
       expect(emphasisScore.fontSize).toBeGreaterThan(baseScore.fontSize);
+    });
+  });
+
+  describe('header text fit', () => {
+    it('renders header text on a single line with font auto-shrink', async () => {
+      const renderer = await renderTable();
+      const headerText = renderer.root.findByProps({ testID: 'ranking.header.1' });
+
+      expect(headerText.props.numberOfLines).toBe(1);
+      expect(headerText.props.adjustsFontSizeToFit).toBe(true);
+      expect(headerText.props.minimumFontScale).toBeGreaterThanOrEqual(0.5);
+      expect(headerText.props.minimumFontScale).toBeLessThanOrEqual(0.65);
+    });
+
+    it('styles header text without uppercase transform and with tight letterSpacing', async () => {
+      const renderer = await renderTable();
+      const headerText = renderer.root.findByProps({ testID: 'ranking.header.1' });
+      const flattened = StyleSheet.flatten(headerText.props.style);
+
+      expect(flattened.textTransform).toBeUndefined();
+      expect(flattened.letterSpacing).toBeLessThanOrEqual(0.5);
     });
   });
 
