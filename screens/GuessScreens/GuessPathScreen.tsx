@@ -100,6 +100,8 @@ type GroupsHubGroup = {
   role?: string;
   memberCount?: number;
   member_count?: number;
+  qualifyingMemberCount?: number;
+  qualifying_member_count?: number;
   locked?: boolean;
 };
 
@@ -112,6 +114,7 @@ type ActiveGroupSnapshot = {
   isOwnedByViewer: boolean;
   memberCount: number;
   locked: boolean;
+  qualifyingMemberCount?: number;
 };
 
 type GuessPathCategory = {
@@ -168,11 +171,21 @@ function buildActiveGroupSnapshot(
     return null;
   }
 
-  return {
+  // Owned-group pass-through: the server serializes qualifying_member_count on
+  // owned groups only, so absent stays absent (never fabricated as 0).
+  const snapshot: ActiveGroupSnapshot = {
     isOwnedByViewer: activeGroup.role === 'owner',
     memberCount: Number(activeGroup.memberCount ?? activeGroup.member_count ?? 0),
     locked: activeGroup?.locked === true,
   };
+  const qualifyingMemberCount = Number(
+    activeGroup.qualifyingMemberCount ?? activeGroup.qualifying_member_count
+  );
+  if (Number.isFinite(qualifyingMemberCount)) {
+    snapshot.qualifyingMemberCount = qualifyingMemberCount;
+  }
+
+  return snapshot;
 }
 
 async function resolveActiveGroupSnapshot({

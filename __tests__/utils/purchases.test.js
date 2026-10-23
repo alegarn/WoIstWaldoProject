@@ -5,6 +5,7 @@ jest.mock('../../services/billing/billingApi', () => ({
 import { syncEntitlement } from '../../services/billing/billingApi';
 import {
   applyEntitlementToContext,
+  entitlementToContextPayload,
   refreshEntitlement,
 } from '../../utils/purchases';
 
@@ -38,6 +39,8 @@ describe('utils/purchases', () => {
         paidExpiresAt: null,
         isGroupOwner: true,
         activeGroupId: 'g1',
+        earnedAdFree: false,
+        earnedPremium: false,
       });
       expect(result).toEqual({ ok: true, refreshed: true });
     });
@@ -50,6 +53,51 @@ describe('utils/purchases', () => {
 
       expect(authContext.setEntitlement).not.toHaveBeenCalled();
       expect(result).toEqual({ ok: false, refreshed: false });
+    });
+  });
+
+  describe('entitlementToContextPayload', () => {
+    it('maps earned_ad_free and earned_premium to earnedAdFree and earnedPremium when both are true', () => {
+      const payload = entitlementToContextPayload({
+        is_paid: true,
+        paid_tier: 3,
+        paid_expires_at: null,
+        is_group_owner: true,
+        active_group_id: 'g1',
+        earned_ad_free: true,
+        earned_premium: true,
+      });
+
+      expect(payload.earnedAdFree).toBe(true);
+      expect(payload.earnedPremium).toBe(true);
+    });
+
+    it('maps earned_ad_free and earned_premium to false when both are false', () => {
+      const payload = entitlementToContextPayload({
+        is_paid: false,
+        paid_tier: 0,
+        paid_expires_at: null,
+        is_group_owner: false,
+        active_group_id: null,
+        earned_ad_free: false,
+        earned_premium: false,
+      });
+
+      expect(payload.earnedAdFree).toBe(false);
+      expect(payload.earnedPremium).toBe(false);
+    });
+
+    it('maps absent earned_ad_free and earned_premium (older server / stale cache) to false without crashing', () => {
+      const payload = entitlementToContextPayload({
+        is_paid: true,
+        paid_tier: 2,
+        paid_expires_at: null,
+        is_group_owner: true,
+        active_group_id: 'g1',
+      });
+
+      expect(payload.earnedAdFree).toBe(false);
+      expect(payload.earnedPremium).toBe(false);
     });
   });
 
@@ -73,6 +121,8 @@ describe('utils/purchases', () => {
         paidExpiresAt: '2099-01-01T00:00:00Z',
         isGroupOwner: true,
         activeGroupId: 'g-42',
+        earnedAdFree: false,
+        earnedPremium: false,
       });
     });
   });

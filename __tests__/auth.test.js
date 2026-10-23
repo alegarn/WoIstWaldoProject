@@ -164,10 +164,50 @@ describe('auth utilities', () => {
       isPaid: null,
       paidTier: null,
       paidExpiresAt: null,
+      earnedAdFree: null,
+      earnedPremium: null,
       isGroupOwner: null,
       activeGroupId: null,
       isPrivateMode: null,
     });
+  });
+
+  it('rehydrates the persisted earned reward flags as parsed values', async () => {
+    mockStoredValues({
+      ...storedSession,
+      earnedAdFree: JSON.stringify(true),
+      earnedPremium: JSON.stringify(true),
+    });
+    const restoreSession = jest.fn();
+
+    const didRestoreSession = await bootstrapStoredAuthSession(restoreSession);
+
+    expect(didRestoreSession).toBe(true);
+    const restoredState = restoreSession.mock.calls[0][0];
+    expect(restoredState.earnedAdFree).toBe(true);
+    expect(restoredState.earnedPremium).toBe(true);
+  });
+
+  it('restores earned reward flags as null when the stored session does not carry them', async () => {
+    mockStoredValues(storedSession);
+
+    const authState = await getStoredAuthState();
+
+    expect(authState.earnedAdFree).toBeNull();
+    expect(authState.earnedPremium).toBeNull();
+  });
+
+  it('keeps restoring earned reward flags when their stored values are malformed', async () => {
+    mockStoredValues({
+      ...storedSession,
+      earnedAdFree: '{not-json',
+      earnedPremium: 'true',
+    });
+
+    const authState = await getStoredAuthState();
+
+    expect(authState.earnedAdFree).toBeNull();
+    expect(authState.earnedPremium).toBe(true);
   });
 
   it('rehydrates the persisted entitlement and group fields as parsed values', async () => {
