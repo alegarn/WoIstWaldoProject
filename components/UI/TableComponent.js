@@ -83,6 +83,8 @@ const RowItem = React.memo(function RowItem({ row, columns, onPressMore, metrics
             <Text
               style={cellTextStyle(column.kind, styles, rankColor)}
               numberOfLines={1}
+              adjustsFontSizeToFit
+              minimumFontScale={0.7}
               testID={`ranking.row.${row.rank}.${column.field}`}
             >
               {row[column.field]}
@@ -94,7 +96,15 @@ const RowItem = React.memo(function RowItem({ row, columns, onPressMore, metrics
   );
 });
 
-export default function TableComponent({ data, onPress, onEndReached, refreshing, onRefresh, refreshTint }) {
+const SeparatorItem = React.memo(function SeparatorItem({ styles, metrics }) {
+  return (
+    <View style={[styles.separatorRow, { height: metrics.rowHeight }]} testID="ranking.separator">
+      <Text style={styles.separatorText}>⋯</Text>
+    </View>
+  );
+});
+
+export default function TableComponent({ data, onPress, onStartReached, onEndReached, refreshing, onRefresh, refreshTint }) {
   const { width, height } = useWindowDimensions();
   const { t } = useTranslation();
   const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
@@ -169,6 +179,16 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
     scoreEmphasis: {
       fontSize: metrics.textFontSize * 1.1,
     },
+    separatorRow: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    separatorText: {
+      color: headTextColor,
+      fontSize: metrics.headerFontSize,
+      textAlign: 'center',
+    },
   }), [metrics, containerBg, headBg, scoreColor, headTextColor]);
 
   const columns = useMemo(
@@ -206,13 +226,19 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
 
   const renderItem = useCallback(
     ({ item }) => {
+      if (item.separator) {
+        return <SeparatorItem styles={styles} metrics={metrics} />;
+      }
       return <RowItem row={item} columns={columns} onPressMore={onPressMore} metrics={metrics} styles={styles} medalPalette={medals} t={t} />;
     },
     [columns, onPressMore, metrics, styles, medals, t]
   );
 
   const keyExtractor = useCallback(
-    (item) => (item.userId != null ? String(item.userId) : `rank-${item.rank}`),
+    (item, index) => {
+      if (item.separator) return `ellipsis-${index}`;
+      return item.userId != null ? String(item.userId) : `rank-${item.rank}`;
+    },
     []
   );
 
@@ -232,6 +258,9 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
         initialNumToRender={12}
         windowSize={5}
         removeClippedSubviews // optional; remove if blank rows appear on low-end Android
+        maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+        onStartReached={onStartReached}
+        onStartReachedThreshold={0.5}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
         refreshControl={

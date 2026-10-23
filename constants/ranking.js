@@ -25,11 +25,31 @@ export const RANKING_BOARD_COLUMNS = {
   ],
 };
 
+// Period-aware variant (plan 06 D6): the total board drops the maxStreak
+// column for week/day windows and widens the score cell instead of showing
+// blank streak values. Point/shape boards already carry 4 columns.
+export const RANKING_BOARD_PERIOD_COLUMNS = {
+  total: [
+    { board: 'total', header: 'Rank', field: 'rank', flex: 0.7, kind: 'rank', i18nKey: 'ui.ranking.rank' },
+    { board: 'total', header: 'Name', field: 'name', flex: 1.1, kind: 'name', i18nKey: 'ui.ranking.name' },
+    { board: 'total', header: 'Score', field: 'total_score', flex: 1.4, kind: 'score', i18nKey: 'ui.ranking.score' },
+    { board: 'total', header: 'Others', field: 'others', flex: 0.9, kind: 'button', i18nKey: 'ui.ranking.others' },
+  ],
+};
+
 // Active leaderboard boards, in tab order. Single source of truth for the
 // board switch guard (RankingScreen) and the tab list (BoardTabs).
 export const BOARDS = ['total', 'point', 'shape'];
 
-export function columnsForBoard(board) {
+// Active time windows, in chip order (plan-05 D0: period=all|week|day,
+// default all). Single source of truth for the period switch guard
+// (RankingScreen) and the chip list (PeriodChips).
+export const PERIODS = ['all', 'week', 'day'];
+
+export function columnsForBoard(board, period) {
+  if (period && period !== 'all' && RANKING_BOARD_PERIOD_COLUMNS[board]) {
+    return RANKING_BOARD_PERIOD_COLUMNS[board];
+  }
   return RANKING_BOARD_COLUMNS[board] ?? RANKING_BOARD_COLUMNS.total;
 }
 

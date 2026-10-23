@@ -106,6 +106,7 @@
     "loadingTable": "Carregando tabela de classificação...",
     "userNotFound": "Usuário não encontrado",
     "noScoresForUser": "Nenhuma pontuação encontrada para {{name}}.",
+    "empty": "Ainda não há pontuações para este período.",
     "scoresUnavailable": "Pontuações indisponíveis",
     "detailsUnavailable": "Não foi possível carregar as pontuações detalhadas de {{name}}.",
     "complementaryTitle": "Pontuações complementares de {{name}}",
@@ -146,6 +147,11 @@
         "total": "Total",
         "point": "Ponto",
         "shape": "Contorno"
+      },
+      "period": {
+        "all": "Tudo",
+        "week": "Esta semana",
+        "day": "Hoje"
       }
     },
     "uploadNotice": {

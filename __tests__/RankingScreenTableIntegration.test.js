@@ -106,4 +106,38 @@ describe('RankingScreen + TableComponent integration', () => {
     expect(scoreCellText(renderer, 1, 'shape_score')).toBe(130);
     expect(scoreCellText(renderer, 2, 'shape_score')).toBe(90);
   });
+
+  it('renders the me-anchored separator as a centered non-interactive ellipsis row', async () => {
+    getRankingData.mockImplementation(() =>
+      Promise.resolve({
+        status: 200,
+        data: {
+          rows: [
+            { rank: '1', username: 'waldo', total_score: 250, max_streak: 4, user_id: 'u1' },
+            { rank: '2', username: 'odile', total_score: 200, max_streak: 2, user_id: 'u2' },
+            { rank: '3', username: 'bronze', total_score: 190, user_id: 'u3' },
+            { rank: '9', username: 'me_user', total_score: 50, user_id: 'u9' },
+          ],
+          nextCursor: null,
+          hasMore: false,
+          me: { user_id: 'u9', username: 'me_user', total_score: 50, rank: 9 },
+        },
+      })
+    );
+
+    const renderer = await renderScreen();
+
+    const separator = renderer.root.findByProps({ testID: 'ranking.separator' });
+    expect(separator.props.children.props.children).toBe('⋯');
+    expect(renderer.root.findAllByProps({ testID: 'ranking.separator.more' })).toHaveLength(0);
+  });
+
+  it('font-fits row cells so long scores shrink instead of truncating', async () => {
+    const renderer = await renderScreen();
+
+    const scoreText = renderer.root.findByProps({ testID: 'ranking.row.1.total_score' });
+    expect(scoreText.props.numberOfLines).toBe(1);
+    expect(scoreText.props.adjustsFontSizeToFit).toBe(true);
+    expect(scoreText.props.minimumFontScale).toBe(0.7);
+  });
 });

@@ -40,8 +40,10 @@ async function fetchLeaderboardPage(context, groupId, params) {
     .catch(mapRequestError);
 }
 
-export async function fetchPrivateLeaderboard(context, { groupId, limit, board } = {}) {
+export async function fetchPrivateLeaderboard(context, { groupId, top, window, limit, board } = {}) {
   const params = {};
+  if (top) params.top = top;
+  if (window) params.window = window;
   if (limit) params.limit = limit;
   if (board) params.board = board;
 

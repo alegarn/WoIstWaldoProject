@@ -1,13 +1,14 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { BOARDS, columnsForBoard } from '../constants/ranking';
+import { BOARDS, PERIODS, columnsForBoard } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
 import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import { rgbaFromHex } from '../utils/privateGroupTheme';
 
 import TableComponent from '../components/UI/TableComponent';
 import BoardTabs from '../components/Ranking/BoardTabs';
+import PeriodChips from '../components/Ranking/PeriodChips';
 import UserScoreDetailContent from '../components/Ranking/UserScoreDetailContent';
 import CenteredModal from '../components/UI/CenteredModal';
 import Spinner from '../components/UI/Spinner';
@@ -21,7 +22,6 @@ import { useActiveGroup } from '../hooks/useActiveGroup';
 // Old slices are evicted when the cap is exceeded (see fetchCursorPage).
 const RANKING_RESIDENT_ROW_CAP = 150;
 const RANKING_PAGE_LIMIT = 20;
-const RANKING_TOP = 10;
 const RANKING_WINDOW = 5;
 
 function scoreColumnFor(columns) {
@@ -40,24 +40,80 @@ function convertRankingRows(rows, columns, { renumber = false, baseRank = 0 } = 
     maxStreak: Number(row.max_streak || 0),
     others: "",
     userId: row.user_id,
-    total_score: row.total_score,
+    total_score: row.total_score ?? row.score,
     point_score: row.point_score,
     shape_score: row.shape_score,
   }));
 }
 
-function appendSliceWithCap(prevSlices, incoming, cap) {
-  const next = [...prevSlices, incoming];
-  const totalRows = next.reduce((sum, slice) => sum + slice.length, 0);
-  if (totalRows <= cap) return next;
+function hasServerRank(row) {
+  const rank = Number(row.rank);
+  return Number.isInteger(rank) && rank > 0;
+}
+
+function lastResidentRank(residentRows) {
+  for (let i = residentRows.length - 1; i >= 0; i--) {
+    if (!residentRows[i].separator) return Number(residentRows[i].rank) || 0;
+  }
+  return 0;
+}
+
+function firstResidentRank(residentRows) {
+  for (let i = 0; i < residentRows.length; i++) {
+    if (!residentRows[i].separator) return Number(residentRows[i].rank) || 0;
+  }
+  return 0;
+}
+
+export function deriveDisplayRows(slices) {
+  const seenUserIds = new Set();
+  const rows = [];
+  (slices || []).forEach((slice) => {
+    (slice || []).forEach((row) => {
+      if (row.separator) return;
+      if (row.userId != null) {
+        if (seenUserIds.has(row.userId)) return;
+        seenUserIds.add(row.userId);
+      }
+      rows.push(row);
+    });
+  });
+  rows.sort((a, b) => Number(a.rank) - Number(b.rank));
+  const display = [];
+  rows.forEach((row, index) => {
+    if (index > 0 && Number(row.rank) - Number(rows[index - 1].rank) > 1) {
+      display.push({ separator: true });
+    }
+    display.push(row);
+  });
+  return display;
+}
+
+function countSliceRows(slice) {
+  return slice.filter((row) => !row.separator).length;
+}
+
+function capSliceWindow(sliceList, cap, keepFromEnd) {
+  const totalRows = sliceList.reduce((sum, slice) => sum + countSliceRows(slice), 0);
+  if (totalRows <= cap) return sliceList;
   let kept = [];
   let count = 0;
-  for (let i = next.length - 1; i >= 0; i--) {
-    if (count + next[i].length > cap && kept.length > 0) break;
-    kept.unshift(next[i]);
-    count += next[i].length;
+  const order = keepFromEnd ? [...sliceList].reverse() : sliceList;
+  for (const slice of order) {
+    const sliceCount = countSliceRows(slice);
+    if (count + sliceCount > cap && kept.length > 0) break;
+    kept.push(slice);
+    count += sliceCount;
   }
-  return kept;
+  return keepFromEnd ? kept.reverse() : kept;
+}
+
+function appendSliceWithCap(prevSlices, incoming, cap) {
+  return capSliceWindow([...prevSlices, incoming], cap, true);
+}
+
+function prependSliceWithCap(prevSlices, incoming, cap) {
+  return capSliceWindow([incoming, ...prevSlices], cap, false);
 }
 
 function buildDetailRows(scores) {
@@ -86,17 +142,21 @@ export default function RankingScreen({ route, navigation }) {
   const { t } = useTranslation();
 
   const [board, setBoard] = useState('total');
+  const [period, setPeriod] = useState('all');
   const [slices, setSlices] = useState([]);
-  const [nextCursor, setNextCursor] = useState(null);
-  const [hasMore, setHasMore] = useState(true);
+  const [upCursor, setUpCursor] = useState(null);
+  const [hasMoreUp, setHasMoreUp] = useState(false);
+  const [downCursor, setDownCursor] = useState(null);
+  const [hasMoreDown, setHasMoreDown] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [me, setMe] = useState(null);
   const [fetchError, setFetchError] = useState(null);
-  const [mode, setMode] = useState('initial');
   const [listEpoch, setListEpoch] = useState(0);
   const [detail, setDetail] = useState(null);
-  const fetchingRef = useRef(false);
+  const fetchingUpRef = useRef(false);
+  const fetchingDownRef = useRef(false);
+  const inFlightRef = useRef(0);
   const epochRef = useRef(0);
 
   const context = useContext(AuthContext);
@@ -105,9 +165,9 @@ export default function RankingScreen({ route, navigation }) {
   const { scope: activeScope } = useActiveGroup();
   const rankingScope = isPrivate ? (routeScope ?? activeScope) : 'initial';
 
-  const columns = useMemo(() => columnsForBoard(board), [board]);
+  const columns = useMemo(() => columnsForBoard(board, period), [board, period]);
 
-  const displayRows = useMemo(() => slices.flat(), [slices]);
+  const displayRows = useMemo(() => deriveDisplayRows(slices), [slices]);
 
   const rankingDatum = useMemo(
     () => (displayRows.length > 0 ? { board, columns, tableScores: displayRows } : null),
@@ -165,17 +225,24 @@ export default function RankingScreen({ route, navigation }) {
 
   const isCurrentEpoch = (epoch) => epochRef.current === epoch;
 
-  const loadFirstPage = useCallback(async (nextBoard) => {
+  const loadFirstPage = useCallback(async (nextBoard, nextPeriod) => {
     const epoch = ++epochRef.current;
+    fetchingUpRef.current = false;
+    fetchingDownRef.current = false;
+    inFlightRef.current = 0;
     setIsLoading(true);
     setFetchError(null);
     try {
+      // Contract v3 public path: me-window envelope, no top block request.
+      // Private path stays legacy top-3: the private leaderboard defaults
+      // top=10, which would silently grow the head block.
       const response = await getRankingData(context, {
         scope: rankingScope,
-        top: RANKING_TOP,
+        ...(isPrivate ? { top: 3 } : {}),
         window: RANKING_WINDOW,
         limit: RANKING_PAGE_LIMIT,
         board: nextBoard,
+        period: nextPeriod,
       });
 
       if (!isCurrentEpoch(epoch)) return;
@@ -185,30 +252,45 @@ export default function RankingScreen({ route, navigation }) {
         return;
       }
 
-      const { rows, nextCursor: cursor } = response.data;
-      setSlices([convertRankingRows(rows, columnsForBoard(nextBoard))]);
-      setNextCursor(cursor);
-      setHasMore(true);
-      setMode('initial');
-      setMe(response.data.me ?? null);
+      const data = response.data;
+      const isBidirectional = data.upCursor !== undefined || data.downCursor !== undefined;
+      const converted = convertRankingRows(data.rows, columnsForBoard(nextBoard, nextPeriod));
+      setSlices([converted]);
+      if (isBidirectional) {
+        setUpCursor(data.upCursor ?? null);
+        setHasMoreUp(data.hasMoreUp !== false && data.upCursor != null);
+        setDownCursor(data.downCursor ?? null);
+        setHasMoreDown(data.hasMoreDown !== false && data.downCursor != null);
+      } else {
+        setUpCursor(null);
+        setHasMoreUp(false);
+        setDownCursor(data.nextCursor ?? null);
+        setHasMoreDown(data.hasMore !== false && data.nextCursor != null);
+      }
+      setMe(data.me ?? null);
     } catch (error) {
       if (!isCurrentEpoch(epoch)) return;
       setFetchError(error?.message ?? '');
     } finally {
       if (isCurrentEpoch(epoch)) setIsLoading(false);
     }
-  }, [context, rankingScope]);
+  }, [context, isPrivate, rankingScope]);
 
-  const fetchCursorPage = useCallback(async () => {
-    if (fetchingRef.current || !hasMore) return;
+  const fetchCursorPage = useCallback(async (direction) => {
+    const isUp = direction === 'up';
+    const fetchingRef = isUp ? fetchingUpRef : fetchingDownRef;
+    const cursor = isUp ? upCursor : downCursor;
+    const hasMore = isUp ? hasMoreUp : hasMoreDown;
+    if (fetchingRef.current || !hasMore || !cursor) return;
     fetchingRef.current = true;
+    inFlightRef.current += 1;
     setIsLoading(true);
     setFetchError(null);
 
     const epoch = epochRef.current;
     const cursorParams = isPrivate
-      ? { scope: rankingScope, after: nextCursor, limit: RANKING_PAGE_LIMIT, board }
-      : { after: nextCursor, limit: RANKING_PAGE_LIMIT, board };
+      ? { scope: rankingScope, after: cursor, limit: RANKING_PAGE_LIMIT, board }
+      : { after: cursor, direction, limit: RANKING_PAGE_LIMIT, board, period };
 
     try {
       const response = await getRankingData(context, cursorParams);
@@ -220,72 +302,117 @@ export default function RankingScreen({ route, navigation }) {
         return;
       }
 
-      const { rows, nextCursor: cursor, hasMore: more } = response.data;
+      const { rows, nextCursor, hasMore: more } = response.data;
       const rawRows = rows || [];
+      const nextHasMore = more !== false && nextCursor != null;
 
       setSlices(prev => {
         const residentRows = prev.flat();
-        const converted = convertRankingRows(rawRows, columns, { renumber: true, baseRank: residentRows.length });
-        const finalConverted = mode === 'initial'
-          ? (() => {
-              const existingIds = new Set(residentRows.map(r => r.userId));
-              return converted.filter(r => !existingIds.has(r.userId));
-            })()
-          : converted;
-        return appendSliceWithCap(prev, finalConverted, RANKING_RESIDENT_ROW_CAP);
+        const existingIds = new Set(residentRows.map(r => r.userId));
+        const freshRows = rawRows.filter(r => !existingIds.has(r.user_id));
+        let converted;
+        if (isUp) {
+          const firstRank = firstResidentRank(residentRows);
+          converted = freshRows.map((row, index) => {
+            if (hasServerRank(row)) {
+              return convertRankingRows([row], columns)[0];
+            }
+            return convertRankingRows([row], columns, { renumber: true, baseRank: firstRank - (freshRows.length - index) })[0];
+          });
+        } else {
+          let renumberBase = lastResidentRank(residentRows);
+          converted = freshRows.map((row) => {
+            if (hasServerRank(row)) {
+              return convertRankingRows([row], columns)[0];
+            }
+            const convertedRow = convertRankingRows([row], columns, { renumber: true, baseRank: renumberBase })[0];
+            renumberBase = convertedRow.rank;
+            return convertedRow;
+          });
+        }
+        return isUp
+          ? prependSliceWithCap(prev, converted, RANKING_RESIDENT_ROW_CAP)
+          : appendSliceWithCap(prev, converted, RANKING_RESIDENT_ROW_CAP);
       });
-      setNextCursor(cursor);
-      setHasMore(more !== false);
-      setMode('browse');
+      if (isUp) {
+        setUpCursor(nextCursor);
+        setHasMoreUp(nextHasMore);
+      } else {
+        setDownCursor(nextCursor);
+        setHasMoreDown(nextHasMore);
+      }
     } catch (error) {
       if (!isCurrentEpoch(epoch)) return;
       setFetchError(error?.message ?? '');
     } finally {
-      fetchingRef.current = false;
-      if (isCurrentEpoch(epoch)) setIsLoading(false);
+      if (isCurrentEpoch(epoch)) {
+        fetchingRef.current = false;
+        inFlightRef.current = Math.max(0, inFlightRef.current - 1);
+        if (inFlightRef.current === 0) setIsLoading(false);
+      }
     }
-  }, [board, columns, context, hasMore, isPrivate, mode, nextCursor, rankingScope]);
+  }, [board, columns, context, downCursor, hasMoreDown, hasMoreUp, isPrivate, period, rankingScope, upCursor]);
 
   const handleBoardSwitch = useCallback((nextBoard) => {
     if (!BOARDS.includes(nextBoard) || nextBoard === board) return;
     epochRef.current += 1;
     setBoard(nextBoard);
     setSlices([]);
-    setNextCursor(null);
-    setHasMore(false);
+    setUpCursor(null);
+    setHasMoreUp(false);
+    setDownCursor(null);
+    setHasMoreDown(false);
     setIsLoading(true);
-    setMode('initial');
     setMe(null);
     setFetchError(null);
     setListEpoch(current => current + 1);
   }, [board]);
 
+  const handlePeriodSwitch = useCallback((nextPeriod) => {
+    if (!PERIODS.includes(nextPeriod) || nextPeriod === period) return;
+    epochRef.current += 1;
+    setPeriod(nextPeriod);
+    setSlices([]);
+    setUpCursor(null);
+    setHasMoreUp(false);
+    setDownCursor(null);
+    setHasMoreDown(false);
+    setIsLoading(true);
+    setMe(null);
+    setFetchError(null);
+    setListEpoch(current => current + 1);
+  }, [period]);
+
   const handleRefresh = useCallback(async () => {
     setListEpoch(current => current + 1);
     setIsRefreshing(true);
     try {
-      await loadFirstPage(board);
+      await loadFirstPage(board, period);
     } finally {
       setIsRefreshing(false);
     }
-  }, [board, loadFirstPage]);
+  }, [board, loadFirstPage, period]);
 
   const handleRetry = useCallback(() => {
     if (displayRows.length > 0) {
-      fetchCursorPage();
+      fetchCursorPage('up');
+      fetchCursorPage('down');
       return;
     }
-    loadFirstPage(board);
-  }, [board, displayRows.length, fetchCursorPage, loadFirstPage]);
+    loadFirstPage(board, period);
+  }, [board, displayRows.length, fetchCursorPage, loadFirstPage, period]);
 
-  const handleEndReached = useCallback(async () => {
-    if (fetchingRef.current || !hasMore) return;
-    await fetchCursorPage();
-  }, [hasMore, fetchCursorPage]);
+  const handleEndReached = useCallback(() => {
+    fetchCursorPage('down');
+  }, [fetchCursorPage]);
+
+  const handleStartReached = useCallback(() => {
+    fetchCursorPage('up');
+  }, [fetchCursorPage]);
 
   useEffect(() => {
-    loadFirstPage(board);
-  }, [loadFirstPage, board])
+    loadFirstPage(board, period);
+  }, [loadFirstPage, board, period])
 
   const accentColor = theme ? theme.secondaryColor : GlobalStyle.color.secondaryColor;
   const chromeHairline = theme ? theme.hairlineStrong : rgbaFromHex(GlobalStyle.color.secondaryColor, 0.5);
@@ -302,6 +429,9 @@ export default function RankingScreen({ route, navigation }) {
           contentContainerStyle={styles.chromeContent}
         >
           <BoardTabs activeBoard={board} onSelectBoard={handleBoardSwitch} />
+          {!isPrivate ? (
+            <PeriodChips activePeriod={period} onSelectPeriod={handlePeriodSwitch} />
+          ) : null}
           {me ? (
             <View style={[styles.meCard, { borderColor: chromeHairline }]} testID="ranking.meCard">
               <Text style={[styles.meCardRank, { color: accentColor }]} testID="ranking.meCard.rank">
@@ -315,16 +445,32 @@ export default function RankingScreen({ route, navigation }) {
             </View>
           ) : null}
         </ScrollView>
-        {rankingDatum || fetchError ? (
+        {fetchError || rankingDatum ? (
           <TableComponent
             key={listEpoch}
             data={rankingDatum}
             onPress={showSpecificDatum}
             onEndReached={handleEndReached}
+            onStartReached={handleStartReached}
             refreshing={isRefreshing}
             onRefresh={handleRefresh}
             refreshTint={accentColor}
           />
+        ) : slices.length > 0 ? (
+          <ScrollView
+            style={styles.emptyState}
+            contentContainerStyle={styles.emptyStateContent}
+            testID="ranking.empty"
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={accentColor}
+              />
+            }
+          >
+            <Text style={styles.emptyStateText}>{t('ranking.empty')}</Text>
+          </ScrollView>
         ) : (
           <LoadingOverlay message={t('ranking.loadingTable')}/>
         )}
@@ -348,7 +494,7 @@ export default function RankingScreen({ route, navigation }) {
             <View testID="ranking.footer.spinner">
               <Spinner />
             </View>
-          ) : !hasMore ? (
+          ) : !hasMoreDown ? (
             <View testID="ranking.footer.end">
               <Text style={styles.footerEnd}>{t('ui.ranking.endOfRanking')}</Text>
             </View>
@@ -432,6 +578,20 @@ const styles = StyleSheet.create({
   footerEnd: {
     color: 'rgba(255, 255, 255, 0.55)',
     fontSize: 12,
+  },
+  emptyState: {
+    flex: 1,
+  },
+  emptyStateContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyStateText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    fontSize: 14,
   },
   detailBody: {
     width: '100%',

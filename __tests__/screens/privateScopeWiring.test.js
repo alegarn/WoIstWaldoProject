@@ -462,8 +462,8 @@ describe('private scope games', () => {
         String(url).includes('api/v1/private_groups/g-123/leaderboard'),
       );
       expect(leaderboardCalls).toHaveLength(2);
-      expect(leaderboardCalls[0][1].params).toEqual({ limit: 20, board: 'total' });
-      expect(leaderboardCalls[1][1].params).toEqual({ limit: 20, board: 'point' });
+      expect(leaderboardCalls[0][1].params).toEqual({ top: 3, window: 5, limit: 20, board: 'total' });
+      expect(leaderboardCalls[1][1].params).toEqual({ top: 3, window: 5, limit: 20, board: 'point' });
     });
   });
 });

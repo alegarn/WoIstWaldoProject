@@ -106,6 +106,7 @@
     "loadingTable": "Loading ranking table...",
     "userNotFound": "User not found",
     "noScoresForUser": "No scores found for {{name}}.",
+    "empty": "No scores for this period yet.",
     "scoresUnavailable": "Scores unavailable",
     "detailsUnavailable": "Couldn't load detailed scores for {{name}}.",
     "complementaryTitle": "Complementary Scores of {{name}}",
@@ -146,6 +147,11 @@
         "total": "Total",
         "point": "Point",
         "shape": "Contour"
+      },
+      "period": {
+        "all": "All",
+        "week": "This week",
+        "day": "Today"
       }
     },
     "uploadNotice": {

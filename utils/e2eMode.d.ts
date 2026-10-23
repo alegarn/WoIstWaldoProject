@@ -90,7 +90,7 @@ export interface E2EHiddenGuessPayload {
 export type E2EShapeVariant = 'hit' | 'miss';
 
 export interface E2ERankingRow {
-  rank: string;
+  rank: number;
   username: string;
   total_score: number;
   user_id: string;
@@ -111,11 +111,15 @@ export interface E2ERankingMeRow {
 
 export interface E2ERankingResponse {
   rows: E2ERankingRow[];
-  nextCursor: string | null;
-  hasMore: boolean;
+  nextCursor?: string | null;
+  hasMore?: boolean;
   me: E2ERankingMeRow | null;
-  meta: { top: number; window: number } | null;
+  meta: { window?: number; limit?: number; board?: string; period?: string; top?: number } | null;
   pagy: { count: number; pages: number; page: number } | null;
+  upCursor?: string | null;
+  hasMoreUp?: boolean;
+  downCursor?: string | null;
+  hasMoreDown?: boolean;
 }
 
 export interface E2EUserScores {
@@ -191,10 +195,12 @@ export function buildE2EGuessCardFromPayload(
 export function buildE2ERankingRows(): E2ERankingRow[];
 export function buildE2ERankingResponse(args?: {
   after?: unknown;
+  direction?: unknown;
   limit?: unknown;
   scope?: unknown;
   page?: unknown;
   board?: unknown;
+  period?: unknown;
 }): E2ERankingResponse;
 export function buildE2EUserScores(username?: unknown): E2EUserScores;
 export function buildE2EImageRating(): E2EImageRating;

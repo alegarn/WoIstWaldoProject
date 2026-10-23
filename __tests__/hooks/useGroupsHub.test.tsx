@@ -157,6 +157,30 @@ describe('useGroupsHub', () => {
     expect(result.current.error).toEqual({ error: 'boom' });
   });
 
+  it('logs a readable HTTP status message, never "[object Object]", when a 404 envelope has no message body', async () => {
+    mockedAxiosGet.mockRejectedValue({ response: { status: 404 } });
+
+    const { result } = renderHook(() => useGroupsHub(), {
+      wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
+    });
+
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledWith('[useGroupsHub] groups fetch failed', {
+      status: 404,
+      message: 'HTTP 404',
+      attempts: 1,
+      identityKey: 'present',
+    });
+
+    const failureLogs = warn.mock.calls.filter(([tag]) => tag === '[useGroupsHub] groups fetch failed');
+    expect(failureLogs).toHaveLength(1);
+    for (const [, payload] of failureLogs) {
+      expect(String(payload.message)).not.toContain('[object Object]');
+    }
+  });
+
   it('keeps the pending loading state and does not fetch when auth context has no token', async () => {
     const { result } = renderHook(() => useGroupsHub(), {
       wrapper: makeWrapper({ token: null, userId: USER_ID }),

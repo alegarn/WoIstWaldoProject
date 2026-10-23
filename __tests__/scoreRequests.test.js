@@ -291,6 +291,73 @@ describe('scoreRequests utilities', () => {
     });
   });
 
+  it('normalizes the v3 bidirectional initial envelope (up_cursor/down_cursor) for the ranking screen', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '12', username: 'me_user', total_score: 80, user_id: 'u12' }],
+          me: { user_id: 'u12', username: 'me_user', total_score: 80, rank: 12 },
+          meta: { window: 2 },
+          up_cursor: 'up-anchor',
+          has_more_up: true,
+          down_cursor: 'down-anchor',
+          has_more_down: false,
+        },
+      },
+    });
+
+    const response = await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', window: 5, limit: 20, board: 'total', period: 'all' }
+    );
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        rows: [{ rank: '12', username: 'me_user', total_score: 80, user_id: 'u12' }],
+        me: { user_id: 'u12', username: 'me_user', total_score: 80, rank: 12 },
+        upCursor: 'up-anchor',
+        hasMoreUp: true,
+        downCursor: 'down-anchor',
+        hasMoreDown: false,
+        meta: { window: 2 },
+      },
+    });
+  });
+
+  it('normalizes next_cursor and has_more out of the initial envelope for anchored scrolling (plan 06 D1)', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+          me: { user_id: 'u9', username: 'me_user', total_score: 10, rank: 21 },
+          meta: { top: 3, window: 2 },
+          next_cursor: 'anchor-1',
+          has_more: true,
+        },
+      },
+    });
+
+    const response = await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', top: 3, window: 5, limit: 20 }
+    );
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+        nextCursor: 'anchor-1',
+        hasMore: true,
+        me: { user_id: 'u9', username: 'me_user', total_score: 10, rank: 21 },
+        meta: { top: 3, window: 2 },
+        pagy: null,
+      },
+    });
+  });
+
   it('forwards board and limit to the public ranking params', async () => {
     axios.get.mockResolvedValue({
       status: 200,
@@ -324,14 +391,47 @@ describe('scoreRequests utilities', () => {
     expect(config.params).not.toHaveProperty('board');
   });
 
+  it('forwards period to the public ranking params', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'global', top: 10, window: 'weekly', board: 'point', period: 'week', limit: 20 }
+    );
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { scope: 'global', top: 10, window: 'weekly', board: 'point', period: 'week', limit: 20 },
+      }
+    );
+  });
+
+  it('does not send a period key when getRankingData is called without one', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: { rows: [] } },
+    });
+
+    await getRankingData({ token: 'Bearer token' }, { scope: 'global', top: 10, window: 'weekly' });
+
+    const config = axios.get.mock.calls[0][1];
+    expect(config.params).toEqual({ scope: 'global', top: 10, window: 'weekly' });
+    expect(config.params).not.toHaveProperty('period');
+  });
+
   describe('private scope leaderboard forwarding', () => {
-    it('forwards board and limit to fetchPrivateLeaderboard on the initial private fetch', async () => {
+    it('forwards board, limit, top and window to fetchPrivateLeaderboard on the initial private fetch', async () => {
       fetchPrivateLeaderboard.mockResolvedValue({ status: 200, data: { rows: [], nextCursor: null, hasMore: false } });
 
       const context = { token: 'Bearer token' };
-      await getRankingData(context, { scope: { kind: 'private', groupId: 'g-9' }, board: 'point', limit: 20 });
+      await getRankingData(context, { scope: { kind: 'private', groupId: 'g-9' }, board: 'point', limit: 20, top: 3, window: 5 });
 
-      expect(fetchPrivateLeaderboard).toHaveBeenCalledWith(context, { groupId: 'g-9', board: 'point', limit: 20 });
+      expect(fetchPrivateLeaderboard).toHaveBeenCalledWith(context, { groupId: 'g-9', board: 'point', limit: 20, top: 3, window: 5 });
       expect(fetchPrivateLeaderboardNext).not.toHaveBeenCalled();
     });
 
@@ -446,7 +546,8 @@ describe('scoreRequests utilities', () => {
 
     const response = await getRankingData({ token: 'Bearer token' }, { scope: 'global' });
 
-    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: undefined, limit: undefined, scope: 'global', page: undefined });
+    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: undefined, direction: undefined, limit: undefined, scope: 'global', page: undefined });
+    expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,
       data: {
@@ -475,6 +576,26 @@ describe('scoreRequests utilities', () => {
       },
     });
     expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('forwards direction alongside the cursor params for bidirectional paging', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: [], next_cursor: null, has_more: false, limit: 20 },
+    });
+
+    await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', after: 'up-anchor', direction: 'up', limit: 20, board: 'total', period: 'all' }
+    );
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { scope: 'initial', after: 'up-anchor', direction: 'up', limit: 20, board: 'total', period: 'all' },
+      }
+    );
   });
 
   it('sends cursor params and normalizes a cursor envelope in normal mode', async () => {
@@ -533,7 +654,8 @@ describe('scoreRequests utilities', () => {
       { after: 'any-cursor', limit: 10 }
     );
 
-    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: 'any-cursor', limit: 10, scope: undefined, page: undefined });
+    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: 'any-cursor', direction: undefined, limit: 10, scope: undefined, page: undefined });
+    expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,
       data: {
