@@ -1,16 +1,16 @@
 appId: com.alegarn.WoIstWaldoProject
 ---
-# Public ranking period chips (plan 05 T5a, plan 06 me-anchored composition).
+# Public ranking period chips (plan 05 T5a, contract v3 bidirectional window).
 # Assumes the session phase already ran (auth-boot-login.yml) and the app sits
 # on HomeScreen, like the other feature flows. Requires EXPO_PUBLIC_E2E_MODE=true
 # at bundle start/build.
 # CAVEAT: hide-to-guess-to-result.yml documents a pre-existing app crash when
 # navigating into RankingScreen from the guess path (expo-file-system
 # File.exists on a non-file URI); this flow enters from HomeScreen instead.
-# The shim is period-aware AND me-anchored: rows are top 3 + the me-block far
-# below with an ellipsis separator row when a rank gap opens. Me-card rank per
-# chip: all -> #12 (separator visible), week -> #6 (separator visible),
-# day -> #2 (me inside the top block, no separator).
+# The shim is period-aware AND me-anchored: the initial envelope is the
+# contiguous me-window only (no top block), so no separator is visible until
+# the user pages toward a rank gap. Me-card rank per chip: all -> #12,
+# week -> #6, day -> #2.
 - assertVisible:
     id: home.button.ranking
 - tapOn:
@@ -27,8 +27,6 @@ appId: com.alegarn.WoIstWaldoProject
     id: ranking.screen.period.day
 - assertVisible:
     text: "You are #12"
-- assertVisible:
-    id: ranking.separator
 - tapOn:
     id: ranking.screen.period.week
 - extendedWaitUntil:
@@ -37,8 +35,6 @@ appId: com.alegarn.WoIstWaldoProject
     timeout: 10000
 - assertVisible:
     id: ranking.screen.board.total
-- assertVisible:
-    id: ranking.separator
 - tapOn:
     id: ranking.screen.period.day
 - extendedWaitUntil:
@@ -53,4 +49,11 @@ appId: com.alegarn.WoIstWaldoProject
     visible:
       text: "You are #12"
     timeout: 10000
+# Contract v3: one directional (scroll-down) page load. The shim serves rows
+# 15-20 past the all-period me-window (10-14), so rank 15 must appear.
+- scrollUntilVisible:
+    element:
+      id: ranking.row.15.rank
+    direction: DOWN
+    timeout: 20000
 - runFlow: "_shared/return_home.yaml"

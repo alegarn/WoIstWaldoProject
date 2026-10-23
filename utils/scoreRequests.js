@@ -113,9 +113,9 @@ export async function submitScoreBatch({ items, context }) {
     .catch(() => false);
 }
 
-export async function getRankingData(context, { scope, top, window, page, after, limit, board, period } = {}) {
+export async function getRankingData(context, { scope, top, window, page, after, direction, limit, board, period } = {}) {
   if (isE2EMode()) {
-    const e2eData = buildE2ERankingResponse({ after, limit, scope, page, period });
+    const e2eData = buildE2ERankingResponse({ after, direction, limit, scope, page, period });
     return { status: 200, data: e2eData };
   }
 
@@ -136,6 +136,7 @@ export async function getRankingData(context, { scope, top, window, page, after,
   if (window) params.window = window;
   if (page) params.page = page;
   if (after) params.after = after;
+  if (direction) params.direction = direction;
   if (limit) params.limit = limit;
   if (board) params.board = board;
   if (period) params.period = period;
@@ -150,8 +151,19 @@ export async function getRankingData(context, { scope, top, window, page, after,
     .then((response) => {
       const payload = response.data;
       let normalized;
+      const initialData = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null;
 
-      if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) && payload.data.rows) {
+      if (initialData && initialData.rows && (initialData.up_cursor !== undefined || initialData.down_cursor !== undefined)) {
+        normalized = {
+          rows: initialData.rows,
+          me: initialData.me || null,
+          upCursor: initialData.up_cursor ?? null,
+          hasMoreUp: initialData.has_more_up ?? false,
+          downCursor: initialData.down_cursor ?? null,
+          hasMoreDown: initialData.has_more_down ?? false,
+          meta: initialData.meta || null,
+        };
+      } else if (initialData && initialData.rows) {
         normalized = {
           rows: payload.data.rows,
           nextCursor: payload.data.next_cursor ?? null,

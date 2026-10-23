@@ -291,6 +291,41 @@ describe('scoreRequests utilities', () => {
     });
   });
 
+  it('normalizes the v3 bidirectional initial envelope (up_cursor/down_cursor) for the ranking screen', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '12', username: 'me_user', total_score: 80, user_id: 'u12' }],
+          me: { user_id: 'u12', username: 'me_user', total_score: 80, rank: 12 },
+          meta: { window: 2 },
+          up_cursor: 'up-anchor',
+          has_more_up: true,
+          down_cursor: 'down-anchor',
+          has_more_down: false,
+        },
+      },
+    });
+
+    const response = await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', window: 5, limit: 20, board: 'total', period: 'all' }
+    );
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        rows: [{ rank: '12', username: 'me_user', total_score: 80, user_id: 'u12' }],
+        me: { user_id: 'u12', username: 'me_user', total_score: 80, rank: 12 },
+        upCursor: 'up-anchor',
+        hasMoreUp: true,
+        downCursor: 'down-anchor',
+        hasMoreDown: false,
+        meta: { window: 2 },
+      },
+    });
+  });
+
   it('normalizes next_cursor and has_more out of the initial envelope for anchored scrolling (plan 06 D1)', async () => {
     axios.get.mockResolvedValue({
       status: 200,
@@ -511,7 +546,7 @@ describe('scoreRequests utilities', () => {
 
     const response = await getRankingData({ token: 'Bearer token' }, { scope: 'global' });
 
-    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: undefined, limit: undefined, scope: 'global', page: undefined });
+    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: undefined, direction: undefined, limit: undefined, scope: 'global', page: undefined });
     expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,
@@ -541,6 +576,26 @@ describe('scoreRequests utilities', () => {
       },
     });
     expect(axios.get).not.toHaveBeenCalled();
+  });
+
+  it('forwards direction alongside the cursor params for bidirectional paging', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: { data: [], next_cursor: null, has_more: false, limit: 20 },
+    });
+
+    await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', after: 'up-anchor', direction: 'up', limit: 20, board: 'total', period: 'all' }
+    );
+
+    expect(axios.get).toHaveBeenCalledWith(
+      'https://backend.example/api/v1/users/42/scores',
+      {
+        headers: { Authorization: 'Bearer token' },
+        params: { scope: 'initial', after: 'up-anchor', direction: 'up', limit: 20, board: 'total', period: 'all' },
+      }
+    );
   });
 
   it('sends cursor params and normalizes a cursor envelope in normal mode', async () => {
@@ -599,7 +654,7 @@ describe('scoreRequests utilities', () => {
       { after: 'any-cursor', limit: 10 }
     );
 
-    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: 'any-cursor', limit: 10, scope: undefined, page: undefined });
+    expect(buildE2ERankingResponse).toHaveBeenCalledWith({ after: 'any-cursor', direction: undefined, limit: 10, scope: undefined, page: undefined });
     expect(buildE2ERankingResponse.mock.calls[0][0]).toHaveProperty('period');
     expect(response).toEqual({
       status: 200,

@@ -104,7 +104,7 @@ const SeparatorItem = React.memo(function SeparatorItem({ styles, metrics }) {
   );
 });
 
-export default function TableComponent({ data, onPress, onEndReached, refreshing, onRefresh, refreshTint }) {
+export default function TableComponent({ data, onPress, onStartReached, onEndReached, refreshing, onRefresh, refreshTint }) {
   const { width, height } = useWindowDimensions();
   const { t } = useTranslation();
   const metrics = useMemo(() => buildRankingMetrics(width, height), [width, height]);
@@ -235,8 +235,8 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
   );
 
   const keyExtractor = useCallback(
-    (item) => {
-      if (item.separator) return 'ellipsis';
+    (item, index) => {
+      if (item.separator) return `ellipsis-${index}`;
       return item.userId != null ? String(item.userId) : `rank-${item.rank}`;
     },
     []
@@ -258,6 +258,9 @@ export default function TableComponent({ data, onPress, onEndReached, refreshing
         initialNumToRender={12}
         windowSize={5}
         removeClippedSubviews // optional; remove if blank rows appear on low-end Android
+        maintainVisibleContentPosition={{ minIndexForVisible: 1 }}
+        onStartReached={onStartReached}
+        onStartReachedThreshold={0.5}
         onEndReached={onEndReached}
         onEndReachedThreshold={0.5}
         refreshControl={

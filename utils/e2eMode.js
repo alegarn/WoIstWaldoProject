@@ -322,7 +322,7 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
 
 export function buildE2ERankingRows(count = 10) {
   return DUMMY_RANKING.scoresDatum.slice(0, count).map((row) => ({
-    rank: String(row.rank),
+    rank: row.rank,
     username: row.name,
     total_score: row.totalScore,
     user_id: row.user_id,
@@ -335,25 +335,58 @@ export function buildE2ERankingRows(count = 10) {
   }));
 }
 
-// Plan-06 D4 shim: deterministic me-anchored composition. Top 3 head block,
-// me-neighborhood far below (all/week exercise the rank-gap separator; day
-// keeps me inside the top block), anchored cursor continues below the
-// me-block with rank-less rows the client renumbers. All deterministic.
-const E2E_RANKING_TOP = 3;
-const E2E_RANKING_CURSOR_FIRST_RANK = 15;
+// Contract v3 shim: bidirectional me-anchored leaderboard. The initial
+// envelope carries only the me-window plus per-direction cursors; scroll-up
+// pages walk toward rank 1, scroll-down pages continue past the me-block.
+// Cursor strings encode the next edge rank so every page is deterministic.
+// The down walk terminates at E2E_RANKING_MAX_RANK so deep scrolling cannot
+// loop forever against the finite shim dataset.
+const E2E_RANKING_CURSOR_ROWS = 6;
+const E2E_RANKING_MAX_RANK = 30;
 const E2E_RANKING_PERIOD_ME_RANKS = { all: 12, week: 6, day: 2 };
 const E2E_RANKING_PERIOD_ME_BLOCKS = {
   all: { first: 10, last: 14 },
   week: { first: 5, last: 7 },
   day: { first: 1, last: 3 },
 };
+const E2E_RANKING_UP_CURSOR = 'e2e-cursor-up';
+const E2E_RANKING_DOWN_CURSOR = 'e2e-cursor-down';
 
-export function buildE2ERankingResponse({ after, limit, scope, page, board, period } = {}) {
+function e2eRankingRowAt(rank) {
+  const source = DUMMY_RANKING.scoresDatum[(rank - 1) % DUMMY_RANKING.scoresDatum.length];
+  const suffix = rank > DUMMY_RANKING.scoresDatum.length ? `-${rank}` : '';
+  return {
+    rank,
+    username: `${source.name}${suffix}`,
+    total_score: source.totalScore,
+    user_id: `e2e-user-${(rank - 1) % DUMMY_RANKING.scoresDatum.length}${suffix}`,
+    total_point_guess_score: source.total_point_guess_score,
+    total_shape_guess_score: source.total_shape_guess_score,
+    total_point_hide_score: source.total_point_hide_score,
+    total_shape_hide_score: source.total_shape_hide_score,
+    point_score: source.point_score,
+    shape_score: source.shape_score,
+  };
+}
+
+function e2eCursorEdgeRank(cursor, fallback) {
+  const parsed = Number(String(cursor).split('-').pop());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function buildE2ERankingResponse({ after, direction, limit, scope, page, board, period } = {}) {
   const meBlock = E2E_RANKING_PERIOD_ME_BLOCKS[period] ?? E2E_RANKING_PERIOD_ME_BLOCKS.all;
   const meRank = E2E_RANKING_PERIOD_ME_RANKS[period] ?? E2E_RANKING_PERIOD_ME_RANKS.all;
   const me = { ...E2E_RANKING_ME, rank: meRank };
   const allRows = buildE2ERankingRows(20);
   const withScore = (rows) => rows.map((row) => ({ ...row, score: row.total_score }));
+  const rowsForRanks = (from, to) => {
+    const rows = [];
+    for (let rank = Math.max(1, from); rank <= to; rank++) {
+      rows.push(rank <= allRows.length ? allRows[rank - 1] : e2eRankingRowAt(rank));
+    }
+    return rows;
+  };
 
   if (page) {
     return {
@@ -366,31 +399,47 @@ export function buildE2ERankingResponse({ after, limit, scope, page, board, peri
     };
   }
 
-  if (after) {
+  if (after && direction === 'up') {
+    const endRank = e2eCursorEdgeRank(after, meBlock.first - 1);
+    const nextEndRank = endRank - E2E_RANKING_CURSOR_ROWS;
     return {
-      rows: allRows
-        .slice(E2E_RANKING_CURSOR_FIRST_RANK - 1)
-        .map(({ rank, ...row }) => row),
-      nextCursor: null,
-      hasMore: false,
+      rows: withScore(rowsForRanks(endRank - E2E_RANKING_CURSOR_ROWS + 1, endRank)),
+      nextCursor: nextEndRank >= 1 ? `${E2E_RANKING_UP_CURSOR}-${nextEndRank}` : null,
+      hasMore: nextEndRank >= 1,
       me,
       meta: null,
       pagy: null,
     };
   }
 
-  const topRows = allRows.slice(0, E2E_RANKING_TOP);
-  const meBlockRows = allRows
-    .slice(meBlock.first - 1, meBlock.last)
-    .filter((row) => Number(row.rank) > E2E_RANKING_TOP);
+  if (after) {
+    const startRank = e2eCursorEdgeRank(after, meBlock.last + 1);
+    const endRank = Math.min(startRank + E2E_RANKING_CURSOR_ROWS - 1, E2E_RANKING_MAX_RANK);
+    const nextStartRank = endRank + 1;
+    const hasMore = nextStartRank <= E2E_RANKING_MAX_RANK;
+    return {
+      rows: withScore(rowsForRanks(startRank, endRank)),
+      nextCursor: hasMore ? `${E2E_RANKING_DOWN_CURSOR}-${nextStartRank}` : null,
+      hasMore,
+      me,
+      meta: null,
+      pagy: null,
+    };
+  }
 
   return {
-    rows: withScore([...topRows, ...meBlockRows]),
+    rows: withScore(rowsForRanks(meBlock.first, meBlock.last)),
     me,
-    meta: { top: E2E_RANKING_TOP, window: 2 },
-    nextCursor: 'e2e-cursor-next',
-    hasMore: true,
-    pagy: null,
+    meta: {
+      window: meBlock.last - meBlock.first + 1,
+      limit: limit ?? 20,
+      board: board ?? 'total',
+      period: period ?? 'all',
+    },
+    upCursor: meBlock.first > 1 ? E2E_RANKING_UP_CURSOR : null,
+    hasMoreUp: meBlock.first > 1,
+    downCursor: E2E_RANKING_DOWN_CURSOR,
+    hasMoreDown: true,
   };
 }
 

@@ -86,9 +86,43 @@ describe('TableComponent', () => {
     expect(flatList.props.initialNumToRender).toBeGreaterThan(0);
     expect(flatList.props.windowSize).toBeGreaterThan(0);
     expect(flatList.props.onEndReachedThreshold).toBe(0.5);
+    expect(flatList.props.onStartReachedThreshold).toBe(0.5);
     expect(flatList.props.maxToRenderPerBatch).toBe(5);
     expect(flatList.props.updateCellsBatchingPeriod).toBe(100);
     expect(flatList.props.removeClippedSubviews).toBeTruthy();
+  });
+
+  it('anchors the viewport against top prepends via maintainVisibleContentPosition', async () => {
+    const renderer = await renderTable();
+    const flatList = renderer.root.findByType(FlatList);
+
+    expect(flatList.props.maintainVisibleContentPosition).toEqual({ minIndexForVisible: 1 });
+  });
+
+  it('threads onStartReached into the FlatList for scroll-up paging', async () => {
+    const onStartReached = jest.fn();
+
+    let renderer;
+    await act(async () => {
+      renderer = create(<TableComponent data={data} onPress={jest.fn()} onStartReached={onStartReached} />);
+    });
+
+    expect(renderer.root.findByType(FlatList).props.onStartReached).toBe(onStartReached);
+  });
+
+  it('renders the rank-gap separator as a plain non-pressable row', async () => {
+    const renderer = await renderTable({
+      columns: columnsForBoard('total'),
+      tableScores: [
+        { rank: 1, name: 'waldo', total_score: 25, others: '', userId: 'u-1' },
+        { separator: true },
+        { rank: 8, name: 'odile', total_score: 14, others: '', userId: 'u-2' },
+      ],
+    });
+
+    const separator = renderer.root.findByProps({ testID: 'ranking.separator' });
+    expect(separator.props.onPress).toBeUndefined();
+    expect(separator.props.children.props.children).toBe('⋯');
   });
 
   it('threads the pull-to-refresh contract into the FlatList refresh control', async () => {
@@ -270,6 +304,18 @@ describe('TableComponent', () => {
       expect(keyExtractor({ userId: 'u-9', rank: 4 })).toBe('u-9');
       expect(keyExtractor({ rank: 4 })).toBe('rank-4');
       expect(keyExtractor({ userId: 'u-9', rank: 1 })).toBe(keyExtractor({ userId: 'u-9', rank: 7 }));
+    });
+
+    it('keys derived separators uniquely so two gaps never collide in the FlatList', async () => {
+      const renderer = await renderTable();
+      const keyExtractor = renderer.root.findByType(FlatList).props.keyExtractor;
+
+      const first = keyExtractor({ separator: true }, 3);
+      const second = keyExtractor({ separator: true }, 6);
+
+      expect(first).toBe('ellipsis-3');
+      expect(second).toBe('ellipsis-6');
+      expect(first).not.toBe(second);
     });
   });
 
