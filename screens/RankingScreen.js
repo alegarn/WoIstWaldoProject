@@ -1,5 +1,5 @@
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 import { BOARDS, PERIODS, columnsForBoard } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
@@ -367,9 +367,20 @@ export default function RankingScreen({ route, navigation }) {
             refreshTint={accentColor}
           />
         ) : slices.length > 0 ? (
-          <View style={styles.emptyState} testID="ranking.empty">
+          <ScrollView
+            style={styles.emptyState}
+            contentContainerStyle={styles.emptyStateContent}
+            testID="ranking.empty"
+            refreshControl={
+              <RefreshControl
+                refreshing={isRefreshing}
+                onRefresh={handleRefresh}
+                tintColor={accentColor}
+              />
+            }
+          >
             <Text style={styles.emptyStateText}>{t('ranking.empty')}</Text>
-          </View>
+          </ScrollView>
         ) : (
           <LoadingOverlay message={t('ranking.loadingTable')}/>
         )}
@@ -480,6 +491,9 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     flex: 1,
+  },
+  emptyStateContent: {
+    flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,

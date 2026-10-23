@@ -1433,6 +1433,31 @@ describe('RankingScreen', () => {
 
       expect(mockLoadingOverlay.mock.calls.length).toBe(overlayCallsBeforeSwitch + 1);
     });
+
+    it('keeps pull-to-refresh wired on the empty state', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: [], nextCursor: null, hasMore: false, me: null },
+      });
+
+      const renderer = await renderScreen();
+
+      const emptyState = renderer.root.findByProps({ testID: 'ranking.empty' });
+      const refreshControl = emptyState.props.refreshControl;
+      expect(refreshControl).toBeTruthy();
+      expect(refreshControl.props.refreshing).toBe(false);
+
+      await act(async () => {
+        refreshControl.props.onRefresh();
+      });
+
+      expect(getRankingData).toHaveBeenNthCalledWith(
+        2,
+        contextValue,
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'all' }
+      );
+      expect(refreshControl.props.refreshing).toBe(false);
+    });
   });
 
   describe('stale in-flight fetches (request epoch guard)', () => {

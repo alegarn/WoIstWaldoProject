@@ -70,7 +70,7 @@ function warnFetchFailed(errorOrResponse: unknown, attempts: number, hasIdentity
     message?: string;
     data?: { message?: string; error?: string } | null;
   };
-  const message = (
+  const message = String(
     candidate.message
     ?? candidate.data?.message
     ?? candidate.data?.error
