@@ -82,6 +82,7 @@ jest.mock('../utils/targetLocation', () => ({ isOnTarget: jest.fn() }));
 
 jest.mock('../utils/handleGuessOutcome', () => ({
   applySuccessSideEffects: jest.fn().mockResolvedValue(undefined),
+  bufferWinScore: jest.fn().mockResolvedValue(undefined),
   resolveNextGuessParams: jest.fn(),
 }));
 

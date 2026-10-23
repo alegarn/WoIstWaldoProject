@@ -638,7 +638,7 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
     });
 
-    it('renders the corridor band during a stroke and the graded reveal after lift (before confirm)', async () => {
+    it('renders the corridor band during a stroke, hides the solution until confirm, and reveals the grade after confirm', async () => {
       outlineMatchScore.mockReturnValue(0.87);
       isWinningTrace.mockReturnValue(true);
       const toAdScreen = jest.fn();
@@ -663,12 +663,16 @@ describe('GuessPicture', () => {
         pan.onFinalizeHandler({}, true);
       });
 
-      expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
-      expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
+      // ANTI-LEAK: the lift opens the confirm modal but the solution outline
+      // + verdict stay hidden until the guess is submitted.
+      expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
       expect(confirmModalQuery(screen)).not.toBeNull();
 
       fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
       expect(toAdScreen).toHaveBeenCalledTimes(1);
+
+      expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
+      expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
     });
 
     it('mirrors only the trailing window into the loupe while the full-size trace keeps every bar (D6 pin)', async () => {

@@ -26,6 +26,9 @@ import {
   buildE2EImageRating,
   buildE2EImageTags,
   buildE2EPictureSelection,
+  buildE2ERankingResponse,
+  buildE2ERankingRows,
+  buildE2EUserScores,
   getE2EAdDelayMs,
   getE2EIncorrectHideLocation,
   getE2EShapeOutline,
@@ -388,5 +391,182 @@ describe('e2eMode helpers', () => {
     expect(detailA.category).not.toBe(detailB.category);
     expect(detailA.tags).not.toBe(detailB.tags);
     expect(detailA.tags[0]).not.toBe(detailB.tags[0]);
+  });
+
+  describe('e2e leaderboard fixtures', () => {
+    it('carries user_id and per-mode split fields on every seeded ranking row', () => {
+      const rows = buildE2ERankingRows();
+
+      expect(rows).toHaveLength(10);
+      rows.forEach((row) => {
+        expect(Object.keys(row).sort()).toEqual([
+          'point_score',
+          'rank',
+          'shape_score',
+          'total_point_guess_score',
+          'total_point_hide_score',
+          'total_score',
+          'total_shape_guess_score',
+          'total_shape_hide_score',
+          'user_id',
+          'username',
+        ]);
+        expect(row.user_id).toMatch(/^e2e-user-/);
+        expect(row.point_score).toBe(row.total_point_guess_score + row.total_point_hide_score);
+        expect(row.shape_score).toBe(row.total_shape_guess_score + row.total_shape_hide_score);
+        expect(row.total_score).toBe(row.point_score + row.shape_score);
+      });
+
+      expect(rows[0]).toEqual({
+        rank: 1,
+        username: 'John',
+        total_score: 100,
+        user_id: 'e2e-user-0',
+        total_point_guess_score: 35,
+        total_shape_guess_score: 35,
+        total_point_hide_score: 15,
+        total_shape_hide_score: 15,
+        point_score: 50,
+        shape_score: 50,
+      });
+    });
+
+    it('returns total-ordered rows regardless of the requested board', () => {
+      const totalEnvelope = buildE2ERankingResponse({ board: 'total' });
+      const pointEnvelope = buildE2ERankingResponse({ board: 'point' });
+      const shapeEnvelope = buildE2ERankingResponse({ board: 'shape', limit: 20 });
+
+      const scores = totalEnvelope.rows.map((row) => row.total_score);
+      for (let i = 1; i < scores.length; i += 1) {
+        expect(scores[i - 1]).toBeGreaterThanOrEqual(scores[i]);
+      }
+
+      expect(pointEnvelope.rows).toEqual(totalEnvelope.rows);
+      expect(shapeEnvelope.rows).toEqual(totalEnvelope.rows);
+    });
+
+    it('returns a deterministic me-anchored me-window per period (contract v3 shim)', () => {
+      const allEnvelope = buildE2ERankingResponse({ period: 'all' });
+      const defaultEnvelope = buildE2ERankingResponse();
+      const weekEnvelope = buildE2ERankingResponse({ period: 'week' });
+      const dayEnvelope = buildE2ERankingResponse({ period: 'day' });
+
+      expect(allEnvelope).toEqual(defaultEnvelope);
+      expect(allEnvelope.rows.map((row) => Number(row.rank))).toEqual([10, 11, 12, 13, 14]);
+      expect(weekEnvelope.rows.map((row) => Number(row.rank))).toEqual([5, 6, 7]);
+      expect(dayEnvelope.rows.map((row) => Number(row.rank))).toEqual([1, 2, 3]);
+      expect(weekEnvelope.rows).not.toEqual(allEnvelope.rows);
+
+      [allEnvelope, weekEnvelope, dayEnvelope].forEach((envelope) => {
+        envelope.rows.forEach((row) => {
+          expect(row.user_id).toMatch(/^e2e-user-/);
+          expect(row.total_score).toBe(row.point_score + row.shape_score);
+          expect(row.score).toBe(row.total_score);
+        });
+      });
+
+      expect(allEnvelope.me.rank).toBe(12);
+      expect(weekEnvelope.me.rank).toBe(6);
+      expect(dayEnvelope.me.rank).toBe(2);
+      expect(weekEnvelope.me).toEqual({ ...allEnvelope.me, rank: 6 });
+
+      expect(allEnvelope.meta).toEqual({ window: 5, limit: 20, board: 'total', period: 'all' });
+      expect(dayEnvelope.meta).toEqual({ window: 3, limit: 20, board: 'total', period: 'day' });
+    });
+
+    it('exposes per-direction cursors on the initial envelope and no legacy next cursor', () => {
+      const allEnvelope = buildE2ERankingResponse({ period: 'all' });
+      const dayEnvelope = buildE2ERankingResponse({ period: 'day' });
+
+      expect(allEnvelope).not.toHaveProperty('nextCursor');
+      expect(allEnvelope).not.toHaveProperty('hasMore');
+      expect(allEnvelope.upCursor).toBe('e2e-cursor-up');
+      expect(allEnvelope.hasMoreUp).toBe(true);
+      expect(allEnvelope.downCursor).toBe('e2e-cursor-down');
+      expect(allEnvelope.hasMoreDown).toBe(true);
+
+      expect(dayEnvelope.upCursor).toBeNull();
+      expect(dayEnvelope.hasMoreUp).toBe(false);
+      expect(dayEnvelope.downCursor).toBe('e2e-cursor-down');
+    });
+
+    it('serves direction-aware ranked continuation pages toward rank 1 and past the me-window (contract v3)', () => {
+      const initial = buildE2ERankingResponse({ period: 'all' });
+
+      const upPageOne = buildE2ERankingResponse({ period: 'all', after: initial.upCursor, direction: 'up' });
+      expect(upPageOne.rows.map((row) => Number(row.rank))).toEqual([4, 5, 6, 7, 8, 9]);
+      expect(upPageOne.nextCursor).toBe('e2e-cursor-up-3');
+      expect(upPageOne.hasMore).toBe(true);
+
+      const upPageTwo = buildE2ERankingResponse({ period: 'all', after: upPageOne.nextCursor, direction: 'up' });
+      expect(upPageTwo.rows.map((row) => Number(row.rank))).toEqual([1, 2, 3]);
+      expect(upPageTwo.nextCursor).toBeNull();
+      expect(upPageTwo.hasMore).toBe(false);
+
+      const downPageOne = buildE2ERankingResponse({ period: 'all', after: initial.downCursor, direction: 'down' });
+      expect(downPageOne.rows.map((row) => Number(row.rank))).toEqual([15, 16, 17, 18, 19, 20]);
+      expect(downPageOne.nextCursor).toBe('e2e-cursor-down-21');
+      expect(downPageOne.hasMore).toBe(true);
+
+      const downPageTwo = buildE2ERankingResponse({ period: 'all', after: downPageOne.nextCursor, direction: 'down' });
+      expect(downPageTwo.rows.map((row) => Number(row.rank))).toEqual([21, 22, 23, 24, 25, 26]);
+
+      const downPageThree = buildE2ERankingResponse({ period: 'all', after: downPageTwo.nextCursor, direction: 'down' });
+      expect(downPageThree.rows.map((row) => Number(row.rank))).toEqual([27, 28, 29, 30]);
+      expect(downPageThree.nextCursor).toBeNull();
+      expect(downPageThree.hasMore).toBe(false);
+
+      [upPageOne, upPageTwo, downPageOne, downPageTwo].forEach((envelope) => {
+        envelope.rows.forEach((row) => {
+          expect(Number.isInteger(row.rank)).toBe(true);
+          expect(Number(row.rank)).toBeGreaterThan(0);
+          expect(row.user_id).toMatch(/^e2e-user-/);
+          expect(row.total_score).toBe(row.point_score + row.shape_score);
+          expect(row.score).toBe(row.total_score);
+        });
+      });
+
+      const initialIds = new Set(initial.rows.map((row) => row.user_id));
+      [upPageOne, downPageOne].forEach((envelope) => {
+        envelope.rows.forEach((row) => {
+          expect(initialIds.has(row.user_id)).toBe(false);
+        });
+      });
+    });
+
+    it('exposes the me payload in every e2e ranking envelope', () => {
+      const me = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 12 };
+
+      expect(buildE2ERankingResponse().me).toEqual(me);
+      expect(buildE2ERankingResponse({ page: 2 }).me).toEqual(me);
+      expect(buildE2ERankingResponse({ after: 'e2e-cursor-up', direction: 'up' }).me).toEqual(me);
+      expect(buildE2ERankingResponse({ after: 'e2e-cursor-down', direction: 'down' }).me).toEqual(me);
+    });
+
+    it('returns split-aware modal fields from buildE2EUserScores', () => {
+      expect(buildE2EUserScores('John')).toEqual({
+        total: {
+          total_score: 100,
+          total_hide_score: 30,
+          total_guess_score: 70,
+          total_point_guess_score: 35,
+          total_shape_guess_score: 35,
+          total_point_hide_score: 15,
+          total_shape_hide_score: 15,
+          point_score: 50,
+          shape_score: 50,
+        },
+        hide_info: { hide_count: 2 },
+        guess_info: { guess_count: 70 },
+      });
+    });
+
+    it('falls back to the top row for unknown usernames without losing splits', () => {
+      const scores = buildE2EUserScores('nobody-here');
+
+      expect(scores.total.total_score).toBe(100);
+      expect(scores.total.point_score).toBe(50);
+      expect(scores.total.shape_score).toBe(50);
+    });
   });
 });

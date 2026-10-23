@@ -124,6 +124,10 @@ const GuessPicture: FC<GuessPictureProps> = ({
   // swipe classifier that used to re-open it is suppressed whole-mode.
   const [guessOutline, setGuessOutline] = useState<ShapeOutline | null>(null);
   const [shapeEnigmaOpen, setShapeEnigmaOpen] = useState(skipInstructions === true);
+  // Anti-leak reveal gate: bumped ONLY on confirm so the surface's graded
+  // reveal (solution outline + verdict) unmasks after submission, never at
+  // stroke lift while the guesser is still guessing.
+  const [revealToken, setRevealToken] = useState(0);
   // Live clamped target centre (image-px) while the drag is active; null on
   // finalize. Threaded into ShowPicture to anchor the loupe (D3/D4).
   const [dragPosition, setDragPosition] = useState<Point | null>(null);
@@ -261,6 +265,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
   const handleConfirm = () => {
     onInteract?.();
     setShowModal(false);
+    setRevealToken((token) => token + 1);
     toAdScreen?.({
       location: isShapeMode ? null : touchLocation,
       hiddenLocation,
@@ -308,6 +313,7 @@ const GuessPicture: FC<GuessPictureProps> = ({
         outline={(isShapeMode ? guessOutline : null) as unknown as null}
         onOutlineChange={isShapeMode ? applyGuessOutline : undefined}
         hiddenOutline={shape}
+        revealToken={isShapeMode ? revealToken : undefined}
         imageWidth={imageWidth}
         imageHeight={imageHeight}
         enigmaOpen={isShapeMode ? shapeEnigmaOpen : undefined}

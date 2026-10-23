@@ -106,6 +106,7 @@
     "loadingTable": "Chargement du tableau de classement...",
     "userNotFound": "Utilisateur introuvable",
     "noScoresForUser": "Aucun score trouvé pour {{name}}.",
+    "empty": "Aucun score pour cette période pour l'instant.",
     "scoresUnavailable": "Scores indisponibles",
     "detailsUnavailable": "Impossible de charger les scores détaillés de {{name}}.",
     "complementaryTitle": "Scores complémentaires de {{name}}",
@@ -114,6 +115,18 @@
     "totalGuessScore": "Score total de devinettes : {{value}}",
     "hiddenCount": "Nombre d'images cachées : {{value}}",
     "guessedCount": "Nombre d'images devinées : {{value}}",
+    "pointScore": "Score de points : {{value}}",
+    "contourScore": "Score de contour : {{value}}",
+    "pointGuessScore": "Score de devinettes en point : {{value}}",
+    "shapeGuessScore": "Score de devinettes en contour : {{value}}",
+    "pointHideScore": "Score de cache en point : {{value}}",
+    "shapeHideScore": "Score de cache en contour : {{value}}",
+    "detail": {
+      "title": "Détails de {{name}}",
+      "scoresTitle": "Scores",
+      "activityTitle": "Activité",
+      "breakdownTitle": "Détails"
+    },
     "authFailed": "{{message}}. Votre authentification a échoué. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement.",
     "genericFailed": "{{message}}. Essayez de vous reconnecter. Vous ne pouvez pas obtenir de classement."
   },
@@ -124,7 +137,22 @@
       "score": "Score",
       "maxStreak": "Meilleure série",
       "others": "Autres",
-      "moreScores": "Afficher plus de scores pour {{name}}"
+      "moreScores": "Afficher plus de scores pour {{name}}",
+      "pointScore": "Score",
+      "contourScore": "Score",
+      "youAreRanked": "Vous êtes #{{rank}}",
+      "endOfRanking": "Fin du classement",
+      "retry": "Réessayer",
+      "board": {
+        "total": "Total",
+        "point": "Point",
+        "shape": "Contour"
+      },
+      "period": {
+        "all": "Tout",
+        "week": "Cette semaine",
+        "day": "Aujourd'hui"
+      }
     },
     "uploadNotice": {
       "title": "Se cache-t-il là ?",

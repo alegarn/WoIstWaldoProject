@@ -106,6 +106,7 @@
     "loadingTable": "ランキング表を読み込み中...",
     "userNotFound": "ユーザーが見つかりません",
     "noScoresForUser": "{{name}} のスコアが見つかりません。",
+    "empty": "この期間のスコアはまだありません。",
     "scoresUnavailable": "スコアを利用できません",
     "detailsUnavailable": "{{name}} の詳細スコアを読み込めませんでした。",
     "complementaryTitle": "{{name}} の補足スコア",
@@ -114,6 +115,18 @@
     "totalGuessScore": "当てる合計スコア: {{value}}",
     "hiddenCount": "隠した画像の数: {{value}}",
     "guessedCount": "当てた画像の数: {{value}}",
+    "pointScore": "ポイントスコア: {{value}}",
+    "contourScore": "なぞるスコア: {{value}}",
+    "pointGuessScore": "当てるポイントスコア: {{value}}",
+    "shapeGuessScore": "当てるなぞるスコア: {{value}}",
+    "pointHideScore": "隠すポイントスコア: {{value}}",
+    "shapeHideScore": "隠すなぞるスコア: {{value}}",
+    "detail": {
+      "title": "{{name}} の詳細",
+      "scoresTitle": "スコア",
+      "activityTitle": "アクティビティ",
+      "breakdownTitle": "内訳"
+    },
     "authFailed": "{{message}}。認証に失敗しました。再接続してください。ランキングを取得できません。",
     "genericFailed": "{{message}}。再接続してください。ランキングを取得できません。"
   },
@@ -124,7 +137,22 @@
       "score": "スコア",
       "maxStreak": "最大連続記録",
       "others": "その他",
-      "moreScores": "{{name}} のスコアをもっと見る"
+      "moreScores": "{{name}} のスコアをもっと見る",
+      "pointScore": "スコア",
+      "contourScore": "スコア",
+      "youAreRanked": "あなたは#{{rank}}位です",
+      "endOfRanking": "ランキングの最後です",
+      "retry": "再試行",
+      "board": {
+        "total": "合計",
+        "point": "ポイント",
+        "shape": "なぞる"
+      },
+      "period": {
+        "all": "すべて",
+        "week": "今週",
+        "day": "今日"
+      }
     },
     "uploadNotice": {
       "title": "そこに隠れてる？",

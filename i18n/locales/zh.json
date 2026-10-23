@@ -106,6 +106,7 @@
     "loadingTable": "正在加载排行榜...",
     "userNotFound": "未找到用户",
     "noScoresForUser": "未找到 {{name}} 的分数。",
+    "empty": "该时间段还没有分数。",
     "scoresUnavailable": "分数不可用",
     "detailsUnavailable": "无法加载 {{name}} 的详细分数。",
     "complementaryTitle": "{{name}} 的补充分数",
@@ -114,6 +115,18 @@
     "totalGuessScore": "竞猜总分：{{value}}",
     "hiddenCount": "隐藏图片数：{{value}}",
     "guessedCount": "猜中图片数：{{value}}",
+    "pointScore": "点选分：{{value}}",
+    "contourScore": "圈画分：{{value}}",
+    "pointGuessScore": "竞猜点选分：{{value}}",
+    "shapeGuessScore": "竞猜圈画分：{{value}}",
+    "pointHideScore": "隐藏点选分：{{value}}",
+    "shapeHideScore": "隐藏圈画分：{{value}}",
+    "detail": {
+      "title": "{{name}} 的详情",
+      "scoresTitle": "得分",
+      "activityTitle": "活跃度",
+      "breakdownTitle": "明细"
+    },
     "authFailed": "{{message}}。你的身份验证失败。请重新连接。无法获取排行榜。",
     "genericFailed": "{{message}}。请重新连接。无法获取排行榜。"
   },
@@ -124,7 +137,22 @@
       "score": "分数",
       "maxStreak": "最长连胜",
       "others": "其他",
-      "moreScores": "显示 {{name}} 的更多分数"
+      "moreScores": "显示 {{name}} 的更多分数",
+      "pointScore": "分数",
+      "contourScore": "分数",
+      "youAreRanked": "你是第{{rank}}名",
+      "endOfRanking": "已到排行榜末尾",
+      "retry": "重试",
+      "board": {
+        "total": "总分",
+        "point": "点选",
+        "shape": "圈画"
+      },
+      "period": {
+        "all": "全部",
+        "week": "本周",
+        "day": "今天"
+      }
     },
     "uploadNotice": {
       "title": "它藏在那里吗？",

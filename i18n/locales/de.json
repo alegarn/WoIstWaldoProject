@@ -106,6 +106,7 @@
     "loadingTable": "Ranglistentabelle wird geladen...",
     "userNotFound": "Benutzer nicht gefunden",
     "noScoresForUser": "Keine Punkte für {{name}} gefunden.",
+    "empty": "Noch keine Punkte für diesen Zeitraum.",
     "scoresUnavailable": "Punkte nicht verfügbar",
     "detailsUnavailable": "Detaillierte Punkte für {{name}} konnten nicht geladen werden.",
     "complementaryTitle": "Zusätzliche Punkte von {{name}}",
@@ -114,6 +115,18 @@
     "totalGuessScore": "Punkte insgesamt (Raten): {{value}}",
     "hiddenCount": "Anzahl versteckter Bilder: {{value}}",
     "guessedCount": "Anzahl geratener Bilder: {{value}}",
+    "pointScore": "Punktestand: {{value}}",
+    "contourScore": "Umriss-Punktestand: {{value}}",
+    "pointGuessScore": "Raten-Punkte (Punkt): {{value}}",
+    "shapeGuessScore": "Raten-Punkte (Umriss): {{value}}",
+    "pointHideScore": "Verstecken-Punkte (Punkt): {{value}}",
+    "shapeHideScore": "Verstecken-Punkte (Umriss): {{value}}",
+    "detail": {
+      "title": "Details von {{name}}",
+      "scoresTitle": "Punkte",
+      "activityTitle": "Aktivität",
+      "breakdownTitle": "Einzelwerte"
+    },
     "authFailed": "{{message}}. Deine Authentifizierung ist fehlgeschlagen. Versuche, dich erneut zu verbinden. Du kannst keine Rangliste abrufen.",
     "genericFailed": "{{message}}. Versuche, dich erneut zu verbinden. Du kannst keine Rangliste abrufen."
   },
@@ -124,7 +137,22 @@
       "score": "Punkte",
       "maxStreak": "Beste Serie",
       "others": "Sonstige",
-      "moreScores": "Weitere Punkte für {{name}} anzeigen"
+      "moreScores": "Weitere Punkte für {{name}} anzeigen",
+      "pointScore": "Punkte",
+      "contourScore": "Punkte",
+      "youAreRanked": "Du bist #{{rank}}",
+      "endOfRanking": "Ende der Rangliste",
+      "retry": "Erneut versuchen",
+      "board": {
+        "total": "Gesamt",
+        "point": "Punkt",
+        "shape": "Umriss"
+      },
+      "period": {
+        "all": "Gesamt",
+        "week": "Diese Woche",
+        "day": "Heute"
+      }
     },
     "uploadNotice": {
       "title": "Versteckt er sich dort?",

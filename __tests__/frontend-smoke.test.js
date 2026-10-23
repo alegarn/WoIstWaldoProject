@@ -1,5 +1,5 @@
 import { INSTRUCTIONS } from '../constants/instructions';
-import { RANKING } from '../constants/ranking';
+import { RANKING, columnsForBoard } from '../constants/ranking';
 import { GlobalStyle } from '../constants/theme';
 import Image from '../models/image';
 
@@ -24,16 +24,21 @@ describe('frontend smoke invariants', () => {
     );
   });
 
-  it('keeps ranking headers and theme tokens available to the UI', () => {
-    expect(RANKING.tableHeaders).toEqual([
+  it('keeps ranking column contract and theme tokens available to the UI', () => {
+    expect(RANKING.tableHeaders).toEqual(
+      columnsForBoard('total').map((column) => column.header)
+    );
+    expect(columnsForBoard('point').map((column) => column.header)).toEqual([
       'Rank',
       'Name',
-      'Score',
-      'Max Streak',
-      'Guess Score',
-      'Guess Count',
-      'Hide Score',
-      'Hide Count',
+      'Point Score',
+      'Others',
+    ]);
+    expect(columnsForBoard('shape').map((column) => column.header)).toEqual([
+      'Rank',
+      'Name',
+      'Contour Score',
+      'Others',
     ]);
     expect(GlobalStyle.color).toEqual(
       expect.objectContaining({
@@ -41,6 +46,12 @@ describe('frontend smoke invariants', () => {
         secondaryColor: expect.any(String),
         tertiaryColor: expect.any(String),
         error500: expect.any(String),
+        medalGold: expect.any(String),
+        medalSilver: expect.any(String),
+        medalBronze: expect.any(String),
+        medalGoldTint: expect.any(String),
+        medalSilverTint: expect.any(String),
+        medalBronzeTint: expect.any(String),
       })
     );
   });

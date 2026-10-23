@@ -113,17 +113,17 @@ export async function submitScoreBatch({ items, context }) {
     .catch(() => false);
 }
 
-export async function getRankingData(context, { scope, top, window, page, after, limit } = {}) {
+export async function getRankingData(context, { scope, top, window, page, after, direction, limit, board, period } = {}) {
   if (isE2EMode()) {
-    const e2eData = buildE2ERankingResponse({ after, limit, scope, page });
+    const e2eData = buildE2ERankingResponse({ after, direction, limit, scope, page, period });
     return { status: 200, data: e2eData };
   }
 
   if (isPrivateScope(scope)) {
     if (after) {
-      return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit });
+      return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit, board });
     }
-    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, limit });
+    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, top, window, limit, board });
   }
 
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
@@ -136,7 +136,10 @@ export async function getRankingData(context, { scope, top, window, page, after,
   if (window) params.window = window;
   if (page) params.page = page;
   if (after) params.after = after;
+  if (direction) params.direction = direction;
   if (limit) params.limit = limit;
+  if (board) params.board = board;
+  if (period) params.period = period;
 
   const config = {
     headers: headers,
@@ -148,12 +151,23 @@ export async function getRankingData(context, { scope, top, window, page, after,
     .then((response) => {
       const payload = response.data;
       let normalized;
+      const initialData = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null;
 
-      if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) && payload.data.rows) {
+      if (initialData && initialData.rows && (initialData.up_cursor !== undefined || initialData.down_cursor !== undefined)) {
+        normalized = {
+          rows: initialData.rows,
+          me: initialData.me || null,
+          upCursor: initialData.up_cursor ?? null,
+          hasMoreUp: initialData.has_more_up ?? false,
+          downCursor: initialData.down_cursor ?? null,
+          hasMoreDown: initialData.has_more_down ?? false,
+          meta: initialData.meta || null,
+        };
+      } else if (initialData && initialData.rows) {
         normalized = {
           rows: payload.data.rows,
-          nextCursor: null,
-          hasMore: false,
+          nextCursor: payload.data.next_cursor ?? null,
+          hasMore: payload.data.has_more ?? false,
           me: payload.data.me || null,
           meta: payload.data.meta || null,
           pagy: null,

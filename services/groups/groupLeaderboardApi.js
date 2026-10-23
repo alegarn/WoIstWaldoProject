@@ -31,25 +31,30 @@ function normalizeLeaderboard(payload) {
   };
 }
 
-export async function fetchPrivateLeaderboard(context, { groupId, limit } = {}) {
+async function fetchLeaderboardPage(context, groupId, params) {
   const { token } = await getBackendHeaders(context);
-  const config = { headers: setHeaders({ token }), params: {} };
-
-  if (limit) config.params.limit = limit;
+  const config = { headers: setHeaders({ token }), params };
 
   return axios.get(`${leaderboardUrl(groupId)}/`, config)
     .then((response) => ({ status: response.status, data: normalizeLeaderboard(response.data) }))
     .catch(mapRequestError);
 }
 
-export async function fetchPrivateLeaderboardNext(context, { groupId, after, limit } = {}) {
-  const { token } = await getBackendHeaders(context);
-  const config = { headers: setHeaders({ token }), params: {} };
+export async function fetchPrivateLeaderboard(context, { groupId, top, window, limit, board } = {}) {
+  const params = {};
+  if (top) params.top = top;
+  if (window) params.window = window;
+  if (limit) params.limit = limit;
+  if (board) params.board = board;
 
-  if (after) config.params.after = after;
-  if (limit) config.params.limit = limit;
+  return fetchLeaderboardPage(context, groupId, params);
+}
 
-  return axios.get(`${leaderboardUrl(groupId)}/`, config)
-    .then((response) => ({ status: response.status, data: normalizeLeaderboard(response.data) }))
-    .catch(mapRequestError);
+export async function fetchPrivateLeaderboardNext(context, { groupId, after, limit, board } = {}) {
+  const params = {};
+  if (after) params.after = after;
+  if (limit) params.limit = limit;
+  if (board) params.board = board;
+
+  return fetchLeaderboardPage(context, groupId, params);
 }

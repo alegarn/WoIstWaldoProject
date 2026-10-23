@@ -106,6 +106,7 @@
     "loadingTable": "Carregando tabela de classificação...",
     "userNotFound": "Usuário não encontrado",
     "noScoresForUser": "Nenhuma pontuação encontrada para {{name}}.",
+    "empty": "Ainda não há pontuações para este período.",
     "scoresUnavailable": "Pontuações indisponíveis",
     "detailsUnavailable": "Não foi possível carregar as pontuações detalhadas de {{name}}.",
     "complementaryTitle": "Pontuações complementares de {{name}}",
@@ -114,6 +115,18 @@
     "totalGuessScore": "Pontuação total de adivinhações: {{value}}",
     "hiddenCount": "Número de imagens escondidas: {{value}}",
     "guessedCount": "Número de imagens adivinhadas: {{value}}",
+    "pointScore": "Pontuação de pontos: {{value}}",
+    "contourScore": "Pontuação de contorno: {{value}}",
+    "pointGuessScore": "Pontuação de adivinhações em ponto: {{value}}",
+    "shapeGuessScore": "Pontuação de adivinhações em contorno: {{value}}",
+    "pointHideScore": "Pontuação de esconder em ponto: {{value}}",
+    "shapeHideScore": "Pontuação de esconder em contorno: {{value}}",
+    "detail": {
+      "title": "Detalhes de {{name}}",
+      "scoresTitle": "Pontuações",
+      "activityTitle": "Atividade",
+      "breakdownTitle": "Detalhes"
+    },
     "authFailed": "{{message}}. Sua autenticação falhou. Tente reconectar. Você não pode obter uma classificação.",
     "genericFailed": "{{message}}. Tente reconectar. Você não pode obter uma classificação."
   },
@@ -124,7 +137,22 @@
       "score": "Pontos",
       "maxStreak": "Melhor sequência",
       "others": "Outros",
-      "moreScores": "Mostrar mais pontuações de {{name}}"
+      "moreScores": "Mostrar mais pontuações de {{name}}",
+      "pointScore": "Pontos",
+      "contourScore": "Pontos",
+      "youAreRanked": "Você está em #{{rank}}",
+      "endOfRanking": "Fim da classificação",
+      "retry": "Tentar novamente",
+      "board": {
+        "total": "Total",
+        "point": "Ponto",
+        "shape": "Contorno"
+      },
+      "period": {
+        "all": "Tudo",
+        "week": "Esta semana",
+        "day": "Hoje"
+      }
     },
     "uploadNotice": {
       "title": "Está escondido aí?",

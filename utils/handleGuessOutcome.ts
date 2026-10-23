@@ -9,6 +9,16 @@ function isPrivateKind(scope: unknown): boolean {
     (scope as { kind?: unknown }).kind === 'private';
 }
 
+export interface BufferWinScoreArgs {
+  pictureId?: string | null;
+  scope?: unknown;
+  userId?: unknown;
+  points?: number;
+  multiplier?: number;
+  streak?: number;
+  streakMultiplier?: number;
+}
+
 export interface ApplySuccessSideEffectsArgs {
   listId?: number;
   categoryKey?: string | null;
@@ -18,10 +28,6 @@ export interface ApplySuccessSideEffectsArgs {
   pictureId?: string | null;
   scope?: unknown;
   userId?: unknown;
-  points?: number;
-  multiplier?: number;
-  streak?: number;
-  streakMultiplier?: number;
 }
 
 export interface ResolveNextGuessParamsArgs {
@@ -39,15 +45,14 @@ export interface ResolveNextGuessParamsResult {
 }
 
 /**
- * Best-effort side effects of a correct guess: buffer the score, remove the
- * played card from its OWN deck namespace (removeImageFromList by listId) so
- * the deck advances past it, and delete the cached image file. Score buffering
- * runs first; storage cleanup is wrapped so a failure there cannot unwind an
- * already-buffered score.
+ * Bank a correct guess's score the moment the win happens (NOT at advance
+ * time): a last/only card (the advance exhausts) or a leave mid-advance must
+ * still reach the server. Called once per win from the win path (GuessScreen
+ * gates re-entry via the advance state); the score flush is dedupe-safe.
  *
  * @returns {Promise<void>}
  */
-export async function applySuccessSideEffects({ listId, categoryKey, language, mode, imageFile, pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }: ApplySuccessSideEffectsArgs): Promise<void> {
+export async function bufferWinScore({ pictureId, scope, userId, points = SPEED_MULTIPLIER_BASE, multiplier, streak = 0, streakMultiplier }: BufferWinScoreArgs): Promise<void> {
   await bufferScore({
     guessId: mintGuessId(),
     imageName: pictureId,
@@ -61,7 +66,18 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, m
     ts: Date.now(),
     userId,
   });
+}
 
+/**
+ * Best-effort post-advance cleanup of a correct guess: remove the played card
+ * from its OWN deck namespace (removeImageFromList by listId) so the deck
+ * advances past it, and delete the cached image file. Runs only after a
+ * successfully resolved next card — the score itself is banked at win time
+ * (bufferWinScore), so a failed cleanup can never lose a win.
+ *
+ * @returns {Promise<void>}
+ */
+export async function applySuccessSideEffects({ listId, categoryKey, language, mode, imageFile, pictureId, scope, userId }: ApplySuccessSideEffectsArgs): Promise<void> {
   try {
     addPlayedPictureId(pictureId, language, scope).catch(() => {});
     await removeImageFromList(listId as number, categoryKey, language, mode);
@@ -72,7 +88,7 @@ export async function applySuccessSideEffects({ listId, categoryKey, language, m
       await sweepPlayedOrphanCacheFiles(language);
     }
   } catch (e) {
-    console.warn('applySuccessSideEffects: storage cleanup failed (best-effort, score kept buffered)', e);
+    console.warn('applySuccessSideEffects: storage cleanup failed (best-effort, score already banked at win time)', e);
   }
 }
 

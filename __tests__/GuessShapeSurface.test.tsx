@@ -3,9 +3,11 @@
 // The surface is the guess-only composition (decision doc :197): a single
 // ShapeCanvas (with the corridor offset + renderBand slot) plus the graded
 // MatchRevealOverlay stacked above it. ALL scoring lives at the single
-// lift-time call site here — the surface turns a lifted stroke into a reveal
-// (win / loseScore / loseLengthCap) and forwards the normalized outline to
-// the parent.
+// lift-time call site here — the surface turns a lifted stroke into a pending
+// reveal (win / loseScore / loseLengthCap) and forwards the normalized outline
+// to the parent. ANTI-LEAK: the reveal is scored at lift but only UNMASKED
+// when the parent bumps `revealToken` (the confirm-modal tap) — the solution
+// outline + verdict must never render while the guesser is still guessing.
 //
 // Mocks (system boundaries only):
 // - react-native-gesture-handler: Pan handlers are captured so tests fire the
@@ -99,6 +101,7 @@ import { act, render, screen } from '@testing-library/react-native';
 
 import GuessShapeSurface from '../components/Picture/GuessShapeSurface';
 import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
+import type { Point } from '../utils/shapeGeometry';
 import i18n from '../i18n';
 
 const shapeCanvasMock = jest.requireMock('../components/Picture/ShapeCanvas') as {
@@ -205,14 +208,19 @@ describe('GuessShapeSurface', () => {
   // FIRST in the file: React logs the "Cannot update a component while
   // rendering a different component" dev warning only once per process, so
   // this test must run before any other test triggers it.
-  it('clears the reveal at stroke start without a React cross-component update warning', async () => {
+  it('masks the reveal at lift, unmasks it at the confirm token, and clears it at stroke start without a React cross-component update warning', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      render(<GuessShapeSurface {...baseProps} />);
+      const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
       await fireShapePan(STROKE_VERTICES);
+      expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+      await act(async () => {
+        rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+      });
       expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
       await startStroke(STROKE_VERTICES);
@@ -234,30 +242,45 @@ describe('GuessShapeSurface', () => {
     expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
   });
 
-  it('on a winning lift, reveals the win verdict + percent and forwards the outline', async () => {
+  it('on a winning lift, forwards the outline and holds the reveal until the confirm token, then reveals the win verdict + percent', async () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
     const onOutlineChange = jest.fn();
-    render(<GuessShapeSurface {...baseProps} onOutlineChange={onOutlineChange} />);
+    const { rerender } = render(
+      <GuessShapeSurface {...baseProps} revealToken={0} onOutlineChange={onOutlineChange} />
+    );
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
     await fireShapePan(STROKE_VERTICES);
+
+    // ANTI-LEAK: lift forwards the outline (confirm modal opens upstream) but
+    // the solution + verdict stay hidden while the guesser is still deciding.
+    expect(onOutlineChange).toHaveBeenCalledWith(NORMALIZED_STROKE);
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+    await act(async () => {
+      rerender(<GuessShapeSurface {...baseProps} revealToken={1} onOutlineChange={onOutlineChange} />);
+    });
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
       i18n.t('game.picture.traceWin')
     );
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
-    expect(onOutlineChange).toHaveBeenCalledWith(NORMALIZED_STROKE);
   });
 
-  it('on a losing lift within the length cap, reveals the loseScore verdict', async () => {
+  it('on a losing lift within the length cap, reveals the loseScore verdict after the confirm token', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
-    render(<GuessShapeSurface {...baseProps} />);
+    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+    await act(async () => {
+      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+    });
 
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
       i18n.t('game.picture.traceLoseScore')
@@ -265,39 +288,108 @@ describe('GuessShapeSurface', () => {
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('50%');
   });
 
-  it('on a losing lift past the length cap, the cap beats the score (loseLengthCap)', async () => {
+  it('on a losing lift past the length cap, the cap beats the score (loseLengthCap) after the confirm token', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
-    render(<GuessShapeSurface {...baseProps} hiddenOutline={SMALL_SQUARE_OUTLINE} />);
+    const { rerender } = render(
+      <GuessShapeSurface {...baseProps} revealToken={0} hiddenOutline={SMALL_SQUARE_OUTLINE} />
+    );
 
     await fireShapePan(STROKE_VERTICES);
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+
+    await act(async () => {
+      rerender(
+        <GuessShapeSurface {...baseProps} revealToken={1} hiddenOutline={SMALL_SQUARE_OUTLINE} />
+      );
+    });
 
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
       i18n.t('game.picture.traceLoseLengthCap')
     );
   });
 
-  it('keeps the reveal rendered across rerenders while no new stroke starts', async () => {
+  it('clears the unmasked reveal when hiddenOutline changes identity (card swap without remount)', async () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
-    const { rerender } = render(<GuessShapeSurface {...baseProps} />);
+    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
+    await act(async () => {
+      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+    });
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
-    rerender(<GuessShapeSurface {...baseProps} />);
+    // Card swap without remount: a NEW hidden outline identity with the SAME
+    // (non-zero) token must never carry the previous card's solution over.
+    const nextCardOutline = [
+      { x: 0.2, y: 0.2 },
+      { x: 0.8, y: 0.2 },
+      { x: 0.5, y: 0.8 },
+      { x: 0.2, y: 0.2 },
+    ];
+    await act(async () => {
+      rerender(
+        <GuessShapeSurface {...baseProps} revealToken={1} hiddenOutline={nextCardOutline} />
+      );
+    });
+
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+  });
+
+  it('clears the unmasked reveal at finger-down (stroke begin), before any second point commits', async () => {
+    outlineMatchScoreMock.mockReturnValue(0.87);
+    isWinningTraceMock.mockReturnValue(true);
+    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+
+    await fireShapePan(STROKE_VERTICES);
+    await act(async () => {
+      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+    });
+    expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
+
+    const pan = findShapePan();
+    await act(async () => {
+      pan.onBeginHandler({ x: 50, y: 50 });
+    });
+
+    // Only ONE point is committed at finger-down, so the band slot (≥2
+    // points) has not fired: the clear must come from the stroke-begin seam.
+    expect(screen.queryByTestId('game.picture.trace-band')).toBeNull();
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
+  });
+
+  it('keeps the unmasked reveal rendered across rerenders while the confirm token holds', async () => {
+    outlineMatchScoreMock.mockReturnValue(0.87);
+    isWinningTraceMock.mockReturnValue(true);
+    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+
+    await fireShapePan(STROKE_VERTICES);
+    await act(async () => {
+      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+    });
+    expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
+
+    rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
   });
 
-  it('clears the reveal at the next stroke START, replaces it on the second lift, and forwards redraw nulls', async () => {
+  it('masks the second lift until its own confirm, clears at the next stroke START, and forwards redraw nulls', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
     const onOutlineChange = jest.fn();
-    render(<GuessShapeSurface {...baseProps} onOutlineChange={onOutlineChange} />);
+    const { rerender } = render(
+      <GuessShapeSurface {...baseProps} revealToken={0} onOutlineChange={onOutlineChange} />
+    );
 
     await fireShapePan(STROKE_VERTICES);
+    await act(async () => {
+      rerender(
+        <GuessShapeSurface {...baseProps} revealToken={1} onOutlineChange={onOutlineChange} />
+      );
+    });
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
     const pan = findShapePan();
@@ -307,14 +399,21 @@ describe('GuessShapeSurface', () => {
     expect(screen.queryByTestId('game.picture.trace-band')).not.toBeNull();
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
-    // Second lift replaces the verdict.
+    // Second lift scores but stays MASKED: a fresh confirm token is required.
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
     await act(async () => {
       pan.onFinalizeHandler({}, true);
     });
-    expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
+    expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
     expect(onOutlineChange).toHaveBeenLastCalledWith(NORMALIZED_STROKE);
+
+    await act(async () => {
+      rerender(
+        <GuessShapeSurface {...baseProps} revealToken={2} onOutlineChange={onOutlineChange} />
+      );
+    });
+    expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
 
     // Redraw path (degenerate stroke → ShapeCanvas calls onOutlineChange(null)):
     // reveal gone and null forwarded to the parent.
@@ -370,10 +469,15 @@ describe('GuessShapeSurface', () => {
       { x: 0.5, y: 0.8 },
       { x: 0.2, y: 0.2 },
     ];
-    render(
+    // Same identity across both renders — hiddenOutline identity IS the card
+    // identity (a new literal per render reads as a card swap and clears the
+    // reveal).
+    const emptyOutline: Point[] = [];
+    const { rerender } = render(
       <GuessShapeSurface
         {...baseProps}
-        hiddenOutline={[]}
+        revealToken={0}
+        hiddenOutline={emptyOutline}
         outline={storedOutline}
         onOutlineChange={onOutlineChange}
       />
@@ -386,6 +490,18 @@ describe('GuessShapeSurface', () => {
     expect('hiddenOutline' in forwarded).toBe(false);
 
     await fireShapePan(STROKE_VERTICES);
+
+    await act(async () => {
+      rerender(
+        <GuessShapeSurface
+          {...baseProps}
+          revealToken={1}
+          hiddenOutline={emptyOutline}
+          outline={storedOutline}
+          onOutlineChange={onOutlineChange}
+        />
+      );
+    });
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     const verdict = screen.getByTestId('game.picture.trace-reveal-verdict').props.children;

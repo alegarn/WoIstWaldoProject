@@ -76,6 +76,13 @@ export function getPrivateGroupTheme({ primaryColor, secondaryColor } = {}) {
     danger: '#E03A3A',
     dangerSoft: 'rgba(224,58,58,0.12)',
     headerTintColor: accentText,
+
+    medalGold: GlobalStyle.color.medalGold,
+    medalSilver: GlobalStyle.color.medalSilver,
+    medalBronze: GlobalStyle.color.medalBronze,
+    medalGoldTint: rgbaFromHex(secondary, 0.12),
+    medalSilverTint: rgbaFromHex(secondary, 0.08),
+    medalBronzeTint: rgbaFromHex(secondary, 0.05),
   };
 }
 

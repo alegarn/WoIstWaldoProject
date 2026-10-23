@@ -130,7 +130,7 @@ jest.mock('../../services/cardDeck', () => {
 });
 
 import React from 'react';
-import { AppState } from 'react-native';
+import { AppState, StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
@@ -139,6 +139,8 @@ import GuessScreen from '../../screens/GuessScreens/GuessScreen';
 import HideScreen from '../../screens/HideScreens/HideScreen';
 import RankingScreen from '../../screens/RankingScreen';
 import { AuthContext } from '../../store/auth-context';
+import { resetGroupHubStore } from '../../services/groups/groupHubStore';
+import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
 const PRIVATE_SCOPE = { kind: 'private', groupId: 'g-123' };
 
@@ -336,6 +338,11 @@ describe('private scope games', () => {
   });
 
   describe('RankingScreen', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+      resetGroupHubStore();
+    });
+
     it('loads the private ranking from the group leaderboard endpoint, not the public scores endpoint', async () => {
       axios.get.mockImplementation(async (url) => {
         if (String(url).includes('/leaderboard')) {
@@ -373,6 +380,90 @@ describe('private scope games', () => {
       expect(publicScoresCalls).toHaveLength(0);
 
       expect(screen.getByText('waldo')).toBeTruthy();
+    });
+
+    function mockPrivateRankingAxios({ withGroup, withMe }) {
+      axios.get.mockImplementation(async (url) => {
+        if (String(url).includes('/leaderboard')) {
+          return {
+            status: 200,
+            data: {
+              data: {
+                rows: [{ rank: '1', username: 'waldo', total_score: 25, max_streak: 2, user_id: 'u1' }],
+                next_cursor: null,
+                has_more: false,
+                me: withMe
+                  ? { user_id: 'user-1', username: 'me_user', total_score: 10, rank: 3 }
+                  : null,
+              },
+            },
+          };
+        }
+        if (withGroup && String(url).endsWith('/private_groups/')) {
+          return {
+            status: 200,
+            data: [{
+              id: 'g-123',
+              name: 'My Group',
+              primary_color: '#198868',
+              secondary_color: '#FFCC00',
+              owner_id: 'user-1',
+            }],
+          };
+        }
+        return { status: 200, data: { owned: [], joined: [] } };
+      });
+    }
+
+    it('renders theme-aware board tabs and the me card under the private scope', async () => {
+      mockPrivateRankingAxios({ withGroup: true, withMe: true });
+
+      const navigation = { setOptions: jest.fn() };
+      const screen = render(
+        <AuthContext.Provider value={AUTH}>
+          <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
+        </AuthContext.Provider>,
+      );
+      await flush();
+
+      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.total' }).length).toBeGreaterThan(0);
+      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' }).length).toBeGreaterThan(0);
+      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.shape' }).length).toBeGreaterThan(0);
+      expect(screen.getByText('Total')).toBeTruthy();
+      expect(screen.getByText('Point')).toBeTruthy();
+      expect(screen.getByText('Contour')).toBeTruthy();
+
+      const expectedTheme = getPrivateGroupTheme({ primaryColor: '#198868' });
+      const activeTab = screen.root.findAllByProps({ testID: 'ranking.screen.board.total' })[0];
+      expect(StyleSheet.flatten(activeTab.props.style)).toEqual(
+        expect.objectContaining({ backgroundColor: expectedTheme.primaryColor }),
+      );
+
+      expect(screen.getByTestId('ranking.meCard')).toBeTruthy();
+      expect(screen.getByText('You are #3')).toBeTruthy();
+      expect(screen.getByText('me_user')).toBeTruthy();
+    });
+
+    it('switching boards refetches page 1 from the group leaderboard and keeps the group scope', async () => {
+      mockPrivateRankingAxios({ withGroup: true, withMe: false });
+
+      const navigation = { setOptions: jest.fn() };
+      const screen = render(
+        <AuthContext.Provider value={AUTH}>
+          <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
+        </AuthContext.Provider>,
+      );
+      await flush();
+
+      fireEvent.press(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' })[0]);
+      await flush();
+
+      const leaderboardCalls = axios.get.mock.calls.filter(([url]) =>
+        String(url).includes('api/v1/private_groups/g-123/leaderboard'),
+      );
+      expect(leaderboardCalls).toHaveLength(2);
+      expect(leaderboardCalls[0][1].params).toEqual({ top: 3, window: 5, limit: 20, board: 'total' });
+      expect(leaderboardCalls[1][1].params).toEqual({ top: 3, window: 5, limit: 20, board: 'point' });
     });
   });
 });

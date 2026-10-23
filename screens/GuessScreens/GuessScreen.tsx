@@ -22,7 +22,9 @@ import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetche
 import { getNextImagesForScope, clearExhaustedCategory } from '../../utils/storageDatum';
 import { normalizeMode } from '../../utils/sessionFilter';
 import { computeMultiplier, SPEED_MULTIPLIER_BASE, SHAPE_SPEED_BONUS_THRESHOLD_MS } from '../../utils/speedMultiplier';
-import { computePoints } from '../../utils/guessPoints';
+import { computePoints, resolveCorrectGuessOutcome } from '../../utils/guessPoints';
+import { bufferWinScore } from '../../utils/handleGuessOutcome';
+import { flush } from '../../utils/sessionScoreStore';
 import { useAdvanceStateMachine } from '../../hooks/useAdvanceStateMachine';
 import { useResolveLifecycle } from '../../hooks/useResolveLifecycle';
 import { useAdCadence } from '../../hooks/useAdCadence';
@@ -161,9 +163,6 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   // §2.3 (2) + §2.4: resolve-lifecycle machinery (nextCardResolveRef,
   // pendingNextRef, runResolveCycle, onAdvanceResolved, scheduleRetry,
   // retryTimerRef, retryCountRef, mountedRef, handleAdDone) lives in the hook.
-  // `multiplier` is threaded explicitly through runResolveCycle →
-  // onAdvanceResolved → scheduleRetry → runResolveCycle so the success-time
-  // value survives the retry loop with no parallel multiplier mirror ref.
   const {
     kickoffResolve,
     awaitResolve,
@@ -176,7 +175,6 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     dispatch,
     advanceStateRef,
     setAdPhase,
-    currentStreak: streak,
     onWin,
     overlayVisibleRef,
     resolveArgs: {
@@ -306,11 +304,10 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }, [listId, category?.key, category?.id, language, scope]);
 
   async function applySuccessPath(multiplier: number) {
-    // PB6: streak + score commit deferred to RESOLVED side-effect in
-    // onAdvanceResolved — a tap that fails to advance must not credit the
-    // streak/score. Only the speed multiplier + overlay state commit here;
-    // fire-and-forget deck prefetch is preserved (PB7 Phase 3 covers image
-    // preload placement separately).
+    // PB2: exactly one win per advancing cycle. advanceStateRef is flipped
+    // synchronously by dispatch(WIN) below, so a re-entrant confirm while the
+    // advance is mid-flight returns here without re-banking or re-kicking.
+    if (advanceStateRef.current !== 'idle') return;
     // B2: PUBLIC scope threads categoryKey only (bundled string keys, no
     // server UUID); PRIVATE scope keeps categoryId (UUID). Mirrors the
     // cardDeck.buildFeedFilters split.
@@ -330,10 +327,24 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // guard in onAdvanceResolved requires advanceStateRef to read 'advancing'
     // before the in-flight resolve can commit side effects, so dispatch(WIN)
     // precedes the kickoff. handleOverlayDone awaits the in-flight resolve at
-    // dismiss — usually already settled. The multiplier is threaded through
-    // kickoffResolve so it survives the retry loop without a mirror ref.
+    // dismiss — usually already settled.
     dispatch({ type: 'WIN' });
-    kickoffResolve(multiplier);
+    // WIN-CREDIT (bug-2 fix, reverses the old PB6/C1 no-advance-no-credit
+    // rule): the win is buffered HERE, at win time — not in the advance flow.
+    // A last/only card (the advance exhausts) or a leave mid-advance must
+    // still reach the server via the exit/background flush. Same scoring
+    // inputs as before (speed multiplier × post-increment streak tier).
+    const { finalPoints, nextStreak, nextTier } = resolveCorrectGuessOutcome({ multiplier, currentStreak: streak });
+    await bufferWinScore({
+      pictureId,
+      scope,
+      userId,
+      points: finalPoints,
+      multiplier,
+      streak: nextStreak,
+      streakMultiplier: nextTier.multiplier,
+    });
+    kickoffResolve();
   }
 
   function applyFailurePath(sharedParams: SharedParams) {
@@ -410,6 +421,11 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }
 
   function handleExitToHome() {
+    // Direct exit flush (ShowFailure mount-flush form): guarantees a
+    // just-banked win reaches the server on this exit, even when this screen
+    // is not the one owning the beforeRemove listener (popToTop unwinds the
+    // feed's useFlushOnLeave too — flush() dedupes concurrent triggers).
+    void flush({ authContext });
     if (isPrivate) {
       // v6-compatible equivalent of v7's popTo('PrivateHomeScreen').
       // Mirrors the reset-to-private-home pattern used by ResultChoices.js and
@@ -429,6 +445,10 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   }
 
   function handleSwitchCategory() {
+    // Same direct exit flush as handleExitToHome: the switch leaves the game
+    // without unwinding a screen that owns a beforeRemove flush, so the
+    // just-banked win must be sent here.
+    void flush({ authContext });
     // F3a invalidation (E1): clear the exhausted-cache entry for the CURRENT
     // category+scope so re-entering re-queries the server (handles newly
     // uploaded images since the category was marked empty). Fire-and-forget —
@@ -461,9 +481,11 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       // played card's listId was also 1). The collision silently skipped
       // remount, leaving useTargetDrag's userInteractedRef=true blocking the
       // target reset on the new card → target rendered at the old dragged
-      // position (or off-screen). pictureId is server-unique per card; fall
-      // back to listId only if it is ever absent.
-      key={pictureId ?? listId}
+      // position (or off-screen). pictureId is server-unique per card; for
+      // pictureId-less cards, folding in imageFile keeps two distinct cards
+      // on the same listId key-distinct (fallback layer for the in-place
+      // card-swap reveal/drag resets upstream).
+      key={pictureId ?? `${listId}-${imageFile ?? ''}`}
       navigation={navigation}
       // only in dev with local images, but imageFile in Prod
       imageFile={uri}

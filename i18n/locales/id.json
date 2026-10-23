@@ -106,6 +106,7 @@
     "loadingTable": "Memuat tabel peringkat...",
     "userNotFound": "Pengguna tidak ditemukan",
     "noScoresForUser": "Tidak ada skor ditemukan untuk {{name}}.",
+    "empty": "Belum ada skor untuk periode ini.",
     "scoresUnavailable": "Skor tidak tersedia",
     "detailsUnavailable": "Tidak dapat memuat skor terperinci untuk {{name}}.",
     "complementaryTitle": "Skor pelengkap {{name}}",
@@ -114,6 +115,18 @@
     "totalGuessScore": "Skor tebak total: {{value}}",
     "hiddenCount": "Jumlah gambar tersembunyi: {{value}}",
     "guessedCount": "Jumlah gambar yang ditebak: {{value}}",
+    "pointScore": "Skor titik: {{value}}",
+    "contourScore": "Skor bentuk: {{value}}",
+    "pointGuessScore": "Skor tebak titik: {{value}}",
+    "shapeGuessScore": "Skor tebak bentuk: {{value}}",
+    "pointHideScore": "Skor sembunyi titik: {{value}}",
+    "shapeHideScore": "Skor sembunyi bentuk: {{value}}",
+    "detail": {
+      "title": "Detail {{name}}",
+      "scoresTitle": "Skor",
+      "activityTitle": "Aktivitas",
+      "breakdownTitle": "Rincian"
+    },
     "authFailed": "{{message}}. Autentikasi kamu gagal. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat.",
     "genericFailed": "{{message}}. Coba hubungkan kembali. Kamu tidak bisa mendapatkan peringkat."
   },
@@ -124,7 +137,22 @@
       "score": "Skor",
       "maxStreak": "Runtunan terpanjang",
       "others": "Lainnya",
-      "moreScores": "Tampilkan lebih banyak skor untuk {{name}}"
+      "moreScores": "Tampilkan lebih banyak skor untuk {{name}}",
+      "pointScore": "Skor",
+      "contourScore": "Skor",
+      "youAreRanked": "Kamu peringkat #{{rank}}",
+      "endOfRanking": "Akhir peringkat",
+      "retry": "Coba lagi",
+      "board": {
+        "total": "Total",
+        "point": "Titik",
+        "shape": "Bentuk"
+      },
+      "period": {
+        "all": "Semua",
+        "week": "Minggu ini",
+        "day": "Hari ini"
+      }
     },
     "uploadNotice": {
       "title": "Apakah dia bersembunyi di sana?",

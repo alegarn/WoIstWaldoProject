@@ -138,6 +138,8 @@ const E2E_IMAGE_DETAIL_FULL_DESCRIPTION = 'e2e full description';
 const E2E_IMAGE_DETAIL_AVERAGE_RATING = 4;
 const E2E_IMAGE_DETAIL_RATINGS_COUNT = 5;
 
+const E2E_RANKING_ME = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 };
+
 function attachE2EGuessCardMetadata(card, overrides = {}) {
   card.category = overrides.category ?? E2E_GUESS_CARD_CATEGORY;
   card.language = overrides.language ?? E2E_GUESS_CARD_LANGUAGE;
@@ -318,46 +320,126 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
   return card;
 }
 
-export function buildE2ERankingRows() {
-  return DUMMY_RANKING.scoresDatum.slice(0, 10).map((row) => ({
-    rank: String(row.rank),
+export function buildE2ERankingRows(count = 10) {
+  return DUMMY_RANKING.scoresDatum.slice(0, count).map((row) => ({
+    rank: row.rank,
     username: row.name,
     total_score: row.totalScore,
+    user_id: row.user_id,
+    total_point_guess_score: row.total_point_guess_score,
+    total_shape_guess_score: row.total_shape_guess_score,
+    total_point_hide_score: row.total_point_hide_score,
+    total_shape_hide_score: row.total_shape_hide_score,
+    point_score: row.point_score,
+    shape_score: row.shape_score,
   }));
 }
 
-export function buildE2ERankingResponse({ after, limit, scope, page } = {}) {
-  const allRows = buildE2ERankingRows();
+// Contract v3 shim: bidirectional me-anchored leaderboard. The initial
+// envelope carries only the me-window plus per-direction cursors; scroll-up
+// pages walk toward rank 1, scroll-down pages continue past the me-block.
+// Cursor strings encode the next edge rank so every page is deterministic.
+// The down walk terminates at E2E_RANKING_MAX_RANK so deep scrolling cannot
+// loop forever against the finite shim dataset.
+const E2E_RANKING_CURSOR_ROWS = 6;
+const E2E_RANKING_MAX_RANK = 30;
+const E2E_RANKING_PERIOD_ME_RANKS = { all: 12, week: 6, day: 2 };
+const E2E_RANKING_PERIOD_ME_BLOCKS = {
+  all: { first: 10, last: 14 },
+  week: { first: 5, last: 7 },
+  day: { first: 1, last: 3 },
+};
+const E2E_RANKING_UP_CURSOR = 'e2e-cursor-up';
+const E2E_RANKING_DOWN_CURSOR = 'e2e-cursor-down';
+
+function e2eRankingRowAt(rank) {
+  const source = DUMMY_RANKING.scoresDatum[(rank - 1) % DUMMY_RANKING.scoresDatum.length];
+  const suffix = rank > DUMMY_RANKING.scoresDatum.length ? `-${rank}` : '';
+  return {
+    rank,
+    username: `${source.name}${suffix}`,
+    total_score: source.totalScore,
+    user_id: `e2e-user-${(rank - 1) % DUMMY_RANKING.scoresDatum.length}${suffix}`,
+    total_point_guess_score: source.total_point_guess_score,
+    total_shape_guess_score: source.total_shape_guess_score,
+    total_point_hide_score: source.total_point_hide_score,
+    total_shape_hide_score: source.total_shape_hide_score,
+    point_score: source.point_score,
+    shape_score: source.shape_score,
+  };
+}
+
+function e2eCursorEdgeRank(cursor, fallback) {
+  const parsed = Number(String(cursor).split('-').pop());
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+export function buildE2ERankingResponse({ after, direction, limit, scope, page, board, period } = {}) {
+  const meBlock = E2E_RANKING_PERIOD_ME_BLOCKS[period] ?? E2E_RANKING_PERIOD_ME_BLOCKS.all;
+  const meRank = E2E_RANKING_PERIOD_ME_RANKS[period] ?? E2E_RANKING_PERIOD_ME_RANKS.all;
+  const me = { ...E2E_RANKING_ME, rank: meRank };
+  const allRows = buildE2ERankingRows(20);
+  const withScore = (rows) => rows.map((row) => ({ ...row, score: row.total_score }));
+  const rowsForRanks = (from, to) => {
+    const rows = [];
+    for (let rank = Math.max(1, from); rank <= to; rank++) {
+      rows.push(rank <= allRows.length ? allRows[rank - 1] : e2eRankingRowAt(rank));
+    }
+    return rows;
+  };
 
   if (page) {
     return {
-      rows: allRows,
+      rows: withScore(allRows.slice(0, 10)),
       nextCursor: null,
       hasMore: false,
-      me: null,
+      me,
       meta: null,
-      pagy: { count: allRows.length, pages: 1, page: 1 },
+      pagy: { count: 10, pages: 1, page: 1 },
+    };
+  }
+
+  if (after && direction === 'up') {
+    const endRank = e2eCursorEdgeRank(after, meBlock.first - 1);
+    const nextEndRank = endRank - E2E_RANKING_CURSOR_ROWS;
+    return {
+      rows: withScore(rowsForRanks(endRank - E2E_RANKING_CURSOR_ROWS + 1, endRank)),
+      nextCursor: nextEndRank >= 1 ? `${E2E_RANKING_UP_CURSOR}-${nextEndRank}` : null,
+      hasMore: nextEndRank >= 1,
+      me,
+      meta: null,
+      pagy: null,
     };
   }
 
   if (after) {
+    const startRank = e2eCursorEdgeRank(after, meBlock.last + 1);
+    const endRank = Math.min(startRank + E2E_RANKING_CURSOR_ROWS - 1, E2E_RANKING_MAX_RANK);
+    const nextStartRank = endRank + 1;
+    const hasMore = nextStartRank <= E2E_RANKING_MAX_RANK;
     return {
-      rows: allRows.slice(5),
-      nextCursor: 'e2e-cursor-next',
-      hasMore: false,
-      me: null,
+      rows: withScore(rowsForRanks(startRank, endRank)),
+      nextCursor: hasMore ? `${E2E_RANKING_DOWN_CURSOR}-${nextStartRank}` : null,
+      hasMore,
+      me,
       meta: null,
       pagy: null,
     };
   }
 
   return {
-    rows: allRows.slice(0, 5),
-    me: { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 },
-    meta: { top: 3, window: 2 },
-    nextCursor: null,
-    hasMore: false,
-    pagy: null,
+    rows: withScore(rowsForRanks(meBlock.first, meBlock.last)),
+    me,
+    meta: {
+      window: meBlock.last - meBlock.first + 1,
+      limit: limit ?? 20,
+      board: board ?? 'total',
+      period: period ?? 'all',
+    },
+    upCursor: meBlock.first > 1 ? E2E_RANKING_UP_CURSOR : null,
+    hasMoreUp: meBlock.first > 1,
+    downCursor: E2E_RANKING_DOWN_CURSOR,
+    hasMoreDown: true,
   };
 }
 
@@ -370,6 +452,12 @@ export function buildE2EUserScores(username) {
       total_score: selectedRow.totalScore,
       total_hide_score: selectedRow.hideScore,
       total_guess_score: selectedRow.guessScore,
+      total_point_guess_score: selectedRow.total_point_guess_score,
+      total_shape_guess_score: selectedRow.total_shape_guess_score,
+      total_point_hide_score: selectedRow.total_point_hide_score,
+      total_shape_hide_score: selectedRow.total_shape_hide_score,
+      point_score: selectedRow.point_score,
+      shape_score: selectedRow.shape_score,
     },
     hide_info: {
       hide_count: selectedRow.hideWaldoCreatedCount,

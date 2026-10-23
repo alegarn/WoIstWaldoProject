@@ -106,6 +106,7 @@
     "loadingTable": "Caricamento della tabella di classifica...",
     "userNotFound": "Utente non trovato",
     "noScoresForUser": "Nessun punteggio trovato per {{name}}.",
+    "empty": "Ancora nessun punteggio per questo periodo.",
     "scoresUnavailable": "Punteggi non disponibili",
     "detailsUnavailable": "Impossibile caricare i punteggi dettagliati di {{name}}.",
     "complementaryTitle": "Punteggi complementari di {{name}}",
@@ -114,6 +115,18 @@
     "totalGuessScore": "Punteggio totale indovinelli: {{value}}",
     "hiddenCount": "Numero di immagini nascoste: {{value}}",
     "guessedCount": "Numero di immagini indovinate: {{value}}",
+    "pointScore": "Punteggio punti: {{value}}",
+    "contourScore": "Punteggio contorno: {{value}}",
+    "pointGuessScore": "Punteggio indovinelli punti: {{value}}",
+    "shapeGuessScore": "Punteggio indovinelli contorno: {{value}}",
+    "pointHideScore": "Punteggio nascondino punti: {{value}}",
+    "shapeHideScore": "Punteggio nascondino contorno: {{value}}",
+    "detail": {
+      "title": "Dettagli di {{name}}",
+      "scoresTitle": "Punteggi",
+      "activityTitle": "Attività",
+      "breakdownTitle": "Dettagli"
+    },
     "authFailed": "{{message}}. Autenticazione non riuscita. Prova a riconnetterti. Non puoi ottenere una classifica.",
     "genericFailed": "{{message}}. Prova a riconnetterti. Non puoi ottenere una classifica."
   },
@@ -124,7 +137,22 @@
       "score": "Punti",
       "maxStreak": "Serie migliore",
       "others": "Altri",
-      "moreScores": "Mostra più punteggi per {{name}}"
+      "moreScores": "Mostra più punteggi per {{name}}",
+      "pointScore": "Punti",
+      "contourScore": "Punti",
+      "youAreRanked": "Sei in posizione #{{rank}}",
+      "endOfRanking": "Fine della classifica",
+      "retry": "Riprova",
+      "board": {
+        "total": "Totale",
+        "point": "Punto",
+        "shape": "Contorno"
+      },
+      "period": {
+        "all": "Tutto",
+        "week": "Questa settimana",
+        "day": "Oggi"
+      }
     },
     "uploadNotice": {
       "title": "Si nasconde lì?",
