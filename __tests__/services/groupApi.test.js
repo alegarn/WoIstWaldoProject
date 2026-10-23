@@ -506,6 +506,33 @@ describe('services/groups', () => {
       expect(config.params).toEqual({ limit: 20 });
       expect(config.params).not.toHaveProperty('board');
     });
+
+    it('fetchPrivateLeaderboard forwards the top and window params into the request config', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [], next_cursor: null, has_more: false },
+      });
+
+      await fetchPrivateLeaderboard(CONTEXT, { groupId: 'g-3', top: 3, window: 5, limit: 20 });
+
+      expect(axios.get).toHaveBeenCalledWith(
+        'https://backend.example/api/v1/private_groups/g-3/leaderboard/',
+        { headers: AUTH_HEADERS, params: { top: 3, window: 5, limit: 20 } }
+      );
+    });
+
+    it('fetchPrivateLeaderboard omits the top and window params when not provided', async () => {
+      axios.get.mockResolvedValue({
+        status: 200,
+        data: { data: [], next_cursor: null, has_more: false },
+      });
+
+      await fetchPrivateLeaderboard(CONTEXT, { groupId: 'g-3', limit: 20 });
+
+      const config = axios.get.mock.calls[0][1];
+      expect(config.params).not.toHaveProperty('top');
+      expect(config.params).not.toHaveProperty('window');
+    });
   });
 
   describe('groupUploadApi', () => {

@@ -445,32 +445,60 @@ describe('e2eMode helpers', () => {
       expect(shapeEnvelope.rows).toEqual(totalEnvelope.rows);
     });
 
-    it('returns a deterministic smaller window and adjusted me rank per period', () => {
+    it('returns a deterministic me-anchored composition per period (plan 06 shim)', () => {
       const allEnvelope = buildE2ERankingResponse({ period: 'all' });
       const defaultEnvelope = buildE2ERankingResponse();
       const weekEnvelope = buildE2ERankingResponse({ period: 'week' });
       const dayEnvelope = buildE2ERankingResponse({ period: 'day' });
 
       expect(allEnvelope).toEqual(defaultEnvelope);
-      expect(weekEnvelope.rows).toHaveLength(3);
-      expect(dayEnvelope.rows).toHaveLength(2);
+      expect(allEnvelope.rows.map((row) => Number(row.rank))).toEqual([1, 2, 3, 10, 11, 12, 13, 14]);
+      expect(weekEnvelope.rows.map((row) => Number(row.rank))).toEqual([1, 2, 3, 5, 6, 7]);
+      expect(dayEnvelope.rows.map((row) => Number(row.rank))).toEqual([1, 2, 3]);
       expect(weekEnvelope.rows).not.toEqual(allEnvelope.rows);
 
       [allEnvelope, weekEnvelope, dayEnvelope].forEach((envelope) => {
         envelope.rows.forEach((row) => {
           expect(row.user_id).toMatch(/^e2e-user-/);
           expect(row.total_score).toBe(row.point_score + row.shape_score);
+          expect(row.score).toBe(row.total_score);
         });
       });
 
-      expect(allEnvelope.me.rank).toBe(3);
-      expect(weekEnvelope.me.rank).toBe(2);
-      expect(dayEnvelope.me.rank).toBe(1);
-      expect(weekEnvelope.me).toEqual({ ...allEnvelope.me, rank: 2 });
+      expect(allEnvelope.me.rank).toBe(12);
+      expect(weekEnvelope.me.rank).toBe(6);
+      expect(dayEnvelope.me.rank).toBe(2);
+      expect(weekEnvelope.me).toEqual({ ...allEnvelope.me, rank: 6 });
+    });
+
+    it('anchors the initial envelope with a next cursor and has_more for continued scrolling', () => {
+      const envelope = buildE2ERankingResponse({ period: 'all' });
+
+      expect(envelope.nextCursor).toBe('e2e-cursor-next');
+      expect(envelope.hasMore).toBe(true);
+    });
+
+    it('serves rank-less continuation rows below the me-block for the anchored cursor', () => {
+      const initial = buildE2ERankingResponse({ period: 'all' });
+      const envelope = buildE2ERankingResponse({ period: 'all', after: 'e2e-cursor-next' });
+
+      expect(envelope.nextCursor).toBeNull();
+      expect(envelope.hasMore).toBe(false);
+      expect(envelope.rows.length).toBeGreaterThan(0);
+      envelope.rows.forEach((row) => {
+        expect(row).not.toHaveProperty('rank');
+        expect(row.user_id).toMatch(/^e2e-user-/);
+        expect(row.total_score).toBe(row.point_score + row.shape_score);
+      });
+
+      const initialIds = new Set(initial.rows.map((row) => row.user_id));
+      envelope.rows.forEach((row) => {
+        expect(initialIds.has(row.user_id)).toBe(false);
+      });
     });
 
     it('exposes the me payload in every e2e ranking envelope', () => {
-      const me = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 3 };
+      const me = { user_id: 'e2e-user', username: 'e2e_user', total_score: 50, rank: 12 };
 
       expect(buildE2ERankingResponse().me).toEqual(me);
       expect(buildE2ERankingResponse({ page: 2 }).me).toEqual(me);

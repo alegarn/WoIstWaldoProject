@@ -123,7 +123,7 @@ export async function getRankingData(context, { scope, top, window, page, after,
     if (after) {
       return fetchPrivateLeaderboardNext(context, { groupId: scope.groupId, after, limit, board });
     }
-    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, limit, board });
+    return fetchPrivateLeaderboard(context, { groupId: scope.groupId, top, window, limit, board });
   }
 
   const { token, uid, expiry, access_token, client, userId } = await getBackendHeaders(context);
@@ -154,8 +154,8 @@ export async function getRankingData(context, { scope, top, window, page, after,
       if (payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) && payload.data.rows) {
         normalized = {
           rows: payload.data.rows,
-          nextCursor: null,
-          hasMore: false,
+          nextCursor: payload.data.next_cursor ?? null,
+          hasMore: payload.data.has_more ?? false,
           me: payload.data.me || null,
           meta: payload.data.meta || null,
           pagy: null,

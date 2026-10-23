@@ -320,8 +320,8 @@ export function buildE2EGuessCardFromPayload(payload, { listId = 1 } = {}) {
   return card;
 }
 
-export function buildE2ERankingRows() {
-  return DUMMY_RANKING.scoresDatum.slice(0, 10).map((row) => ({
+export function buildE2ERankingRows(count = 10) {
+  return DUMMY_RANKING.scoresDatum.slice(0, count).map((row) => ({
     rank: String(row.rank),
     username: row.name,
     total_score: row.totalScore,
@@ -335,33 +335,43 @@ export function buildE2ERankingRows() {
   }));
 }
 
-// Plan-05 D6: the e2e shim is period-aware so the chips visibly change data.
-// Shorter windows expose fewer ranked rows and a better "me" rank — all
-// deterministic, no randomness.
-const E2E_RANKING_PERIOD_ROW_COUNTS = { all: 5, week: 3, day: 2 };
-const E2E_RANKING_PERIOD_ME_RANKS = { all: 3, week: 2, day: 1 };
+// Plan-06 D4 shim: deterministic me-anchored composition. Top 3 head block,
+// me-neighborhood far below (all/week exercise the rank-gap separator; day
+// keeps me inside the top block), anchored cursor continues below the
+// me-block with rank-less rows the client renumbers. All deterministic.
+const E2E_RANKING_TOP = 3;
+const E2E_RANKING_CURSOR_FIRST_RANK = 15;
+const E2E_RANKING_PERIOD_ME_RANKS = { all: 12, week: 6, day: 2 };
+const E2E_RANKING_PERIOD_ME_BLOCKS = {
+  all: { first: 10, last: 14 },
+  week: { first: 5, last: 7 },
+  day: { first: 1, last: 3 },
+};
 
 export function buildE2ERankingResponse({ after, limit, scope, page, board, period } = {}) {
-  const periodRowCount = E2E_RANKING_PERIOD_ROW_COUNTS[period] ?? E2E_RANKING_PERIOD_ROW_COUNTS.all;
-  const periodMeRank = E2E_RANKING_PERIOD_ME_RANKS[period] ?? E2E_RANKING_PERIOD_ME_RANKS.all;
-  const me = { ...E2E_RANKING_ME, rank: periodMeRank };
-  const allRows = buildE2ERankingRows();
+  const meBlock = E2E_RANKING_PERIOD_ME_BLOCKS[period] ?? E2E_RANKING_PERIOD_ME_BLOCKS.all;
+  const meRank = E2E_RANKING_PERIOD_ME_RANKS[period] ?? E2E_RANKING_PERIOD_ME_RANKS.all;
+  const me = { ...E2E_RANKING_ME, rank: meRank };
+  const allRows = buildE2ERankingRows(20);
+  const withScore = (rows) => rows.map((row) => ({ ...row, score: row.total_score }));
 
   if (page) {
     return {
-      rows: allRows,
+      rows: withScore(allRows.slice(0, 10)),
       nextCursor: null,
       hasMore: false,
       me,
       meta: null,
-      pagy: { count: allRows.length, pages: 1, page: 1 },
+      pagy: { count: 10, pages: 1, page: 1 },
     };
   }
 
   if (after) {
     return {
-      rows: allRows.slice(5),
-      nextCursor: 'e2e-cursor-next',
+      rows: allRows
+        .slice(E2E_RANKING_CURSOR_FIRST_RANK - 1)
+        .map(({ rank, ...row }) => row),
+      nextCursor: null,
       hasMore: false,
       me,
       meta: null,
@@ -369,12 +379,17 @@ export function buildE2ERankingResponse({ after, limit, scope, page, board, peri
     };
   }
 
+  const topRows = allRows.slice(0, E2E_RANKING_TOP);
+  const meBlockRows = allRows
+    .slice(meBlock.first - 1, meBlock.last)
+    .filter((row) => Number(row.rank) > E2E_RANKING_TOP);
+
   return {
-    rows: allRows.slice(0, periodRowCount),
+    rows: withScore([...topRows, ...meBlockRows]),
     me,
-    meta: { top: 3, window: 2 },
-    nextCursor: null,
-    hasMore: false,
+    meta: { top: E2E_RANKING_TOP, window: 2 },
+    nextCursor: 'e2e-cursor-next',
+    hasMore: true,
     pagy: null,
   };
 }

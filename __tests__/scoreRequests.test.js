@@ -291,6 +291,38 @@ describe('scoreRequests utilities', () => {
     });
   });
 
+  it('normalizes next_cursor and has_more out of the initial envelope for anchored scrolling (plan 06 D1)', async () => {
+    axios.get.mockResolvedValue({
+      status: 200,
+      data: {
+        data: {
+          rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+          me: { user_id: 'u9', username: 'me_user', total_score: 10, rank: 21 },
+          meta: { top: 3, window: 2 },
+          next_cursor: 'anchor-1',
+          has_more: true,
+        },
+      },
+    });
+
+    const response = await getRankingData(
+      { token: 'Bearer token' },
+      { scope: 'initial', top: 3, window: 5, limit: 20 }
+    );
+
+    expect(response).toEqual({
+      status: 200,
+      data: {
+        rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+        nextCursor: 'anchor-1',
+        hasMore: true,
+        me: { user_id: 'u9', username: 'me_user', total_score: 10, rank: 21 },
+        meta: { top: 3, window: 2 },
+        pagy: null,
+      },
+    });
+  });
+
   it('forwards board and limit to the public ranking params', async () => {
     axios.get.mockResolvedValue({
       status: 200,
@@ -358,13 +390,13 @@ describe('scoreRequests utilities', () => {
   });
 
   describe('private scope leaderboard forwarding', () => {
-    it('forwards board and limit to fetchPrivateLeaderboard on the initial private fetch', async () => {
+    it('forwards board, limit, top and window to fetchPrivateLeaderboard on the initial private fetch', async () => {
       fetchPrivateLeaderboard.mockResolvedValue({ status: 200, data: { rows: [], nextCursor: null, hasMore: false } });
 
       const context = { token: 'Bearer token' };
-      await getRankingData(context, { scope: { kind: 'private', groupId: 'g-9' }, board: 'point', limit: 20 });
+      await getRankingData(context, { scope: { kind: 'private', groupId: 'g-9' }, board: 'point', limit: 20, top: 3, window: 5 });
 
-      expect(fetchPrivateLeaderboard).toHaveBeenCalledWith(context, { groupId: 'g-9', board: 'point', limit: 20 });
+      expect(fetchPrivateLeaderboard).toHaveBeenCalledWith(context, { groupId: 'g-9', board: 'point', limit: 20, top: 3, window: 5 });
       expect(fetchPrivateLeaderboardNext).not.toHaveBeenCalled();
     });
 

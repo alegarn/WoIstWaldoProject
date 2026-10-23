@@ -148,7 +148,7 @@ describe('RankingScreen', () => {
 
     expect(getRankingData).toHaveBeenCalledWith(
       contextValue,
-      { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
+      { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'all' }
     );
     const data = getTableProps().data;
     expect(data.board).toBe('total');
@@ -552,10 +552,13 @@ describe('RankingScreen', () => {
     });
 
     const tableScores = getTableProps().data.tableScores;
+    // Pin updated (plan 06 D5): dedupe now runs before renumbering, so bob
+    // takes the contiguous rank 3 instead of the gap-rank 4 the old
+    // mode-gated post-renumber dedupe produced.
     expect(tableScores).toEqual([
       { rank: 1, name: 'waldo', score: 100, maxStreak: 0, others: '', userId: 'u1', total_score: 100 },
       { rank: 2, name: 'odile', score: 80, maxStreak: 0, others: '', userId: 'u2', total_score: 80 },
-      { rank: 4, name: 'bob', score: 60, maxStreak: 0, others: '', userId: 'u3', total_score: 60 },
+      { rank: 3, name: 'bob', score: 60, maxStreak: 0, others: '', userId: 'u3', total_score: 60 },
     ]);
   });
 
@@ -735,7 +738,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         3,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point', period: 'all' }
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'point', period: 'all' }
       );
 
       expect(getTableProps().data.tableScores).toEqual([
@@ -853,7 +856,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         2,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'all' }
       );
       expect(getTableProps().data.tableScores).toEqual([
         { rank: 1, name: 'waldo', score: 120, maxStreak: 0, others: '', userId: 'u1', total_score: 120 },
@@ -915,7 +918,7 @@ describe('RankingScreen', () => {
       });
       expect(getRankingData).toHaveBeenCalledWith(
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'all' }
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'all' }
       );
     });
 
@@ -947,7 +950,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         2,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'total', period: 'week' }
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'week' }
       );
       expect(getTableProps().data.board).toBe('total');
       expect(getTableProps().data.tableScores).toEqual([
@@ -1127,6 +1130,235 @@ describe('RankingScreen', () => {
     });
   });
 
+  describe('me-anchored composition (plan 06)', () => {
+    const gapRows = [
+      { rank: '1', username: 'gold', total_score: 300, user_id: 'u1' },
+      { rank: '2', username: 'silver', total_score: 290, user_id: 'u2' },
+      { rank: '3', username: 'bronze', total_score: 280, user_id: 'u3' },
+      { rank: '8', username: 'above', total_score: 60, user_id: 'u8' },
+      { rank: '9', username: 'me_user', total_score: 50, user_id: 'u9' },
+      { rank: '10', username: 'below', total_score: 40, user_id: 'u10' },
+    ];
+    const mePayload = { user_id: 'u9', username: 'me_user', total_score: 50, rank: 9 };
+
+    it('requests the anchored top 3 window instead of the legacy top 10', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: gapRows, nextCursor: null, hasMore: false, me: mePayload },
+      });
+
+      await renderScreen();
+
+      expect(getRankingData).toHaveBeenCalledWith(
+        contextValue,
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'all' }
+      );
+    });
+
+    it('inserts a separator pseudo-row when a rank gap opens between the top block and the me-block', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: gapRows, nextCursor: null, hasMore: false, me: mePayload },
+      });
+
+      await renderScreen();
+
+      const tableScores = getTableProps().data.tableScores;
+      expect(tableScores.filter((row) => row.separator)).toEqual([{ separator: true }]);
+      expect(tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([1, 2, 3, 'sep', 8, 9, 10]);
+    });
+
+    it('keeps rows contiguous without a separator when me sits within the top block', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: {
+          rows: [
+            { rank: '1', username: 'gold', total_score: 300, user_id: 'u1' },
+            { rank: '2', username: 'me_user', total_score: 50, user_id: 'u9' },
+            { rank: '3', username: 'bronze', total_score: 280, user_id: 'u3' },
+            { rank: '4', username: 'fourth', total_score: 270, user_id: 'u4' },
+          ],
+          nextCursor: null,
+          hasMore: false,
+          me: { user_id: 'u9', username: 'me_user', total_score: 50, rank: 2 },
+        },
+      });
+
+      await renderScreen();
+
+      const tableScores = getTableProps().data.tableScores;
+      expect(tableScores.some((row) => row.separator)).toBe(false);
+      expect(tableScores.map((row) => row.rank)).toEqual([1, 2, 3, 4]);
+    });
+
+    it('renders rows flat when the payload has no me entry', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: gapRows, nextCursor: null, hasMore: false, me: null },
+      });
+
+      await renderScreen();
+
+      const tableScores = getTableProps().data.tableScores;
+      expect(tableScores.some((row) => row.separator)).toBe(false);
+      expect(tableScores.map((row) => row.rank)).toEqual([1, 2, 3, 8, 9, 10]);
+    });
+
+    it('honors a false normalized hasMore instead of forcing endless scrolling', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: gapRows, nextCursor: null, hasMore: false, me: mePayload },
+      });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+
+      expect(getRankingData).toHaveBeenCalledTimes(1);
+      expect(renderer.root.findAllByProps({ testID: 'ranking.footer.end' }).length).toBeGreaterThan(0);
+    });
+
+    it('never fires a bare cursor request when hasMore is true but nextCursor is null', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: { rows: gapRows, nextCursor: null, hasMore: true, me: mePayload },
+      });
+
+      await renderScreen();
+
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+
+      expect(getRankingData).toHaveBeenCalledTimes(1);
+      expect(getRankingData.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ top: 3, scope: 'initial' })
+      );
+      expect(getRankingData.mock.calls[0][1]).not.toHaveProperty('after');
+    });
+
+    it('renumbers cursor rows from the last resident rank so labels stay contiguous past the me-block', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [
+              { rank: '1', username: 'gold', total_score: 300, user_id: 'u1' },
+              { rank: '2', username: 'silver', total_score: 290, user_id: 'u2' },
+              { rank: '3', username: 'bronze', total_score: 280, user_id: 'u3' },
+              { rank: '20', username: 'above', total_score: 60, user_id: 'u20' },
+              { rank: '21', username: 'me_user', total_score: 50, user_id: 'u21' },
+            ],
+            nextCursor: 'anchor-1',
+            hasMore: true,
+            me: { user_id: 'u21', username: 'me_user', total_score: 50, rank: 21 },
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [
+              { username: 'chaser1', total_score: 5, user_id: 'u30' },
+              { username: 'chaser2', total_score: 4, user_id: 'u31' },
+            ],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      await renderScreen();
+
+      expect(getTableProps().data.tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([1, 2, 3, 'sep', 20, 21]);
+
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+
+      expect(getRankingData).toHaveBeenNthCalledWith(
+        2,
+        contextValue,
+        { after: 'anchor-1', limit: 20, board: 'total', period: 'all' }
+      );
+      expect(getTableProps().data.tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([
+        1, 2, 3, 'sep', 20, 21, 22, 23,
+      ]);
+    });
+
+    it('dedupes every cursor append against resident userIds, not just the first browse page', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [
+              { rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' },
+              { rank: '2', username: 'odile', total_score: 80, user_id: 'u2' },
+            ],
+            nextCursor: 'c1',
+            hasMore: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '3', username: 'bob', total_score: 60, user_id: 'u3' }],
+            nextCursor: 'c2',
+            hasMore: true,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [
+              { rank: '2', username: 'odile', total_score: 80, user_id: 'u2' },
+              { rank: '3', username: 'bob', total_score: 60, user_id: 'u3' },
+              { rank: '4', username: 'eve', total_score: 40, user_id: 'u4' },
+            ],
+            nextCursor: null,
+            hasMore: false,
+          },
+        });
+
+      await renderScreen();
+
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+      await act(async () => {
+        await getTableProps().onEndReached();
+      });
+
+      const tableScores = getTableProps().data.tableScores;
+      expect(tableScores.map((row) => row.userId)).toEqual(['u1', 'u2', 'u3', 'u4']);
+      expect(new Set(tableScores.map((row) => row.userId)).size).toBe(tableScores.length);
+      expect(tableScores.map((row) => row.rank)).toEqual([1, 2, 3, 4]);
+    });
+
+    it('drops the Max Streak column for the total board on period week and widens the score cell', async () => {
+      getRankingData.mockResolvedValue({
+        status: 200,
+        data: {
+          rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+          nextCursor: null,
+          hasMore: false,
+        },
+      });
+
+      const renderer = await renderScreen();
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.week' }).props.onPress('week');
+      });
+
+      const data = getTableProps().data;
+      expect(data.columns.map((column) => column.header)).toEqual(['Rank', 'Name', 'Score', 'Others']);
+      const scoreColumn = data.columns.find((column) => column.kind === 'score');
+      expect(scoreColumn.flex).toBeGreaterThan(1);
+      expect(data.columns.some((column) => column.field === 'maxStreak')).toBe(false);
+    });
+  });
+
   describe('list footer', () => {
     it('shows a footer spinner while a cursor page is loading and an end text when hasMore is false', async () => {
       let resolveCursor;
@@ -1215,7 +1447,7 @@ describe('RankingScreen', () => {
       expect(getRankingData).toHaveBeenNthCalledWith(
         3,
         contextValue,
-        { scope: 'initial', top: 10, window: 5, limit: 20, board: 'point', period: 'all' }
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'point', period: 'all' }
       );
       expect(getTableProps().data.board).toBe('point');
       expect(getTableProps().data.tableScores).toEqual([
