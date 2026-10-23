@@ -106,6 +106,7 @@
     "loadingTable": "ランキング表を読み込み中...",
     "userNotFound": "ユーザーが見つかりません",
     "noScoresForUser": "{{name}} のスコアが見つかりません。",
+    "empty": "この期間のスコアはまだありません。",
     "scoresUnavailable": "スコアを利用できません",
     "detailsUnavailable": "{{name}} の詳細スコアを読み込めませんでした。",
     "complementaryTitle": "{{name}} の補足スコア",

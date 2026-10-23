@@ -106,6 +106,7 @@
     "loadingTable": "Ranglistentabelle wird geladen...",
     "userNotFound": "Benutzer nicht gefunden",
     "noScoresForUser": "Keine Punkte für {{name}} gefunden.",
+    "empty": "Noch keine Punkte für diesen Zeitraum.",
     "scoresUnavailable": "Punkte nicht verfügbar",
     "detailsUnavailable": "Detaillierte Punkte für {{name}} konnten nicht geladen werden.",
     "complementaryTitle": "Zusätzliche Punkte von {{name}}",

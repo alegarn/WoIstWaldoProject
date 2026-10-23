@@ -106,6 +106,7 @@
     "loadingTable": "正在加载排行榜...",
     "userNotFound": "未找到用户",
     "noScoresForUser": "未找到 {{name}} 的分数。",
+    "empty": "该时间段还没有分数。",
     "scoresUnavailable": "分数不可用",
     "detailsUnavailable": "无法加载 {{name}} 的详细分数。",
     "complementaryTitle": "{{name}} 的补充分数",

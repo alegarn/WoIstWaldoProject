@@ -106,6 +106,7 @@
     "loadingTable": "Chargement du tableau de classement...",
     "userNotFound": "Utilisateur introuvable",
     "noScoresForUser": "Aucun score trouvé pour {{name}}.",
+    "empty": "Aucun score pour cette période pour l'instant.",
     "scoresUnavailable": "Scores indisponibles",
     "detailsUnavailable": "Impossible de charger les scores détaillés de {{name}}.",
     "complementaryTitle": "Scores complémentaires de {{name}}",

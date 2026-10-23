@@ -356,7 +356,7 @@ export default function RankingScreen({ route, navigation }) {
             </View>
           ) : null}
         </ScrollView>
-        {rankingDatum || fetchError ? (
+        {fetchError || rankingDatum ? (
           <TableComponent
             key={listEpoch}
             data={rankingDatum}
@@ -366,6 +366,10 @@ export default function RankingScreen({ route, navigation }) {
             onRefresh={handleRefresh}
             refreshTint={accentColor}
           />
+        ) : slices.length > 0 ? (
+          <View style={styles.emptyState} testID="ranking.empty">
+            <Text style={styles.emptyStateText}>{t('ranking.empty')}</Text>
+          </View>
         ) : (
           <LoadingOverlay message={t('ranking.loadingTable')}/>
         )}
@@ -473,6 +477,17 @@ const styles = StyleSheet.create({
   footerEnd: {
     color: 'rgba(255, 255, 255, 0.55)',
     fontSize: 12,
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyStateText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    textAlign: 'center',
+    fontSize: 14,
   },
   detailBody: {
     width: '100%',

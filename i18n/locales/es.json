@@ -106,6 +106,7 @@
     "loadingTable": "Cargando tabla de clasificación...",
     "userNotFound": "Usuario no encontrado",
     "noScoresForUser": "No se encontraron puntuaciones para {{name}}.",
+    "empty": "Aún no hay puntuaciones para este período.",
     "scoresUnavailable": "Puntuaciones no disponibles",
     "detailsUnavailable": "No se pudieron cargar las puntuaciones detalladas de {{name}}.",
     "complementaryTitle": "Puntuaciones complementarias de {{name}}",

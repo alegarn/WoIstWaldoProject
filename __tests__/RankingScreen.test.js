@@ -1397,6 +1397,44 @@ describe('RankingScreen', () => {
     });
   });
 
+  describe('empty ranking state', () => {
+    it('shows the empty-state message instead of a stuck loading overlay when a period has no scores', async () => {
+      getRankingData
+        .mockResolvedValueOnce({
+          status: 200,
+          data: {
+            rows: [{ rank: '1', username: 'waldo', total_score: 100, user_id: 'u1' }],
+            nextCursor: null,
+            hasMore: false,
+          },
+        })
+        .mockResolvedValueOnce({
+          status: 200,
+          data: { rows: [], nextCursor: null, hasMore: false, me: null },
+        });
+
+      const renderer = await renderScreen();
+
+      const overlayCallsBeforeSwitch = mockLoadingOverlay.mock.calls.length;
+
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'ranking.screen.period.day' }).props.onPress('day');
+      });
+
+      expect(getRankingData).toHaveBeenNthCalledWith(
+        2,
+        contextValue,
+        { scope: 'initial', top: 3, window: 5, limit: 20, board: 'total', period: 'day' }
+      );
+
+      expect(renderer.root.findAllByProps({ testID: 'ranking.footer.error' })).toHaveLength(0);
+      const texts = renderer.root.findAll((node) => typeof node.props.children === 'string');
+      expect(texts.map((node) => node.props.children)).toContain('No scores for this period yet.');
+
+      expect(mockLoadingOverlay.mock.calls.length).toBe(overlayCallsBeforeSwitch + 1);
+    });
+  });
+
   describe('stale in-flight fetches (request epoch guard)', () => {
     it('discards a stale cursor response when the board is switched mid-flight', async () => {
       let resolveCursor;

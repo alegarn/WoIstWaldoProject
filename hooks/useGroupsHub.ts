@@ -53,19 +53,34 @@ function snapshotDataFor(snapshot: HubSnapshot | null | undefined, identityKey: 
     : null;
 }
 
+// Last-resort text for an unloggable failure value; JSON.stringify returns
+// undefined for null/undefined input and throws on circular structures.
+function safeStringify(value: unknown): string {
+  if (value == null) return 'unknown';
+  try {
+    return JSON.stringify(value) ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 // Never logs token/userId values — only whether an identityKey was present.
 function warnFetchFailed(errorOrResponse: unknown, attempts: number, hasIdentity: boolean) {
   const candidate = (errorOrResponse ?? {}) as HubResponse & {
     message?: string;
-    data?: { message?: string } | null;
+    data?: { message?: string; error?: string } | null;
   };
+  const message = (
+    candidate.message
+    ?? candidate.data?.message
+    ?? candidate.data?.error
+    ?? (typeof errorOrResponse === 'string' ? errorOrResponse : null)
+    ?? (candidate.status != null ? `HTTP ${candidate.status}` : null)
+    ?? safeStringify(errorOrResponse)
+  ).slice(0, 200);
   console.warn('[useGroupsHub] groups fetch failed', {
     status: candidate.status ?? null,
-    message: (
-      candidate.data?.message
-      ?? candidate.message
-      ?? String(errorOrResponse ?? 'unknown')
-    ).slice(0, 200),
+    message,
     attempts,
     identityKey: hasIdentity ? 'present' : 'empty',
   });
