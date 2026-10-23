@@ -62,6 +62,8 @@ import { getRankingData, getUserScores } from '../utils/scoreRequests';
 import { GlobalStyle } from '../constants/theme';
 import { getPrivateGroupTheme } from '../utils/privateGroupTheme';
 
+const rankSeq = (rows) => rows.map((row) => (row.separator ? 'sep' : row.rank));
+
 describe('RankingScreen', () => {
   const contextValue = {
     token: 'token',
@@ -1244,7 +1246,7 @@ describe('RankingScreen', () => {
         contextValue,
         { after: 'up-c1', direction: 'up', limit: 20, board: 'total', period: 'all' }
       );
-      expect(getTableProps().data.tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([
+      expect(rankSeq(getTableProps().data.tableScores)).toEqual([
         2, 3, 4, 'sep', 10, 11, 12, 13, 14,
       ]);
     });
@@ -1333,7 +1335,7 @@ describe('RankingScreen', () => {
 
       await renderScreen();
 
-      expect(getTableProps().data.tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([20, 21]);
+      expect(rankSeq(getTableProps().data.tableScores)).toEqual([20, 21]);
 
       await act(async () => {
         await getTableProps().onEndReached();
@@ -1344,7 +1346,7 @@ describe('RankingScreen', () => {
         contextValue,
         { after: 'anchor-1', direction: 'down', limit: 20, board: 'total', period: 'all' }
       );
-      expect(getTableProps().data.tableScores.map((row) => (row.separator ? 'sep' : row.rank))).toEqual([
+      expect(rankSeq(getTableProps().data.tableScores)).toEqual([
         20, 21, 22, 23,
       ]);
     });
@@ -1431,7 +1433,6 @@ describe('RankingScreen', () => {
       return rows;
     }
 
-    const rankSeq = (rows) => rows.map((row) => (row.separator ? 'sep' : row.rank));
     const v3Window = (overrides = {}) => ({
       rows: rankRange(45, 51, 'me'),
       me: { user_id: 'u48', username: 'me48', total_score: 952, rank: 48 },
@@ -1465,7 +1466,7 @@ describe('RankingScreen', () => {
       await act(async () => {
         await getTableProps().onStartReached();
       });
-      expect(rankSeq(getTableProps().data.tableScores)).toEqual([...rankRange(25, 51, 'x').map((r) => r.rank)]);
+      expect(rankSeq(getTableProps().data.tableScores)).toEqual(Array.from({ length: 27 }, (_, i) => i + 25));
 
       await act(async () => {
         await getTableProps().onStartReached();
