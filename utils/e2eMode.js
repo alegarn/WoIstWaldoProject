@@ -352,14 +352,22 @@ const E2E_RANKING_PERIOD_ME_BLOCKS = {
 const E2E_RANKING_UP_CURSOR = 'e2e-cursor-up';
 const E2E_RANKING_DOWN_CURSOR = 'e2e-cursor-down';
 
+function e2eRankingRowSuffix(rank) {
+  return rank > DUMMY_RANKING.scoresDatum.length ? `-${rank}` : '';
+}
+
+function e2eRankingUserId(rank) {
+  return `e2e-user-${(rank - 1) % DUMMY_RANKING.scoresDatum.length}${e2eRankingRowSuffix(rank)}`;
+}
+
 function e2eRankingRowAt(rank) {
   const source = DUMMY_RANKING.scoresDatum[(rank - 1) % DUMMY_RANKING.scoresDatum.length];
-  const suffix = rank > DUMMY_RANKING.scoresDatum.length ? `-${rank}` : '';
+  const suffix = e2eRankingRowSuffix(rank);
   return {
     rank,
     username: `${source.name}${suffix}`,
     total_score: source.totalScore,
-    user_id: `e2e-user-${(rank - 1) % DUMMY_RANKING.scoresDatum.length}${suffix}`,
+    user_id: e2eRankingUserId(rank),
     total_point_guess_score: source.total_point_guess_score,
     total_shape_guess_score: source.total_shape_guess_score,
     total_point_hide_score: source.total_point_hide_score,

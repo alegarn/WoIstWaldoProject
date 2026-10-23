@@ -153,24 +153,24 @@ export async function getRankingData(context, { scope, top, window, page, after,
       let normalized;
       const initialData = payload.data && typeof payload.data === 'object' && !Array.isArray(payload.data) ? payload.data : null;
 
-      if (initialData && initialData.rows && (initialData.up_cursor !== undefined || initialData.down_cursor !== undefined)) {
+      if (initialData && initialData.rows) {
+        const isBidirectional = initialData.up_cursor !== undefined || initialData.down_cursor !== undefined;
         normalized = {
           rows: initialData.rows,
           me: initialData.me || null,
-          upCursor: initialData.up_cursor ?? null,
-          hasMoreUp: initialData.has_more_up ?? false,
-          downCursor: initialData.down_cursor ?? null,
-          hasMoreDown: initialData.has_more_down ?? false,
           meta: initialData.meta || null,
-        };
-      } else if (initialData && initialData.rows) {
-        normalized = {
-          rows: payload.data.rows,
-          nextCursor: payload.data.next_cursor ?? null,
-          hasMore: payload.data.has_more ?? false,
-          me: payload.data.me || null,
-          meta: payload.data.meta || null,
-          pagy: null,
+          ...(isBidirectional
+            ? {
+                upCursor: initialData.up_cursor ?? null,
+                hasMoreUp: initialData.has_more_up ?? false,
+                downCursor: initialData.down_cursor ?? null,
+                hasMoreDown: initialData.has_more_down ?? false,
+              }
+            : {
+                nextCursor: initialData.next_cursor ?? null,
+                hasMore: initialData.has_more ?? false,
+                pagy: null,
+              }),
         };
       } else if (payload.next_cursor !== undefined) {
         normalized = {
