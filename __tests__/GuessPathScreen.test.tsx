@@ -454,6 +454,67 @@ describe('GuessPathScreen', () => {
     });
   });
 
+  it('threads the owned-group qualifying_member_count into the active-group snapshot', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-1', role: 'owner', member_count: 6, qualifying_member_count: 7 }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1')!;
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
+      language: 'any',
+      mode: 'any',
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: {
+        isOwnedByViewer: true,
+        memberCount: 6,
+        locked: false,
+        qualifyingMemberCount: 7,
+      },
+    });
+  });
+
+  it('does not fabricate qualifying_member_count on the snapshot for joined groups', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [],
+        joined: [{ id: 'g-1', role: 'member', member_count: 4 }],
+      },
+      refresh: jest.fn(),
+    });
+    emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1')!;
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    const params = navigation.navigate.mock.calls[0][1] as {
+      activeGroup?: Record<string, unknown> | null;
+    };
+    expect(params.activeGroup).toEqual({
+      isOwnedByViewer: false,
+      memberCount: 4,
+      locked: false,
+    });
+    expect(params.activeGroup).not.toHaveProperty('qualifyingMemberCount');
+  });
+
   it('does not navigate to GuessFeedScreen and shows the lock alert when the private group is locked', async () => {
     mockUseGroupsHub.mockReturnValue({
       data: {

@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # DEVICE-LEVEL WIRING SMOKE for `result.button.next` ("Next Card") when the guess
 # session was entered via a SPECIFIC category (here: nature), instead of the

@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Shape-mode guess success flow. Assumes the app is already launched, connected
 # to Metro, logged in, and sitting on HomeScreen. Run auth-boot-login.yml ONCE

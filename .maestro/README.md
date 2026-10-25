@@ -130,6 +130,6 @@ maestro test .maestro/private-manage-mode-smoke.yml
 maestro test .maestro/private-category-delete.yml
 ```
 
-The Android app id is `com.alegarn.WoIstWaldoProject`.
+The Android app id is `com.AlG.HiddenInPlainSight`.
 
 Deterministic mode stubs image upload, ranking, score updates, and guess-card data, but auth still uses the configured backend. The recommended coverage path is login-only with a reusable non-production account so Maestro does not bloat the backend with new signup records.

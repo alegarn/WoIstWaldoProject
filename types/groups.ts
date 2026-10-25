@@ -19,6 +19,7 @@ export type Group = {
   primary_color?: string | null;
   secondary_color?: string | null;
   member_count?: number | null;
+  qualifying_member_count?: number;
   locked?: boolean | null;
   owner_id?: string | null;
   joining_code?: string | null;

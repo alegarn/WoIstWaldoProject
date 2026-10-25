@@ -16,7 +16,7 @@
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos.",
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos."
       },
-      "bundleIdentifier": "com.alegarn.WoIstWaldoProject",
+      "bundleIdentifier": "com.AlG.HiddenInPlainSight",
       "config": {
         "usesNonExemptEncryption": false
       }
@@ -29,7 +29,7 @@
       "permissions": [
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
-      "package": "com.alegarn.WoIstWaldoProject"
+      "package": "com.AlG.HiddenInPlainSight"
     },
     "web": {
       "favicon": "./assets/logo.png"

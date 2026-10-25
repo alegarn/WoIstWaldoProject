@@ -3,7 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { consumeAdSlot as resolveAdSlot } from '../utils/adCadence';
 import type { AdScope, ConsumeAdSlotResult } from '../utils/adCadence';
 import { shouldSuppressAds, type ActiveGroupAdContext } from '../services/billing/adPolicy';
-import type { AuthContextLike } from '../services/billing/entitlements';
+import { isFlagExplicitlyOn, type AuthContextLike } from '../services/billing/entitlements';
 import { isE2EMode } from '../utils/e2eMode';
 import type { AdSource } from '../services/ads/AdSource';
 
@@ -35,6 +35,8 @@ export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseA
     paidTier: authContext?.paidTier ?? 0,
     scope: policyScope,
     activeGroup: policyScope === 'private' ? activeGroup ?? null : null,
+    earnedAdFree: isFlagExplicitlyOn(authContext?.earnedAdFree),
+    earnedPremium: isFlagExplicitlyOn(authContext?.earnedPremium),
   });
   const isE2E = isE2EMode();
 

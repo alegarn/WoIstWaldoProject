@@ -302,6 +302,8 @@ describe('AuthContextProvider', () => {
         paidExpiresAt: null,
         isGroupOwner: true,
         activeGroupId: 'g1',
+        earnedAdFree: false,
+        earnedPremium: false,
       });
     } finally {
       jest.useRealTimers();
@@ -431,6 +433,118 @@ describe('AuthContextProvider', () => {
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  it('authenticates and persists the earned ad flags alongside the paid fields', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+        earnedAdFree: true,
+        earnedPremium: true,
+      });
+    });
+
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedAdFree', JSON.stringify(true));
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedPremium', JSON.stringify(true));
+    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedPremium).toBe(true);
+  });
+
+  it('restores the earned ad flags from persisted storage on restart and defaults absent flags to false', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+        earnedAdFree: true,
+        earnedPremium: false,
+      });
+    });
+
+    const storedValues = SecureStore.setItemAsync.mock.calls.reduce((accumulator, [key, value]) => {
+      accumulator[key] = value;
+      return accumulator;
+    }, {});
+
+    await renderProvider();
+
+    await act(async () => {
+      latestContext.restoreSession({
+        token: storedValues.token,
+        userId: storedValues.userId,
+        email: storedValues.email,
+        username: storedValues.username,
+        scoreId: storedValues.scoreId,
+        earnedAdFree: JSON.parse(storedValues.earnedAdFree),
+        earnedPremium: JSON.parse(storedValues.earnedPremium),
+      });
+    });
+
+    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedPremium).toBe(false);
+
+    await renderProvider();
+
+    await act(async () => {
+      latestContext.restoreSession({
+        token: 'Bearer restored-token',
+        userId: 'user-2',
+      });
+    });
+
+    expect(latestContext.earnedAdFree).toBe(false);
+    expect(latestContext.earnedPremium).toBe(false);
+  });
+
+  it('persists the earned ad flags through setEntitlement like the paid fields', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.setEntitlement({ earnedAdFree: true, earnedPremium: false });
+    });
+
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedAdFree', JSON.stringify(true));
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedPremium', JSON.stringify(false));
+    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedPremium).toBe(false);
+  });
+
+  it('clears the earned ad flags from memory and storage on logout', async () => {
+    await renderProvider();
+
+    await act(async () => {
+      await latestContext.authenticate({
+        token: 'Bearer token-123',
+        userId: 'user-1',
+        email: 'waldo@example.com',
+        username: 'waldo',
+        scoreId: 'score-9',
+        isTutorialFinished: false,
+        earnedAdFree: true,
+        earnedPremium: true,
+      });
+    });
+
+    await act(async () => {
+      await latestContext.logout();
+    });
+
+    expect(latestContext.earnedAdFree).toBe(false);
+    expect(latestContext.earnedPremium).toBe(false);
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('earnedAdFree');
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('earnedPremium');
   });
 
   it('does not apply an in-flight syncEntitlement response that resolves after logout', async () => {

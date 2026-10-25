@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Smoke: boot on a clean app state, verify the auth selectors, and complete a real
 # login with a non-production account.
@@ -6,7 +6,7 @@ appId: com.alegarn.WoIstWaldoProject
 # Example: maestro test .maestro/auth-boot-login.yml -e LOGIN_EMAIL=a@a.com -e LOGIN_PASSWORD=aaaaaa
 
 - launchApp:
-    appId: com.alegarn.WoIstWaldoProject
+    appId: com.AlG.HiddenInPlainSight
 - waitForAnimationToEnd
 - tapOn:
     text: Reload

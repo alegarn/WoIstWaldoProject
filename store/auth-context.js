@@ -22,6 +22,8 @@ export const AuthContext = createContext({
   isPaid: false,
   paidTier: 0,
   paidExpiresAt: null,
+  earnedAdFree: false,
+  earnedPremium: false,
   isGroupOwner: false,
   activeGroupId: null,
   isPrivateMode: false,
@@ -177,6 +179,8 @@ export default function AuthContextProvider({ children }) {
   const [isPaid, setIsPaid] = useState(false);
   const [paidTier, setPaidTier] = useState(0);
   const [paidExpiresAt, setPaidExpiresAt] = useState(null);
+  const [earnedAdFree, setEarnedAdFree] = useState(false);
+  const [earnedPremium, setEarnedPremium] = useState(false);
   const [isGroupOwner, setIsGroupOwner] = useState(false);
   const [activeGroupId, setActiveGroupIdState] = useState(null);
   const [isPrivateMode, setIsPrivateModeState] = useState(false);
@@ -215,7 +219,7 @@ export default function AuthContextProvider({ children }) {
     return { token, userId, scoreId, email, username };
   };
 
-  function restoreSession({ token, userId, email, username, scoreId, isTutorialFinished, isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId, isPrivateMode }) {
+  function restoreSession({ token, userId, email, username, scoreId, isTutorialFinished, isPaid, paidTier, paidExpiresAt, earnedAdFree, earnedPremium, isGroupOwner, activeGroupId, isPrivateMode }) {
     setAuthToken(token);
     setUserId(userId ?? '');
     setScoreId(scoreId ?? '');
@@ -225,6 +229,8 @@ export default function AuthContextProvider({ children }) {
     setIsPaid(!!isPaid);
     setPaidTier(Number.isFinite(paidTier) ? paidTier : 0);
     setPaidExpiresAt(paidExpiresAt ?? null);
+    setEarnedAdFree(!!earnedAdFree);
+    setEarnedPremium(!!earnedPremium);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(!!isPrivateMode);
@@ -254,7 +260,7 @@ export default function AuthContextProvider({ children }) {
     };
   };
 
-  async function authenticate({token, userId, email, username, isTutorialFinished, scoreId, isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId}) {
+  async function authenticate({token, userId, email, username, isTutorialFinished, scoreId, isPaid, paidTier, paidExpiresAt, earnedAdFree, earnedPremium, isGroupOwner, activeGroupId}) {
     await wipePublicGuessStorage();
 
     setAuthToken(token);
@@ -266,6 +272,8 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('isPaid', JSON.stringify(!!isPaid));
     await SecureStore.setItemAsync('paidTier', JSON.stringify(Number.isFinite(paidTier) ? paidTier : 0));
     await SecureStore.setItemAsync('paidExpiresAt', JSON.stringify(paidExpiresAt ?? null));
+    await SecureStore.setItemAsync('earnedAdFree', JSON.stringify(!!earnedAdFree));
+    await SecureStore.setItemAsync('earnedPremium', JSON.stringify(!!earnedPremium));
     await SecureStore.setItemAsync('isGroupOwner', JSON.stringify(!!isGroupOwner));
     await SecureStore.setItemAsync('activeGroupId', JSON.stringify(activeGroupId ?? null));
     await SecureStore.setItemAsync('isPrivateMode', JSON.stringify(false));
@@ -278,6 +286,8 @@ export default function AuthContextProvider({ children }) {
     setIsPaid(!!isPaid);
     setPaidTier(Number.isFinite(paidTier) ? paidTier : 0);
     setPaidExpiresAt(paidExpiresAt ?? null);
+    setEarnedAdFree(!!earnedAdFree);
+    setEarnedPremium(!!earnedPremium);
     setIsGroupOwner(!!isGroupOwner);
     setActiveGroupIdState(activeGroupId ?? null);
     setIsPrivateModeState(false);
@@ -319,6 +329,8 @@ export default function AuthContextProvider({ children }) {
     setIsPaid(false);
     setPaidTier(0);
     setPaidExpiresAt(null);
+    setEarnedAdFree(false);
+    setEarnedPremium(false);
     setIsGroupOwner(false);
     setActiveGroupIdState(null);
     setIsPrivateModeState(false);
@@ -334,6 +346,8 @@ export default function AuthContextProvider({ children }) {
       await SecureStore.deleteItemAsync('isPaid');
       await SecureStore.deleteItemAsync('paidTier');
       await SecureStore.deleteItemAsync('paidExpiresAt');
+      await SecureStore.deleteItemAsync('earnedAdFree');
+      await SecureStore.deleteItemAsync('earnedPremium');
       await SecureStore.deleteItemAsync('isGroupOwner');
       await SecureStore.deleteItemAsync('activeGroupId');
       await SecureStore.deleteItemAsync('isPrivateMode');
@@ -368,7 +382,7 @@ export default function AuthContextProvider({ children }) {
     await SecureStore.setItemAsync('username', username ?? '');
   };
 
-  async function setEntitlement({ isPaid, paidTier, paidExpiresAt, isGroupOwner, activeGroupId } = {}) {
+  async function setEntitlement({ isPaid, paidTier, paidExpiresAt, earnedAdFree, earnedPremium, isGroupOwner, activeGroupId } = {}) {
     entitlementVersionRef.current += 1;
 
     if (isPaid !== undefined) {
@@ -384,6 +398,14 @@ export default function AuthContextProvider({ children }) {
       const expiresAt = paidExpiresAt ?? null;
       setPaidExpiresAt(expiresAt);
       await SecureStore.setItemAsync('paidExpiresAt', JSON.stringify(expiresAt));
+    }
+    if (earnedAdFree !== undefined) {
+      setEarnedAdFree(!!earnedAdFree);
+      await SecureStore.setItemAsync('earnedAdFree', JSON.stringify(!!earnedAdFree));
+    }
+    if (earnedPremium !== undefined) {
+      setEarnedPremium(!!earnedPremium);
+      await SecureStore.setItemAsync('earnedPremium', JSON.stringify(!!earnedPremium));
     }
     if (isGroupOwner !== undefined) {
       setIsGroupOwner(!!isGroupOwner);
@@ -447,6 +469,8 @@ export default function AuthContextProvider({ children }) {
     isPaid: isPaid,
     paidTier: paidTier,
     paidExpiresAt: paidExpiresAt,
+    earnedAdFree: earnedAdFree,
+    earnedPremium: earnedPremium,
     isGroupOwner: isGroupOwner,
     activeGroupId: activeGroupId,
     isPrivateMode: isPrivateMode,

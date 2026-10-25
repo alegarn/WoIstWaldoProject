@@ -1,10 +1,10 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Smoke: boot on a clean app state, generate unique signup credentials, and
 # verify the account can be created without colliding with existing rows.
 
 - launchApp:
-    appId: com.alegarn.WoIstWaldoProject
+    appId: com.AlG.HiddenInPlainSight
 - waitForAnimationToEnd
 - tapOn:
     text: Reload

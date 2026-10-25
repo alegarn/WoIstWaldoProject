@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Return to HomeScreen from any authenticated screen.
 # Handles: ResultScreen, GuessScreen, GuessFeedScreen, RankingScreen,
