@@ -302,7 +302,7 @@ describe('AuthContextProvider', () => {
         paidExpiresAt: null,
         isGroupOwner: true,
         activeGroupId: 'g1',
-        earnedAdFree: false,
+        earnedGroupCreator: false,
         earnedPremium: false,
       });
     } finally {
@@ -435,7 +435,7 @@ describe('AuthContextProvider', () => {
     }
   });
 
-  it('authenticates and persists the earned ad flags alongside the paid fields', async () => {
+  it('authenticates and persists the earned rights flags alongside the paid fields', async () => {
     await renderProvider();
 
     await act(async () => {
@@ -446,18 +446,18 @@ describe('AuthContextProvider', () => {
         username: 'waldo',
         scoreId: 'score-9',
         isTutorialFinished: false,
-        earnedAdFree: true,
+        earnedGroupCreator: true,
         earnedPremium: true,
       });
     });
 
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedAdFree', JSON.stringify(true));
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedGroupCreator', JSON.stringify(true));
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedPremium', JSON.stringify(true));
-    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedGroupCreator).toBe(true);
     expect(latestContext.earnedPremium).toBe(true);
   });
 
-  it('restores the earned ad flags from persisted storage on restart and defaults absent flags to false', async () => {
+  it('restores the earned rights flags from persisted storage on restart and defaults absent flags to false', async () => {
     await renderProvider();
 
     await act(async () => {
@@ -468,7 +468,7 @@ describe('AuthContextProvider', () => {
         username: 'waldo',
         scoreId: 'score-9',
         isTutorialFinished: false,
-        earnedAdFree: true,
+        earnedGroupCreator: true,
         earnedPremium: false,
       });
     });
@@ -487,12 +487,12 @@ describe('AuthContextProvider', () => {
         email: storedValues.email,
         username: storedValues.username,
         scoreId: storedValues.scoreId,
-        earnedAdFree: JSON.parse(storedValues.earnedAdFree),
+        earnedGroupCreator: JSON.parse(storedValues.earnedGroupCreator),
         earnedPremium: JSON.parse(storedValues.earnedPremium),
       });
     });
 
-    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedGroupCreator).toBe(true);
     expect(latestContext.earnedPremium).toBe(false);
 
     await renderProvider();
@@ -504,24 +504,24 @@ describe('AuthContextProvider', () => {
       });
     });
 
-    expect(latestContext.earnedAdFree).toBe(false);
+    expect(latestContext.earnedGroupCreator).toBe(false);
     expect(latestContext.earnedPremium).toBe(false);
   });
 
-  it('persists the earned ad flags through setEntitlement like the paid fields', async () => {
+  it('persists the earned rights flags through setEntitlement like the paid fields', async () => {
     await renderProvider();
 
     await act(async () => {
-      await latestContext.setEntitlement({ earnedAdFree: true, earnedPremium: false });
+      await latestContext.setEntitlement({ earnedGroupCreator: true, earnedPremium: false });
     });
 
-    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedAdFree', JSON.stringify(true));
+    expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedGroupCreator', JSON.stringify(true));
     expect(SecureStore.setItemAsync).toHaveBeenCalledWith('earnedPremium', JSON.stringify(false));
-    expect(latestContext.earnedAdFree).toBe(true);
+    expect(latestContext.earnedGroupCreator).toBe(true);
     expect(latestContext.earnedPremium).toBe(false);
   });
 
-  it('clears the earned ad flags from memory and storage on logout', async () => {
+  it('clears the earned rights flags from memory and storage on logout', async () => {
     await renderProvider();
 
     await act(async () => {
@@ -532,7 +532,7 @@ describe('AuthContextProvider', () => {
         username: 'waldo',
         scoreId: 'score-9',
         isTutorialFinished: false,
-        earnedAdFree: true,
+        earnedGroupCreator: true,
         earnedPremium: true,
       });
     });
@@ -541,9 +541,9 @@ describe('AuthContextProvider', () => {
       await latestContext.logout();
     });
 
-    expect(latestContext.earnedAdFree).toBe(false);
+    expect(latestContext.earnedGroupCreator).toBe(false);
     expect(latestContext.earnedPremium).toBe(false);
-    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('earnedAdFree');
+    expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('earnedGroupCreator');
     expect(SecureStore.deleteItemAsync).toHaveBeenCalledWith('earnedPremium');
   });
 

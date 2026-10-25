@@ -10,10 +10,27 @@
 export type AuthContextLike = {
   paidTier?: number;
   token?: string | null;
-  earnedAdFree?: boolean;
+  earnedGroupCreator?: boolean;
   earnedPremium?: boolean;
 };
 
 export function isFlagExplicitlyOn(flag: unknown): boolean {
   return flag === true;
+}
+
+// Effective tier folds earned rights into the paid ladder: creator rung is
+// tier-2-equivalent, premium rung is tier-3-equivalent; paid tier never loses
+// to an earned rung. Single helper for every capability-surface consumer.
+export function effectiveTierFor({
+  paidTier,
+  earnedGroupCreator,
+  earnedPremium,
+}: {
+  paidTier?: number;
+  earnedGroupCreator?: boolean;
+  earnedPremium?: boolean;
+}): number {
+  const paid = Number.isFinite(paidTier) ? (paidTier as number) : 0;
+  const earnedTier = earnedPremium === true ? 3 : earnedGroupCreator === true ? 2 : 0;
+  return Math.max(paid, earnedTier);
 }

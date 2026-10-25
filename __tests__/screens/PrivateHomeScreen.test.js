@@ -322,6 +322,72 @@ describe('PrivateHomeScreen', () => {
       expect(Alert.alert).not.toHaveBeenCalled();
     });
 
+    it('shares directly for an earned creator at 10 members (no at-cap alert)', async () => {
+      const { navigation } = await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', joining_code: 'WALDO42', member_count: 10 }],
+          joined: [],
+        },
+        authContext: { paidTier: 0, earnedGroupCreator: true },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.share-code' }).props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(Share.share).toHaveBeenCalled();
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(navigation.navigate).not.toHaveBeenCalled();
+    });
+
+    it('unlocks background upload chips for an earned creator (no personalize paywall)', async () => {
+      const { renderer, navigation } = await renderScreen({
+        groupsData: ownerData,
+        authContext: { paidTier: 0, earnedGroupCreator: true },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.button-bg.hide.locked' })).toThrow();
+      expect(renderer.root.findByProps({ testID: 'private-home.button-bg.hide.choose' })).toBeTruthy();
+      expect(navigation.navigate).not.toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+    });
+
+    it('keeps legacy free-owner behavior when earned flags are explicitly false', async () => {
+      const { renderer, navigation } = await renderScreen({
+        groupsData: {
+          owned: [{ id: 'g-7', name: 'Waldos', role: 'owner', joining_code: 'WALDO42', member_count: 10 }],
+          joined: [],
+        },
+        authContext: { paidTier: 0, earnedGroupCreator: false, earnedPremium: false },
+      });
+
+      const headerRoot = await renderHeader(navigation);
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.share-code' }).props.onPress();
+        await Promise.resolve();
+      });
+
+      expect(Share.share).not.toHaveBeenCalled();
+      expect(Alert.alert).toHaveBeenCalledTimes(1);
+      const [title, message] = Alert.alert.mock.calls[0];
+      expect(title).toBe('Your group is full');
+      expect(message).toBe('Your group is full (10 members). Creator raises the cap to 30.');
+
+      await act(async () => {
+        headerRoot.root.findByProps({ testID: 'private-home.button.customize-colors' }).props.onPress();
+      });
+      expect(renderer.root.findByProps({ testID: 'private-home.button-bg.hide.locked' })).toBeTruthy();
+    });
+
     it('shares directly for a paid owner even at 10 members (creator cap is 30)', async () => {
       const { navigation } = await renderScreen({
         groupsData: {

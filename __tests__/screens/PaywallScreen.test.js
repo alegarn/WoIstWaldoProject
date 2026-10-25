@@ -216,7 +216,7 @@ describe('PaywallScreen', () => {
       isPaid: true,
       paidTier: 3,
       paidExpiresAt: null,
-      earnedAdFree: false,
+      earnedGroupCreator: false,
       earnedPremium: false,
     });
   });
@@ -259,7 +259,7 @@ describe('PaywallScreen', () => {
       paidExpiresAt: null,
       isGroupOwner: true,
       activeGroupId: 'group-7',
-      earnedAdFree: false,
+      earnedGroupCreator: false,
       earnedPremium: false,
     });
   });

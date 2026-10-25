@@ -110,13 +110,11 @@ describe('useAdCadence', () => {
     expect(lastConsumeCallArg().isAdFree).toBe(true);
   });
 
-  it('earned ad-free flag: passes earnedAdFree into shouldSuppressAds input and suppression stops the ad slot (tier 0, public scope)', () => {
-    mockShouldSuppressAds.mockReturnValue(true);
-
+  it('earned creator flag: never feeds shouldSuppressAds and does not stop the ad slot (tier 0, public scope)', () => {
     const { result } = renderHook(() =>
       useAdCadence({
         scope: { kind: 'public' },
-        authContext: { paidTier: 0, earnedAdFree: true },
+        authContext: { paidTier: 0, earnedGroupCreator: true },
         adSource: makeSource(true),
       }),
     );
@@ -125,8 +123,9 @@ describe('useAdCadence', () => {
 
     const policyInput = mockShouldSuppressAds.mock.calls[0][0] as Record<string, unknown>;
     expect(policyInput.paidTier).toBe(0);
-    expect(policyInput.earnedAdFree).toBe(true);
-    expect(lastConsumeCallArg().isAdFree).toBe(true);
+    expect(policyInput).not.toHaveProperty('earnedGroupCreator');
+    expect(policyInput.earnedPremium).toBe(false);
+    expect(lastConsumeCallArg().isAdFree).toBe(false);
   });
 
   it('earned premium flag: passes earnedPremium into shouldSuppressAds input (private scope, no owned group needed)', () => {
@@ -159,8 +158,8 @@ describe('useAdCadence', () => {
     result.current.consumeAdSlot();
 
     const policyInput = mockShouldSuppressAds.mock.calls[0][0] as Record<string, unknown>;
-    expect(policyInput.earnedAdFree).not.toBe(true);
-    expect(policyInput.earnedPremium).not.toBe(true);
+    expect(policyInput.earnedGroupCreator).toBeUndefined();
+    expect(policyInput.earnedPremium).toBe(false);
     expect(lastConsumeCallArg().isAdFree).toBe(false);
   });
 

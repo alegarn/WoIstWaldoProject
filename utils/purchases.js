@@ -16,7 +16,7 @@ export function entitlementToContextPayload(entitlement) {
     paidExpiresAt: entitlement.paid_expires_at,
     isGroupOwner: entitlement.is_group_owner,
     activeGroupId: entitlement.active_group_id,
-    earnedAdFree: isFlagExplicitlyOn(entitlement.earned_ad_free),
+    earnedGroupCreator: isFlagExplicitlyOn(entitlement.earned_group_creator),
     earnedPremium: isFlagExplicitlyOn(entitlement.earned_premium),
   };
 }
