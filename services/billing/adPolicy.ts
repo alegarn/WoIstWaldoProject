@@ -9,26 +9,31 @@ export type AdSuppressionInput = {
   paidTier: number;
   scope: AdScope;
   activeGroup?: ActiveGroupAdContext | null;
-  earnedAdFree?: boolean;
+  earnedGroupCreator?: boolean;
   earnedPremium?: boolean;
 };
 
 // Mirror of API `Billing::CreatorReward` thresholds (planning §5.1). Client-side
 // derivation (`earnedRewardFor`) is for display/progress only — gating truth is
-// the server's `earned_ad_free` / `earned_premium` flags; on disagreement,
-// server wins. The optional flags are tri-state: only an explicit `true`
-// suppresses; `false`/absent fall through to the purchase-derived legacy
-// branches below.
-export const CREATOR_REWARD_AD_FREE_AT = 9;
+// the server's `earned_group_creator` / `earned_premium` flags; on disagreement,
+// server wins. `earnedRewardFor` mirrors the server's two-stage ladder: the
+// cheap qualifying count drives the group-creator rung, the strict premium
+// count (absent until the server emits it) drives the premium rung.
+export const CREATOR_REWARD_GROUP_CREATOR_AT = 9;
 export const CREATOR_REWARD_PREMIUM_AT = 19;
 
-export function earnedRewardFor(qualifyingCount: number): {
-  earnedAdFree: boolean;
+export function earnedRewardFor(
+  qualifyingCount: number,
+  premiumQualifyingCount?: number
+): {
+  earnedGroupCreator: boolean;
   earnedPremium: boolean;
 } {
   return {
-    earnedAdFree: qualifyingCount >= CREATOR_REWARD_AD_FREE_AT,
-    earnedPremium: qualifyingCount >= CREATOR_REWARD_PREMIUM_AT,
+    earnedGroupCreator: qualifyingCount >= CREATOR_REWARD_GROUP_CREATOR_AT,
+    earnedPremium:
+      premiumQualifyingCount != null
+      && premiumQualifyingCount >= CREATOR_REWARD_PREMIUM_AT,
   };
 }
 
@@ -50,7 +55,7 @@ function isCreatorOwnedLargePrivateGroup(input: AdSuppressionInput): boolean {
 }
 
 function hasEarnedReward(input: AdSuppressionInput): boolean {
-  return input.earnedAdFree === true || input.earnedPremium === true;
+  return input.earnedPremium === true;
 }
 
 export function shouldSuppressAds(input: AdSuppressionInput): boolean {

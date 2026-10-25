@@ -1,5 +1,5 @@
 import {
-  CREATOR_REWARD_AD_FREE_AT,
+  CREATOR_REWARD_GROUP_CREATOR_AT,
   CREATOR_REWARD_PREMIUM_AT,
   earnedRewardFor,
   shouldSuppressAds,
@@ -67,49 +67,92 @@ describe('services/billing/adPolicy', () => {
 
 describe('earnedRewardFor', () => {
   it('grants nothing at 8 qualifying members', () => {
-    expect(earnedRewardFor(8)).toEqual({ earnedAdFree: false, earnedPremium: false });
+    expect(earnedRewardFor(8)).toEqual({ earnedGroupCreator: false, earnedPremium: false });
   });
 
-  it('grants ad-free only at 9 qualifying members', () => {
-    expect(earnedRewardFor(9)).toEqual({ earnedAdFree: true, earnedPremium: false });
+  it('grants group creator only at 9 qualifying members', () => {
+    expect(earnedRewardFor(9)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
   });
 
-  it('grants ad-free only at 18 qualifying members', () => {
-    expect(earnedRewardFor(18)).toEqual({ earnedAdFree: true, earnedPremium: false });
+  it('grants group creator only at 18 qualifying members (no premium count yet)', () => {
+    expect(earnedRewardFor(18)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
   });
 
-  it('grants both rewards at 19 qualifying members', () => {
-    expect(earnedRewardFor(19)).toEqual({ earnedAdFree: true, earnedPremium: true });
+  it('never grants premium from the cheap count alone (19 with no premium count → false)', () => {
+    expect(earnedRewardFor(19)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
+  });
+
+  it('requires the premium count to reach 19 (18 → no premium)', () => {
+    expect(earnedRewardFor(18, 18)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
+  });
+
+  it('grants both rewards at a premium count of 19', () => {
+    expect(earnedRewardFor(19, 19)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
+  });
+
+  it('grants both rewards above the premium boundary (monotonic)', () => {
+    expect(earnedRewardFor(25, 20)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
+  });
+
+  it('keeps premium false when the premium count is missing even for a huge cheap count', () => {
+    expect(earnedRewardFor(200)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
   });
 
   it('exposes the mirrored thresholds', () => {
-    expect(CREATOR_REWARD_AD_FREE_AT).toBe(9);
+    expect(CREATOR_REWARD_GROUP_CREATOR_AT).toBe(9);
     expect(CREATOR_REWARD_PREMIUM_AT).toBe(19);
   });
 });
 
 describe('shouldSuppressAds with earned flags', () => {
-  it('suppresses ads for earnedAdFree at tier 0 in public scope', () => {
-    expect(
-      shouldSuppressAds({ paidTier: 0, scope: 'public', earnedAdFree: true })
-    ).toBe(true);
-  });
-
   it('suppresses ads for earnedPremium at tier 0 in public scope', () => {
     expect(
       shouldSuppressAds({ paidTier: 0, scope: 'public', earnedPremium: true })
     ).toBe(true);
   });
 
-  it('suppresses ads for earnedAdFree in private scope without an active group', () => {
+  it('suppresses ads for earnedPremium in private scope without an active group', () => {
     expect(
-      shouldSuppressAds({ paidTier: 0, scope: 'private', earnedAdFree: true })
+      shouldSuppressAds({ paidTier: 0, scope: 'private', earnedPremium: true })
     ).toBe(true);
+  });
+
+  it('does NOT suppress ads for earnedGroupCreator only at tier 0 in public scope (D8: 9–18 band keeps ads)', () => {
+    expect(
+      shouldSuppressAds({ paidTier: 0, scope: 'public', earnedGroupCreator: true })
+    ).toBe(false);
+  });
+
+  it('does NOT suppress ads for earnedGroupCreator only in private scope without an active group', () => {
+    expect(
+      shouldSuppressAds({ paidTier: 0, scope: 'private', earnedGroupCreator: true })
+    ).toBe(false);
+  });
+
+  it('does NOT suppress ads for earnedGroupCreator only even with an owned active group context', () => {
+    expect(
+      shouldSuppressAds({
+        paidTier: 0,
+        scope: 'private',
+        earnedGroupCreator: true,
+        activeGroup: { isOwnedByViewer: true, memberCount: 6 },
+      })
+    ).toBe(false);
+  });
+
+  it('does NOT suppress ads for earnedGroupCreator only at tier 2 (creator flag never stacks with tiers)', () => {
+    expect(
+      shouldSuppressAds({
+        paidTier: 2,
+        scope: 'public',
+        earnedGroupCreator: true,
+      })
+    ).toBe(false);
   });
 
   it('keeps legacy decision when both flags are false (tier 0, public → false)', () => {
     expect(
-      shouldSuppressAds({ paidTier: 0, scope: 'public', earnedAdFree: false, earnedPremium: false })
+      shouldSuppressAds({ paidTier: 0, scope: 'public', earnedGroupCreator: false, earnedPremium: false })
     ).toBe(false);
   });
 
@@ -123,7 +166,7 @@ describe('shouldSuppressAds with earned flags', () => {
         paidTier: 2,
         scope: 'private',
         activeGroup: { isOwnedByViewer: true, memberCount: 6 },
-        earnedAdFree: false,
+        earnedGroupCreator: false,
         earnedPremium: false,
       })
     ).toBe(true);
@@ -135,7 +178,7 @@ describe('shouldSuppressAds with earned flags', () => {
         paidTier: 2,
         scope: 'private',
         activeGroup: { isOwnedByViewer: true, memberCount: 5 },
-        earnedAdFree: false,
+        earnedGroupCreator: false,
         earnedPremium: false,
       })
     ).toBe(false);
