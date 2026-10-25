@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Full login-first deterministic E2E journey using the saved hide payload bridge.
 # The app itself must already have been started or built with EXPO_PUBLIC_E2E_MODE=true.

@@ -1,4 +1,4 @@
-appId: com.alegarn.WoIstWaldoProject
+appId: com.AlG.HiddenInPlainSight
 ---
 # Public ranking period chips (plan 05 T5a, contract v3 bidirectional window).
 # Assumes the session phase already ran (auth-boot-login.yml) and the app sits
