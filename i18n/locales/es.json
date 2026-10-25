@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Reintentar actualización del plan",
       "upgrade": "Mejorar",
       "manage": "Gestionar suscripción",
-      "openSettingsFailed": "No se pudo abrir los ajustes de suscripción"
+      "openSettingsFailed": "No se pudo abrir los ajustes de suscripción",
+      "earnedCreatorBadge": "Ganado: Creator",
+      "earnedPremiumBadge": "Ganado: Equivalente a Premium (recompensa de grupo)"
     },
     "tiers": {
       "premium": {

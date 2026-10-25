@@ -94,7 +94,7 @@ describe('PaywallScreen', () => {
   it('calls Purchases.purchasePackage then syncEntitlement and routes after a tier subscribe tap', async () => {
     const navigation = { replace: jest.fn() };
     const authContext = { setEntitlement: jest.fn() };
-    const renderer = await renderScreen({ authContext, navigation, route: { params: { intent: 'create-group' } } });
+    const renderer = await renderScreen({ authContext, navigation, route: { params: { intent: 'store' } } });
 
     await act(async () => {
       const subscribeButtons = renderer.root.findAll((node) =>
@@ -108,7 +108,7 @@ describe('PaywallScreen', () => {
 
     expect(Purchases.purchasePackage).toHaveBeenCalledTimes(1);
     expect(syncEntitlement).toHaveBeenCalledTimes(1);
-    expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
+    expect(navigation.replace).toHaveBeenCalledWith('SubscriptionManagementScreen');
   });
 
   it('routes back to GroupSettingsScreen after a purchase with intent personalize-group', async () => {
@@ -273,7 +273,7 @@ describe('PaywallScreen', () => {
     const renderer = await renderScreen({
       authContext,
       navigation,
-      route: { params: { intent: 'create-group' } },
+      route: { params: { intent: 'store' } },
     });
 
     await act(async () => {
@@ -289,7 +289,7 @@ describe('PaywallScreen', () => {
     expect(syncEntitlement).toHaveBeenCalledTimes(1);
     expect(authContext.setEntitlement).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalled();
-    expect(navigation.replace).toHaveBeenCalledWith('CreateGroupScreen');
+    expect(navigation.replace).toHaveBeenCalledWith('SubscriptionManagementScreen');
 
     alertSpy.mockRestore();
   });

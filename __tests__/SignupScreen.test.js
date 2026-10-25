@@ -77,6 +77,8 @@ describe('SignupScreen', () => {
           is_paid: false,
           paid_tier: 0,
           paid_expires_at: null,
+          earned_group_creator: false,
+          earned_premium: false,
           is_group_owner: false,
           active_group_id: null,
         },
@@ -110,6 +112,8 @@ describe('SignupScreen', () => {
       isPaid: false,
       paidTier: 0,
       paidExpiresAt: null,
+      earnedGroupCreator: false,
+      earnedPremium: false,
       isGroupOwner: false,
       activeGroupId: null,
     });

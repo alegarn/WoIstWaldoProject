@@ -7,6 +7,7 @@ import Button from '../../components/UI/Button';
 import LoadingOverlay from '../../components/UI/LoadingOverlay';
 import { GlobalStyle } from '../../constants/theme';
 import { AuthContext } from '../../store/auth-context';
+import { isFlagExplicitlyOn } from '../../services/billing/entitlements';
 import {
   getPurchasesModule,
   applyEntitlementToContext,
@@ -35,6 +36,16 @@ export default function SubscriptionManagementScreen({ navigation }) {
   const [restoreError, setRestoreError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState(false);
+
+  const earnedBadgeLabel = () => {
+    if (isFlagExplicitlyOn(authContext?.earnedPremium)) {
+      return t('billing.subscription.earnedPremiumBadge');
+    }
+    if (isFlagExplicitlyOn(authContext?.earnedGroupCreator)) {
+      return t('billing.subscription.earnedCreatorBadge');
+    }
+    return null;
+  };
 
   const refreshFromBackend = useCallback(async () => {
     setRefreshing(true);
@@ -86,10 +97,18 @@ export default function SubscriptionManagementScreen({ navigation }) {
     return <LoadingOverlay message={t('billing.subscription.restoring')} />;
   }
 
+  const earnedBadge = earnedBadgeLabel();
+
   return (
     <View style={styles.container}>
       <Text style={styles.title}>{t('billing.subscription.currentPlan')}</Text>
       <Text style={styles.tier}>{tierLabel(authContext?.paidTier ?? 0)}</Text>
+
+      {earnedBadge && (
+        <Text style={styles.earnedBadge} testID="subscription-manage.earned-badge">
+          {earnedBadge}
+        </Text>
+      )}
 
       {refreshing && (
         <Text style={styles.refreshHint} testID="subscription-refresh.hint">
@@ -117,7 +136,7 @@ export default function SubscriptionManagementScreen({ navigation }) {
       )}
 
       <View style={styles.buttonGroup}>
-        {(authContext?.paidTier ?? 0) < 3 && (
+        {(authContext?.paidTier ?? 0) < 3 && !isFlagExplicitlyOn(authContext?.earnedPremium) && (
           <Button
             accessibilityLabel={t('billing.subscription.upgrade')}
             onPress={() => navigation.navigate('PaywallScreen', { intent: 'store' })}
@@ -152,6 +171,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: GlobalStyle.color.primaryColor900, padding: 20 },
   title: { color: '#fff', fontSize: 22, fontWeight: '700' },
   tier: { color: '#ffd700', fontSize: 24, marginTop: 8 },
+  earnedBadge: { color: '#cfcfcf', fontSize: 14, marginTop: 4, fontStyle: 'italic' },
   buttonGroup: {
     flex: 1,
     width: '100%',

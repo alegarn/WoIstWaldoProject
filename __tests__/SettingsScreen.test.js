@@ -295,6 +295,30 @@ describe('SettingsScreen', () => {
     expect(testIDs).not.toContain('settings.button.view-plans');
   });
 
+  it('hides the View plans CTA for a free user who earned premium via group rewards', async () => {
+    await renderScreen({ contextOverride: { paidTier: 0, earnedPremium: true } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
+    expect(testIDs).toContain('settings.button.subscription');
+  });
+
+  it('hides the View plans CTA for a tier 2 user who earned premium via group rewards', async () => {
+    await renderScreen({ contextOverride: { paidTier: 2, earnedPremium: true } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
+  });
+
+  it('shows the View plans CTA in the earned-creator band (9–18 qualifying)', async () => {
+    await renderScreen({
+      contextOverride: { paidTier: 0, earnedGroupCreator: true, earnedPremium: false },
+    });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+  });
+
   it('dev reset action calls wipePublicGuessStorage and resetServingCycles and shows success alert', async () => {
     await renderScreen();
 

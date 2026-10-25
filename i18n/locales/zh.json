@@ -616,7 +616,9 @@
       "retryRefreshLabel": "重试刷新套餐",
       "upgrade": "升级",
       "manage": "管理订阅",
-      "openSettingsFailed": "无法打开订阅设置"
+      "openSettingsFailed": "无法打开订阅设置",
+      "earnedCreatorBadge": "已获得：Creator",
+      "earnedPremiumBadge": "已获得：Premium 等同（群组奖励）"
     },
     "tiers": {
       "premium": {

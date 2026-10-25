@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Plan-Aktualisierung erneut versuchen",
       "upgrade": "Upgrade",
       "manage": "Abo verwalten",
-      "openSettingsFailed": "Abo-Einstellungen konnten nicht geöffnet werden"
+      "openSettingsFailed": "Abo-Einstellungen konnten nicht geöffnet werden",
+      "earnedCreatorBadge": "Verdient: Creator",
+      "earnedPremiumBadge": "Verdient: Premium-Äquivalent (Gruppenprämie)"
     },
     "tiers": {
       "premium": {
