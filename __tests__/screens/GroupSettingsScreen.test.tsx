@@ -441,6 +441,38 @@ describe('GroupSettingsScreen (private group)', () => {
     expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
   });
 
+  it('shows the earned creator the 30 cap and unlocks the categories panel', async () => {
+    serveHub({ owned: [OWNER_GROUP], categoryQueue: [[{ id: 'cat-1', name: 'Cats' }]] });
+    const { view } = await renderSettingsScreen({
+      authOverrides: { paidTier: 0, earnedGroupCreator: true },
+    });
+
+    const banner = view.getByTestId('group-settings.members.cap-banner');
+    const bannerText = banner
+      .findAllByType(Text)
+      .map((node) => String(node.props.children))
+      .join(' ');
+    expect(bannerText).toContain('3/30 members');
+    expect(view.queryByTestId('group-settings.members.upgrade')).toBeNull();
+    expect(view.queryByTestId('group-settings.category.locked')).toBeNull();
+    expect(view.getByTestId('group-settings.category.editor')).toBeTruthy();
+  });
+
+  it('keeps the free cap and locked categories for explicitly false earned flags', async () => {
+    serveHub({ owned: [OWNER_GROUP], categoryQueue: [[]] });
+    const { view } = await renderSettingsScreen({
+      authOverrides: { paidTier: 0, earnedGroupCreator: false, earnedPremium: false },
+    });
+
+    const banner = view.getByTestId('group-settings.members.cap-banner');
+    const bannerText = banner
+      .findAllByType(Text)
+      .map((node) => String(node.props.children))
+      .join(' ');
+    expect(bannerText).toContain('3/10 members');
+    expect(view.getByTestId('group-settings.category.locked')).toBeTruthy();
+  });
+
   it('shows the free member cap to a free owner', async () => {
     serveHub({ owned: [OWNER_GROUP], categoryQueue: [[]] });
     const { view } = await renderSettingsScreen({ authOverrides: { paidTier: 0 } });

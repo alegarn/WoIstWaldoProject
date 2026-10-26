@@ -95,4 +95,46 @@ describe('SubscriptionManagementScreen upgrade entry point', () => {
     expect(testIDs).toContain('subscription-manage.button.restore');
     expect(testIDs).toContain('subscription-manage.button.manage');
   });
+
+  it('hides the upgrade button when a free user earned premium via group rewards', async () => {
+    const { renderer } = await renderScreen({ paidTier: 0, earnedPremium: true });
+
+    const testIDs = buttonTestIDs();
+    expect(testIDs).not.toContain('subscription-manage.button.upgrade');
+    expect(testIDs).toContain('subscription-manage.button.restore');
+    expect(testIDs).toContain('subscription-manage.button.manage');
+    expect(
+      renderer.root.findByProps({ testID: 'subscription-manage.earned-badge' }).props.children
+    ).toBe('Earned: Premium-equivalent (group reward)');
+  });
+
+  it('keeps the purchase-truth tier label and shows the earned badge at earnedPremium', async () => {
+    const { renderer } = await renderScreen({ paidTier: 0, earnedPremium: true });
+
+    expect(renderer.root.findByProps({ children: 'Free' })).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ testID: 'subscription-manage.earned-badge' }).props.children
+    ).toBe('Earned: Premium-equivalent (group reward)');
+  });
+
+  it('shows the earned-creator badge in the 9–18 band and keeps the upgrade button', async () => {
+    const { renderer } = await renderScreen({
+      paidTier: 0,
+      earnedGroupCreator: true,
+      earnedPremium: false,
+    });
+
+    expect(
+      renderer.root.findByProps({ testID: 'subscription-manage.earned-badge' }).props.children
+    ).toBe('Earned: Creator');
+    expect(buttonTestIDs()).toContain('subscription-manage.button.upgrade');
+  });
+
+  it('shows no earned badge without earned flags', async () => {
+    const { renderer } = await renderScreen({ paidTier: 2 });
+
+    expect(
+      renderer.root.findAllByProps({ testID: 'subscription-manage.earned-badge' })
+    ).toHaveLength(0);
+  });
 });

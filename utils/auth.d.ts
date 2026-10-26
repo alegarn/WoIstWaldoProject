@@ -17,7 +17,7 @@ export interface StoredAuthState {
   isPaid: unknown;
   paidTier: unknown;
   paidExpiresAt: unknown;
-  earnedAdFree: unknown;
+  earnedGroupCreator: unknown;
   earnedPremium: unknown;
   isGroupOwner: unknown;
   activeGroupId: unknown;

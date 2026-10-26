@@ -490,7 +490,7 @@ describe('GuessPathScreen', () => {
     mockUseGroupsHub.mockReturnValue({
       data: {
         owned: [],
-        joined: [{ id: 'g-1', role: 'member', member_count: 4 }],
+        joined: [{ id: 'g-1', role: 'member', member_count: 4, ad_cadence_every_n_wins: 4 }],
       },
       refresh: jest.fn(),
     });
@@ -511,8 +511,41 @@ describe('GuessPathScreen', () => {
       isOwnedByViewer: false,
       memberCount: 4,
       locked: false,
+      adCadenceEveryNWins: 4,
     });
     expect(params.activeGroup).not.toHaveProperty('qualifyingMemberCount');
+  });
+
+  it('threads the member-viewed ad_cadence_every_n_wins from the hub row into GuessFeedScreen params', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [],
+        joined: [{ id: 'g-1', role: 'member', member_count: 12, ad_cadence_every_n_wins: 6 }],
+      },
+      refresh: jest.fn(),
+    });
+    emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
+
+    await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    const privateCard = getCardPropsByKey('c-1')!;
+
+    await act(async () => {
+      await privateCard.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
+      category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
+      language: 'any',
+      mode: 'any',
+      scope: { kind: 'private', groupId: 'g-1' },
+      activeGroup: {
+        isOwnedByViewer: false,
+        memberCount: 12,
+        locked: false,
+        adCadenceEveryNWins: 6,
+      },
+    });
   });
 
   it('does not navigate to GuessFeedScreen and shows the lock alert when the private group is locked', async () => {

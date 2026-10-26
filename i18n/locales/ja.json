@@ -616,7 +616,9 @@
       "retryRefreshLabel": "プランの更新を再試行",
       "upgrade": "アップグレード",
       "manage": "サブスクリプションを管理",
-      "openSettingsFailed": "サブスクリプション設定を開けませんでした"
+      "openSettingsFailed": "サブスクリプション設定を開けませんでした",
+      "earnedCreatorBadge": "獲得：クリエイター",
+      "earnedPremiumBadge": "獲得：プレミアム相当（グループ報酬）"
     },
     "tiers": {
       "premium": {

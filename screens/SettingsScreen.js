@@ -14,6 +14,7 @@ import { checkSecureStoreItem } from '../utils/auth';
 import { getPreferredLanguage, savePreferredLanguage, wipePublicGuessStorage } from '../utils/storageDatum';
 import { resetServingCycles } from '../utils/servingCycle';
 import { resolveDefaultLanguage } from '../utils/languageDefaults';
+import { isFlagExplicitlyOn } from '../services/billing/entitlements';
 import CenteredModal from '../components/UI/CenteredModal';
 import LoadingOverlay from '../components/UI/LoadingOverlay';
 
@@ -368,7 +369,7 @@ const SettingsScreen = ({ navigation }) => {
               >
                 {t('settings.manageSubscription')}
               </Button>
-              {(context?.paidTier ?? 0) < 3 && (
+              {(context?.paidTier ?? 0) < 3 && !isFlagExplicitlyOn(context?.earnedPremium) && (
                 <Button
                   accessibilityLabel={t('settings.viewPlans')}
                   mode="flat"

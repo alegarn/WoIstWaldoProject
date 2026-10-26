@@ -86,6 +86,8 @@ describe('LoginScreen', () => {
         is_paid: false,
         paid_tier: 0,
         paid_expires_at: null,
+        earned_group_creator: false,
+        earned_premium: false,
         is_group_owner: false,
         active_group_id: null,
       })
@@ -111,6 +113,8 @@ describe('LoginScreen', () => {
       isPaid: false,
       paidTier: 0,
       paidExpiresAt: null,
+      earnedGroupCreator: false,
+      earnedPremium: false,
       isGroupOwner: false,
       activeGroupId: null,
     });
@@ -128,6 +132,8 @@ describe('LoginScreen', () => {
         is_paid: true,
         paid_tier: 2,
         paid_expires_at: '2099-01-01T00:00:00Z',
+        earned_group_creator: true,
+        earned_premium: true,
         is_group_owner: true,
         active_group_id: 'group-7',
       })
@@ -148,6 +154,8 @@ describe('LoginScreen', () => {
       isPaid: true,
       paidTier: 2,
       paidExpiresAt: '2099-01-01T00:00:00Z',
+      earnedGroupCreator: true,
+      earnedPremium: true,
       isGroupOwner: true,
       activeGroupId: 'group-7',
     });

@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Tentar atualizar plano novamente",
       "upgrade": "Fazer upgrade",
       "manage": "Gerenciar assinatura",
-      "openSettingsFailed": "Não foi possível abrir as configurações de assinatura"
+      "openSettingsFailed": "Não foi possível abrir as configurações de assinatura",
+      "earnedCreatorBadge": "Conquistado: Creator",
+      "earnedPremiumBadge": "Conquistado: Equivalente a Premium (recompensa de grupo)"
     },
     "tiers": {
       "premium": {

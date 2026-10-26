@@ -7,12 +7,22 @@ export type AdSlotInput = { scope?: AdScope; isAdFree: boolean; isE2E: boolean }
 
 export type ConsumeAdSlotInput = AdSlotInput & {
   successesSinceLastAd: number;
+  everyNWins?: number;
   isSourceReady?: boolean;
 };
 
 export type ConsumeAdSlotResult = { showAd: boolean; nextCount: number };
 
 export const AD_EVERY_N_SUCCESSES = 3;
+
+// Non-positive/non-finite overrides clamp to the default so the pure machine
+// never sees an unsafe denominator.
+function resolveEveryNWins(everyNWins?: number): number {
+  if (everyNWins === undefined || !Number.isFinite(everyNWins) || everyNWins <= 0) {
+    return AD_EVERY_N_SUCCESSES;
+  }
+  return everyNWins;
+}
 
 function isE2EModeActive({ isE2E }: { isE2E: boolean }): boolean {
   return isE2E === true;
@@ -31,14 +41,21 @@ export function isAdSlotActive({ scope, isAdFree, isE2E }: AdSlotInput): boolean
 }
 
 // Pure introspection (tests + debugging). Does NOT mutate.
-export function isAdDue({ successesSinceLastAd }: { successesSinceLastAd: number }): boolean {
-  return (successesSinceLastAd + 1) >= AD_EVERY_N_SUCCESSES;
+export function isAdDue({
+  successesSinceLastAd,
+  everyNWins,
+}: {
+  successesSinceLastAd: number;
+  everyNWins?: number;
+}): boolean {
+  return (successesSinceLastAd + 1) >= resolveEveryNWins(everyNWins);
 }
 
 // Full state-machine: tick + due-check + reset-on-consume whether or not source displayed.
 // Returns { showAd: boolean, nextCount: number }.
 export function consumeAdSlot({
   successesSinceLastAd,
+  everyNWins,
   scope,
   isAdFree,
   isE2E,
@@ -50,7 +67,7 @@ export function consumeAdSlot({
 
   const nextCount = successesSinceLastAd + 1;
 
-  if (!isAdDue({ successesSinceLastAd })) {
+  if (!isAdDue({ successesSinceLastAd, everyNWins })) {
     return { showAd: false, nextCount };
   }
 

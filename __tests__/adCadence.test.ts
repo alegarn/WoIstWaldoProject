@@ -126,6 +126,139 @@ describe('utils/adCadence', () => {
     });
   });
 
+  describe('everyNWins override (default = AD_EVERY_N_SUCCESSES)', () => {
+    it('omitted override behaves as the default 3 (3rd success shows ad)', () => {
+      const result = consumeAdSlot({
+        successesSinceLastAd: 2,
+        everyNWins: undefined,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(result).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('override 4: not due on 3rd success, ad due on 4th', () => {
+      const tick = consumeAdSlot({ successesSinceLastAd: 2, everyNWins: 4, ...NO_SKIP });
+      expect(tick).toEqual({ showAd: false, nextCount: 3 });
+
+      const due = consumeAdSlot({
+        successesSinceLastAd: 3,
+        everyNWins: 4,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(due).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('override 4: resets after consume, next cycle restarts at 1/4', () => {
+      const result = consumeAdSlot({ successesSinceLastAd: 0, everyNWins: 4, ...NO_SKIP });
+      expect(result).toEqual({ showAd: false, nextCount: 1 });
+    });
+
+    it('override 6: not due on 5th success, ad due on 6th', () => {
+      const tick = consumeAdSlot({ successesSinceLastAd: 4, everyNWins: 6, ...NO_SKIP });
+      expect(tick).toEqual({ showAd: false, nextCount: 5 });
+
+      const due = consumeAdSlot({
+        successesSinceLastAd: 5,
+        everyNWins: 6,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(due).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('clamps 0 to the default 3', () => {
+      const tick = consumeAdSlot({ successesSinceLastAd: 1, everyNWins: 0, ...NO_SKIP });
+      expect(tick).toEqual({ showAd: false, nextCount: 2 });
+
+      const due = consumeAdSlot({
+        successesSinceLastAd: 2,
+        everyNWins: 0,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(due).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('clamps -1 to the default 3', () => {
+      const tick = consumeAdSlot({ successesSinceLastAd: 1, everyNWins: -1, ...NO_SKIP });
+      expect(tick).toEqual({ showAd: false, nextCount: 2 });
+
+      const due = consumeAdSlot({
+        successesSinceLastAd: 2,
+        everyNWins: -1,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(due).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('clamps NaN to the default 3', () => {
+      const tick = consumeAdSlot({ successesSinceLastAd: 1, everyNWins: NaN, ...NO_SKIP });
+      expect(tick).toEqual({ showAd: false, nextCount: 2 });
+
+      const due = consumeAdSlot({
+        successesSinceLastAd: 2,
+        everyNWins: NaN,
+        ...NO_SKIP,
+        isSourceReady: true,
+      });
+      expect(due).toEqual({ showAd: true, nextCount: 0 });
+    });
+
+    it('skip conditions precede cadence: isAdFree=true freezes counter despite override', () => {
+      const result = consumeAdSlot({
+        successesSinceLastAd: 3,
+        everyNWins: 4,
+        scope: undefined,
+        isAdFree: true,
+        isE2E: false,
+      });
+      expect(result).toEqual({ showAd: false, nextCount: 3 });
+    });
+
+    it('skip conditions precede cadence: isE2E=true freezes counter despite override', () => {
+      const result = consumeAdSlot({
+        successesSinceLastAd: 3,
+        everyNWins: 4,
+        scope: undefined,
+        isAdFree: false,
+        isE2E: true,
+      });
+      expect(result).toEqual({ showAd: false, nextCount: 3 });
+    });
+
+    it('source-not-ready still consumes the slot at the overridden boundary', () => {
+      const result = consumeAdSlot({
+        successesSinceLastAd: 3,
+        everyNWins: 4,
+        ...NO_SKIP,
+        isSourceReady: false,
+      });
+      expect(result).toEqual({ showAd: false, nextCount: 0 });
+    });
+  });
+
+  describe('isAdDue with everyNWins (pure introspection)', () => {
+    it('override 4: due at 3 successes, not at 2', () => {
+      expect(isAdDue({ successesSinceLastAd: 2, everyNWins: 4 })).toBe(false);
+      expect(isAdDue({ successesSinceLastAd: 3, everyNWins: 4 })).toBe(true);
+    });
+
+    it('override 6: due at 5 successes, not at 4', () => {
+      expect(isAdDue({ successesSinceLastAd: 4, everyNWins: 6 })).toBe(false);
+      expect(isAdDue({ successesSinceLastAd: 5, everyNWins: 6 })).toBe(true);
+    });
+
+    it('clamped overrides are due at the default boundary', () => {
+      expect(isAdDue({ successesSinceLastAd: 2, everyNWins: 0 })).toBe(true);
+      expect(isAdDue({ successesSinceLastAd: 1, everyNWins: 0 })).toBe(false);
+      expect(isAdDue({ successesSinceLastAd: 2, everyNWins: NaN })).toBe(true);
+      expect(isAdDue({ successesSinceLastAd: 1, everyNWins: NaN })).toBe(false);
+    });
+  });
+
   describe('isAdSlotActive (skip predicate)', () => {
     it('active on public scope, non-ad-free, non-e2e', () => {
       expect(isAdSlotActive(NO_SKIP)).toBe(true);

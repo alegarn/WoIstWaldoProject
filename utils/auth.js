@@ -2,7 +2,7 @@ import axios from 'axios';
 import * as SecureStore from 'expo-secure-store';
 
 const AUTH_STORAGE_KEYS = ['token', 'userId'];
-const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished', 'isPaid', 'paidTier', 'paidExpiresAt', 'earnedAdFree', 'earnedPremium', 'isGroupOwner', 'activeGroupId', 'isPrivateMode'];
+const PERSISTED_SESSION_KEYS = [...AUTH_STORAGE_KEYS, 'email', 'username', 'scoreId', 'isTutorialFinished', 'isPaid', 'paidTier', 'paidExpiresAt', 'earnedGroupCreator', 'earnedPremium', 'isGroupOwner', 'activeGroupId', 'isPrivateMode'];
 const BEARER_TOKEN_REGEX = /^Bearer [A-Za-z0-9\-._~+/]+=*$/;
 
 
@@ -52,7 +52,7 @@ export async function getStoredAuthState() {
     isPaid: parseStoredJsonValue(storedState.isPaid),
     paidTier: parseStoredJsonValue(storedState.paidTier),
     paidExpiresAt: parseStoredJsonValue(storedState.paidExpiresAt),
-    earnedAdFree: parseStoredJsonValue(storedState.earnedAdFree),
+    earnedGroupCreator: parseStoredJsonValue(storedState.earnedGroupCreator),
     earnedPremium: parseStoredJsonValue(storedState.earnedPremium),
     isGroupOwner: parseStoredJsonValue(storedState.isGroupOwner),
     activeGroupId: parseStoredJsonValue(storedState.activeGroupId),

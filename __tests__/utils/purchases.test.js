@@ -39,7 +39,7 @@ describe('utils/purchases', () => {
         paidExpiresAt: null,
         isGroupOwner: true,
         activeGroupId: 'g1',
-        earnedAdFree: false,
+        earnedGroupCreator: false,
         earnedPremium: false,
       });
       expect(result).toEqual({ ok: true, refreshed: true });
@@ -57,37 +57,37 @@ describe('utils/purchases', () => {
   });
 
   describe('entitlementToContextPayload', () => {
-    it('maps earned_ad_free and earned_premium to earnedAdFree and earnedPremium when both are true', () => {
+    it('maps earned_group_creator and earned_premium to earnedGroupCreator and earnedPremium when both are true', () => {
       const payload = entitlementToContextPayload({
         is_paid: true,
         paid_tier: 3,
         paid_expires_at: null,
         is_group_owner: true,
         active_group_id: 'g1',
-        earned_ad_free: true,
+        earned_group_creator: true,
         earned_premium: true,
       });
 
-      expect(payload.earnedAdFree).toBe(true);
+      expect(payload.earnedGroupCreator).toBe(true);
       expect(payload.earnedPremium).toBe(true);
     });
 
-    it('maps earned_ad_free and earned_premium to false when both are false', () => {
+    it('maps earned_group_creator and earned_premium to false when both are false', () => {
       const payload = entitlementToContextPayload({
         is_paid: false,
         paid_tier: 0,
         paid_expires_at: null,
         is_group_owner: false,
         active_group_id: null,
-        earned_ad_free: false,
+        earned_group_creator: false,
         earned_premium: false,
       });
 
-      expect(payload.earnedAdFree).toBe(false);
+      expect(payload.earnedGroupCreator).toBe(false);
       expect(payload.earnedPremium).toBe(false);
     });
 
-    it('maps absent earned_ad_free and earned_premium (older server / stale cache) to false without crashing', () => {
+    it('maps absent earned_group_creator and earned_premium (older server / stale cache) to false without crashing', () => {
       const payload = entitlementToContextPayload({
         is_paid: true,
         paid_tier: 2,
@@ -96,7 +96,22 @@ describe('utils/purchases', () => {
         active_group_id: 'g1',
       });
 
-      expect(payload.earnedAdFree).toBe(false);
+      expect(payload.earnedGroupCreator).toBe(false);
+      expect(payload.earnedPremium).toBe(false);
+    });
+
+    it('treats non-boolean earned_group_creator values as off via the explicit-true rule', () => {
+      const payload = entitlementToContextPayload({
+        is_paid: true,
+        paid_tier: 2,
+        paid_expires_at: null,
+        is_group_owner: true,
+        active_group_id: 'g1',
+        earned_group_creator: 'yes',
+        earned_premium: 1,
+      });
+
+      expect(payload.earnedGroupCreator).toBe(false);
       expect(payload.earnedPremium).toBe(false);
     });
   });
@@ -121,7 +136,7 @@ describe('utils/purchases', () => {
         paidExpiresAt: '2099-01-01T00:00:00Z',
         isGroupOwner: true,
         activeGroupId: 'g-42',
-        earnedAdFree: false,
+        earnedGroupCreator: false,
         earnedPremium: false,
       });
     });

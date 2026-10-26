@@ -58,6 +58,7 @@ import { act, create } from 'react-test-renderer';
 import { Alert, StyleSheet, Text } from 'react-native';
 
 import MemberManagementScreen from '../../screens/Groups/MemberManagementScreen';
+import { AuthContext } from '../../store/auth-context';
 import { listMembers, removeMember, transferOwnership } from '../../services/groups/groupMembershipApi';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 
@@ -271,6 +272,78 @@ describe('MemberManagementScreen', () => {
     });
 
     expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
+  });
+
+  it('shows the earned creator a 30-member cap banner with no upgrade CTA at 10 members', async () => {
+    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+    const members = Array.from({ length: 10 }, (_, i) => ({
+      id: `m-${i}`,
+      user_id: `u-${i}`,
+      username: `member-${i}`,
+      role: i === 0 ? 'owner' : 'member',
+    }));
+
+    mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-3' } });
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine', member_count: 10 }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    listMembers.mockResolvedValue({ status: 200, data: members });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ paidTier: 0, earnedGroupCreator: true }}>
+          <MemberManagementScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const banner = renderer.root.findByProps({ testID: 'member-mgmt.members.cap-banner' });
+    const bannerText = banner.findAllByType(Text).map((node) => node.props.children).join(' ');
+    expect(bannerText).toContain('10/30 members');
+    expect(() => renderer.root.findByProps({ testID: 'member-mgmt.members.upgrade' })).toThrow();
+  });
+
+  it('keeps the free 10-member cap banner and upgrade CTA for explicitly false earned flags', async () => {
+    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+    const members = Array.from({ length: 10 }, (_, i) => ({
+      id: `m-${i}`,
+      user_id: `u-${i}`,
+      username: `member-${i}`,
+      role: i === 0 ? 'owner' : 'member',
+    }));
+
+    mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-3' } });
+    mockUseGroupsHub.mockReturnValue({
+      data: {
+        owned: [{ id: 'g-3', role: 'owner', name: 'Mine', member_count: 10 }],
+        joined: [],
+      },
+      refresh: jest.fn(),
+    });
+    listMembers.mockResolvedValue({ status: 200, data: members });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ paidTier: 0, earnedGroupCreator: false, earnedPremium: false }}>
+          <MemberManagementScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    const banner = renderer.root.findByProps({ testID: 'member-mgmt.members.cap-banner' });
+    const bannerText = banner.findAllByType(Text).map((node) => node.props.children).join(' ');
+    expect(bannerText).toContain('10/10 members');
+    expect(renderer.root.findByProps({ testID: 'member-mgmt.members.upgrade' })).toBeTruthy();
   });
 
   it('surfaces the not-a-member explanation when transfer fails with recipient_not_member', async () => {

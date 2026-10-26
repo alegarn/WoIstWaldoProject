@@ -28,6 +28,8 @@ function SignupScreen({navigation}) {
       isPaid: data?.is_paid,
       paidTier: data?.paid_tier,
       paidExpiresAt: data?.paid_expires_at,
+      earnedGroupCreator: data?.earned_group_creator,
+      earnedPremium: data?.earned_premium,
       isGroupOwner: data?.is_group_owner,
       activeGroupId: data?.active_group_id,
     });

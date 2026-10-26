@@ -3,31 +3,42 @@ export type AdScope = 'public' | 'private';
 export type ActiveGroupAdContext = {
   isOwnedByViewer: boolean;
   memberCount: number;
+  adCadenceEveryNWins?: number;
 };
 
 export type AdSuppressionInput = {
   paidTier: number;
   scope: AdScope;
   activeGroup?: ActiveGroupAdContext | null;
-  earnedAdFree?: boolean;
+  earnedGroupCreator?: boolean;
   earnedPremium?: boolean;
 };
 
 // Mirror of API `Billing::CreatorReward` thresholds (planning §5.1). Client-side
 // derivation (`earnedRewardFor`) is for display/progress only — gating truth is
-// the server's `earned_ad_free` / `earned_premium` flags; on disagreement,
-// server wins. The optional flags are tri-state: only an explicit `true`
-// suppresses; `false`/absent fall through to the purchase-derived legacy
-// branches below.
-export const CREATOR_REWARD_AD_FREE_AT = 9;
+// the server's `earned_group_creator` / `earned_premium` flags; on disagreement,
+// server wins. `earnedRewardFor` mirrors the server's single-count ladder: one
+// qualifying count, two thresholds (9 → group creator, 19 → + premium).
+export const CREATOR_REWARD_GROUP_CREATOR_AT = 9;
 export const CREATOR_REWARD_PREMIUM_AT = 19;
 
+// Mirror of API `Billing::CreatorReward` member-cadence thresholds (plan D5,
+// same-PR rule, same names). Display/progress-only — gating truth is the
+// server's `ad_cadence_every_n_wins` field (absent = default 3); these mirrors
+// are dead exports in v1, kept only for the single-source contract.
+export const ACTIVITY_MIN_GUESSES = 5;
+export const VESTING_DAYS = 14;
+export const MEMBER_CADENCE_AT_12_QUALIFYING = 12;
+export const MEMBER_CADENCE_AT_19_QUALIFYING = 19;
+export const MEMBER_CADENCE_AT_12 = 4;
+export const MEMBER_CADENCE_AT_19 = 6;
+
 export function earnedRewardFor(qualifyingCount: number): {
-  earnedAdFree: boolean;
+  earnedGroupCreator: boolean;
   earnedPremium: boolean;
 } {
   return {
-    earnedAdFree: qualifyingCount >= CREATOR_REWARD_AD_FREE_AT,
+    earnedGroupCreator: qualifyingCount >= CREATOR_REWARD_GROUP_CREATOR_AT,
     earnedPremium: qualifyingCount >= CREATOR_REWARD_PREMIUM_AT,
   };
 }
@@ -50,7 +61,7 @@ function isCreatorOwnedLargePrivateGroup(input: AdSuppressionInput): boolean {
 }
 
 function hasEarnedReward(input: AdSuppressionInput): boolean {
-  return input.earnedAdFree === true || input.earnedPremium === true;
+  return input.earnedPremium === true;
 }
 
 export function shouldSuppressAds(input: AdSuppressionInput): boolean {
