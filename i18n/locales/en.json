@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Retry plan refresh",
       "upgrade": "Upgrade",
       "manage": "Manage subscription",
-      "openSettingsFailed": "Could not open subscription settings"
+      "openSettingsFailed": "Could not open subscription settings",
+      "earnedCreatorBadge": "Earned: Creator",
+      "earnedPremiumBadge": "Earned: Premium-equivalent (group reward)"
     },
     "tiers": {
       "premium": {

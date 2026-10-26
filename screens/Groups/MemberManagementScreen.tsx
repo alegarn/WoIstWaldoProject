@@ -13,6 +13,7 @@ import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
+import { effectiveTierFor } from '../../services/billing/entitlements';
 import {
   listMembers,
   removeMember,
@@ -69,9 +70,9 @@ export default function MemberManagementScreen({ navigation }: MemberManagementS
   const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
   const group = groups.find((g) => g.id === groupId) ?? null;
   const isOwner = group?.role === 'owner';
-  const paidTier = authContext?.paidTier ?? 0;
-  const canPersonalize = canPersonalizeGroup(paidTier);
-  const memberCap = memberCapFor(paidTier);
+  const effectiveTier = effectiveTierFor(authContext);
+  const canPersonalize = canPersonalizeGroup(effectiveTier);
+  const memberCap = memberCapFor(effectiveTier);
   const theme = getPrivateGroupTheme({
     primaryColor: group?.primary_color,
     secondaryColor: group?.secondary_color,

@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Riprova aggiornamento piano",
       "upgrade": "Esegui upgrade",
       "manage": "Gestisci abbonamento",
-      "openSettingsFailed": "Impossibile aprire le impostazioni dell'abbonamento"
+      "openSettingsFailed": "Impossibile aprire le impostazioni dell'abbonamento",
+      "earnedCreatorBadge": "Guadagnato: Creator",
+      "earnedPremiumBadge": "Guadagnato: Equivalente Premium (premio di gruppo)"
     },
     "tiers": {
       "premium": {

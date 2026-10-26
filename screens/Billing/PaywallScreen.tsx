@@ -34,7 +34,7 @@ const BigButton = _BigButton as React.ComponentType<any>;
 // utils/purchases.js; pkg is the SDK's own PurchasesPackage shape.
 type PaywallPackage = { pkg: PurchasesPackage; tier: BillingTier };
 
-type PaywallIntent = 'create-group' | 'personalize-group' | 'store';
+type PaywallIntent = 'personalize-group' | 'store';
 
 type PaywallRouteParams = {
   intent?: PaywallIntent;
@@ -43,7 +43,6 @@ type PaywallRouteParams = {
 
 type PaywallParamList = {
   PaywallScreen: PaywallRouteParams;
-  CreateGroupScreen: undefined;
   GroupSettingsScreen: undefined;
   SubscriptionManagementScreen: undefined;
 };
@@ -107,9 +106,7 @@ export default function PaywallScreen({ navigation, route }: PaywallScreenProps)
         t('billing.paywall.purchaseRecordedMessage'),
       );
     }
-    if (intent === 'create-group') {
-      navigation.replace('CreateGroupScreen');
-    } else if (intent === 'personalize-group') {
+    if (intent === 'personalize-group') {
       navigation.replace('GroupSettingsScreen');
     } else {
       navigation.replace('SubscriptionManagementScreen');

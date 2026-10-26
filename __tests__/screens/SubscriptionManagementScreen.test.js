@@ -88,6 +88,37 @@ describe('SubscriptionManagementScreen', () => {
     expect(renderer.root.findByProps({ children: 'Premium' })).toBeTruthy();
   });
 
+  it('hides the upgrade button at earned premium and keeps restore/manage untouched', async () => {
+    const renderer = await renderScreen({ authContext: { paidTier: 1, earnedPremium: true } });
+
+    expect(
+      renderer.root.findAllByProps({ testID: 'subscription-manage.button.upgrade' })
+    ).toHaveLength(0);
+    expect(renderer.root.findByProps({ testID: 'subscription-manage.button.restore' })).toBeTruthy();
+    expect(renderer.root.findByProps({ testID: 'subscription-manage.button.manage' })).toBeTruthy();
+  });
+
+  it('shows the earned-premium badge next to the purchase-truth tier label', async () => {
+    const renderer = await renderScreen({ authContext: { paidTier: 0, earnedPremium: true } });
+
+    expect(
+      renderer.root.findByProps({ testID: 'subscription-manage.earned-badge' }).props.children
+    ).toBe('Earned: Premium-equivalent (group reward)');
+    expect(renderer.root.findByProps({ children: 'Free' })).toBeTruthy();
+  });
+
+  it('shows the earned-creator badge in the 9–18 band and keeps the upgrade button', async () => {
+    const renderer = await renderScreen({
+      authContext: { paidTier: 0, earnedGroupCreator: true, earnedPremium: false },
+    });
+
+    expect(
+      renderer.root.findByProps({ testID: 'subscription-manage.earned-badge' }).props.children
+    ).toBe('Earned: Creator');
+    expect(renderer.root.findByProps({ testID: 'subscription-manage.button.upgrade' })).toBeTruthy();
+    expect(renderer.root.findByProps({ children: 'Free' })).toBeTruthy();
+  });
+
   it('triggers a deep-link to the OS subscription settings when manage is tapped', async () => {
     const renderer = await renderScreen({ authContext: { paidTier: 1 } });
 

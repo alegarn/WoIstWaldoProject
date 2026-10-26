@@ -102,6 +102,8 @@ type GroupsHubGroup = {
   member_count?: number;
   qualifyingMemberCount?: number;
   qualifying_member_count?: number;
+  premiumQualifyingMemberCount?: number;
+  premium_qualifying_member_count?: number;
   locked?: boolean;
 };
 
@@ -115,6 +117,7 @@ type ActiveGroupSnapshot = {
   memberCount: number;
   locked: boolean;
   qualifyingMemberCount?: number;
+  premiumQualifyingMemberCount?: number;
 };
 
 type GuessPathCategory = {
@@ -171,8 +174,10 @@ function buildActiveGroupSnapshot(
     return null;
   }
 
-  // Owned-group pass-through: the server serializes qualifying_member_count on
-  // owned groups only, so absent stays absent (never fabricated as 0).
+  // Owned-group pass-through: the server serializes qualifying_member_count /
+  // premium_qualifying_member_count on owned groups only (premium count only
+  // when the cheap count reaches the premium band), so absent stays absent
+  // (never fabricated as 0).
   const snapshot: ActiveGroupSnapshot = {
     isOwnedByViewer: activeGroup.role === 'owner',
     memberCount: Number(activeGroup.memberCount ?? activeGroup.member_count ?? 0),
@@ -183,6 +188,12 @@ function buildActiveGroupSnapshot(
   );
   if (Number.isFinite(qualifyingMemberCount)) {
     snapshot.qualifyingMemberCount = qualifyingMemberCount;
+  }
+  const premiumQualifyingMemberCount = Number(
+    activeGroup.premiumQualifyingMemberCount ?? activeGroup.premium_qualifying_member_count
+  );
+  if (Number.isFinite(premiumQualifyingMemberCount)) {
+    snapshot.premiumQualifyingMemberCount = premiumQualifyingMemberCount;
   }
 
   return snapshot;

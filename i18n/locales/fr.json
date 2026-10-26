@@ -617,7 +617,9 @@
       "retryRefreshLabel": "Réessayer l'actualisation de l'offre",
       "upgrade": "Améliorer",
       "manage": "Gérer l'abonnement",
-      "openSettingsFailed": "Impossible d'ouvrir les paramètres d'abonnement"
+      "openSettingsFailed": "Impossible d'ouvrir les paramètres d'abonnement",
+      "earnedCreatorBadge": "Obtenu : Creator",
+      "earnedPremiumBadge": "Obtenu : Équivalent Premium (récompense de groupe)"
     },
     "tiers": {
       "premium": {

@@ -24,6 +24,7 @@ import { resolveHomeBackground, deleteHomeBackgroundFile } from '../../services/
 import { uploadHomeBackground } from '../../services/groups/homeBackgroundUpload';
 import { getPrivateGroupTheme } from '../../utils/privateGroupTheme';
 import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
+import { effectiveTierFor } from '../../services/billing/entitlements';
 import { showPersonalizationUpsellAlert } from '../../services/billing/personalizationUpsell';
 import { PrivateGroupThemeProvider } from '../../store/privateGroupTheme-context';
 import type { GroupHomeBackgroundSlotData, GroupScope, GroupsHubData } from '../../types/groups';
@@ -87,9 +88,12 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
   // calls setPrivateMode with a boolean.
   const authContext = useContext(AuthContext) as {
     paidTier?: number;
+    earnedGroupCreator?: boolean;
+    earnedPremium?: boolean;
     setPrivateMode?: (isPrivate: boolean) => void | Promise<void>;
   };
   const { setPrivateMode } = authContext;
+  const effectiveTier = effectiveTierFor(authContext);
   const activeScope = routeScope ?? scope;
   const { data, isLoading, error, isFresh = true, refresh } = useGroupsHub() as {
     data: GroupsHubData | null;
@@ -104,7 +108,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     : null;
   const isLocked = group?.locked === true;
   const isOwner = group?.role === 'owner';
-  const canPersonalize = canPersonalizeGroup(authContext?.paidTier ?? 0);
+  const canPersonalize = canPersonalizeGroup(effectiveTier);
   const openPersonalizationUpsell = useCallback(() => {
     navigation.navigate('PaywallScreen', { intent: 'personalize-group' });
   }, [navigation]);
@@ -177,7 +181,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
       return;
     }
     // Owner-side invite at the free cap: upsell first, but never block sharing.
-    const cap = memberCapFor(authContext?.paidTier ?? 0);
+    const cap = memberCapFor(effectiveTier);
     const isFreeOwnerAtCap = isOwner && !canPersonalize && (group?.member_count ?? 0) >= cap;
     if (isFreeOwnerAtCap) {
       Alert.alert(
@@ -191,7 +195,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
       return;
     }
     await shareInvitation(code);
-  }, [group?.joining_code, group?.member_count, isOwner, canPersonalize, authContext?.paidTier, openPersonalizationUpsell, shareInvitation, t]);
+  }, [group?.joining_code, group?.member_count, isOwner, canPersonalize, effectiveTier, openPersonalizationUpsell, shareInvitation, t]);
 
   const openColorEditor = useCallback(() => {
     setIsColorEditorVisible(true);

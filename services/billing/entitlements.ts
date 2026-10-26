@@ -10,10 +10,34 @@
 export type AuthContextLike = {
   paidTier?: number;
   token?: string | null;
-  earnedAdFree?: boolean;
+  earnedGroupCreator?: boolean;
   earnedPremium?: boolean;
 };
 
 export function isFlagExplicitlyOn(flag: unknown): boolean {
   return flag === true;
+}
+
+// Effective tier folds earned rights into the paid ladder: creator rung is
+// tier-2-equivalent, premium rung is tier-3-equivalent; paid tier never loses
+// to an earned rung. Single helper for every capability-surface consumer.
+// Earned rungs sit at fixed points of the paid ladder (groupPersonalization
+// CREATOR_MIN_TIER = 2, adPolicy PREMIUM_BUNDLE_TIER = 3); named locally to
+// keep this pure policy module import-free.
+const EARNED_CREATOR_TIER = 2;
+const EARNED_PREMIUM_TIER = 3;
+
+export function effectiveTierFor({
+  paidTier,
+  earnedGroupCreator,
+  earnedPremium,
+}: {
+  paidTier?: number;
+  earnedGroupCreator?: boolean;
+  earnedPremium?: boolean;
+}): number {
+  const paid = Number.isFinite(paidTier) ? (paidTier as number) : 0;
+  const earnedTier =
+    earnedPremium === true ? EARNED_PREMIUM_TIER : earnedGroupCreator === true ? EARNED_CREATOR_TIER : 0;
+  return Math.max(paid, earnedTier);
 }

@@ -616,7 +616,9 @@
       "retryRefreshLabel": "Coba lagi segarkan paket",
       "upgrade": "Tingkatkan",
       "manage": "Kelola langganan",
-      "openSettingsFailed": "Gagal membuka pengaturan langganan"
+      "openSettingsFailed": "Gagal membuka pengaturan langganan",
+      "earnedCreatorBadge": "Diraih: Creator",
+      "earnedPremiumBadge": "Diraih: Setara Premium (hadiah grup)"
     },
     "tiers": {
       "premium": {

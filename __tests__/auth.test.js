@@ -164,7 +164,7 @@ describe('auth utilities', () => {
       isPaid: null,
       paidTier: null,
       paidExpiresAt: null,
-      earnedAdFree: null,
+      earnedGroupCreator: null,
       earnedPremium: null,
       isGroupOwner: null,
       activeGroupId: null,
@@ -172,10 +172,10 @@ describe('auth utilities', () => {
     });
   });
 
-  it('rehydrates the persisted earned reward flags as parsed values', async () => {
+  it('rehydrates the persisted earned rights flags as parsed values', async () => {
     mockStoredValues({
       ...storedSession,
-      earnedAdFree: JSON.stringify(true),
+      earnedGroupCreator: JSON.stringify(true),
       earnedPremium: JSON.stringify(true),
     });
     const restoreSession = jest.fn();
@@ -184,29 +184,29 @@ describe('auth utilities', () => {
 
     expect(didRestoreSession).toBe(true);
     const restoredState = restoreSession.mock.calls[0][0];
-    expect(restoredState.earnedAdFree).toBe(true);
+    expect(restoredState.earnedGroupCreator).toBe(true);
     expect(restoredState.earnedPremium).toBe(true);
   });
 
-  it('restores earned reward flags as null when the stored session does not carry them', async () => {
+  it('restores earned rights flags as null when the stored session does not carry them', async () => {
     mockStoredValues(storedSession);
 
     const authState = await getStoredAuthState();
 
-    expect(authState.earnedAdFree).toBeNull();
+    expect(authState.earnedGroupCreator).toBeNull();
     expect(authState.earnedPremium).toBeNull();
   });
 
-  it('keeps restoring earned reward flags when their stored values are malformed', async () => {
+  it('keeps restoring earned rights flags when their stored values are malformed', async () => {
     mockStoredValues({
       ...storedSession,
-      earnedAdFree: '{not-json',
+      earnedGroupCreator: '{not-json',
       earnedPremium: 'true',
     });
 
     const authState = await getStoredAuthState();
 
-    expect(authState.earnedAdFree).toBeNull();
+    expect(authState.earnedGroupCreator).toBeNull();
     expect(authState.earnedPremium).toBe(true);
   });
 

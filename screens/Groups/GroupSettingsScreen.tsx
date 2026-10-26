@@ -9,6 +9,7 @@ import { AuthContext } from '../../store/auth-context';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { canPersonalizeGroup, memberCapFor } from '../../services/billing/groupPersonalization';
+import { effectiveTierFor } from '../../services/billing/entitlements';
 import GroupMembersSection from '../../components/Groups/Settings/GroupMembersSection';
 import GroupIdentitySection from '../../components/Groups/Settings/GroupIdentitySection';
 import GroupCategoriesSection from '../../components/Groups/Settings/GroupCategoriesSection';
@@ -47,9 +48,9 @@ export default function GroupSettingsScreen({ navigation }: GroupSettingsScreenP
   const groups = [...(data?.owned ?? []), ...(data?.joined ?? [])];
   const group = groups.find((g) => g.id === groupId) ?? null;
   const isOwner = group?.role === 'owner';
-  const paidTier = authContext?.paidTier ?? 0;
-  const canPersonalize = canPersonalizeGroup(paidTier);
-  const memberCap = memberCapFor(paidTier);
+  const effectiveTier = effectiveTierFor(authContext);
+  const canPersonalize = canPersonalizeGroup(effectiveTier);
+  const memberCap = memberCapFor(effectiveTier);
   const openPersonalizationUpsell = useCallback(() => {
     navigation.navigate?.('PaywallScreen', { intent: 'personalize-group' });
   }, [navigation]);
