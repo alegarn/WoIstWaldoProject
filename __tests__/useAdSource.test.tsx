@@ -18,6 +18,9 @@ import { act, fireEvent, render, renderHook } from '@testing-library/react-nativ
 
 import { useAdSource, _setAdSourceFactoryForTests } from '../hooks/useAdSource';
 import {
+  ADMOB_POLL_INTERVAL_MS,
+} from '../services/ads/AdMobInterstitialSource';
+import {
   INTERNAL_AD_CONTINUE_TESTID,
   INTERNAL_AD_PANEL_TESTID,
   INTERNAL_AD_TIMEOUT_MS,
@@ -53,15 +56,31 @@ afterEach(() => {
 
 describe('useAdSource', () => {
   it('shows the AdMob interstitial through the app bridge when a loaded ad is available (android)', async () => {
+    jest.useFakeTimers();
     setPlatformOS('android');
     const nativeShow = jest.fn().mockResolvedValue(undefined);
-    setBridgeSnapshot({ isLoaded: true, show: nativeShow });
+    const snapshot: HookSnapshot = { isLoaded: true, show: nativeShow };
+    setBridgeSnapshot(snapshot);
 
     const { result } = renderHook(() => useAdSource());
 
     expect(result.current.isReady()).toBe(true);
 
-    await result.current.show();
+    const shown = result.current.show();
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+    });
+    expect(nativeShow).toHaveBeenCalledTimes(1);
+
+    snapshot.isShowing = true;
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+    });
+    snapshot.isClosed = true;
+    await act(async () => {
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+    });
+    await shown;
 
     expect(nativeShow).toHaveBeenCalledTimes(1);
   });

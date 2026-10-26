@@ -60,6 +60,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: OverlayZIndex.EXHAUSTED_PANEL,
+    elevation: OverlayZIndex.EXHAUSTED_PANEL,
   },
   card: {
     width: '85%',

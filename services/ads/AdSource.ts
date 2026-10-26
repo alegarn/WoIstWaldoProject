@@ -20,6 +20,8 @@ export interface AdSource {
    * the caller; the source must not retain refs.
    */
   renderSurface(): ReactNode;
+  /** Called when the host surface unmounts mid-show; sources clean timers / resolve pending show(). */
+  dispose?(): void;
 }
 
 /**

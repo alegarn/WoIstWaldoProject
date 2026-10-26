@@ -287,7 +287,10 @@
     }
   },
   "ads": {
-    "loading": "Werbung wird geladen…"
+    "loading": "Werbung wird geladen…",
+    "fallbackTitle": "Werbung müde?",
+    "fallbackBody": "Mit Pro alle Werbung ausblenden.",
+    "continue": "Weiter"
   },
   "tutorial": {
     "homeScreen": "Willkommen beim WoIstWaldo-Tutorial. \n\n Das Spiel hat 2 Teile.\n\n 1 - Versteckteil\n\nWähle oder mache ein Bild, das die Sache (den Waldo) enthält, die andere raten sollen. Dann markiere, wo du sie verstecken willst. Beschreibe sie zuletzt. \n\n 2 - Rateteil\n\nWähle ein Bild anderer Spieler. Lies dann die Beschreibung und rate, was sie verstecken wollten. \n\n  Probieren wir es!\n\nZuerst verstecken oder raten?",

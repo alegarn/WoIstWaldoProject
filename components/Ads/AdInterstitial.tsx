@@ -38,7 +38,10 @@ export default function AdInterstitial({ adSource, onDone }: AdInterstitialProps
       onDone();
     });
 
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      adSource.dispose?.();
+    };
   }, [adSource, onDone]);
 
   const surface = adSource.renderSurface();
