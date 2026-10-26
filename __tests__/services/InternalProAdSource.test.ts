@@ -166,7 +166,7 @@ describe('services/ads/InternalProAdSource', () => {
       expect(title.props.children).toBe(i18n.t('ads.fallbackTitle'));
       expect(title.props.children).toBe('Tired of ads?');
       expect(body.props.children).toBe(i18n.t('ads.fallbackBody'));
-      expect(body.props.children).toBe('Go Pro to hide every ad.');
+      expect(body.props.children).toBe('Go Premium to hide every ad.');
       expect(button.props.title).toBe(i18n.t('ads.continue'));
       expect(button.props.title).toBe('Continue');
       expect(button.props.testID).toBe('ad.internal.pro.continue');

@@ -289,7 +289,7 @@
   "ads": {
     "loading": "Chargement des publicités…",
     "fallbackTitle": "Fatigué des publicités ?",
-    "fallbackBody": "Passez à Pro pour masquer toutes les publicités.",
+    "fallbackBody": "Passez à Premium pour masquer toutes les publicités.",
     "continue": "Continuer"
   },
   "tutorial": {

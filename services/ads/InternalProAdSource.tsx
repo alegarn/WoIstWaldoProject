@@ -1,5 +1,5 @@
 // Internal Pro-mode ad source. Mock-first.
-// Renders a simple branded panel: "Tired of ads? Go Pro" CTA + Continue button.
+// Renders a simple branded panel: "Tired of ads? Go Premium" CTA + Continue button.
 // isReady() always true (synchronous, no network). show() resolves on Continue tap
 // (_continue()) OR after INTERNAL_AD_TIMEOUT_MS (named constant, G25).
 //
