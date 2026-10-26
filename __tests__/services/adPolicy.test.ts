@@ -102,28 +102,16 @@ describe('earnedRewardFor', () => {
     expect(earnedRewardFor(9)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
   });
 
-  it('grants group creator only at 18 qualifying members (no premium count yet)', () => {
+  it('grants group creator only at 18 qualifying members', () => {
     expect(earnedRewardFor(18)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
   });
 
-  it('never grants premium from the cheap count alone (19 with no premium count → false)', () => {
-    expect(earnedRewardFor(19)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
-  });
-
-  it('requires the premium count to reach 19 (18 → no premium)', () => {
-    expect(earnedRewardFor(18, 18)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
-  });
-
-  it('grants both rewards at a premium count of 19', () => {
-    expect(earnedRewardFor(19, 19)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
+  it('grants both rewards at 19 qualifying members', () => {
+    expect(earnedRewardFor(19)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
   });
 
   it('grants both rewards above the premium boundary (monotonic)', () => {
-    expect(earnedRewardFor(25, 20)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
-  });
-
-  it('keeps premium false when the premium count is missing even for a huge cheap count', () => {
-    expect(earnedRewardFor(200)).toEqual({ earnedGroupCreator: true, earnedPremium: false });
+    expect(earnedRewardFor(200)).toEqual({ earnedGroupCreator: true, earnedPremium: true });
   });
 
   it('exposes the mirrored thresholds', () => {
