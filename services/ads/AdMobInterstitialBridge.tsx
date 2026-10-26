@@ -47,13 +47,8 @@ export function AdMobInterstitialBridge(): null {
   const hook = useInterstitialAd(adUnitId);
   const loadRetryAttemptsRef = useRef(0);
 
-  // Effect split (avoids the dep-change null race, B3): mount-only marker effect,
-  // initial-load/refill effect, retry effect (error identity), capture effect,
-  // unmount-only cleanup.
-  useEffect(() => {
-    // Mount-only: register this bridge as the snapshot owner. The empty dep array means
-    // this runs once on mount and the cleanup runs once on unmount (no dep-change teardown).
-  }, []);
+  // Effect split (avoids the dep-change null race, B3): initial-load/refill effect,
+  // retry effect (error identity), capture effect, unmount-only cleanup.
 
   // Initial load / refill effect. Runs only when the load identity or loaded state
   // changes — NOT on unrelated flips (isClosed etc.), so transient re-renders can
@@ -89,6 +84,8 @@ export function AdMobInterstitialBridge(): null {
     };
   }, [hook?.error, hook?.load]);
 
+  // Capture effect: registers this bridge as the snapshot owner. AdMobInterstitialSource
+  // reads the snapshot through the module-level handle, so it never mounts the bridge.
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     currentSnapshot = hook as HookSnapshot;
