@@ -104,6 +104,8 @@ type GroupsHubGroup = {
   qualifying_member_count?: number;
   premiumQualifyingMemberCount?: number;
   premium_qualifying_member_count?: number;
+  adCadenceEveryNWins?: number;
+  ad_cadence_every_n_wins?: number;
   locked?: boolean;
 };
 
@@ -118,6 +120,7 @@ type ActiveGroupSnapshot = {
   locked: boolean;
   qualifyingMemberCount?: number;
   premiumQualifyingMemberCount?: number;
+  adCadenceEveryNWins?: number;
 };
 
 type GuessPathCategory = {
@@ -177,7 +180,8 @@ function buildActiveGroupSnapshot(
   // Owned-group pass-through: the server serializes qualifying_member_count /
   // premium_qualifying_member_count on owned groups only (premium count only
   // when the cheap count reaches the premium band), so absent stays absent
-  // (never fabricated as 0).
+  // (never fabricated as 0). ad_cadence_every_n_wins rides member-viewed
+  // serializations (absent = client default); same absent-stays-absent rule.
   const snapshot: ActiveGroupSnapshot = {
     isOwnedByViewer: activeGroup.role === 'owner',
     memberCount: Number(activeGroup.memberCount ?? activeGroup.member_count ?? 0),
@@ -194,6 +198,12 @@ function buildActiveGroupSnapshot(
   );
   if (Number.isFinite(premiumQualifyingMemberCount)) {
     snapshot.premiumQualifyingMemberCount = premiumQualifyingMemberCount;
+  }
+  const adCadenceEveryNWins = Number(
+    activeGroup.adCadenceEveryNWins ?? activeGroup.ad_cadence_every_n_wins
+  );
+  if (Number.isFinite(adCadenceEveryNWins)) {
+    snapshot.adCadenceEveryNWins = adCadenceEveryNWins;
   }
 
   return snapshot;

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 
-import { consumeAdSlot as resolveAdSlot } from '../utils/adCadence';
+import { AD_EVERY_N_SUCCESSES, consumeAdSlot as resolveAdSlot } from '../utils/adCadence';
 import type { AdScope, ConsumeAdSlotResult } from '../utils/adCadence';
 import { shouldSuppressAds, type ActiveGroupAdContext } from '../services/billing/adPolicy';
 import { isFlagExplicitlyOn, type AuthContextLike } from '../services/billing/entitlements';
@@ -26,11 +26,25 @@ function resolvePolicyScope(scope?: AdScope): 'public' | 'private' {
   return scope?.kind === 'private' ? 'private' : 'public';
 }
 
+// Member cadence override: private scope only, positive server value only;
+// anything else falls back to the default denominator. Suppression stays
+// upstream (suppressed ⇒ slot inactive ⇒ cadence irrelevant).
+function resolveEveryNWins(
+  policyScope: 'public' | 'private',
+  activeGroup?: ActiveGroupAdContext | null
+): number {
+  const override = activeGroup?.adCadenceEveryNWins;
+  return policyScope === 'private' && typeof override === 'number' && override > 0
+    ? override
+    : AD_EVERY_N_SUCCESSES;
+}
+
 export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseAdCadenceArgs): UseAdCadenceResult {
   const [successesSinceLastAd, setSuccessesSinceLastAd] = useState(0);
   const successesSinceLastAdRef = useRef(successesSinceLastAd);
   successesSinceLastAdRef.current = successesSinceLastAd;
   const policyScope = resolvePolicyScope(scope);
+  const everyNWins = resolveEveryNWins(policyScope, activeGroup);
   const isAdFree = shouldSuppressAds({
     paidTier: authContext?.paidTier ?? 0,
     scope: policyScope,
@@ -48,6 +62,7 @@ export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseA
     // suppressed every ad; paid tier and e2e are still skipped by consumeAdSlot.
     const result = resolveAdSlot({
       successesSinceLastAd: successesSinceLastAdRef.current,
+      everyNWins,
       scope,
       isAdFree,
       isE2E,
@@ -56,7 +71,7 @@ export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseA
     successesSinceLastAdRef.current = result.nextCount;
     setSuccessesSinceLastAd(result.nextCount);
     return result;
-  }, [adSource, isAdFree, isE2E, scope]);
+  }, [adSource, everyNWins, isAdFree, isE2E, scope]);
 
   const resetSuccessesSinceLastAd = useCallback(() => {
     successesSinceLastAdRef.current = 0;

@@ -3,6 +3,7 @@ export type AdScope = 'public' | 'private';
 export type ActiveGroupAdContext = {
   isOwnedByViewer: boolean;
   memberCount: number;
+  adCadenceEveryNWins?: number;
 };
 
 export type AdSuppressionInput = {
@@ -21,6 +22,17 @@ export type AdSuppressionInput = {
 // count (absent until the server emits it) drives the premium rung.
 export const CREATOR_REWARD_GROUP_CREATOR_AT = 9;
 export const CREATOR_REWARD_PREMIUM_AT = 19;
+
+// Mirror of API `Billing::CreatorReward` member-cadence thresholds (plan D5,
+// same-PR rule, same names). Display/progress-only — gating truth is the
+// server's `ad_cadence_every_n_wins` field (absent = default 3); these mirrors
+// are dead exports in v1, kept only for the single-source contract.
+export const ACTIVITY_MIN_GUESSES = 5;
+export const VESTING_DAYS = 14;
+export const MEMBER_CADENCE_AT_12_QUALIFYING = 12;
+export const MEMBER_CADENCE_AT_19_QUALIFYING = 19;
+export const MEMBER_CADENCE_AT_12 = 4;
+export const MEMBER_CADENCE_AT_19 = 6;
 
 export function earnedRewardFor(
   qualifyingCount: number,

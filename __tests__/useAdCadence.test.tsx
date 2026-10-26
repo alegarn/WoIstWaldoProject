@@ -20,6 +20,7 @@ const mockIsE2EMode = jest.fn(() => false);
 
 jest.mock('../utils/adCadence', () => ({
   __esModule: true,
+  ...jest.requireActual('../utils/adCadence'),
   consumeAdSlot: (...args: unknown[]) => mockConsumeAdSlot(...(args as [unknown])),
 }));
 
@@ -175,5 +176,69 @@ describe('useAdCadence', () => {
     result.current.consumeAdSlot();
 
     expect(lastConsumeCallArg().isSourceReady).toBe(false);
+  });
+
+  it('private scope with a positive adCadenceEveryNWins: passes the override to consumeAdSlot', () => {
+    const { result } = renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4, adCadenceEveryNWins: 4 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(4);
+  });
+
+  it('public scope: passes the default cadence (3) even when an active group carries an override', () => {
+    const { result } = renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4, adCadenceEveryNWins: 6 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
+
+  it('private scope without the cadence field: passes the default cadence (3)', () => {
+    const { result } = renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
+
+  it('private scope with no active group at all (member viewer): passes the default cadence (3)', () => {
+    const { result } = renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: null,
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
   });
 });

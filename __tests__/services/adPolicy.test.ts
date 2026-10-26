@@ -1,9 +1,17 @@
 import {
+  ACTIVITY_MIN_GUESSES,
   CREATOR_REWARD_GROUP_CREATOR_AT,
   CREATOR_REWARD_PREMIUM_AT,
+  MEMBER_CADENCE_AT_12,
+  MEMBER_CADENCE_AT_12_QUALIFYING,
+  MEMBER_CADENCE_AT_19,
+  MEMBER_CADENCE_AT_19_QUALIFYING,
+  VESTING_DAYS,
   earnedRewardFor,
   shouldSuppressAds,
+  type ActiveGroupAdContext,
 } from '../../services/billing/adPolicy';
+import { consumeAdSlot } from '../../utils/adCadence';
 
 describe('services/billing/adPolicy', () => {
   it('returns false for public tier 0', () => {
@@ -63,6 +71,26 @@ describe('services/billing/adPolicy', () => {
       })
     ).toBe(true);
   });
+
+  it('keeps the tier-2 5-member boundary false even when a cadence override is present', () => {
+    expect(
+      shouldSuppressAds({
+        paidTier: 2,
+        scope: 'private',
+        activeGroup: { isOwnedByViewer: true, memberCount: 5, adCadenceEveryNWins: 4 },
+      })
+    ).toBe(false);
+  });
+
+  it('keeps the tier-2 6-member boundary true even when a cadence override is present', () => {
+    expect(
+      shouldSuppressAds({
+        paidTier: 2,
+        scope: 'private',
+        activeGroup: { isOwnedByViewer: true, memberCount: 6, adCadenceEveryNWins: 4 },
+      })
+    ).toBe(true);
+  });
 });
 
 describe('earnedRewardFor', () => {
@@ -101,6 +129,26 @@ describe('earnedRewardFor', () => {
   it('exposes the mirrored thresholds', () => {
     expect(CREATOR_REWARD_GROUP_CREATOR_AT).toBe(9);
     expect(CREATOR_REWARD_PREMIUM_AT).toBe(19);
+  });
+});
+
+describe('member-cadence mirrors (D5: same names as API Billing::CreatorReward)', () => {
+  it('exposes the mirrored thresholds', () => {
+    expect(ACTIVITY_MIN_GUESSES).toBe(5);
+    expect(VESTING_DAYS).toBe(14);
+    expect(MEMBER_CADENCE_AT_12_QUALIFYING).toBe(12);
+    expect(MEMBER_CADENCE_AT_19_QUALIFYING).toBe(19);
+    expect(MEMBER_CADENCE_AT_12).toBe(4);
+    expect(MEMBER_CADENCE_AT_19).toBe(6);
+  });
+
+  it('carries the optional cadence override on ActiveGroupAdContext', () => {
+    const activeGroup: ActiveGroupAdContext = {
+      isOwnedByViewer: false,
+      memberCount: 4,
+      adCadenceEveryNWins: 4,
+    };
+    expect(activeGroup.adCadenceEveryNWins).toBe(4);
   });
 });
 
@@ -182,5 +230,60 @@ describe('shouldSuppressAds with earned flags', () => {
         earnedPremium: false,
       })
     ).toBe(false);
+  });
+});
+
+describe('suppression precedence over cadence (real chain: shouldSuppressAds → consumeAdSlot)', () => {
+  it('earnedPremium true + everyNWins 4 → no slot at all (counter frozen, cadence never evaluated)', () => {
+    const activeGroup: ActiveGroupAdContext = {
+      isOwnedByViewer: false,
+      memberCount: 4,
+      adCadenceEveryNWins: 4,
+    };
+    const isAdFree = shouldSuppressAds({
+      paidTier: 0,
+      scope: 'private',
+      activeGroup,
+      earnedPremium: true,
+    });
+    expect(isAdFree).toBe(true);
+
+    const result = consumeAdSlot({
+      successesSinceLastAd: 3,
+      everyNWins: 4,
+      scope: { kind: 'private' },
+      isAdFree,
+      isE2E: false,
+    });
+    expect(result).toEqual({ showAd: false, nextCount: 3 });
+  });
+
+  it('tier-2 memberCount>5 suppression + everyNWins 4 → no slot at all', () => {
+    const isAdFree = shouldSuppressAds({
+      paidTier: 2,
+      scope: 'private',
+      activeGroup: { isOwnedByViewer: true, memberCount: 6, adCadenceEveryNWins: 4 },
+    });
+    expect(isAdFree).toBe(true);
+
+    const result = consumeAdSlot({
+      successesSinceLastAd: 3,
+      everyNWins: 4,
+      scope: { kind: 'private' },
+      isAdFree,
+      isE2E: false,
+    });
+    expect(result).toEqual({ showAd: false, nextCount: 3 });
+  });
+
+  it('E2E mode → no slot regardless of override (counter frozen, cadence never evaluated)', () => {
+    const result = consumeAdSlot({
+      successesSinceLastAd: 3,
+      everyNWins: 4,
+      scope: { kind: 'private' },
+      isAdFree: false,
+      isE2E: true,
+    });
+    expect(result).toEqual({ showAd: false, nextCount: 3 });
   });
 });
