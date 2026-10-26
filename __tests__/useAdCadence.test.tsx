@@ -225,4 +225,20 @@ describe('useAdCadence', () => {
     expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
     expect(lastConsumeCallArg().everyNWins).toBe(3);
   });
+
+  it('private scope with no active group at all (member viewer): passes the default cadence (3)', () => {
+    const { result } = renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: null,
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
 });
