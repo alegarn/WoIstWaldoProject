@@ -1,8 +1,15 @@
 import {
+  ACTIVITY_MIN_GUESSES,
   CREATOR_REWARD_GROUP_CREATOR_AT,
   CREATOR_REWARD_PREMIUM_AT,
+  MEMBER_CADENCE_AT_12,
+  MEMBER_CADENCE_AT_12_QUALIFYING,
+  MEMBER_CADENCE_AT_19,
+  MEMBER_CADENCE_AT_19_QUALIFYING,
+  VESTING_DAYS,
   earnedRewardFor,
   shouldSuppressAds,
+  type ActiveGroupAdContext,
 } from '../../services/billing/adPolicy';
 
 describe('services/billing/adPolicy', () => {
@@ -101,6 +108,26 @@ describe('earnedRewardFor', () => {
   it('exposes the mirrored thresholds', () => {
     expect(CREATOR_REWARD_GROUP_CREATOR_AT).toBe(9);
     expect(CREATOR_REWARD_PREMIUM_AT).toBe(19);
+  });
+});
+
+describe('member-cadence mirrors (D5: same names as API Billing::CreatorReward)', () => {
+  it('exposes the mirrored thresholds', () => {
+    expect(ACTIVITY_MIN_GUESSES).toBe(5);
+    expect(VESTING_DAYS).toBe(14);
+    expect(MEMBER_CADENCE_AT_12_QUALIFYING).toBe(12);
+    expect(MEMBER_CADENCE_AT_19_QUALIFYING).toBe(19);
+    expect(MEMBER_CADENCE_AT_12).toBe(4);
+    expect(MEMBER_CADENCE_AT_19).toBe(6);
+  });
+
+  it('carries the optional cadence override on ActiveGroupAdContext', () => {
+    const activeGroup: ActiveGroupAdContext = {
+      isOwnedByViewer: false,
+      memberCount: 4,
+      adCadenceEveryNWins: 4,
+    };
+    expect(activeGroup.adCadenceEveryNWins).toBe(4);
   });
 });
 

@@ -21,6 +21,7 @@ export type Group = {
   member_count?: number | null;
   qualifying_member_count?: number;
   premium_qualifying_member_count?: number;
+  ad_cadence_every_n_wins?: number;
   locked?: boolean | null;
   owner_id?: string | null;
   joining_code?: string | null;
