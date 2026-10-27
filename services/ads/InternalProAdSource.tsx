@@ -1,5 +1,5 @@
 // Internal Pro-mode ad source. Mock-first.
-// Renders a simple branded panel: "Tired of ads? Go Pro" CTA + Continue button.
+// Renders a simple branded panel: "Tired of ads? Go Premium" CTA + Continue button.
 // isReady() always true (synchronous, no network). show() resolves on Continue tap
 // (_continue()) OR after INTERNAL_AD_TIMEOUT_MS (named constant, G25).
 //
@@ -11,6 +11,7 @@
 
 import { Button, ImageBackground, Text, View } from 'react-native';
 
+import i18n from '../../i18n';
 import { adPanel } from '../../constants/theme';
 import type { ReactNode } from 'react';
 import type { AdSource } from './AdSource';
@@ -58,14 +59,14 @@ export function createInternalProAdSource(): InternalProAdSource {
         >
           <View style={{ backgroundColor: 'rgba(255, 255, 255, 0.85)', padding: 20, borderRadius: 12, alignItems: 'center' }}>
             <Text style={{ fontSize: adPanel.titleFontSize, fontWeight: adPanel.titleFontWeight, marginBottom: adPanel.titleMarginBottom, color: '#000' }}>
-              Tired of ads?
+              {i18n.t('ads.fallbackTitle')}
             </Text>
             <Text style={{ fontSize: adPanel.bodyFontSize, color: '#444', marginBottom: adPanel.bodyMarginBottom, textAlign: 'center' }}>
-              Go Pro to hide every ad.
+              {i18n.t('ads.fallbackBody')}
             </Text>
             <Button
               testID={INTERNAL_AD_CONTINUE_TESTID}
-              title="Continue"
+              title={i18n.t('ads.continue')}
               onPress={resolveAndCleanup}
             />
           </View>
@@ -91,5 +92,9 @@ export function createInternalProAdSource(): InternalProAdSource {
     // Tap / test hook: resolves show() immediately. NOT part of the AdSource interface;
     // named with leading underscore (N10 accepted convention). Tests dismiss show() directly.
     _continue: resolveAndCleanup,
+
+    dispose() {
+      resolveAndCleanup();
+    },
   };
 }

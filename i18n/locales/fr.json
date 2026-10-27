@@ -287,7 +287,10 @@
     }
   },
   "ads": {
-    "loading": "Chargement des publicités…"
+    "loading": "Chargement des publicités…",
+    "fallbackTitle": "Fatigué des publicités ?",
+    "fallbackBody": "Passez à Premium pour masquer toutes les publicités.",
+    "continue": "Continuer"
   },
   "tutorial": {
     "homeScreen": "Bienvenue dans le tutoriel WoIstWaldo. \n\n Le jeu a 2 parties.\n\n 1 - Partie cache\n\nChoisissez ou prenez une photo contenant la chose (le Waldo) que vous voulez faire deviner. Puis indiquez où vous voulez la cacher. Enfin décrivez-la. \n\n 2 - Partie devinettes\n\nChoisissez une photo d'un autre joueur. Lisez ensuite la description et devinez ce qu'il voulait cacher. \n\n  Essayons !\n\nCacher ou deviner d'abord ?",

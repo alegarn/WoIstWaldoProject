@@ -17,23 +17,40 @@ export function createFallbackAdSource(primary: AdSource, secondary: AdSource): 
     return primary.isReady() ? primary : secondary;
   }
 
+  // Sticky pick for the current show cycle. renderSurface() precedes show()
+  // (render precedes effect), so the FIRST caller decides; both then agree on
+  // one source until the cycle ends (active cleared in show()'s finally).
+  let active: AdSource | null = null;
+
   return {
     isReady() {
       return primary.isReady() || secondary.isReady();
     },
 
     renderSurface(): ReactNode {
-      return pick().renderSurface();
+      active ??= pick();
+      return active.renderSurface();
     },
 
     async show() {
       // Decision lives here and nowhere else. Wrap to enforce the AdSource contract:
       // show() never rejects (callers rely on this for post-show routing).
       try {
-        await pick().show();
+        active ??= pick();
+        await active.show();
       } catch {
         // Surface failures resolve as no-op (contract).
+      } finally {
+        active = null;
       }
+    },
+
+    dispose() {
+      // A stale sticky pick must not survive unmount-before-show: the next cycle
+      // has to re-decide (the previously picked source may have disposed/unloaded).
+      active = null;
+      primary.dispose?.();
+      secondary.dispose?.();
     },
   };
 }

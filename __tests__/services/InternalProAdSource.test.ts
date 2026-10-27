@@ -2,6 +2,7 @@ import {
   createInternalProAdSource,
   INTERNAL_AD_TIMEOUT_MS,
 } from '../../services/ads/InternalProAdSource';
+import i18n from '../../i18n';
 
 describe('services/ads/InternalProAdSource', () => {
   beforeEach(() => jest.useFakeTimers());
@@ -96,6 +97,46 @@ describe('services/ads/InternalProAdSource', () => {
     expect(count).toBe(1);
   });
 
+  describe('dispose (host unmount mid-show)', () => {
+    it('clears the pending timer and resolves the pending show()', async () => {
+      const source = createInternalProAdSource();
+      let count = 0;
+      const p = source.show().then(() => { count += 1; });
+
+      expect(count).toBe(0);
+      source.dispose?.();
+      await p;
+      expect(count).toBe(1);
+
+      // Timer must not fire afterwards.
+      jest.advanceTimersByTime(INTERNAL_AD_TIMEOUT_MS + 100);
+      expect(count).toBe(1);
+    });
+
+    it('resolves exactly once when dispose() races _continue()', async () => {
+      const source = createInternalProAdSource();
+      let count = 0;
+      const p = source.show().then(() => { count += 1; });
+
+      source._continue();
+      source.dispose?.();
+      await p;
+      expect(count).toBe(1);
+    });
+
+    it('is a safe no-op after show() already resolved (dispose-after-done)', async () => {
+      const source = createInternalProAdSource();
+      let count = 0;
+      const p = source.show().then(() => { count += 1; });
+      source._continue();
+      await p;
+
+      expect(() => source.dispose?.()).not.toThrow();
+      jest.advanceTimersByTime(INTERNAL_AD_TIMEOUT_MS + 100);
+      expect(count).toBe(1);
+    });
+  });
+
   describe('renderSurface (panel JSX)', () => {
     it('returns a React node (not null)', () => {
       const source = createInternalProAdSource();
@@ -106,11 +147,29 @@ describe('services/ads/InternalProAdSource', () => {
     it('contains the advertisement image (ad-gazette.webp) as background', () => {
       const source = createInternalProAdSource();
       const surface: any = source.renderSurface();
-      
+
       // The surface itself is now the ImageBackground
       expect(surface.props.source).toEqual(require('../../assets/ads/ad-gazette.webp'));
       expect(surface.props.testID).toBe('ad.internal.pro.panel');
       expect(surface.props.resizeMode).toBe('contain');
+    });
+
+    it('renders i18n strings (en) for title, body and Continue button', () => {
+      const source = createInternalProAdSource();
+      const surface: any = source.renderSurface();
+
+      // ImageBackground > View > [title Text, body Text, Continue Button]
+      const panel = surface.props.children;
+      const texts = panel.props.children;
+      const [title, body, button] = texts;
+
+      expect(title.props.children).toBe(i18n.t('ads.fallbackTitle'));
+      expect(title.props.children).toBe('Tired of ads?');
+      expect(body.props.children).toBe(i18n.t('ads.fallbackBody'));
+      expect(body.props.children).toBe('Go Premium to hide every ad.');
+      expect(button.props.title).toBe(i18n.t('ads.continue'));
+      expect(button.props.title).toBe('Continue');
+      expect(button.props.testID).toBe('ad.internal.pro.continue');
     });
 
     it('the returned surface is stable across calls when state has not changed', () => {

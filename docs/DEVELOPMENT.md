@@ -2,7 +2,11 @@
 
 ## Prerequisites
 - **Node.js**: Recommended version 20.x or higher.
-- **Expo Go**: Download the Expo Go app on your mobile device to test.
+- **Dev build on a physical device (NOT Expo Go compatible)**: the app uses custom native
+  code (react-native-google-mobile-ads, etc.) that requires a development build — install a
+  dev build APK on your phone via `npx expo run:android` or an EAS development build, then
+  use the dev-server URL / QR code for live reload while testing. Ads in dev builds
+  automatically use Google Test IDs on Android.
 
 ## Setup
 1. Install dependencies:

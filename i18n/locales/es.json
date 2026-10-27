@@ -287,7 +287,10 @@
     }
   },
   "ads": {
-    "loading": "Cargando anuncios…"
+    "loading": "Cargando anuncios…",
+    "fallbackTitle": "¿Cansado de los anuncios?",
+    "fallbackBody": "Hazte Premium para ocultar todos los anuncios.",
+    "continue": "Continuar"
   },
   "tutorial": {
     "homeScreen": "Bienvenido al tutorial de WoIstWaldo. \n\n El juego tiene 2 partes.\n\n 1 - Parte de escondite\n\nElige o toma una imagen que contenga la cosa (el Waldo) que quieres que otros adivinen. Luego señala dónde quieres esconderla. Finalmente descríbela. \n\n 2 - Parte de adivinanzas\n\nElige una imagen de otros jugadores. Luego lee la descripción y adivina qué querían esconder. \n\n  ¡Probémoslo!\n\n¿Esconder o adivinar primero?",

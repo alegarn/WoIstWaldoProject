@@ -286,7 +286,10 @@
     }
   },
   "ads": {
-    "loading": "Memuat iklan…"
+    "loading": "Memuat iklan…",
+    "fallbackTitle": "Lelah dengan iklan?",
+    "fallbackBody": "Beralih ke Premium untuk menyembunyikan semua iklan.",
+    "continue": "Lanjut"
   },
   "tutorial": {
     "homeScreen": "Selamat datang di tutorial WoIstWaldo. \n\n Permainannya memiliki 2 bagian.\n\n 1 - Bagian menyembunyikan\n\nPilih atau ambil gambar yang berisi benda (Waldo) yang ingin kamu tebak-tebakkan orang lain. Lalu tunjuk di mana kamu ingin menyembunyikannya. Terakhir deskripsikan. \n\n 2 - Bagian menebak\n\nPilih gambar dari pemain lain. Lalu baca deskripsinya dan tebak apa yang ingin mereka sembunyikan. \n\n  Ayo coba!\n\nSembunyikan atau menebak dulu?",

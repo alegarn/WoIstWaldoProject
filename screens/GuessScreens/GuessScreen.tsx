@@ -520,7 +520,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     <NextCardImageWarmer uris={nextCardUris} />
     <SuccessOverlay visible={showSuccess} multiplier={successMultiplier} points={computePoints(successMultiplier, streakMultiplier)} streakTier={tier} onDone={handleOverlayDone} />
     {adPhase === 'showing' && (
-      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: OverlayZIndex.AD_INTERSTITIAL }}>
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, zIndex: OverlayZIndex.AD_INTERSTITIAL, elevation: OverlayZIndex.AD_INTERSTITIAL }}>
         <AdInterstitial adSource={adSource} onDone={handleAdDone} />
       </View>
     )}

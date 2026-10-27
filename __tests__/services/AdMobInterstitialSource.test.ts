@@ -9,13 +9,17 @@ import {
   createAdMobInterstitialSource,
   PLACEHOLDER_AD_UNIT_ID,
   ADMOB_SHOW_TIMEOUT_MS,
+  ADMOB_OPEN_TIMEOUT_MS,
+  ADMOB_POLL_INTERVAL_MS,
 } from '../../services/ads/AdMobInterstitialSource';
 import type { HookSnapshot, HookSnapshotHandle } from '../../services/ads/AdSource';
 
 function makeSnapshot(overrides: Partial<HookSnapshot> = {}): HookSnapshot {
   return {
     isLoaded: false,
+    isOpened: false,
     isClosed: false,
+    isShowing: false,
     show: jest.fn(),
     ...overrides,
   };
@@ -29,6 +33,14 @@ describe('services/ads/AdMobInterstitialSource', () => {
 
     it('ADMOB_SHOW_TIMEOUT_MS is 30000 (named constant guard, G25)', () => {
       expect(ADMOB_SHOW_TIMEOUT_MS).toBe(30_000);
+    });
+
+    it('ADMOB_OPEN_TIMEOUT_MS is 10000 (named constant guard, G25)', () => {
+      expect(ADMOB_OPEN_TIMEOUT_MS).toBe(10_000);
+    });
+
+    it('ADMOB_POLL_INTERVAL_MS is 200 (named constant guard, G25)', () => {
+      expect(ADMOB_POLL_INTERVAL_MS).toBe(200);
     });
   });
 
@@ -73,37 +85,146 @@ describe('services/ads/AdMobInterstitialSource', () => {
     expect(snap.show).not.toHaveBeenCalled();
   });
 
-  it('show() calls the hook show() and resolves when it resolves', async () => {
-    const snap = makeSnapshot({ isLoaded: true, show: jest.fn().mockResolvedValue(undefined) });
-    const hookSnapshot: HookSnapshotHandle = { get: () => snap };
-    const source = createAdMobInterstitialSource({ hookSnapshot });
-    await source.show();
-    expect(snap.show).toHaveBeenCalled();
-  });
-
-  it('show() swallows errors from the hook (contract: never rejects)', async () => {
-    const snap = makeSnapshot({
-      isLoaded: true,
-      show: jest.fn().mockRejectedValue(new Error('ad network down')),
-    });
-    const hookSnapshot: HookSnapshotHandle = { get: () => snap };
-    const source = createAdMobInterstitialSource({ hookSnapshot });
-    await expect(source.show()).resolves.toBeUndefined();
-  });
-
-  it('show() resolves via ADMOB_SHOW_TIMEOUT_MS when the hook show() hangs (timeout race)', async () => {
+  it('show() does NOT resolve instantly: waits for the ad to open before close (H3)', async () => {
     jest.useFakeTimers();
     try {
-      const neverResolves = new Promise(() => {});
-      const snap = makeSnapshot({ isLoaded: true, show: jest.fn().mockReturnValue(neverResolves) });
+      const snap = makeSnapshot({ isLoaded: true, show: jest.fn() });
+      const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+      const source = createAdMobInterstitialSource({ hookSnapshot });
+      let settled = false;
+      const promise = source.show().then(() => { settled = true; });
+
+      expect(snap.show).toHaveBeenCalled();
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS * 5);
+      expect(settled).toBe(false);
+
+      snap.isShowing = true;
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+      expect(settled).toBe(false); // opened, but not closed yet
+
+      snap.isClosed = true;
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+      await promise;
+      expect(settled).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('show() resolves when the ad never opens (open timeout, game continues)', async () => {
+    jest.useFakeTimers();
+    try {
+      const snap = makeSnapshot({ isLoaded: true, show: jest.fn() });
+      const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+      const source = createAdMobInterstitialSource({ hookSnapshot });
+      let settled = false;
+      const promise = source.show().then(() => { settled = true; });
+
+      await jest.advanceTimersByTimeAsync(ADMOB_OPEN_TIMEOUT_MS + ADMOB_POLL_INTERVAL_MS);
+      await promise;
+      expect(settled).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('show() resolves when the ad opens but never closes (show timeout)', async () => {
+    jest.useFakeTimers();
+    try {
+      const snap = makeSnapshot({ isLoaded: true, isShowing: true, show: jest.fn() });
+      const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+      const source = createAdMobInterstitialSource({ hookSnapshot });
+      let settled = false;
+      const promise = source.show().then(() => { settled = true; });
+
+      await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS); // open poll sees isShowing
+      expect(settled).toBe(false);
+      await jest.advanceTimersByTimeAsync(ADMOB_SHOW_TIMEOUT_MS + ADMOB_POLL_INTERVAL_MS);
+      await promise;
+      expect(settled).toBe(true);
+      expect(jest.getTimerCount()).toBe(0);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('show() swallows errors from the hook and keeps waiting per contract (never rejects)', async () => {
+    jest.useFakeTimers();
+    try {
+      const snap = makeSnapshot({
+        isLoaded: true,
+        show: jest.fn().mockRejectedValue(new Error('ad network down')),
+      });
       const hookSnapshot: HookSnapshotHandle = { get: () => snap };
       const source = createAdMobInterstitialSource({ hookSnapshot });
       const promise = source.show();
-      jest.advanceTimersByTime(30_000);
+      await jest.advanceTimersByTimeAsync(ADMOB_OPEN_TIMEOUT_MS + ADMOB_POLL_INTERVAL_MS);
       await expect(promise).resolves.toBeUndefined();
     } finally {
       jest.useRealTimers();
     }
+  });
+
+  describe('dispose (host unmount mid-show)', () => {
+    it('stops the poll interval and resolves the pending show() wait', async () => {
+      jest.useFakeTimers();
+      try {
+        const snap = makeSnapshot({ isLoaded: true, show: jest.fn() });
+        const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+        const source = createAdMobInterstitialSource({ hookSnapshot });
+        let settled = false;
+        const promise = source.show().then(() => { settled = true; });
+
+        // Mid-poll: ad neither opened nor timed out.
+        await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS * 2);
+        expect(settled).toBe(false);
+        expect(jest.getTimerCount()).toBeGreaterThan(0);
+
+        source.dispose?.();
+        await promise;
+        expect(settled).toBe(true);
+
+        // Interval stopped: no timers survive dispose, and later ticks are inert.
+        expect(jest.getTimerCount()).toBe(0);
+        await jest.advanceTimersByTimeAsync(ADMOB_OPEN_TIMEOUT_MS + ADMOB_SHOW_TIMEOUT_MS);
+        expect(settled).toBe(true);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('resolves the pending close wait when disposed after the ad opened', async () => {
+      jest.useFakeTimers();
+      try {
+        const snap = makeSnapshot({ isLoaded: true, show: jest.fn() });
+        const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+        const source = createAdMobInterstitialSource({ hookSnapshot });
+        let settled = false;
+        const promise = source.show().then(() => { settled = true; });
+
+        snap.isShowing = true;
+        await jest.advanceTimersByTimeAsync(ADMOB_POLL_INTERVAL_MS);
+        expect(settled).toBe(false); // opened, waiting for close
+
+        source.dispose?.();
+        await promise;
+        expect(settled).toBe(true);
+        expect(jest.getTimerCount()).toBe(0);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
+    it('show() after dispose() is a safe no-op', async () => {
+      const snap = makeSnapshot({ isLoaded: true, show: jest.fn() });
+      const hookSnapshot: HookSnapshotHandle = { get: () => snap };
+      const source = createAdMobInterstitialSource({ hookSnapshot });
+      source.dispose?.();
+      await expect(source.show()).resolves.toBeUndefined();
+      expect(snap.show).not.toHaveBeenCalled();
+    });
   });
 
   it('show() early-returns on iOS without touching the hook (Q1: iOS no-op)', async () => {
@@ -117,24 +238,6 @@ describe('services/ads/AdMobInterstitialSource', () => {
       expect(snap.show).not.toHaveBeenCalled();
     } finally {
       rn.Platform.OS = 'android';
-    }
-  });
-
-  it('show() clears the timeout in finally even if hook rejects (no leaked timer)', async () => {
-    jest.useFakeTimers();
-    try {
-      const clearTimeoutSpy = jest.spyOn(globalThis, 'clearTimeout');
-      const snap = makeSnapshot({
-        isLoaded: true,
-        show: jest.fn().mockRejectedValue(new Error('boom')),
-      });
-      const hookSnapshot: HookSnapshotHandle = { get: () => snap };
-      const source = createAdMobInterstitialSource({ hookSnapshot });
-      await expect(source.show()).resolves.toBeUndefined();
-      expect(clearTimeoutSpy).toHaveBeenCalled();
-      clearTimeoutSpy.mockRestore();
-    } finally {
-      jest.useRealTimers();
     }
   });
 });

@@ -143,4 +143,43 @@ describe('AdInterstitial', () => {
     expect(onDone).toHaveBeenCalledTimes(1);
     renderer.unmount();
   });
+
+  it('calls dispose() on unmount mid-show (never resolves onDone)', async () => {
+    let resolveShow: () => void = () => {};
+    const dispose = jest.fn(() => resolveShow());
+    const show = jest.fn().mockImplementation(
+      () => new Promise<void>((resolve) => { resolveShow = resolve; }),
+    );
+    const source = makeSource({ show, dispose });
+    const onDone = jest.fn();
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<AdInterstitial adSource={source} onDone={onDone} />);
+    });
+
+    expect(dispose).not.toHaveBeenCalled();
+    await act(async () => { renderer.unmount(); });
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(onDone).not.toHaveBeenCalled();
+  });
+
+  it('dispose() after normal completion stays a safe no-op path (cleanup still runs)', async () => {
+    const dispose = jest.fn();
+    const show = jest.fn().mockResolvedValue(undefined);
+    const source = makeSource({ show, dispose });
+    const onDone = jest.fn();
+
+    let renderer!: ReactTestRenderer;
+    await act(async () => {
+      renderer = create(<AdInterstitial adSource={source} onDone={onDone} />);
+    });
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(onDone).toHaveBeenCalledTimes(1);
+
+    await act(async () => { renderer.unmount(); });
+    expect(dispose).toHaveBeenCalledTimes(1);
+  });
 });

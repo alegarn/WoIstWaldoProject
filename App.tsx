@@ -643,8 +643,11 @@ export default function App() {
 
   useEffect(() => {
     if (Platform.OS !== 'android') return;
-    MobileAds().initialize().catch(() => {
-      // Initialization failure is non-fatal; ads will retry on next load().
+    MobileAds().initialize().catch((error: unknown) => {
+      // Initialization failure is non-fatal: the bridge retries loads on load errors
+      // and the AdInterstitial overlay degrades to the internal panel, but no AdMob
+      // ad will fill this session without a successful init.
+      console.warn('[AdMob] initialization failed:', error);
     });
   }, []);
 
