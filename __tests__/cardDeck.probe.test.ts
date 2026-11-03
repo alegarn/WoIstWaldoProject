@@ -227,6 +227,19 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
+  it('Task 3a: an end-proved played-out batch (poolExhausted flag) maps to exhausted', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
   it('Task 6d: private scope played-out maps to indeterminate too (no startNewServingCycle, played set kept)', async () => {
     const scope = { kind: 'private', groupId: 'g-1' };
     const playedGroup = batch('gplayed-', 5);

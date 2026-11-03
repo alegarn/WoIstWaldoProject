@@ -69,7 +69,8 @@ const e2eMock = isE2EMode as unknown as jest.Mock;
 type FakeCard = { pictureId: string; imageFile: string };
 type FakeErrorResponse =
   | { isError: true; reason?: 'network' | 'server' }
-  | { isError: false; reason: 'played-out'; images: [] };
+  | { isError: false; reason: 'played-out'; images: [] }
+  | { isError: false; reason: 'played-out'; poolExhausted: true; images: [] };
 type ChainEntry = FakeCard[] | FakeErrorResponse;
 
 const feedChains = new Map<string, ChainEntry[]>();
@@ -449,6 +450,27 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 
     expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
     expect((genuineEmptyResult.next as { params: { pictureId: string } }).params.pictureId).toBe('b1');
+  });
+
+  it('an end-proved played-out batch (poolExhausted) records the category exhausted, unlike a bound-hit one', async () => {
+    chain('city', [{ isError: false, reason: 'played-out', poolExhausted: true, images: [] }]);
+    chain('__all__', [cardBatch('a', 5)]);
+
+    const endProvedResult = await resolveNextCardWithServerFallback(cityArgs);
+
+    expect(endProvedResult.reason).toBe('ok');
+    expect((endProvedResult.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+    expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+
+    await AsyncStorage.multiRemove(await AsyncStorage.getAllKeys());
+    feedChains.clear();
+    chain('city', [{ isError: false, reason: 'played-out', images: [] }]);
+    chain('__all__', [cardBatch('b', 5)]);
+
+    const boundHitResult = await resolveNextCardWithServerFallback(cityArgs);
+
+    expect(boundHitResult.reason).toBe('ok');
+    expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
   });
 
   it('a played-out private category batch is not recorded as exhausted, unlike a genuine empty one', async () => {

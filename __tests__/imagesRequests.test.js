@@ -17,6 +17,7 @@ jest.mock('../utils/auth', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  PUBLIC_FEED_END_CURSOR: '__public_feed_end__',
   saveLastImageUuid: jest.fn(),
 }));
 
@@ -1094,6 +1095,68 @@ describe('imagesRequests utilities', () => {
       expect(names[0]).toBe('p-5');
       expect(names).not.toContain('p-0');
       expect(names[names.length - 1]).toBe('p-204');
+    });
+  });
+
+  describe('Task 3 (D2): end-proved played-out arms exhaustion, empty never arms', () => {
+    const setPublicPlayed = (ids) => {
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:public:any' ? JSON.stringify(ids) : null);
+    };
+
+    beforeEach(() => {
+      AsyncStorage.getItem.mockReset();
+    });
+
+    it('a played tail followed by an empty batch writes the feed-end sentinel and returns poolExhausted (end-proved)', async () => {
+      setPublicPlayed(['p1', 'p2']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1', 'p2']));
+      axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [], poolExhausted: true });
+      expect(axios.get).toHaveBeenCalledTimes(1);
+      expect(axios.post).toHaveBeenCalledTimes(1);
+      // Cursor advanced past the played batch, THEN armed with the sentinel.
+      expect(saveLastImageUuid).toHaveBeenCalledTimes(2);
+      expect(saveLastImageUuid).toHaveBeenNthCalledWith(1, 'p2', undefined, undefined, undefined, undefined);
+      expect(saveLastImageUuid).toHaveBeenLastCalledWith('__public_feed_end__', undefined, undefined, undefined, undefined);
+    });
+
+    it('a plain empty batch with no played skips stays "empty" and arms nothing', async () => {
+      setPublicPlayed([]);
+      axios.get.mockResolvedValueOnce({ data: { data: [] } });
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'empty', images: [] });
+      expect(response.poolExhausted).toBeUndefined();
+      expect(saveLastImageUuid).not.toHaveBeenCalled();
+    });
+
+    it('persistCursor:false suppresses the sentinel write on the end-proved terminal', async () => {
+      setPublicPlayed(['p1']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1']));
+      axios.post.mockResolvedValueOnce({ data: { data: [] } });
+
+      const response = await getImages(null, { token: 'Bearer token' }, {}, { persistCursor: false });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [], poolExhausted: true });
+      expect(saveLastImageUuid).not.toHaveBeenCalled();
+    });
+
+    it('a bound-hit played-out terminal carries no poolExhausted flag and writes no sentinel', async () => {
+      setPublicPlayed(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1']));
+      axios.post.mockResolvedValue(batchResponse(['p2']));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+      expect(response.poolExhausted).toBeUndefined();
+      // Per-batch cursor advances only — never the feed-end sentinel.
+      expect(saveLastImageUuid.mock.calls.every((call) => call[0] !== '__public_feed_end__')).toBe(true);
     });
   });
 

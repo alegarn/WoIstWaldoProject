@@ -164,15 +164,18 @@ async function foregroundTopUp(
       // Tier 2 with zero server round-trips. ONLY the genuine-empty branch
       // writes — the 5xx branch above MUST NOT poison the cache (a transient
       // server blip must not permanently mark a category exhausted), and a
-      // 'played-out' batch (Task 1b) is NOT server-empty either: the stale
-      // marker would permanently block category top-ups. 'all' and
-      // Tier-4 head-replay paths are excluded so newly-uploaded cards surface.
+      // bound-hit 'played-out' batch (Task 1b, no poolExhausted flag) is NOT
+      // server-empty either: the stale marker would permanently block category
+      // top-ups. An end-proved played-out batch (Task 3a flag, D2) IS the
+      // exhaustion proof and marks. 'all' and Tier-4 head-replay paths are
+      // excluded so newly-uploaded cards surface.
       // Paired-write note (CC1): services/cardPrefetcher.ts (B1) writes the
-      // SAME cache with a DIFFERENT guard (categoryKey !== 'all' only — the
-      // prefetcher has no pictureIdOverride context and never runs on the
-      // Tier-4 head path). Both sites use the SAME helper; first-wins is
-      // defense-in-depth. Keep this comment in sync with the prefetcher site.
-      if (r?.reason !== 'played-out' && !isHeadReplay && categoryKey !== 'all') {
+      // SAME cache with a DIFFERENT guard (empty reason-less/flag-bearing
+      // results + categoryKey !== 'all' — the prefetcher has no
+      // pictureIdOverride context and never runs on the Tier-4 head path).
+      // Both sites use the SAME helper; first-wins is defense-in-depth. Keep
+      // this comment in sync with the prefetcher site.
+      if ((r?.reason !== 'played-out' || r?.poolExhausted === true) && !isHeadReplay && categoryKey !== 'all') {
         await markCategoryExhausted(categoryKey, args.language, args.scope, args.mode).catch(() => {});
       }
       return { ok: false, reason: 'empty' };

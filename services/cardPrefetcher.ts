@@ -180,19 +180,24 @@ export async function prefetchIfLow({
           !r.isError &&
           Array.isArray(r.images) &&
           r.images.length === 0 &&
+          (!r.reason || (r.reason === 'played-out' && r.poolExhausted === true)) &&
           categoryKey !== 'all'
         ) {
-          // F3a/B1: server returned genuine empty (NOT a 5xx isError — a
-          // transient server blip MUST NOT poison the cache; mirror C1's CC4
-          // defensive pin at nextCardAdvancer.ts:142-158). Paired-write note
+          // F3a/B1: mark ONLY on a sound empty proof (D2): a reason-less empty
+          // (the sentinel gate's result) or an end-proved played-out batch
+          // (Task 3a flag). A transient server blip (5xx isError) MUST NOT
+          // poison the cache (mirror C1's CC4 defensive pin at
+          // nextCardAdvancer.ts), and the ambiguous `reason: 'empty'` /
+          // bound-hit played-out (no flag) prove nothing — marking on them
+          // would permanently block category top-ups. Paired-write note
           // (CC1): utils/nextCardAdvancer.ts#foregroundTopUp writes the SAME
-          // cache with a DIFFERENT guard (`pictureIdOverride !== null &&
-          // categoryKey !== 'all'` — Tier-4 head path excluded so newly-
-          // uploaded images surface). The prefetcher has no pictureIdOverride
-          // context (it never runs on the Tier-4 head path), so its guard is
-          // `categoryKey !== 'all'` only. Both sites use the SAME helper;
-          // first-wins is defense-in-depth. Keep this comment in sync with
-          // nextCardAdvancer.ts:144-156.
+          // cache with a DIFFERENT guard (`reason !== 'played-out' ||
+          // poolExhausted`, head-replay + 'all' excluded — Tier-4 head path
+          // excluded so newly-uploaded images surface). The prefetcher has no
+          // pictureIdOverride context (it never runs on the Tier-4 head
+          // path). Both sites use the SAME helper; first-wins is
+          // defense-in-depth. Keep this comment in sync with
+          // nextCardAdvancer.ts.
           await markCategoryExhausted(categoryKey, language, scope, mode).catch(() => {});
         }
       } catch (e) {

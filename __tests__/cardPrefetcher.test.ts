@@ -65,7 +65,9 @@ const e2eMock = isE2EMode as unknown as jest.Mock;
 type FakeCard = { pictureId: string; imageFile: string };
 type FakeErrorResponse =
   | { isError: true; reason?: 'network' | 'server' }
-  | { isError: false; reason: 'played-out'; images: [] };
+  | { isError: false; reason: 'played-out'; images: [] }
+  | { isError: false; reason: 'played-out'; poolExhausted: true; images: [] }
+  | { isError: false; reason?: 'empty'; images: [] };
 type ChainEntry = FakeCard[] | FakeErrorResponse | Error | { deferred: Promise<void>; cards: FakeCard[] };
 
 const feedChains = new Map<string, ChainEntry[]>();
@@ -345,8 +347,8 @@ describe('cardPrefetcher (behavior-driven)', () => {
       expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
     });
 
-    it('an empty category batch marks the category exhausted', async () => {
-      chain('city', [[]]);
+    it('a reason-less empty batch (feed-end gate shape) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, images: [] }]);
       chain('__all__', [cardBatch('a', 1)]);
 
       await prefetchIfLow(prefetchCity);
@@ -412,6 +414,50 @@ describe('cardPrefetcher (behavior-driven)', () => {
       expect(callsFor('__all__')).toHaveLength(1);
       expect((await storedDeck(CITY_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'k4']);
       expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['a1']);
+    });
+  });
+
+  describe('prefetchIfLow — Task 3 (D2) marker arming couples to the poolExhausted flag', () => {
+    it('a bound-hit played-out batch (no flag) does NOT mark the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'played-out', images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
+    });
+
+    it('an end-proved played-out batch (poolExhausted) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'played-out', poolExhausted: true, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+    });
+
+    it('a reason-less empty batch (D1 gate result) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+    });
+
+    it('a transport "empty" reason (filter-ambiguous) does NOT mark the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'empty', images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
     });
   });
 
@@ -586,16 +632,16 @@ describe('Task C6/D3: mode-segmented prefetch', () => {
     expect(deck!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'n1', 'n2']);
   });
 
-  it('an empty category batch marks exhaustion under the MODE segment only', async () => {
-    chain('city', [[]]);
-    chain('__all__', [cardBatch('a', 1)]);
+    it('a reason-less empty batch marks exhaustion under the MODE segment only', async () => {
+      chain('city', [{ isError: false, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
 
-    await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
-    await settle();
+      await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
+      await settle();
 
-    expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
-    expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
-  });
+      expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+    });
 
   it('a mode-segmented exhausted marker skips that mode\'s round-trip and tops up from "all"', async () => {
     await AsyncStorage.setItem('exhaustedCategory:city:fr:shape', '1');

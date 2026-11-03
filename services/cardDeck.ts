@@ -29,7 +29,7 @@ export interface FetchCardBatchArgs {
 // emits ('network' | 'server' | absent); the old .d.ts said `unknown`.
 export type FetchCardBatchResult =
   | { isError: true; title?: string; message?: string; reason?: 'network' | 'server' }
-  | { isError: false; reason?: 'empty' | 'played-out'; images: CardImage[] };
+  | { isError: false; reason?: 'empty' | 'played-out'; poolExhausted?: boolean; images: CardImage[] };
 
 export interface AppendCardBatchArgs {
   cards?: CardImage[];
@@ -439,7 +439,8 @@ export const PROBE_MAX_BATCHES = 20;
  * Sound exhaustion proof for the 'all' pool: page the cursor forward
  * (cursor-mode fetches only — pictureIdOverride stays undefined, NEVER null)
  * until either an UNPLAYED card lands (pool not exhausted) or the server
- * returns an empty batch (pool drained — the only valid exhaustion signal).
+ * returns an empty batch — plain (pool drained) or flag-bearing played-out
+ * (end-proved feed end, Task 3a): the only valid exhaustion signals.
  *
  * Replaces the unsound one-head-batch proof (`tier4.ok && !next`,
  * `isCycleExhausted(headDeck.length, filtered)`) that treated ONE
@@ -480,6 +481,13 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
 
     const batch = Array.isArray(result.images) ? result.images : [];
     if (batch.length === 0) {
+      // Task 3a (D2): the verdict couples to the transport's poolExhausted
+      // flag. Flag-bearing played-out is an END-PROVED feed end → exhausted
+      // (fires the cycle transition); a bound-hit played-out (no flag, cursor
+      // mid-feed) proves nothing → stays indeterminate (ADR 0015 Tier-2).
+      if (result.reason === 'played-out' && result.poolExhausted === true) {
+        return { status: 'exhausted' };
+      }
       if (result.reason === 'played-out') {
         return { status: 'indeterminate', reason: 'played-out' };
       }
