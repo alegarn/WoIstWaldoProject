@@ -47,8 +47,8 @@ import { getImages } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
-import { probeAllPoolForUnplayed } from '../services/cardDeck';
-import { getServingCycleEpoch } from '../utils/servingCycle';
+import * as cardDeckModule from '../services/cardDeck';
+import { getServingCycleEpoch, startNewServingCycle } from '../utils/servingCycle';
 import { getAllPoolDrainedEpoch, isAllPoolDrainedFresh, markAllPoolDrained } from '../utils/allPoolDrained';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 
@@ -213,6 +213,39 @@ async function exhaustedMarkerKeys(): Promise<string[]> {
 const PUBLIC_ARGS = { language: 'fr', scope: PUBLIC_SCOPE, authContext: { token: 'x' } };
 const cityArgs = { ...PUBLIC_ARGS, category: { id: 7, key: 'city' }, currentListId: 3, isTutorial: false };
 const allArgs = { ...PUBLIC_ARGS, category: { key: 'all' }, currentListId: 3, isTutorial: false };
+
+// Task 5e: fresh-stamp fixture built through the REAL re-stamp path — an
+// advance that drives the probe to 'exhausted', restarts the cycle, and
+// applies the 4b post-restart re-stamp — never a hand-written pre-restart
+// epoch (the restart belt-clears it, Blocking 1). Leaves the pool in the
+// post-restart persistent-empty regime (played deck, stale cursor, dry
+// server chain).
+async function seedFreshAllPoolStampViaProbeExhaustedAdvance(): Promise<void> {
+  await seedDeck(ALL_DECK_KEY, cardBatch('a', 5));
+  await seedPlayedPublic(['a1', 'a2', 'a3', 'a4', 'a5']);
+  await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a5');
+  chain('__all__', [cardBatch('a', 5), []]);
+
+  const fixtureResult = await resolveNextCardWithServerFallback(allArgs);
+
+  expect(fixtureResult.reason).toBe('ok');
+  expect((fixtureResult.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+  const epochAfterRestart = await getServingCycleEpoch('fr', PUBLIC_SCOPE);
+  expect(epochAfterRestart).toBe(1);
+  expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(epochAfterRestart);
+  expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(true);
+  transport.mockClear();
+}
+
+// Re-arms the persistent-empty regime for the next advance after the fixture:
+// the restart cleared played-set and cursor, so the cycle's cards are
+// "played again" and the cursor parked back at the deck tail.
+async function rearmPlayedDeckAndStaleCursor(): Promise<void> {
+  await seedDeck(ALL_DECK_KEY, cardBatch('a', 5));
+  await seedPlayedPublic(['a1', 'a2', 'a3', 'a4', 'a5']);
+  await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a5');
+  feedChains.set('__all__', [cardBatch('a', 5), []]);
+}
 
 describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
   let warnSpy: jest.SpyInstance;
@@ -685,7 +718,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
   it('the pool probe does not count the just-won card as unplayed proof', async () => {
     chain('__all__', [[card('just-won')], []]);
 
-    const excluded = await probeAllPoolForUnplayed({
+    const excluded = await cardDeckModule.probeAllPoolForUnplayed({
       language: 'fr',
       scope: PUBLIC_SCOPE,
       authContext: { token: 'x' },
@@ -696,7 +729,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
     await AsyncStorage.multiRemove(await AsyncStorage.getAllKeys());
     feedChains.set('__all__', [[card('just-won')], []]);
 
-    const counting = await probeAllPoolForUnplayed({
+    const counting = await cardDeckModule.probeAllPoolForUnplayed({
       language: 'fr',
       scope: PUBLIC_SCOPE,
       authContext: { token: 'x' },
@@ -734,6 +767,54 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
     expect(result.reason).toBe('empty');
     expect(await getServingCycleEpoch('fr', PUBLIC_SCOPE)).toBe(0);
     expect(await AsyncStorage.getItem('allPoolDrained:public:fr:drained')).toBe('1');
+  });
+  it('a fresh all-pool stamp short-circuits the Tier-2 "all" advance, skips the probe, and restarts the cycle directly', async () => {
+    await seedFreshAllPoolStampViaProbeExhaustedAdvance();
+    await rearmPlayedDeckAndStaleCursor();
+    const probeSpy = jest.spyOn(cardDeckModule, 'probeAllPoolForUnplayed');
+
+    try {
+      const result = await resolveNextCardWithServerFallback(allArgs);
+
+      expect(result.reason).toBe('ok');
+      expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+      // 5b(a): the Tier-2 consult returned 'empty' before any cursor-mode
+      // fetch — the transition to Tier 4 is unobservable at the transport.
+      expect(callsFor('__all__').filter((call) => !call.headReplay)).toHaveLength(0);
+      // 5b(b): the probe was skipped — the SAME transition (restart + re-stamp
+      // + head replay) fired directly off the fresh stamp.
+      expect(probeSpy).not.toHaveBeenCalled();
+      expect(await getServingCycleEpoch('fr', PUBLIC_SCOPE)).toBe(2);
+      expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(2);
+      expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(true);
+    } finally {
+      probeSpy.mockRestore();
+    }
+  });
+
+  it('a stale-epoch stamp never gates the Tier-2 "all" advance and the probe still runs', async () => {
+    await seedFreshAllPoolStampViaProbeExhaustedAdvance();
+    // Stale-orphan fixture (Blocking 1): a restart WITHOUT the re-stamp
+    // belt-clears the fresh stamp; hand-re-writing the OLD epoch leaves a
+    // stamp the current cycle's epoch invalidates.
+    await startNewServingCycle('fr', PUBLIC_SCOPE);
+    await markAllPoolDrained('fr', PUBLIC_SCOPE, 1);
+    expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(false);
+    await rearmPlayedDeckAndStaleCursor();
+    const probeSpy = jest.spyOn(cardDeckModule, 'probeAllPoolForUnplayed');
+
+    try {
+      const result = await resolveNextCardWithServerFallback(allArgs);
+
+      expect(result.reason).toBe('ok');
+      expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+      expect(probeSpy).toHaveBeenCalledTimes(1);
+      expect(callsFor('__all__').filter((call) => !call.headReplay)).toHaveLength(2);
+      expect(await getServingCycleEpoch('fr', PUBLIC_SCOPE)).toBe(3);
+      expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(3);
+    } finally {
+      probeSpy.mockRestore();
+    }
   });
 });
 

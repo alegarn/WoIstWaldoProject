@@ -155,7 +155,12 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
   const viable = images.filter((image) => localImageFileExists(image?.imageFile));
 
   if (viable.length !== images.length) {
-    // Review-approved deviation from the plan's wrap-write-only fix: re-read
+    // Task 6c: when EVERY entry is dead the trim lands on zero — a known
+    // dead end (the cursor is already past the rows, so nothing re-serves
+    // them from this read). Reachability is owned by SwipeImage's refill head
+    // fallback (refillOrFallback step 4), NOT by a cursor write here —
+    // rewinding the cursor would re-serve dead rows. Review-approved
+    // deviation from the plan's wrap-write-only fix: re-read
     // and re-trim under the lock. Persisting the pre-lock snapshot would
     // clobber appends committed while we waited for the lock; re-reading the
     // persisted deck inside the critical section keeps the trim lossless

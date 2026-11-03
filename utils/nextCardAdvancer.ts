@@ -17,7 +17,7 @@ import { resolveNextGuessParams } from './handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
 import { warmAllDeckIfNeeded, getInFlightPrefetch, getPrefetchScopeKey } from '../services/cardPrefetcher';
 import { isCategoryExhausted, markCategoryExhausted } from './storageDatum';
-import { markAllPoolDrained } from './allPoolDrained';
+import { isAllPoolDrainedFresh, markAllPoolDrained } from './allPoolDrained';
 import { startNewServingCycle, ServingScope } from './servingCycle';
 
 export type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
@@ -117,7 +117,10 @@ async function foregroundTopUp(
   // real category (the 'all' deck is the Tier 3/4 fallback and must stay live
   // so newly-uploaded images surface). On hit, returns 'empty' so control
   // flows straight to the Tier 3 'all' cross-fallback below.
-  if (!isHeadReplay && categoryKey !== 'all' && await isCategoryExhausted(categoryKey, args.language, args.scope, args.mode)) {
+  // D4/A5(a) (Task 5b): for the 'all' deck itself the epoch-stamped drained
+  // consult plays the same role — drained-and-fresh → 'empty', flowing to the
+  // Tier 4 replay.
+  if (!isHeadReplay && ((categoryKey !== 'all' && await isCategoryExhausted(categoryKey, args.language, args.scope, args.mode)) || (categoryKey === 'all' && await isAllPoolDrainedFresh(args.language, args.scope)))) {
     return { ok: false, reason: 'empty' };
   }
 
@@ -175,7 +178,10 @@ async function foregroundTopUp(
       // results + categoryKey !== 'all' — the prefetcher has no
       // pictureIdOverride context and never runs on the Tier-4 head path).
       // Both sites use the SAME helper; first-wins is defense-in-depth. Keep
-      // this comment in sync with the prefetcher site.
+      // this comment in sync with the prefetcher site. D4/A5 (Task 5b): the
+      // all-pool drained stamp (utils/allPoolDrained.ts) is separate state,
+      // not this marker cache — it is consulted BEFORE the Tier-2 'all' fetch
+      // and BEFORE the probe below.
       if ((r?.reason !== 'played-out' || r?.poolExhausted === true) && !isHeadReplay && categoryKey !== 'all') {
         await markCategoryExhausted(categoryKey, args.language, args.scope, args.mode).catch(() => {});
       }
@@ -273,13 +279,21 @@ export async function resolveNextCardWithServerFallback({
     //   (I7); the typed null result carries the accumulated reason.
     // excludePictureId: the just-won card is not yet in the played-set at
     // advance time, so it is excluded from the probe's unplayed check only.
-    const probe = await probeAllPoolForUnplayed({
-      language,
-      mode,
-      scope,
-      authContext,
-      excludePictureId: currentPictureId,
-    });
+    // D4/A5(b) (Task 5b): consult-before-network — a drained-and-fresh stamp
+    // (carrying the epoch the PREVIOUS restart re-stamped, Task 4b) already
+    // proves the pool drained for this cycle: skip the ≤20-batch probe and
+    // run the SAME transition below (startNewServingCycle + 4b re-stamp + head
+    // replay retry). A missing/stale-epoch stamp (restart without re-stamp,
+    // orphan) is never fresh → the sound probe runs.
+    const probe = (await isAllPoolDrainedFresh(language, scope))
+      ? { status: 'exhausted' as const }
+      : await probeAllPoolForUnplayed({
+        language,
+        mode,
+        scope,
+        authContext,
+        excludePictureId: currentPictureId,
+      });
 
     if (probe?.status === 'unplayed') {
       // NO transition — the probe just appended unplayed cards beyond the

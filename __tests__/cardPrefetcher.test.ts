@@ -46,6 +46,9 @@ import { getImages } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { getPrefetchScopeKey, prefetchIfLow, warmAllDeckIfNeeded, __resetForTests } from '../services/cardPrefetcher';
+import { probeAllPoolForUnplayed } from '../services/cardDeck';
+import { startNewServingCycle } from '../utils/servingCycle';
+import { getAllPoolDrainedEpoch, isAllPoolDrainedFresh, markAllPoolDrained } from '../utils/allPoolDrained';
 
 const transport = getImages as unknown as jest.Mock;
 const e2eMock = isE2EMode as unknown as jest.Mock;
@@ -182,6 +185,26 @@ async function resetStore(): Promise<void> {
   }
 }
 
+// Task 5e: fresh-stamp fixtures go through the REAL re-stamp path —
+// probe → 'exhausted' → startNewServingCycle → markAllPoolDrained(newEpoch) —
+// never a hand-written epoch (a stamp for a pre-restart cycle is unreachable:
+// the restart belt-clears it, Blocking 1). Pins the Blocking-1 equality
+// (stamp epoch === the epoch the restart returned) and clears transport
+// bookkeeping so per-test fetch-count pins stay clean.
+async function seedFreshAllPoolDrainedStamp(): Promise<number> {
+  chain('__all__', [[]]);
+  const verdict = await probeAllPoolForUnplayed({ language: 'fr', scope: PUBLIC_SCOPE, authContext: {} });
+  if (verdict.status !== 'exhausted') {
+    throw new Error(`fixture probe verdict was "${verdict.status}", expected "exhausted"`);
+  }
+  const newEpoch = await startNewServingCycle('fr', PUBLIC_SCOPE);
+  await markAllPoolDrained('fr', PUBLIC_SCOPE, newEpoch);
+  expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(newEpoch);
+  expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(true);
+  transport.mockClear();
+  return newEpoch;
+}
+
 // Fails deck writes for one storage key so the failure surfaces inside the
 // prefetcher's own catch (reported + deck unchanged) without rejecting the
 // transport promise itself — a rejecting transport leaves fetchCardBatch's
@@ -197,7 +220,8 @@ function failDeckWrites(deckKey: string): () => void {
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
 
-const PUBLIC_ARGS = { language: 'fr', scope: { kind: 'public' }, authContext: {} };
+const PUBLIC_SCOPE = { kind: 'public' };
+const PUBLIC_ARGS = { language: 'fr', scope: PUBLIC_SCOPE, authContext: {} };
 const prefetchCity = { ...PUBLIC_ARGS, categoryKey: 'city', categoryId: 7 } as const;
 const prefetchAll = { ...PUBLIC_ARGS, categoryKey: 'all' } as const;
 const warmArgs = PUBLIC_ARGS;
@@ -563,6 +587,80 @@ describe('cardPrefetcher (behavior-driven)', () => {
       await warmAllDeckIfNeeded(warmArgs);
 
       expect(callsFor('__all__')).toHaveLength(2);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+  });
+
+  describe('Task 5 (D4/A4): all-pool drained consult before the "all" fetch legs', () => {
+    it('a fresh all-pool stamp skips the "all" prefetch without network', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3']);
+    });
+
+    it('with a fresh stamp the awaited (removal-time) prefetch promise resolves as a 0-fetch no-op', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      // Mirror refillOrFallback step 2: the promise is started at removal
+      // time, then awaited — the in-function gate must stop the fetch before
+      // launch so the awaited promise resolves with no network.
+      const removalTimePromise = prefetchIfLow(prefetchAll);
+      await removalTimePromise;
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(3);
+    });
+
+    it('a missing (or stale-epoch) stamp never gates the "all" prefetch', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await startNewServingCycle('fr', PUBLIC_SCOPE);
+      await markAllPoolDrained('fr', PUBLIC_SCOPE, 0);
+      expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(false);
+      transport.mockClear();
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a non-"all" category prefetch is never gated by the stamp', async () => {
+      await seedDeck(CITY_DECK_KEY, cardBatch('c', 3));
+      chain('city', [cardBatch('k', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await prefetchIfLow(prefetchCity);
+
+      expect(callsFor('city')).toHaveLength(1);
+      expect((await storedDeck(CITY_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'k1', 'k2']);
+    });
+
+    it('a fresh all-pool stamp skips the warm-all fetch without network', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [cardBatch('a', 3)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
+    });
+
+    it('a missing stamp never gates the warm-all fetch', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [cardBatch('a', 3)]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(1);
       expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
     });
   });
