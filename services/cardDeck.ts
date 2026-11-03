@@ -3,6 +3,7 @@ import type { GetImagesFilters } from '../utils/imagesRequests';
 import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
 import type { DeckWriteLockScope } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
+import { clearAllPoolDrained } from '../utils/allPoolDrained';
 import { withScopeLock } from '../utils/scopeMutex';
 import { ANY_FILTER, normalizeLanguage, normalizeMode } from '../utils/sessionFilter';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
@@ -448,9 +449,12 @@ export const PROBE_MAX_BATCHES = 20;
  * premature cycle transitions (validated images re-served, category-only
  * wipe loop).
  *
- * Writes ONLY the feed cursor: the transport's own batch-tail persist plus
- * one sentinel clear. No cycle-state writes, no servingCycle import
- * (cycle policy stays storage-only in utils/servingCycle.ts). Transient
+ * Writes ONLY the feed cursor (the transport's own batch-tail persist plus
+ * one sentinel clear) and the allPoolDrained stamp clear on the 'unplayed'
+ * verdict (utils/allPoolDrained.ts — AsyncStorage only, no servingCycle
+ * import; cycle policy stays storage-only in utils/servingCycle.ts). The
+ * 'exhausted' verdict writes NO stamp: the post-restart re-stamp by the
+ * callers (nextCardAdvancer / SwipeImage) is the write site. Transient
  * fetch failures return 'indeterminate' and mutate nothing (I7).
  *
  * Sentinel pre-clear: a stored feed-end cursor (PUBLIC or PRIVATE sentinel)
@@ -500,6 +504,11 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
       : unplayed;
     if (candidates.length > 0) {
       await appendCardBatch({ cards: batch, categoryKey: 'all', language: lang, mode: filterMode, scope });
+      // Task 4b (D3): an 'unplayed' verdict disproves the drained state — the
+      // allPoolDrained stamp must not survive it. 'exhausted' writes NOTHING
+      // here: the post-restart re-stamp (nextCardAdvancer/SwipeImage) owns the
+      // write; 'indeterminate' touches nothing (I7).
+      await clearAllPoolDrained(lang, scope).catch(() => {});
       return { status: 'unplayed' };
     }
   }

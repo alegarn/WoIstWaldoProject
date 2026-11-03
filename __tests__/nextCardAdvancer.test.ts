@@ -49,6 +49,7 @@ import { isE2EMode } from '../utils/e2eMode';
 import { prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';
 import { probeAllPoolForUnplayed } from '../services/cardDeck';
 import { getServingCycleEpoch } from '../utils/servingCycle';
+import { getAllPoolDrainedEpoch, isAllPoolDrainedFresh, markAllPoolDrained } from '../utils/allPoolDrained';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 
 const transport = getImages as unknown as jest.Mock;
@@ -701,6 +702,38 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
       authContext: { token: 'x' },
     });
     expect(counting).toEqual({ status: 'unplayed' });
+  });
+
+  it('a probe-exhausted advance (end-proved flag) restarts the cycle and re-stamps the all pool with the epoch the restart returned', async () => {
+    await seedDeck(ALL_DECK_KEY, cardBatch('a', 5));
+    await seedPlayedPublic(['a1', 'a2', 'a3', 'a4', 'a5']);
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'a5');
+    chain('__all__', [cardBatch('a', 5), { isError: false, reason: 'played-out', poolExhausted: true, images: [] }]);
+
+    const result = await resolveNextCardWithServerFallback(allArgs);
+
+    expect(result.reason).toBe('ok');
+    expect((result.next as { params: { pictureId: string } }).params.pictureId).toBe('a1');
+    const epochAfterRestart = await getServingCycleEpoch('fr', PUBLIC_SCOPE);
+    expect(epochAfterRestart).toBe(1);
+    expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(epochAfterRestart);
+    expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(1);
+    expect(await AsyncStorage.getItem('allPoolDrained:public:fr:drained')).toBe('1');
+    expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(true);
+  });
+
+  it('a bound-hit played-out probe verdict (no flag) restarts NO cycle and writes NO stamp', async () => {
+    await seedPlayedPublic(['p1', 'p2']);
+    await AsyncStorage.setItem('lastImageUuid:all:fr:any', 'p2');
+    chain('__all__', [cardBatch('p', 2), { isError: false, reason: 'played-out', images: [] }]);
+    await markAllPoolDrained('fr', PUBLIC_SCOPE, 1);
+
+    const result = await resolveNextCardWithServerFallback(allArgs);
+
+    expect(result.next).toBeNull();
+    expect(result.reason).toBe('empty');
+    expect(await getServingCycleEpoch('fr', PUBLIC_SCOPE)).toBe(0);
+    expect(await AsyncStorage.getItem('allPoolDrained:public:fr:drained')).toBe('1');
   });
 });
 

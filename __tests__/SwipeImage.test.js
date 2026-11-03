@@ -582,6 +582,10 @@ describe('SwipeImage', () => {
 
     it('a dry category top-up marks the category exhausted and stops asking the server', async () => {
       await seedDeck(fourCardDeck('nat'), 'nature');
+      // D2: the prefetcher arms only on a sound dry proof — an end-proved
+      // played-out batch (poolExhausted flag) or a reason-less gate result,
+      // never the filter-ambiguous `reason: 'empty'`.
+      fetchCardBatchMock.mockResolvedValue({ isError: false, reason: 'played-out', poolExhausted: true, images: [] });
 
       const { renderer } = await renderSwipeImage({
         category: { id: 'cat-nature', key: 'nature' },
@@ -1211,6 +1215,8 @@ describe('Task C6/D3: mode threading', () => {
 
   it('a dry top-up under an active mode marks exhaustion under the MODE segment only', async () => {
     await seedDeck(fourCardDeck('nat'), 'nature', 'fr', 'shape');
+    // D2: arm via the end-proved flag — see the matching top-up pin above.
+    fetchCardBatchMock.mockResolvedValue({ isError: false, reason: 'played-out', poolExhausted: true, images: [] });
 
     const { renderer } = await renderSwipeImage({
       category: { id: 'cat-nature', key: 'nature' },

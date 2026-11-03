@@ -11,6 +11,7 @@ import useBadgeDetail from './useBadgeDetail';
 import { getE2EHiddenGuessCard, getLocalImages, isCategoryExhausted, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
 import { addPlayedPictureId, filterPlayedCards } from '../../utils/playedPictureIds';
 import { isCycleExhausted, startNewServingCycle } from '../../utils/servingCycle';
+import { markAllPoolDrained } from '../../utils/allPoolDrained';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -300,7 +301,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           setImageList(allDeck);
         }
       } else if (probe?.status === 'exhausted') {
-        await startNewServingCycle(lang, scope).catch(() => {});
+        // Task 4b (D3): post-restart re-stamp — re-stamp ONLY with the epoch
+        // this restart returned (undefined on restart failure → skip; the
+        // stale orphan is inert, epoch mismatch invalidates it).
+        const newEpoch = await startNewServingCycle(lang, scope).catch(() => {});
+        if (typeof newEpoch === 'number') {
+          await markAllPoolDrained(lang, scope, newEpoch).catch(() => {});
+        }
         setImageList(await filterPlayedCards(headDeck, lang, scope));
       }
       // 'indeterminate' → NO transition (I7); the exhausted flow stands.

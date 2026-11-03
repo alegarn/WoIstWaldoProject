@@ -17,6 +17,7 @@ import { resolveNextGuessParams } from './handleGuessOutcome';
 import { fetchCardBatch, appendCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
 import { warmAllDeckIfNeeded, getInFlightPrefetch, getPrefetchScopeKey } from '../services/cardPrefetcher';
 import { isCategoryExhausted, markCategoryExhausted } from './storageDatum';
+import { markAllPoolDrained } from './allPoolDrained';
 import { startNewServingCycle, ServingScope } from './servingCycle';
 
 export type NextGuessResult = { params: Record<string, unknown> } | null | undefined;
@@ -297,7 +298,14 @@ export async function resolveNextCardWithServerFallback({
       // now servable in the new cycle, at zero extra roundtrips. Bound: at
       // most ONE extra head fetch per cycle exhaustion (the single retry
       // below) — never more.
-      await startNewServingCycle(language, scope as ServingScope).catch(() => {});
+      // Task 4b (D3): post-restart re-stamp — the restart belt-cleared the old
+      // allPoolDrained stamp, so the new one must carry the epoch THIS restart
+      // returned. The .catch above swallows restart failures (epoch undefined
+      // → skip; a stale orphan stamp is inert — epoch mismatch invalidates it).
+      const newEpoch = await startNewServingCycle(language, scope as ServingScope).catch(() => {});
+      if (typeof newEpoch === 'number') {
+        await markAllPoolDrained(language, scope, newEpoch).catch(() => {});
+      }
       const headCursorArgs = { ...resolveArgs, currentListId: undefined };
       next = await resolveNextGuessParams(headCursorArgs);
       if (next) return { next, reason: 'ok' };
