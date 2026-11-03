@@ -11,6 +11,7 @@ import useBadgeDetail from './useBadgeDetail';
 import { getE2EHiddenGuessCard, getLocalImages, isCategoryExhausted, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
 import { addPlayedPictureId, filterPlayedCards } from '../../utils/playedPictureIds';
 import { isCycleExhausted, startNewServingCycle } from '../../utils/servingCycle';
+import { isAllPoolDrainedFresh, markAllPoolDrained } from '../../utils/allPoolDrained';
 import { AuthContext } from '../../store/auth-context';
 import { buildE2EGuessCardFromPayload, buildE2EGuessCards, isE2EMode } from '../../utils/e2eMode';
 import { GlobalStyle } from '../../constants/theme';
@@ -81,6 +82,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
     if (currentImageList === null) {
       console.log("updatedImageList handleData imageList null");
+      // Task 6a(i): an empty batch must NOT reach persistCardBatch — persisting
+      // `cards: []` wipes the persisted resume deck (I5 violation). Leave the
+      // stored deck untouched and report a dry round.
+      if (!data || data?.length === 0) {
+        setImageList([]);
+        return false;
+      }
       const normalized = await persistCardBatch({
         cards: data,
         categoryKey: aKey,
@@ -278,13 +286,20 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     );
     const servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
     if (isCycleExhausted(headDeck.length, servableCount)) {
-      const probe = await probeAllPoolForUnplayed({
-        language: lang,
-        mode: filterMode,
-        scope,
-        authContext: context,
-        excludePictureId: imageListRef.current?.[0]?.pictureId,
-      });
+      // D4/A6 (Task 5c): consult-before-network — a drained-and-fresh stamp
+      // (carrying the epoch the previous restart re-stamped, 4b) already
+      // proves the 'all' pool drained for this cycle: skip the ≤20-batch
+      // probe and run the SAME startNewServingCycle branch below. A missing/
+      // stale-epoch stamp is never fresh → the sound probe arbitrates.
+      const probe = (await isAllPoolDrainedFresh(lang, scope))
+        ? { status: 'exhausted' }
+        : await probeAllPoolForUnplayed({
+          language: lang,
+          mode: filterMode,
+          scope,
+          authContext: context,
+          excludePictureId: imageListRef.current?.[0]?.pictureId,
+        });
       if (probe?.status === 'unplayed') {
         // Serve the 'all' deck (the probe appended ≥1 unplayed card to it)
         // and switch the active category the same way refillOrFallback
@@ -300,7 +315,13 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           setImageList(allDeck);
         }
       } else if (probe?.status === 'exhausted') {
-        await startNewServingCycle(lang, scope).catch(() => {});
+        // Task 4b (D3): post-restart re-stamp — re-stamp ONLY with the epoch
+        // this restart returned (undefined on restart failure → skip; the
+        // stale orphan is inert, epoch mismatch invalidates it).
+        const newEpoch = await startNewServingCycle(lang, scope).catch(() => {});
+        if (typeof newEpoch === 'number') {
+          await markAllPoolDrained(lang, scope, newEpoch).catch(() => {});
+        }
         setImageList(await filterPlayedCards(headDeck, lang, scope));
       }
       // 'indeterminate' → NO transition (I7); the exhausted flow stands.
@@ -412,20 +433,31 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       return;
     }
 
+    // D4/A6 (Task 5d): consult the all-pool drained stamp where the re-arm
+    // attempts initiate — drained-and-fresh → skip step 2's prefetchIfLow
+    // re-arm AND step 3's warmAllDeckIfNeeded fetch (ONLY those), then fall
+    // through to step 4 and the final gated load. D4 precedence pin: the
+    // consult NEVER skips straight to the exhausted UI — the final load (and
+    // its Task 6b single head fallback) still runs, so a cap-200-resurrected
+    // id behind the cursor keeps its serve path.
+    const allPoolDrainedFresh = await isAllPoolDrainedFresh(language, scope).catch(() => false);
+
     // 2. Join any in-flight category prefetch (or start one at deck 0) before
     //    declaring the category exhausted. This covers the last-card race where
     //    the background top-up lands just after the first storage read.
     // SwipeImage intentionally operates cursor-agnostic; pass undefined so
     // getRemainingDeckCount counts all remaining cards.
-    await (categoryPrefetchPromise ?? prefetchIfLow({
-      categoryKey: aKey,
-      categoryId: aCat?.id,
-      language,
-      mode: filterMode,
-      scope,
-      authContext: context,
-      currentListId: undefined,
-    }).catch(() => {}));
+    if (!allPoolDrainedFresh) {
+      await (categoryPrefetchPromise ?? prefetchIfLow({
+        categoryKey: aKey,
+        categoryId: aCat?.id,
+        language,
+        mode: filterMode,
+        scope,
+        authContext: context,
+        currentListId: undefined,
+      }).catch(() => {}));
+    }
 
     catDeck = await readDeck(aKey, aCat);
     if (catDeck.length > 0) {
@@ -436,7 +468,9 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     // 3. Active deck empty and not already on 'all' → fall back to the 'all' deck.
     //    Await the warm so we don't bounce when the warm is mid-flight.
     if (aKey !== 'all') {
-      await warmAllDeckIfNeeded({ language, mode: filterMode, scope, authContext: context }).catch(() => {});
+      if (!allPoolDrainedFresh) {
+        await warmAllDeckIfNeeded({ language, mode: filterMode, scope, authContext: context }).catch(() => {});
+      }
       const allDeck = await readDeck('all', RECENT_ALL_CATEGORY);
       if (allDeck.length > 0) {
         setActiveCategoryKey('all');
@@ -455,7 +489,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         return;
       }
     }
-    await handleImagesLoading();
+    const lastLoad = await handleImagesLoading();
+    // Task 6b: a dry cursor round gets ONE head fallback before accepting
+    // 'exhausted' (mirrors runMountRecoveryFlow's cursor-round + head-probe
+    // contract) — this re-serves the trim-to-zero row (getLocalImages dead-file
+    // trim) and any cursor-past survivor, including under a fresh all-pool
+    // stamp (D4 precedence pin: the 5d consult skips re-arm fetches ONLY;
+    // this fallback runs ONCE per refill attempt regardless of stamp
+    // freshness). Bound: one head attempt per refill call — no loop.
+    if (lastLoad === false) {
+      await handleImagesLoading(null);
+    }
   }, [context, filterMode, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
 
   /*

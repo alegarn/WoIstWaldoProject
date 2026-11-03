@@ -7,6 +7,7 @@ const LAST_IMAGE_UUID_KEY_PREFIX = 'lastImageUuid:';
 const EXHAUSTED_CATEGORY_KEY_PREFIX = 'exhaustedCategory:';
 const GROUP_FEED_KEY_PREFIX = 'groupFeed:';
 const GROUP_FEED_EXHAUSTED_KEY_PREFIX = 'groupFeedExhausted:';
+const ALL_POOL_DRAINED_KEY_PREFIX = 'allPoolDrained:';
 
 export type ServingScope = { kind?: string; groupId?: string } | null | undefined;
 
@@ -50,9 +51,16 @@ export async function startNewServingCycle(
  * `exhaustedCategory:all` marker never auto-clears (clearExhaustedMarkerIfLanded
  * excludes 'all'). Both must go under the SAME epoch lock/transition, scoped to
  * (scope, language): public clears `lastImageUuid:*:<lang>:<mode>` cursors +
- * `exhaustedCategory:*:<lang>:<mode>` markers; group parity clears this group's
- * `groupFeed:<gid>:*:<lang>:<mode>:cursor` entries + `groupFeedExhausted:<gid>:*:<lang>:<mode>`
- * markers. Key shapes mirror utils/storageDatum.ts and
+ * `exhaustedCategory:*:<lang>:<mode>` markers + `allPoolDrained:public:<lang>:drained`
+ * stamps; group parity clears this group's
+ * `groupFeed:<gid>:*:<lang>:<mode>:cursor` entries +
+ * `groupFeedExhausted:<gid>:*:<lang>:<mode>` markers +
+ * `allPoolDrained:group:<gid>:<lang>:drained` stamps. The allPoolDrained
+ * prefixes are OLD-stamp cleanup only (the post-restart re-stamp rewrites the
+ * stamp with the new epoch, utils/allPoolDrained.ts); the `public:` segment in
+ * the public prefix is REQUIRED — a bare `allPoolDrained:` prefix would
+ * cross-wipe group stamps on public restarts, and group epochs are
+ * independent. Key shapes mirror utils/storageDatum.ts and
  * services/groups/groupFeedCache.ts (no import — module stays
  * AsyncStorage + scopeMutex + playedPictureIds).
  *
@@ -83,12 +91,14 @@ async function clearStaleCycleCursorsAndMarkers(
     ? keys.filter(
         (key) =>
           matches(key, `${GROUP_FEED_KEY_PREFIX}${groupId}:`, ':cursor') ||
-          matches(key, `${GROUP_FEED_EXHAUSTED_KEY_PREFIX}${groupId}:`),
+          matches(key, `${GROUP_FEED_EXHAUSTED_KEY_PREFIX}${groupId}:`) ||
+          matches(key, `${ALL_POOL_DRAINED_KEY_PREFIX}group:${groupId}:`),
       )
     : keys.filter(
         (key) =>
           matches(key, LAST_IMAGE_UUID_KEY_PREFIX) ||
-          matches(key, EXHAUSTED_CATEGORY_KEY_PREFIX),
+          matches(key, EXHAUSTED_CATEGORY_KEY_PREFIX) ||
+          matches(key, `${ALL_POOL_DRAINED_KEY_PREFIX}public:`),
       );
 
   if (target.length > 0) {

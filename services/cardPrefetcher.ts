@@ -6,6 +6,7 @@ import { fetchCardBatch, appendCardBatch } from './cardDeck';
  * Idempotent — normalizing already-normalized cards is a no-op.
  */
 import { getRemainingDeckCount, normalizeListIds, isCategoryExhausted, markCategoryExhausted } from '../utils/storageDatum';
+import { isAllPoolDrainedFresh } from '../utils/allPoolDrained';
 import { isE2EMode } from '../utils/e2eMode';
 import { ANY_FILTER } from '../utils/sessionFilter';
 
@@ -143,7 +144,11 @@ export async function prefetchIfLow({
     // If the category is known-empty (cache hit), skip the round-trip and let
     // the top-up below fetch the full TARGET_BATCH_SIZE from 'all'. 'all' is
     // never cached (Tier 3/4 fallback must stay live), so the consult is
-    // guarded on `categoryKey !== 'all'`.
+    // guarded on `categoryKey !== 'all'`. D4/A4 (Task 5a): the 'all' fetch leg
+    // is instead gated by the epoch-stamped all-pool drained consult —
+    // drained-and-fresh → skip without network (gate BEFORE launch, so the
+    // removal-time promise awaited by refillOrFallback step 2 resolves as a
+    // 0-fetch no-op). Non-'all' category fetches are never stamp-gated.
     let skipCategoryFetch = false;
     if (categoryKey !== 'all') {
       try {
@@ -151,6 +156,8 @@ export async function prefetchIfLow({
       } catch {
         skipCategoryFetch = false;
       }
+    } else if (await isAllPoolDrainedFresh(language, scope)) {
+      skipCategoryFetch = true;
     }
 
     if (!skipCategoryFetch) {
@@ -180,19 +187,27 @@ export async function prefetchIfLow({
           !r.isError &&
           Array.isArray(r.images) &&
           r.images.length === 0 &&
+          (!r.reason || (r.reason === 'played-out' && r.poolExhausted === true)) &&
           categoryKey !== 'all'
         ) {
-          // F3a/B1: server returned genuine empty (NOT a 5xx isError — a
-          // transient server blip MUST NOT poison the cache; mirror C1's CC4
-          // defensive pin at nextCardAdvancer.ts:142-158). Paired-write note
+          // F3a/B1: mark ONLY on a sound empty proof (D2): a reason-less empty
+          // (the sentinel gate's result) or an end-proved played-out batch
+          // (Task 3a flag). A transient server blip (5xx isError) MUST NOT
+          // poison the cache (mirror C1's CC4 defensive pin at
+          // nextCardAdvancer.ts), and the ambiguous `reason: 'empty'` /
+          // bound-hit played-out (no flag) prove nothing — marking on them
+          // would permanently block category top-ups. Paired-write note
           // (CC1): utils/nextCardAdvancer.ts#foregroundTopUp writes the SAME
-          // cache with a DIFFERENT guard (`pictureIdOverride !== null &&
-          // categoryKey !== 'all'` — Tier-4 head path excluded so newly-
-          // uploaded images surface). The prefetcher has no pictureIdOverride
-          // context (it never runs on the Tier-4 head path), so its guard is
-          // `categoryKey !== 'all'` only. Both sites use the SAME helper;
-          // first-wins is defense-in-depth. Keep this comment in sync with
-          // nextCardAdvancer.ts:144-156.
+          // cache with a DIFFERENT guard (`reason !== 'played-out' ||
+          // poolExhausted`, head-replay + 'all' excluded — Tier-4 head path
+          // excluded so newly-uploaded images surface). The prefetcher has no
+          // pictureIdOverride context (it never runs on the Tier-4 head
+          // path). Both sites use the SAME helper; first-wins is
+          // defense-in-depth. Keep this comment in sync with
+          // nextCardAdvancer.ts. The all-pool drained stamp
+          // (utils/allPoolDrained.ts, D4/A4-A5) is separate state, not this
+          // marker cache: it gates the 'all' fetch legs (above and
+          // warmAllDeckIfNeeded) before any network.
           await markCategoryExhausted(categoryKey, language, scope, mode).catch(() => {});
         }
       } catch (e) {
@@ -264,6 +279,13 @@ export async function warmAllDeckIfNeeded({
   const raced = allWarming.get(wk);
   if (raced) {
     return raced;
+  }
+
+  // D4/A4 (Task 5a): epoch-stamp gate for the 'all' warm leg — drained-and-
+  // fresh → skip without network. Lives INSIDE the function so every 'all'
+  // warm caller is covered.
+  if (await isAllPoolDrainedFresh(language, scope)) {
+    return;
   }
 
   const p = (async () => {

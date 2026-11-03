@@ -10,6 +10,12 @@ import { getPlayedPictureIds, PLAYED_PICTURE_IDS_CAP } from '../../utils/playedP
 export const PRIVATE_FEED_END_CURSOR = '__private_feed_end__';
 
 const MAX_PLAYED_SKIPS = 5;
+// Task 6d (G1): a batch whose unplayed rows ALL fail to download (the 1-row
+// case used to return success-with-0 while the cursor was already past the
+// rows) is a broken batch, not a dry feed. Consume up to this many consecutive
+// broken batches, then surface the transport error (mirrors
+// imagesRequests.ts MAX_EMPTY_DOWNLOAD_BATCHES).
+const MAX_EMPTY_DOWNLOAD_BATCHES = 3;
 
 export type PrivateImageCategoryRow = {
   id?: string | number | null;
@@ -266,6 +272,7 @@ export async function fetchPrivateFeedPageForGame(
 
   let cursor = pictureId || null;
   let skippedPlayedBatches = 0;
+  let brokenDownloadBatches = 0;
 
   for (;;) {
     const response = await fetchPrivateFeedPage(context, {
@@ -320,7 +327,7 @@ export async function fetchPrivateFeedPageForGame(
       await saveLastImageUuid(nextCursor ?? PRIVATE_FEED_END_CURSOR, categoryKey, language, cursorScope, mode);
     }
 
-    const downloaded = await Promise.all(
+    const downloadedRows = await Promise.all(
       unplayedRows.map(async (row) => {
         const filePath = await downloadPrivateImageFromRow(context, {
           groupId,
@@ -334,7 +341,22 @@ export async function fetchPrivateFeedPageForGame(
         return normalizePrivateImage(row, filePath);
       }),
     );
+    const downloaded = downloadedRows.filter((image): image is Image => Boolean(image));
 
-    return { isError: false, images: downloaded.filter((image): image is Image => Boolean(image)) };
+    // Task 6d (G1): every unplayed row's download failed — a broken batch.
+    // The resume cursor was already persisted past these rows (:319-321), so
+    // returning fake success-with-0 would strand the UI on 'exhausted'.
+    // Continue (a null nextCursor re-fetches the same final page — bounded
+    // retry); past the bound, surface the real transport error. Partial
+    // successes (≥1 row) keep returning success immediately.
+    if (downloaded.length === 0) {
+      brokenDownloadBatches += 1;
+      if (brokenDownloadBatches >= MAX_EMPTY_DOWNLOAD_BATCHES) {
+        return { isError: true, title: 'Failed to load private images.', message: 'Please retry later...' };
+      }
+      continue;
+    }
+
+    return { isError: false, images: downloaded };
   }
 }

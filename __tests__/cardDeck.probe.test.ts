@@ -39,6 +39,8 @@ import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/grou
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { probeAllPoolForUnplayed } from '../services/cardDeck';
 
+const STAMP_KEY = 'allPoolDrained:public:fr:drained';
+
 const mockAsyncStorage = AsyncStorage as unknown as {
   getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
   setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
@@ -227,6 +229,19 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
+  it('Task 3a: an end-proved played-out batch (poolExhausted flag) maps to exhausted', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
   it('Task 6d: private scope played-out maps to indeterminate too (no startNewServingCycle, played set kept)', async () => {
     const scope = { kind: 'private', groupId: 'g-1' };
     const playedGroup = batch('gplayed-', 5);
@@ -286,5 +301,112 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.get('groupFeed:g-1:game:all:fr:any:cursor')).toBe(b3[2].pictureId);
     expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
     expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+});
+
+describe('probeAllPoolForUnplayed (allPoolDrained wiring, Task 4b)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStore();
+    mockGetImages.mockReset();
+    readGroupFeedCache.mockResolvedValue(null);
+    writeGroupFeedCache.mockResolvedValue(undefined);
+  });
+
+  function storedDrainedKeys(store: Store): string[] {
+    return Array.from(store.keys()).filter((key) => key.startsWith('allPoolDrained:'));
+  }
+
+  it('an exhausted verdict via a plain empty batch writes NO stamp (the re-stamp is the caller duty)', async () => {
+    const b2 = batch('played-', 2);
+    const store = mockStore({
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, b2]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('allPoolDrained:'))).toHaveLength(0);
+  });
+
+  it('an exhausted verdict via a flag-bearing played-out batch writes NO stamp either', async () => {
+    const store = mockStore();
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('allPoolDrained:'))).toHaveLength(0);
+  });
+
+  it('an unplayed verdict clears a pre-existing stamp', async () => {
+    const b2 = batch('played-', 2);
+    const b3 = batch('fresh-', 3);
+    const store = mockStore({
+      'allPoolDrained:public:fr:drained': '1',
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, b2, b3]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(store.has(STAMP_KEY)).toBe(false);
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(STAMP_KEY);
+  });
+
+  it('an indeterminate verdict (network error) leaves a pre-existing stamp untouched', async () => {
+    const store = mockStore({ 'allPoolDrained:public:fr:drained': '3' });
+    mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'network' });
+    expect(store.get(STAMP_KEY)).toBe('3');
+  });
+
+  it('an indeterminate verdict (bound-hit played-out, no flag) leaves a pre-existing stamp untouched', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'allPoolDrained:public:fr:drained': '3',
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(batch('played-', 5))),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(store.get(STAMP_KEY)).toBe('3');
+  });
+
+  it('contrast pair: end-proved (flag) → exhausted with NO stamp, bound-hit (no flag) → indeterminate with NO stamp and NO cycle restart', async () => {
+    mockStore();
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const endProved = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(endProved).toEqual({ status: 'exhausted' });
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:') || key.startsWith('allPoolDrained:'))).toHaveLength(0);
+
+    jest.clearAllMocks();
+    const store = mockStore();
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    store.set('playedPictureIds:public:fr', JSON.stringify(pictureIds(batch('played-', 5))));
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const boundHit = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(boundHit).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:') || key.startsWith('allPoolDrained:'))).toHaveLength(0);
   });
 });

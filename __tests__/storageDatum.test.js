@@ -142,6 +142,19 @@ describe('storageDatum utilities', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([]));
   });
 
+  it('Task 6c: a 1-card deck trims to zero — persists [] and returns [] (dead end owned by the SwipeImage refill head fallback)', async () => {
+    mockFileExists = false;
+    AsyncStorage.getItem.mockImplementation(async (key) =>
+      key === 'imageList:all:any:any'
+        ? JSON.stringify([{ listId: 1, imageFile: 'file:///cache/solo.jpg' }])
+        : null);
+
+    const result = await getLocalImages('all', 'any');
+
+    expect(result).toEqual([]);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('imageList:all:any:any', JSON.stringify([]));
+  });
+
   it('derives the highest stored image id and falls back to zero for an empty list', async () => {
     AsyncStorage.getItem.mockResolvedValueOnce(JSON.stringify([
       { listId: 1 },

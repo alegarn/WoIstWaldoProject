@@ -46,6 +46,9 @@ import { getImages } from '../utils/imagesRequests';
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { getPrefetchScopeKey, prefetchIfLow, warmAllDeckIfNeeded, __resetForTests } from '../services/cardPrefetcher';
+import { probeAllPoolForUnplayed } from '../services/cardDeck';
+import { startNewServingCycle } from '../utils/servingCycle';
+import { getAllPoolDrainedEpoch, isAllPoolDrainedFresh, markAllPoolDrained } from '../utils/allPoolDrained';
 
 const transport = getImages as unknown as jest.Mock;
 const e2eMock = isE2EMode as unknown as jest.Mock;
@@ -65,7 +68,9 @@ const e2eMock = isE2EMode as unknown as jest.Mock;
 type FakeCard = { pictureId: string; imageFile: string };
 type FakeErrorResponse =
   | { isError: true; reason?: 'network' | 'server' }
-  | { isError: false; reason: 'played-out'; images: [] };
+  | { isError: false; reason: 'played-out'; images: [] }
+  | { isError: false; reason: 'played-out'; poolExhausted: true; images: [] }
+  | { isError: false; reason?: 'empty'; images: [] };
 type ChainEntry = FakeCard[] | FakeErrorResponse | Error | { deferred: Promise<void>; cards: FakeCard[] };
 
 const feedChains = new Map<string, ChainEntry[]>();
@@ -180,6 +185,26 @@ async function resetStore(): Promise<void> {
   }
 }
 
+// Task 5e: fresh-stamp fixtures go through the REAL re-stamp path —
+// probe → 'exhausted' → startNewServingCycle → markAllPoolDrained(newEpoch) —
+// never a hand-written epoch (a stamp for a pre-restart cycle is unreachable:
+// the restart belt-clears it, Blocking 1). Pins the Blocking-1 equality
+// (stamp epoch === the epoch the restart returned) and clears transport
+// bookkeeping so per-test fetch-count pins stay clean.
+async function seedFreshAllPoolDrainedStamp(): Promise<number> {
+  chain('__all__', [[]]);
+  const verdict = await probeAllPoolForUnplayed({ language: 'fr', scope: PUBLIC_SCOPE, authContext: {} });
+  if (verdict.status !== 'exhausted') {
+    throw new Error(`fixture probe verdict was "${verdict.status}", expected "exhausted"`);
+  }
+  const newEpoch = await startNewServingCycle('fr', PUBLIC_SCOPE);
+  await markAllPoolDrained('fr', PUBLIC_SCOPE, newEpoch);
+  expect(await getAllPoolDrainedEpoch('fr', PUBLIC_SCOPE)).toBe(newEpoch);
+  expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(true);
+  transport.mockClear();
+  return newEpoch;
+}
+
 // Fails deck writes for one storage key so the failure surfaces inside the
 // prefetcher's own catch (reported + deck unchanged) without rejecting the
 // transport promise itself — a rejecting transport leaves fetchCardBatch's
@@ -195,7 +220,8 @@ function failDeckWrites(deckKey: string): () => void {
 
 const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 20));
 
-const PUBLIC_ARGS = { language: 'fr', scope: { kind: 'public' }, authContext: {} };
+const PUBLIC_SCOPE = { kind: 'public' };
+const PUBLIC_ARGS = { language: 'fr', scope: PUBLIC_SCOPE, authContext: {} };
 const prefetchCity = { ...PUBLIC_ARGS, categoryKey: 'city', categoryId: 7 } as const;
 const prefetchAll = { ...PUBLIC_ARGS, categoryKey: 'all' } as const;
 const warmArgs = PUBLIC_ARGS;
@@ -345,8 +371,8 @@ describe('cardPrefetcher (behavior-driven)', () => {
       expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
     });
 
-    it('an empty category batch marks the category exhausted', async () => {
-      chain('city', [[]]);
+    it('a reason-less empty batch (feed-end gate shape) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, images: [] }]);
       chain('__all__', [cardBatch('a', 1)]);
 
       await prefetchIfLow(prefetchCity);
@@ -412,6 +438,50 @@ describe('cardPrefetcher (behavior-driven)', () => {
       expect(callsFor('__all__')).toHaveLength(1);
       expect((await storedDeck(CITY_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'k4']);
       expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['a1']);
+    });
+  });
+
+  describe('prefetchIfLow — Task 3 (D2) marker arming couples to the poolExhausted flag', () => {
+    it('a bound-hit played-out batch (no flag) does NOT mark the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'played-out', images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
+    });
+
+    it('an end-proved played-out batch (poolExhausted) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'played-out', poolExhausted: true, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+    });
+
+    it('a reason-less empty batch (D1 gate result) marks the category exhausted', async () => {
+      chain('city', [{ isError: false, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBe('1');
+    });
+
+    it('a transport "empty" reason (filter-ambiguous) does NOT mark the category exhausted', async () => {
+      chain('city', [{ isError: false, reason: 'empty', images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
+
+      await prefetchIfLow(prefetchCity);
+      await settle();
+
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(1);
     });
   });
 
@@ -521,6 +591,80 @@ describe('cardPrefetcher (behavior-driven)', () => {
     });
   });
 
+  describe('Task 5 (D4/A4): all-pool drained consult before the "all" fetch legs', () => {
+    it('a fresh all-pool stamp skips the "all" prefetch without network', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect((await storedDeck(ALL_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3']);
+    });
+
+    it('with a fresh stamp the awaited (removal-time) prefetch promise resolves as a 0-fetch no-op', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      // Mirror refillOrFallback step 2: the promise is started at removal
+      // time, then awaited — the in-function gate must stop the fetch before
+      // launch so the awaited promise resolves with no network.
+      const removalTimePromise = prefetchIfLow(prefetchAll);
+      await removalTimePromise;
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(3);
+    });
+
+    it('a missing (or stale-epoch) stamp never gates the "all" prefetch', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 3));
+      chain('__all__', [cardBatch('n', 2)]);
+      await startNewServingCycle('fr', PUBLIC_SCOPE);
+      await markAllPoolDrained('fr', PUBLIC_SCOPE, 0);
+      expect(await isAllPoolDrainedFresh('fr', PUBLIC_SCOPE)).toBe(false);
+      transport.mockClear();
+
+      await prefetchIfLow(prefetchAll);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+
+    it('a non-"all" category prefetch is never gated by the stamp', async () => {
+      await seedDeck(CITY_DECK_KEY, cardBatch('c', 3));
+      chain('city', [cardBatch('k', 2)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await prefetchIfLow(prefetchCity);
+
+      expect(callsFor('city')).toHaveLength(1);
+      expect((await storedDeck(CITY_DECK_KEY))!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'k1', 'k2']);
+    });
+
+    it('a fresh all-pool stamp skips the warm-all fetch without network', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [cardBatch('a', 3)]);
+      await seedFreshAllPoolDrainedStamp();
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(transport).not.toHaveBeenCalled();
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(2);
+    });
+
+    it('a missing stamp never gates the warm-all fetch', async () => {
+      await seedDeck(ALL_DECK_KEY, cardBatch('c', 2));
+      chain('__all__', [cardBatch('a', 3)]);
+
+      await warmAllDeckIfNeeded(warmArgs);
+
+      expect(callsFor('__all__')).toHaveLength(1);
+      expect(await storedDeck(ALL_DECK_KEY)).toHaveLength(5);
+    });
+  });
+
   describe('persistence contracts', () => {
     it('server cards without listIds are persisted with fresh, unique listIds', async () => {
       chain('__all__', [
@@ -586,16 +730,16 @@ describe('Task C6/D3: mode-segmented prefetch', () => {
     expect(deck!.map((c) => c.pictureId)).toEqual(['c1', 'c2', 'c3', 'n1', 'n2']);
   });
 
-  it('an empty category batch marks exhaustion under the MODE segment only', async () => {
-    chain('city', [[]]);
-    chain('__all__', [cardBatch('a', 1)]);
+    it('a reason-less empty batch marks exhaustion under the MODE segment only', async () => {
+      chain('city', [{ isError: false, images: [] }]);
+      chain('__all__', [cardBatch('a', 1)]);
 
-    await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
-    await settle();
+      await prefetchIfLow({ ...prefetchCity, mode: 'shape' });
+      await settle();
 
-    expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
-    expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
-  });
+      expect(await AsyncStorage.getItem('exhaustedCategory:city:fr:shape')).toBe('1');
+      expect(await AsyncStorage.getItem(CITY_EXHAUSTED_KEY)).toBeNull();
+    });
 
   it('a mode-segmented exhausted marker skips that mode\'s round-trip and tops up from "all"', async () => {
     await AsyncStorage.setItem('exhaustedCategory:city:fr:shape', '1');

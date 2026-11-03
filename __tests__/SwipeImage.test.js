@@ -117,9 +117,11 @@ import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
+import * as cardPrefetcherModule from '../services/cardPrefetcher';
 import { __resetForTests } from '../services/cardPrefetcher';
 import { PUBLIC_FEED_END_CURSOR } from '../utils/storageDatum';
 import { PRIVATE_FEED_END_CURSOR } from '../services/groups/groupFeedApi';
+import { getAllPoolDrainedEpoch, isAllPoolDrainedFresh } from '../utils/allPoolDrained';
 
 const fetchCardBatchMock = fetchCardBatch;
 const probeAllPoolForUnplayedMock = probeAllPoolForUnplayed;
@@ -359,6 +361,36 @@ function setE2EMode(enabled) {
   }
 }
 
+// Task 5e: fresh-stamp fixture built through the REAL re-stamp path — the
+// component's own mount recovery drives the probe to 'exhausted', restarts
+// the serving cycle, and applies the 4b post-restart re-stamp. Never a
+// hand-written pre-restart epoch (the restart belt-clears it, Blocking 1).
+// Pins the Blocking-1 equality: stamp epoch === the epoch the restart
+// returned. Leaves the store in the post-restart regime (played set cleared,
+// nature deck holding the served batch) and clears mock bookkeeping.
+async function seedFreshAllPoolStampViaMountRecovery() {
+  await seedDeck(fourCardDeck('cyc'), 'nature');
+  await seedPlayedIds(['cyc-1', 'cyc-2', 'cyc-3', 'cyc-4', 'hp-1', 'hp-2']);
+  fetchCardBatchMock
+    .mockResolvedValueOnce(EMPTY_BATCH)
+    .mockResolvedValueOnce({
+      isError: false,
+      images: [card('hp-1', 'file:///hp1.jpg'), card('hp-2', 'file:///hp2.jpg')],
+    });
+
+  const { renderer } = await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+  expect(store.get(publicCycleKey())).toBe('1');
+  expect(await getAllPoolDrainedEpoch('any', undefined)).toBe(1);
+  expect(await isAllPoolDrainedFresh('any', undefined)).toBe(true);
+
+  await act(async () => {
+    renderer.unmount();
+  });
+  fetchCardBatchMock.mockReset().mockResolvedValue(EMPTY_BATCH);
+  probeAllPoolForUnplayedMock.mockClear();
+}
+
 describe('SwipeImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -446,6 +478,29 @@ describe('SwipeImage', () => {
 
       expect(renderedCardImageUris(renderer)).toEqual([]);
       expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(store.get(publicCycleKey())).toBeUndefined();
+      // Task 6a(ii): persist-then-filter keeps the resume deck on disk even
+      // when the played filter empties the serve — the state is recoverable.
+      expect(await storedDeck()).toEqual([
+        expect.objectContaining({ pictureId: 'allp-1' }),
+        expect.objectContaining({ pictureId: 'allp-2' }),
+      ]);
+    });
+
+    it('Task 6a: a cold-mount empty batch does not wipe the seeded resume deck', async () => {
+      await seedDeck(fourCardDeck('nat'), 'nature');
+      await seedPlayedIds(['nat-1', 'nat-2', 'nat-3', 'nat-4']);
+      // Cursor round comes back empty (cold handleData branch), then the head
+      // probe errors — gating recovery off so nothing else touches the deck.
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce(serverError('Server error', 'Please retry later'));
+
+      const { renderer } = await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(Alert.alert).toHaveBeenCalledWith('Server error', 'Please retry later');
+      expect(renderedText(renderer)).toContain('The list is not there');
+      expect(await storedDeck('nature')).toHaveLength(4);
       expect(store.get(publicCycleKey())).toBeUndefined();
     });
 
@@ -582,6 +637,10 @@ describe('SwipeImage', () => {
 
     it('a dry category top-up marks the category exhausted and stops asking the server', async () => {
       await seedDeck(fourCardDeck('nat'), 'nature');
+      // D2: the prefetcher arms only on a sound dry proof — an end-proved
+      // played-out batch (poolExhausted flag) or a reason-less gate result,
+      // never the filter-ambiguous `reason: 'empty'`.
+      fetchCardBatchMock.mockResolvedValue({ isError: false, reason: 'played-out', poolExhausted: true, images: [] });
 
       const { renderer } = await renderSwipeImage({
         category: { id: 'cat-nature', key: 'nature' },
@@ -730,6 +789,28 @@ describe('SwipeImage', () => {
 
       expect(storeKeys().some((key) => key.startsWith('exhaustedCategory:'))).toBe(false);
       expect(renderedText(renderer)).toContain('No more images to guess right now!');
+    });
+
+    it('Task 6b: a dry cursor round on refill gets exactly one head fetch that serves the survivor', async () => {
+      await seedDeck(fourCardDeck('nat'));
+      fetchCardBatchMock.mockImplementation(({ pictureIdOverride }) => {
+        if (pictureIdOverride === null) {
+          return Promise.resolve({ isError: false, images: [card('survivor-1', 'file:///survivor.jpg')] });
+        }
+        return Promise.resolve(EMPTY_BATCH);
+      });
+
+      const { renderer } = await renderSwipeImage();
+
+      for (const listId of [1, 2, 3, 4]) {
+        await swipeLeft(renderer, listId);
+      }
+
+      const headFetches = fetchCardBatchMock.mock.calls.filter((call) => call[0]?.pictureIdOverride === null);
+      expect(headFetches).toHaveLength(1);
+      expect(renderedCardImageUris(renderer)).toContain('file:///survivor.jpg');
+      expect(renderedText(renderer)).not.toContain('No more images to guess right now!');
+      expect((await storedDeck()).map((c) => c.pictureId)).toContain('survivor-1');
     });
   });
 
@@ -993,6 +1074,124 @@ describe('SwipeImage', () => {
     });
   });
 
+  describe('Task 5 (D4/A6): all-pool consult at the probe/refill sites', () => {
+    it('mount: a fresh all-pool stamp skips the probe batches, restarts the cycle, and re-stamps with the new epoch', async () => {
+      await seedFreshAllPoolStampViaMountRecovery();
+
+      // Post-restart regime again: the cycle's cards were re-played, the
+      // cursor round and head probe both come back empty, every head-batch
+      // card already played — the exact state the probe used to arbitrate.
+      await seedDeck(fourCardDeck('again'), 'nature');
+      await seedPlayedIds(['again-1', 'again-2', 'again-3', 'again-4', 'hp2-1', 'hp2-2']);
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce({
+          isError: false,
+          images: [card('hp2-1', 'file:///hp21.jpg'), card('hp2-2', 'file:///hp22.jpg')],
+        });
+
+      await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(probeAllPoolForUnplayedMock.mock.calls).toHaveLength(0);
+      expect(fetchCardBatchMock).toHaveBeenCalledTimes(2);
+      expect(store.get(publicCycleKey())).toBe('2');
+      expect(await getAllPoolDrainedEpoch('any', undefined)).toBe(2);
+      expect(await isAllPoolDrainedFresh('any', undefined)).toBe(true);
+    });
+
+    it('refill: a fresh all-pool stamp skips the prefetch/warm re-arm fetches; the final gated load gets exactly one head fallback before the exhausted panel', async () => {
+      await seedFreshAllPoolStampViaMountRecovery();
+
+      // An unplayed 'all' deck serves; swiping it dry hands the empty deck to
+      // refillOrFallback with the stamp fresh.
+      await seedDeck(fourCardDeck('fresh'), 'all');
+
+      const { renderer } = await renderSwipeImage();
+
+      for (const listId of [1, 2, 3, 4]) {
+        await swipeLeft(renderer, listId);
+      }
+
+      // ONLY the final gated load (cursor round) plus EXACTLY ONE head
+      // fallback (Task 6b, D4 precedence pin) fetched — zero prefetch/warm
+      // fetches. Exhausted shows only after BOTH rounds came back dry.
+      expect(fetchCardBatchMock).toHaveBeenCalledTimes(2);
+      expect(fetchCardBatchMock.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ categoryKey: 'all' }),
+      );
+      expect(fetchCardBatchMock.mock.calls[0][0].pictureIdOverride).toBeUndefined();
+      expect(fetchCardBatchMock.mock.calls[1][0]).toEqual(
+        expect.objectContaining({ categoryKey: 'all', pictureIdOverride: null }),
+      );
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      // The consult never skips straight to a restart: no probe, no cycle bump.
+      expect(probeAllPoolForUnplayedMock.mock.calls).toHaveLength(0);
+      expect(store.get(publicCycleKey())).toBe('1');
+      expect(await getAllPoolDrainedEpoch('any', undefined)).toBe(1);
+      expect(await isAllPoolDrainedFresh('any', undefined)).toBe(true);
+    });
+
+    it('refill: a fresh all-pool stamp — the single head fallback serves the cursor-past survivor', async () => {
+      await seedFreshAllPoolStampViaMountRecovery();
+
+      await seedDeck(fourCardDeck('fresh'), 'all');
+      // Cursor round dry; the ONE head fallback resolves the resurrected
+      // survivor (cap-200 eviction put it behind the cursor with a trimmed
+      // cache file — the head round is its only serve path, D4 precedence).
+      fetchCardBatchMock.mockImplementation(({ pictureIdOverride }) => {
+        if (pictureIdOverride === null) {
+          return Promise.resolve({ isError: false, images: [card('risen-1', 'file:///risen.jpg')] });
+        }
+        return Promise.resolve(EMPTY_BATCH);
+      });
+
+      const { renderer } = await renderSwipeImage();
+
+      for (const listId of [1, 2, 3, 4]) {
+        await swipeLeft(renderer, listId);
+      }
+
+      const headFetches = fetchCardBatchMock.mock.calls.filter((call) => call[0]?.pictureIdOverride === null);
+      expect(headFetches).toHaveLength(1);
+      expect(renderedCardImageUris(renderer)).toContain('file:///risen.jpg');
+      expect(renderedText(renderer)).not.toContain('No more images to guess right now!');
+      expect((await storedDeck('all')).map((c) => c.pictureId)).toContain('risen-1');
+      expect(probeAllPoolForUnplayedMock.mock.calls).toHaveLength(0);
+      expect(store.get(publicCycleKey())).toBe('1');
+      // Post-restart re-stamp pin: stamp epoch === the epoch the restart returned.
+      expect(await getAllPoolDrainedEpoch('any', undefined)).toBe(1);
+      expect(await isAllPoolDrainedFresh('any', undefined)).toBe(true);
+    });
+
+    it('refill: a fresh all-pool stamp skips the warm re-arm at the refill site itself', async () => {
+      await seedFreshAllPoolStampViaMountRecovery();
+
+      await seedDeck(fourCardDeck('nat'), 'nature');
+      // Filter-ambiguous empty batches: the removal-time category prefetch
+      // (never stamp-gated) gets nothing but arms no marker, so the refill
+      // reaches step 4 and its final gated load.
+      fetchCardBatchMock.mockResolvedValue({ isError: false, reason: 'empty', images: [] });
+      const warmSpy = jest.spyOn(cardPrefetcherModule, 'warmAllDeckIfNeeded');
+
+      try {
+        const { renderer } = await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+        for (const listId of [1, 2, 3, 4]) {
+          await swipeLeft(renderer, listId);
+        }
+
+        expect(warmSpy).not.toHaveBeenCalled();
+        const allFetches = fetchCardBatchMock.mock.calls.filter((call) => call[0]?.categoryKey === 'all');
+        expect(allFetches).toHaveLength(0);
+        expect(renderedText(renderer)).toContain('No more images to guess right now!');
+        expect(store.get(publicCycleKey())).toBe('1');
+        expect(await getAllPoolDrainedEpoch('any', undefined)).toBe(1);
+      } finally {
+        warmSpy.mockRestore();
+      }
+    });
+  });
+
   describe('badge detail', () => {
     async function seedRichDeck() {
       await seedDeck([
@@ -1211,6 +1410,8 @@ describe('Task C6/D3: mode threading', () => {
 
   it('a dry top-up under an active mode marks exhaustion under the MODE segment only', async () => {
     await seedDeck(fourCardDeck('nat'), 'nature', 'fr', 'shape');
+    // D2: arm via the end-proved flag — see the matching top-up pin above.
+    fetchCardBatchMock.mockResolvedValue({ isError: false, reason: 'played-out', poolExhausted: true, images: [] });
 
     const { renderer } = await renderSwipeImage({
       category: { id: 'cat-nature', key: 'nature' },

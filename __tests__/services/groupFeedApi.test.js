@@ -654,6 +654,86 @@ describe('Task 6: fetchPrivateFeedPageForGame pre-download played filter', () =>
   });
 });
 
+describe('Task 6d (G1): broken-batch bound on all-failed downloads', () => {
+  const GROUP_ARGS = { groupId: 'g-3', categoryKey: 'all', language: 'fr' };
+
+  const row = (id) => ({
+    id,
+    name: id,
+    storage_url: `https://s3.amazonaws.com/bucket/private/${id}.jpg`,
+  });
+
+  const page = (rows, nextCursor) => ({
+    status: 200,
+    data: { images: rows, next_cursor: nextCursor },
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // clearAllMocks keeps once-queues and persistent implementations alive;
+    // the broken-batch tests below use mockRejectedValue defaults — reset the
+    // network mocks so no queue/default leaks into the next test.
+    axios.get.mockReset();
+    downloadAsync.mockReset();
+    getBackendHeaders.mockResolvedValue({ token: TOKEN, userId: 'user-1', scoreId: 'score-1' });
+    setHeaders.mockReturnValue(AUTH_HEADERS);
+    AsyncStorage.getItem.mockReset();
+    AsyncStorage.getItem.mockResolvedValue(null);
+  });
+
+  it('a 1-row batch whose download fails continues the loop past the already-advanced cursor (no fake success-with-0)', async () => {
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockRejectedValueOnce(new Error('presign down'))
+      .mockResolvedValueOnce(page([row('img-2')], null));
+    downloadAsync
+      .mockRejectedValueOnce(new Error('storage down'))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.imageFile)).toEqual(['file:///cache/private-img-2.jpeg']);
+    expect(axios.get).toHaveBeenCalledTimes(3);
+    // The tail cursor was persisted BEFORE the failing downloads — the resume
+    // cursor is already past the broken batch.
+    const cursorWriteOrder = saveLastImageUuid.mock.invocationCallOrder[0];
+    const secondPageOrder = axios.get.mock.invocationCallOrder[2];
+    expect(saveLastImageUuid).toHaveBeenCalledWith('cursor-2', 'all', 'fr', { kind: 'private', groupId: 'g-3' }, undefined);
+    expect(cursorWriteOrder).toBeLessThan(secondPageOrder);
+  });
+
+  it('three consecutive all-failed download batches return the transport error instead of fake success', async () => {
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1')], 'cursor-2'))
+      .mockRejectedValueOnce(new Error('presign down'))
+      .mockResolvedValueOnce(page([row('img-2')], 'cursor-3'))
+      .mockRejectedValueOnce(new Error('presign down'))
+      .mockResolvedValueOnce(page([row('img-3')], 'cursor-4'))
+      .mockRejectedValueOnce(new Error('presign down'));
+    downloadAsync.mockRejectedValue(new Error('storage down'));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response).toEqual({ isError: true, title: 'Failed to load private images.', message: 'Please retry later...' });
+    expect(axios.get).toHaveBeenCalledTimes(6);
+  });
+
+  it('a partial download success still returns the downloaded rows immediately', async () => {
+    axios.get
+      .mockResolvedValueOnce(page([row('img-1'), row('img-2')], null))
+      .mockRejectedValue(new Error('presign down'));
+    downloadAsync
+      .mockRejectedValueOnce(new Error('storage down'))
+      .mockResolvedValueOnce(downloadResult({ contentType: 'image/jpeg' }));
+
+    const response = await fetchPrivateFeedPageForGame(null, CONTEXT, GROUP_ARGS);
+
+    expect(response.isError).toBe(false);
+    expect(response.images.map((image) => image.imageFile)).toEqual(['file:///cache/private-img-2.jpeg']);
+  });
+});
+
 describe('Task 7c: private feed exclude param from group played set', () => {
   const GROUP_ARGS = { groupId: 'g-3', categoryKey: 'all', language: 'fr' };
   const IMAGES_URL = 'https://backend.example/api/v1/private_groups/g-3/images/';

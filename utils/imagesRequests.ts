@@ -7,7 +7,7 @@ import { downloadImageFile, ImageDownloadError, indexCachedFinalFiles } from './
 import type { CachedFilesIndex } from './imageDownloader';
 
 export { getBackendHeaders };
-import { saveLastImageUuid } from './storageDatum';
+import { PUBLIC_FEED_END_CURSOR, saveLastImageUuid } from './storageDatum';
 import { getPlayedPictureIds, PLAYED_PICTURE_IDS_CAP } from './playedPictureIds';
 import { fetchPrivateFeedPageForGame } from '../services/groups/groupFeedApi';
 
@@ -21,6 +21,11 @@ export type GetImagesResult = {
    * apiClient unauthorized handler owns logout/navigation out-of-band
    * (plan §5.3), so no 'auth' reason is ever emitted here. */
   reason?: GetImagesErrorReason;
+  /** True only on the end-proved 'played-out' terminal (D2): the client's own
+   * exclusion consumed the remaining pages, then the server dried up. A plain
+   * 'empty' (filter-ambiguous) and a bound-hit 'played-out' (cursor mid-feed)
+   * never set it. */
+  poolExhausted?: boolean;
   title?: string;
   message?: string;
   images?: Image[];
@@ -442,15 +447,19 @@ async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: st
  *   2. early returns: `data === null` → `{ isError: true, reason }`;
  *      `data === 401` → auth error (no 'auth' `reason`; global apiClient
  *      unauthorized handler owns logout/nav out-of-band);
- *      empty `imagesInfosData.length === 0` → `{ isError: false, reason:'empty',
- *      images: [] }` BEFORE any cursor write;
+ *      empty `imagesInfosData.length === 0` → arm the feed-end sentinel and
+ *      return `{ isError: false, reason: 'played-out', images: [],
+ *      poolExhausted: true }` when ≥1 all-played batch was skipped
+ *      (end-proved, D2), else `{ isError: false, reason: 'empty',
+ *      images: [] }` — both BEFORE any other cursor write;
  *   3. PRE-DOWNLOAD played filter: drop rows whose `name` is in the played
  *      set BEFORE `downloadImageBatch`. If ALL rows are played: cursor
  *      advance (`saveLastImageUuid`) with the FULL server-batch tail,
  *      `skippedPlayedBatches += 1`, loop continues (bounded: at most
  *      `MAX_PLAYED_SKIPS` = 5 skips, then terminal
  *      `{ isError: false, reason: 'played-out', images: [] }` — NOT 'empty',
- *      which Tier-2/probe treat as genuine server-empty);
+ *      which Tier-2/probe treat as genuine server-empty; bound-hit only, so
+ *      no `poolExhausted` flag and no sentinel (ADR 0015 deviation);
  *   4. download the batch (`downloadImageBatch`), then a three-way contract:
  *      - ≥1 image downloaded → CURSOR ADVANCE (`saveLastImageUuid`) AFTER the
  *        download, then return `{ isError: false, images }`;
@@ -549,6 +558,16 @@ export async function getImages(
     const imagesInfosData: ImageMetadataRow[] = imagesInfos?.data?.data ?? [];
 
     if (imagesInfosData.length === 0) {
+      // End-proved exhaustion (D2): at least one all-played batch was consumed
+      // before the server dried up — sound end-of-feed proof, so arm the
+      // read-side sentinel. A plain 'empty' is filter-ambiguous and arms
+      // NOTHING here.
+      if (skippedPlayedBatches > 0) {
+        if (persistCursor) {
+          await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+        }
+        return { isError: false, reason: 'played-out', images: [], poolExhausted: true };
+      }
       return { isError: false, reason: 'empty', images: [] };
     };
 

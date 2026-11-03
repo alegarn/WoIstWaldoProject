@@ -22,7 +22,7 @@ jest.mock('../services/groups/groupFeedCache', () => ({
 }));
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
+import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
 import { clearGroupCategoryExhausted, readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { appendCardBatch, fetchCardBatch, persistCardBatch, probeAllPoolForUnplayed, removeCardFromGroupDeck } from '../services/cardDeck';
@@ -867,30 +867,26 @@ describe('fetchCardBatch', () => {
     expect(getImages.mock.calls[0][2].language).not.toBe('any');
   });
 
-  it('treats a legacy stored exhausted sentinel as a fresh cursor so pictureIdOverride===undefined paths self-heal', async () => {
-    // Regression: prior app versions persisted PUBLIC_FEED_END_CURSOR to mark a
-    // category exhausted. After the brick fix, the cold-mount path bypasses the
-    // cursor (always passes null), but refillOrFallback's foreground load and
-    // the background prefetcher still call fetchCardBatch with no override —
-    // which used to read the stale sentinel and POST {name:'__public_feed_end__'}
-    // to the backend every session. Treat the sentinel as null so those paths
-    // also re-query from head and overwrite the stale key with a real cursor.
+  it('gates a cursor-mode fetch when the stored cursor is the public end sentinel (zero network, no reason)', async () => {
+    // Task 2 / D1: mirror the private read-side gate. A stored
+    // PUBLIC_FEED_END_CURSOR makes every cursor-mode call resolve instantly
+    // with an empty batch — getImages is never called. The result carries no
+    // `reason` so the marker guards treat it as a plain empty batch (the
+    // arming path for non-'all' categories). The legacy self-heal (coerce the
+    // sentinel into a paid head fetch) no longer applies to cursor-mode;
+    // head fetches (override null) stay ungated as the un-arm paths.
     getLastImageUuid.mockResolvedValue('__public_feed_end__');
 
-    await fetchCardBatch({
+    await expect(fetchCardBatch({
       categoryKey: 'nature',
       categoryId: 'cat-nature',
       language: 'fr',
       scope: { kind: 'public' },
       authContext: { token: 't' },
       // pictureIdOverride intentionally omitted (refillOrFallback / prefetcher shape)
-    });
+    })).resolves.toEqual({ isError: false, images: [] });
 
-    expect(getImages).toHaveBeenCalledWith(
-      null,
-      { token: 't' },
-      expect.objectContaining({ category_key: 'nature' }),
-    );
+    expect(getImages).not.toHaveBeenCalled();
   });
 });
 
@@ -981,24 +977,19 @@ describe('fetchCardBatch head-replay detection (Fix 2a)', () => {
     );
   });
 
-  it('(e) sentinel + omitted override → 3-arg call (sentinel un-stick keeps persisting)', async () => {
+  it('(e) sentinel + omitted override → gated empty result, getImages never called (read-side sentinel gate)', async () => {
     getLastImageUuid.mockResolvedValue('__public_feed_end__');
 
-    await fetchCardBatch({
+    await expect(fetchCardBatch({
       categoryKey: 'nature',
       categoryId: 'cat-nature',
       language: 'fr',
       scope: { kind: 'public' },
       authContext: { token: 't' },
-      // pictureIdOverride intentionally omitted (cursor-mode sentinel coercion)
-    });
+      // pictureIdOverride intentionally omitted (cursor-mode)
+    })).resolves.toEqual({ isError: false, images: [] });
 
-    expect(getImages.mock.calls[0]).toHaveLength(3);
-    expect(getImages).toHaveBeenCalledWith(
-      null,
-      { token: 't' },
-      expect.objectContaining({ category_key: 'nature' }),
-    );
+    expect(getImages).not.toHaveBeenCalled();
   });
 
   it('(f) explicit uuid override → 3-arg call even with a stored cursor (explicit-uuid fetch unchanged)', async () => {
@@ -1016,6 +1007,45 @@ describe('fetchCardBatch head-replay detection (Fix 2a)', () => {
     expect(getImages.mock.calls[0]).toHaveLength(3);
     expect(getImages).toHaveBeenCalledWith(
       'explicit-uuid',
+      { token: 't' },
+      expect.objectContaining({ category_key: 'nature' }),
+    );
+  });
+});
+
+describe('fetchCardBatch public end-sentinel gate (Task 2 / G2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    getLastImageUuid.mockResolvedValue(null);
+    getImages.mockResolvedValue({ isError: false, images: [] });
+  });
+
+  it('(c) sentinel as pictureIdOverride → gated empty result without calling getImages (no reason field)', async () => {
+    await expect(fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+      pictureIdOverride: PUBLIC_FEED_END_CURSOR,
+    })).resolves.toEqual({ isError: false, images: [] });
+
+    expect(getImages).not.toHaveBeenCalled();
+  });
+
+  it('a real stored cursor keeps cursor-mode fetching (gate is value-scoped to the sentinel)', async () => {
+    getLastImageUuid.mockResolvedValue('real-cursor-uuid');
+
+    await fetchCardBatch({
+      categoryKey: 'nature',
+      categoryId: 'cat-nature',
+      language: 'fr',
+      scope: { kind: 'public' },
+      authContext: { token: 't' },
+    });
+
+    expect(getImages).toHaveBeenCalledWith(
+      'real-cursor-uuid',
       { token: 't' },
       expect.objectContaining({ category_key: 'nature' }),
     );

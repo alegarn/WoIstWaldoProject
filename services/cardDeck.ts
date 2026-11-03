@@ -3,6 +3,7 @@ import type { GetImagesFilters } from '../utils/imagesRequests';
 import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, clearLastImageUuid, deckWriteLockKey, getLastImageUuid, normalizeListIds, storeImageList, updateImageList } from '../utils/storageDatum';
 import type { DeckWriteLockScope } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
+import { clearAllPoolDrained } from '../utils/allPoolDrained';
 import { withScopeLock } from '../utils/scopeMutex';
 import { ANY_FILTER, normalizeLanguage, normalizeMode } from '../utils/sessionFilter';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
@@ -29,7 +30,7 @@ export interface FetchCardBatchArgs {
 // emits ('network' | 'server' | absent); the old .d.ts said `unknown`.
 export type FetchCardBatchResult =
   | { isError: true; title?: string; message?: string; reason?: 'network' | 'server' }
-  | { isError: false; reason?: 'empty' | 'played-out'; images: CardImage[] };
+  | { isError: false; reason?: 'empty' | 'played-out'; poolExhausted?: boolean; images: CardImage[] };
 
 export interface AppendCardBatchArgs {
   cards?: CardImage[];
@@ -169,7 +170,8 @@ function fetchBatchDedupKey({ categoryKey, categoryId, language, mode, scope, pi
  * pictureIdOverride resolution:
  * - `undefined` → read the persisted cursor via getLastImageUuid.
  * - `null` → head fetch (query from start, ignore cursor).
- * - `PUBLIC_FEED_END_CURSOR` sentinel → coerced to null (legacy self-heal).
+ * - `PUBLIC_FEED_END_CURSOR` sentinel → instant empty result (read-side
+ *   sentinel gate, mirroring the private transport's exhausted short-circuit).
  * - any other value → fetch the batch following that exact picture id.
  *
  * In-flight collapse: concurrent callers with the same dedup key share ONE
@@ -204,13 +206,28 @@ export function fetchCardBatch({ categoryKey, categoryId, language, mode, scope,
     const isHeadReplay = pictureIdOverride === null && !!lastImageUuid;
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
 
-    // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
-    // mark a category exhausted. The cold-mount path now bypasses the cursor
-    // (always passes null), but refillOrFallback's foreground load and the
-    // background prefetcher still call fetchCardBatch with no override. Treat
-    // the stale sentinel as a fresh cursor so those paths also re-query from
-    // head; the next non-empty batch overwrites the stale key with a real uuid.
-    const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
+    // Read-side sentinel gate (mirrors the private transport's exhausted
+    // short-circuit): cursor-mode reads and sentinel-as-override calls
+    // resolve instantly against a stored public end sentinel — zero network.
+    // Head fetches (override null) are never gated: looping replay and the
+    // mount head probe are the un-arm paths. The result carries no `reason`
+    // so the paired marker guards treat it as a plain empty batch. The check
+    // is value-scoped: a stored cursor never holds this sentinel on the
+    // private path (group-scoped keys, PRIVATE_FEED_END_CURSOR value), so no
+    // scope-kind guard is needed.
+    if (
+      (pictureIdOverride === undefined || pictureIdOverride === PUBLIC_FEED_END_CURSOR) &&
+      pictureId === PUBLIC_FEED_END_CURSOR
+    ) {
+      return { isError: false, images: [] };
+    }
+
+    // Legacy self-heal (head-replay scope only): cursor-mode reads never
+    // reach this line with the sentinel — the gate above resolves them
+    // instantly. The coercion stays restricted to the override-null head
+    // path so the sentinel can never leak server-bound.
+    const effectivePictureId =
+      pictureId === PUBLIC_FEED_END_CURSOR && pictureIdOverride === null ? null : pictureId;
 
     // getImages' declared result is a loose `isError: boolean` interface; the
     // runtime shapes coincide with the tagged union above (success ⇒ images
@@ -423,7 +440,8 @@ export const PROBE_MAX_BATCHES = 20;
  * Sound exhaustion proof for the 'all' pool: page the cursor forward
  * (cursor-mode fetches only — pictureIdOverride stays undefined, NEVER null)
  * until either an UNPLAYED card lands (pool not exhausted) or the server
- * returns an empty batch (pool drained — the only valid exhaustion signal).
+ * returns an empty batch — plain (pool drained) or flag-bearing played-out
+ * (end-proved feed end, Task 3a): the only valid exhaustion signals.
  *
  * Replaces the unsound one-head-batch proof (`tier4.ok && !next`,
  * `isCycleExhausted(headDeck.length, filtered)`) that treated ONE
@@ -431,9 +449,12 @@ export const PROBE_MAX_BATCHES = 20;
  * premature cycle transitions (validated images re-served, category-only
  * wipe loop).
  *
- * Writes ONLY the feed cursor: the transport's own batch-tail persist plus
- * one sentinel clear. No cycle-state writes, no servingCycle import
- * (cycle policy stays storage-only in utils/servingCycle.ts). Transient
+ * Writes ONLY the feed cursor (the transport's own batch-tail persist plus
+ * one sentinel clear) and the allPoolDrained stamp clear on the 'unplayed'
+ * verdict (utils/allPoolDrained.ts — AsyncStorage only, no servingCycle
+ * import; cycle policy stays storage-only in utils/servingCycle.ts). The
+ * 'exhausted' verdict writes NO stamp: the post-restart re-stamp by the
+ * callers (nextCardAdvancer / SwipeImage) is the write site. Transient
  * fetch failures return 'indeterminate' and mutate nothing (I7).
  *
  * Sentinel pre-clear: a stored feed-end cursor (PUBLIC or PRIVATE sentinel)
@@ -464,6 +485,13 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
 
     const batch = Array.isArray(result.images) ? result.images : [];
     if (batch.length === 0) {
+      // Task 3a (D2): the verdict couples to the transport's poolExhausted
+      // flag. Flag-bearing played-out is an END-PROVED feed end → exhausted
+      // (fires the cycle transition); a bound-hit played-out (no flag, cursor
+      // mid-feed) proves nothing → stays indeterminate (ADR 0015 Tier-2).
+      if (result.reason === 'played-out' && result.poolExhausted === true) {
+        return { status: 'exhausted' };
+      }
       if (result.reason === 'played-out') {
         return { status: 'indeterminate', reason: 'played-out' };
       }
@@ -476,6 +504,11 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
       : unplayed;
     if (candidates.length > 0) {
       await appendCardBatch({ cards: batch, categoryKey: 'all', language: lang, mode: filterMode, scope });
+      // Task 4b (D3): an 'unplayed' verdict disproves the drained state — the
+      // allPoolDrained stamp must not survive it. 'exhausted' writes NOTHING
+      // here: the post-restart re-stamp (nextCardAdvancer/SwipeImage) owns the
+      // write; 'indeterminate' touches nothing (I7).
+      await clearAllPoolDrained(lang, scope).catch(() => {});
       return { status: 'unplayed' };
     }
   }
