@@ -169,7 +169,8 @@ function fetchBatchDedupKey({ categoryKey, categoryId, language, mode, scope, pi
  * pictureIdOverride resolution:
  * - `undefined` → read the persisted cursor via getLastImageUuid.
  * - `null` → head fetch (query from start, ignore cursor).
- * - `PUBLIC_FEED_END_CURSOR` sentinel → coerced to null (legacy self-heal).
+ * - `PUBLIC_FEED_END_CURSOR` sentinel → instant empty result (read-side
+ *   sentinel gate, mirroring the private transport's exhausted short-circuit).
  * - any other value → fetch the batch following that exact picture id.
  *
  * In-flight collapse: concurrent callers with the same dedup key share ONE
@@ -204,13 +205,28 @@ export function fetchCardBatch({ categoryKey, categoryId, language, mode, scope,
     const isHeadReplay = pictureIdOverride === null && !!lastImageUuid;
     const pictureId = pictureIdOverride !== undefined ? pictureIdOverride : lastImageUuid;
 
-    // Legacy self-heal: prior app versions persisted PUBLIC_FEED_END_CURSOR to
-    // mark a category exhausted. The cold-mount path now bypasses the cursor
-    // (always passes null), but refillOrFallback's foreground load and the
-    // background prefetcher still call fetchCardBatch with no override. Treat
-    // the stale sentinel as a fresh cursor so those paths also re-query from
-    // head; the next non-empty batch overwrites the stale key with a real uuid.
-    const effectivePictureId = pictureId === PUBLIC_FEED_END_CURSOR ? null : pictureId;
+    // Read-side sentinel gate (mirrors the private transport's exhausted
+    // short-circuit): cursor-mode reads and sentinel-as-override calls
+    // resolve instantly against a stored public end sentinel — zero network.
+    // Head fetches (override null) are never gated: looping replay and the
+    // mount head probe are the un-arm paths. The result carries no `reason`
+    // so the paired marker guards treat it as a plain empty batch. The check
+    // is value-scoped: a stored cursor never holds this sentinel on the
+    // private path (group-scoped keys, PRIVATE_FEED_END_CURSOR value), so no
+    // scope-kind guard is needed.
+    if (
+      (pictureIdOverride === undefined || pictureIdOverride === PUBLIC_FEED_END_CURSOR) &&
+      pictureId === PUBLIC_FEED_END_CURSOR
+    ) {
+      return { isError: false, images: [] };
+    }
+
+    // Legacy self-heal (head-replay scope only): cursor-mode reads never
+    // reach this line with the sentinel — the gate above resolves them
+    // instantly. The coercion stays restricted to the override-null head
+    // path so the sentinel can never leak server-bound.
+    const effectivePictureId =
+      pictureId === PUBLIC_FEED_END_CURSOR && pictureIdOverride === null ? null : pictureId;
 
     // getImages' declared result is a loose `isError: boolean` interface; the
     // runtime shapes coincide with the tagged union above (success ⇒ images
