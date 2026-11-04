@@ -17,16 +17,26 @@
       "android": {
         "buildType": "apk"
       },
+      "env": {
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-1838983009101821/6431145621"
+      },
       "channel": "preview"
     },
     "production": {
+      "environment": "production",
+      "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/"
+        "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/",
+        "EXPO_PUBLIC_ADS_DISABLED": "true"
       },
       "channel": "production"
     }
   },
   "submit": {
-    "production": {}
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
   }
 }

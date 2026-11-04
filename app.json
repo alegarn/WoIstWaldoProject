@@ -29,7 +29,8 @@
       "permissions": [
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
-      "package": "com.AlG.HiddenInPlainSight"
+      "package": "com.AlG.HiddenInPlainSight",
+      "versionCode": 2
     },
     "web": {
       "favicon": "./assets/logo.png"
