@@ -24,7 +24,7 @@
     },
     "production": {
       "environment": "production",
-      "autoIncrement": "versionCode",
+      "autoIncrement": true,
       "env": {
         "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/",
         "EXPO_PUBLIC_ADS_DISABLED": "true"
