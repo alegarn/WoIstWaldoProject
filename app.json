@@ -30,7 +30,7 @@
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "package": "com.AlG.HiddenInPlainSight",
-      "versionCode": 4
+      "versionCode": 5
     },
     "web": {
       "favicon": "./assets/logo.png"
@@ -75,7 +75,9 @@
           "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
           "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
           "isAccessMediaLocationEnabled": true,
-          "granularPermissions": ["photo"]
+          "granularPermissions": [
+            "photo"
+          ]
         }
       ],
       [
