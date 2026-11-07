@@ -30,7 +30,7 @@
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "package": "com.AlG.HiddenInPlainSight",
-      "versionCode": 5
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/logo.png"
