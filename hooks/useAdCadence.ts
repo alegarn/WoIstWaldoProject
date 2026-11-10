@@ -5,6 +5,7 @@ import type { AdScope, ConsumeAdSlotResult } from '../utils/adCadence';
 import { shouldSuppressAds, type ActiveGroupAdContext } from '../services/billing/adPolicy';
 import { isFlagExplicitlyOn, type AuthContextLike } from '../services/billing/entitlements';
 import { isE2EMode } from '../utils/e2eMode';
+import { ADS_DISABLED } from '../services/ads/adsGate';
 import type { AdSource } from '../services/ads/AdSource';
 
 type UseAdCadenceArgs = {
@@ -45,7 +46,7 @@ export function useAdCadence({ scope, activeGroup, authContext, adSource }: UseA
   successesSinceLastAdRef.current = successesSinceLastAd;
   const policyScope = resolvePolicyScope(scope);
   const everyNWins = resolveEveryNWins(policyScope, activeGroup);
-  const isAdFree = shouldSuppressAds({
+  const isAdFree = ADS_DISABLED || shouldSuppressAds({
     paidTier: authContext?.paidTier ?? 0,
     scope: policyScope,
     activeGroup: policyScope === 'private' ? activeGroup ?? null : null,

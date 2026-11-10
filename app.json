@@ -30,7 +30,7 @@
         "android.permission.ACCESS_MEDIA_LOCATION"
       ],
       "package": "com.AlG.HiddenInPlainSight",
-      "versionCode": 5
+      "versionCode": 8
     },
     "web": {
       "favicon": "./assets/logo.png"
@@ -92,7 +92,9 @@
         {
           "android": {
             "kotlinVersion": "2.1.20",
-            "extraProguardRules": "-keep class com.google.android.gms.internal.consent_sdk.** { *; }"
+            "extraProguardRules": "-keep class com.google.android.gms.internal.consent_sdk.** { *; }",
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
           }
         }
       ],
@@ -119,7 +121,8 @@
           "checkAutomatically": "ON_LOAD",
           "fallbackToCacheTimeout": 0
         }
-      ]
+      ],
+      "./plugins/edge-to-edge-play-warning"
     ],
     "runtimeVersion": {
       "policy": "fingerprint"
