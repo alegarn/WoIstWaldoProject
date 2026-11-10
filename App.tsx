@@ -31,6 +31,7 @@ import GuessPathScreen from './screens/GuessScreens/GuessPathScreen';
 import GuessFeedScreen from './screens/GuessScreens/GuessFeedScreen';
 import GuessScreen from './screens/GuessScreens/GuessScreen';
 import { AdMobInterstitialBridge } from './services/ads/AdMobInterstitialBridge';
+import { ADS_DISABLED } from './services/ads/adsGate';
 import ResultScreen from './screens/GuessScreens/ResultScreen';
 
 import LanguageOnboardingScreen from './screens/LanguageOnboardingScreen';
@@ -642,6 +643,7 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (ADS_DISABLED) return;
     if (Platform.OS !== 'android') return;
     MobileAds().initialize().catch((error: unknown) => {
       // Initialization failure is non-fatal: the bridge retries loads on load errors
@@ -655,7 +657,7 @@ export default function App() {
     <AuthContextProvider>
       <I18nProvider>
         {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
-        <AdMobInterstitialBridge />
+        {!ADS_DISABLED && <AdMobInterstitialBridge />}
         <NavigationBar hidden />
         <Root />
       </I18nProvider>
