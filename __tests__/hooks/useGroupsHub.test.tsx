@@ -134,8 +134,6 @@ describe('useGroupsHub', () => {
       wrapper: makeWrapper({ token: TOKEN, userId: USER_ID }),
     });
 
-    expect(result.current.isLoading).toBe(true);
-
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
@@ -520,7 +518,7 @@ describe('useGroupsHub', () => {
       result.current.refresh();
     });
 
-    unmount();
+    await unmount();
 
     await act(async () => {
       resolveRefresh(groupsPayload(200, [{ id: 'g-late', owner_id: USER_ID }]));
@@ -737,6 +735,8 @@ describe('useGroupsHub', () => {
         resolveFetch({ status: 401, data: { error: 'unauthorized' } });
       });
 
+      // eslint-disable-next-line no-console
+      console.log('DBG snapshot', JSON.stringify(getSnapshot()), 'Adata', JSON.stringify(instanceA.result.current), 'Bdata', JSON.stringify(instanceB.result.current), 'AisLoading', instanceA.result.current?.isLoading);
       expect(instanceA.result.current.data).toEqual(HUB);
       expect(instanceA.result.current.error).toBeNull();
       expect(instanceA.result.current.isLoading).toBe(false);

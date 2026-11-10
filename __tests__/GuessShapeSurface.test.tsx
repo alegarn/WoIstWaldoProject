@@ -448,7 +448,7 @@ describe('GuessShapeSurface', () => {
     // The parent receives the SAME normalized outline that was scored.
     expect(onOutlineChange).toHaveBeenCalledWith(NORMALIZED_STROKE);
 
-    unmount();
+    await unmount();
 
     const { imageWidth: _omitWidth, imageHeight: _omitHeight, ...propsWithoutDims } = baseProps;
     await render(<GuessShapeSurface {...propsWithoutDims} onOutlineChange={onOutlineChange} />);

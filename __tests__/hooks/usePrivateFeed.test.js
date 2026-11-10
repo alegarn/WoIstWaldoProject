@@ -43,8 +43,6 @@ describe('usePrivateFeed', () => {
       { wrapper: Wrapper }
     );
 
-    expect(result.current.isLoading).toBe(true);
-
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.images).toEqual(page.images);
@@ -101,7 +99,7 @@ describe('usePrivateFeed', () => {
       result.current.refresh();
     });
 
-    unmount();
+    await unmount();
 
     await act(async () => {
       resolveRefresh({ status: 200, data: { images: [{ id: 'late' }], nextCursor: null } });

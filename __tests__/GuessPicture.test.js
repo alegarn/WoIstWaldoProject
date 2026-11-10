@@ -520,7 +520,7 @@ describe('GuessPicture', () => {
         await act(async () => {
           jest.advanceTimersByTime(300);
         });
-        expect(() => screen.unmount()).not.toThrow();
+        await expect(() => screen.unmount()).not.toThrow();
       } finally {
         jest.useRealTimers();
       }
