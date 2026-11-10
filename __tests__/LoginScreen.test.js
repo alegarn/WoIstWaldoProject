@@ -43,13 +43,13 @@ function loginResponse(status, user) {
   };
 }
 
-function renderLoginScreen(contextOverrides = {}) {
+async function renderLoginScreen(contextOverrides = {}) {
   const contextValue = {
     authenticate: jest.fn(),
     ...contextOverrides,
   };
 
-  const screen = render(
+  const screen = await render(
     <AuthContext.Provider value={contextValue}>
       <LoginScreen />
     </AuthContext.Provider>
@@ -58,10 +58,10 @@ function renderLoginScreen(contextOverrides = {}) {
   return { ...screen, contextValue };
 }
 
-function submitCredentials(screen, credentials = CREDENTIALS) {
-  fireEvent.changeText(screen.getByTestId('auth.input.email'), credentials.email);
-  fireEvent.changeText(screen.getByTestId('auth.input.password'), credentials.password);
-  fireEvent.press(screen.getByTestId('auth.button.login-submit'));
+async function submitCredentials(screen, credentials = CREDENTIALS) {
+  await fireEvent.changeText(screen.getByTestId('auth.input.email'), credentials.email);
+  await fireEvent.changeText(screen.getByTestId('auth.input.password'), credentials.password);
+  await fireEvent.press(screen.getByTestId('auth.button.login-submit'));
 }
 
 describe('LoginScreen', () => {
@@ -93,8 +93,8 @@ describe('LoginScreen', () => {
       })
     );
 
-    const screen = renderLoginScreen();
-    submitCredentials(screen, CREDENTIALS);
+    const screen = await renderLoginScreen();
+    await submitCredentials(screen, CREDENTIALS);
 
     await waitFor(() => expect(screen.contextValue.authenticate).toHaveBeenCalledTimes(1));
 
@@ -139,8 +139,8 @@ describe('LoginScreen', () => {
       })
     );
 
-    const screen = renderLoginScreen();
-    submitCredentials(screen, CREDENTIALS);
+    const screen = await renderLoginScreen();
+    await submitCredentials(screen, CREDENTIALS);
 
     await waitFor(() => expect(screen.contextValue.authenticate).toHaveBeenCalledTimes(1));
 
@@ -164,8 +164,8 @@ describe('LoginScreen', () => {
   it('warns about invalid credentials when the backend rejects the login', async () => {
     axios.post.mockResolvedValue(loginResponse(401));
 
-    const screen = renderLoginScreen();
-    submitCredentials(screen, CREDENTIALS);
+    const screen = await renderLoginScreen();
+    await submitCredentials(screen, CREDENTIALS);
 
     await waitFor(() => expect(Alert.alert).toHaveBeenCalledTimes(1));
 
@@ -185,8 +185,8 @@ describe('LoginScreen', () => {
         })
     );
 
-    const screen = renderLoginScreen();
-    submitCredentials(screen, CREDENTIALS);
+    const screen = await renderLoginScreen();
+    await submitCredentials(screen, CREDENTIALS);
 
     expect(screen.getByText('Authenticating...')).toBeTruthy();
 

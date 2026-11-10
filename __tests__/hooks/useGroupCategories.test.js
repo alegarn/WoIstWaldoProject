@@ -51,8 +51,8 @@ function makeWrapper() {
   };
 }
 
-function renderCategories({ groupId = 'g-1', onRefresh = jest.fn(), onUpsell } = {}) {
-  return renderHook(({ groupId, onRefresh, onUpsell }) => useGroupCategories({ groupId, onRefresh, onUpsell }), {
+async function renderCategories({ groupId = 'g-1', onRefresh = jest.fn(), onUpsell } = {}) {
+  return await renderHook(({ groupId, onRefresh, onUpsell }) => useGroupCategories({ groupId, onRefresh, onUpsell }), {
     wrapper: makeWrapper(),
     initialProps: { groupId, onRefresh, onUpsell },
   });
@@ -90,7 +90,7 @@ describe('useGroupCategories', () => {
       { id: 'cat-2', name: 'City' },
     ]));
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
 
     await waitFor(() => expect(result.current.loading).toBe(false));
 
@@ -118,7 +118,7 @@ describe('useGroupCategories', () => {
       onCategories(fresh);
     });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
 
     await waitFor(() => expect(result.current.categories).toEqual(fresh));
 
@@ -132,7 +132,7 @@ describe('useGroupCategories', () => {
       onCategories(same);
     });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
 
     await waitFor(() => expect(result.current.categories).toEqual(same));
 
@@ -145,7 +145,7 @@ describe('useGroupCategories', () => {
       { id: 'cat-1', name: 'Nature' },
     ]));
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
 
     await waitFor(() => expect(result.current.loading).toBe(false));
     expect(result.current.loading).toBe(false);
@@ -168,7 +168,7 @@ describe('useGroupCategories', () => {
     createGroupCategory.mockResolvedValue({ status: 201, data: {} });
     refreshGroupCategories.mockResolvedValue({ data: afterAdd });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.categories).toEqual(initial));
 
     act(() => result.current.setNewCategoryName('Animals'));
@@ -195,7 +195,7 @@ describe('useGroupCategories', () => {
     loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, initial));
     createGroupCategory.mockResolvedValue({ status: 500 });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.categories).toEqual(initial));
 
     act(() => result.current.setNewCategoryName('Animals'));
@@ -214,7 +214,7 @@ describe('useGroupCategories', () => {
     createGroupCategory.mockResolvedValue({ status: 403 });
     const onUpsell = jest.fn();
 
-    const { result } = renderCategories({ onUpsell });
+    const { result } = await renderCategories({ onUpsell });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => result.current.setNewCategoryName('Animals'));
@@ -242,7 +242,7 @@ describe('useGroupCategories', () => {
     loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, []));
     createGroupCategory.mockResolvedValue({ status: 403 });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     act(() => result.current.setNewCategoryName('Animals'));
@@ -260,7 +260,7 @@ describe('useGroupCategories', () => {
     const initial = [{ id: 'cat-1', name: 'Nature' }];
     loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, initial));
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     // Clean draft -> no-op.
@@ -301,7 +301,7 @@ describe('useGroupCategories', () => {
       destructive?.onPress?.();
     });
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
@@ -325,7 +325,7 @@ describe('useGroupCategories', () => {
     });
 
     const onRefresh = jest.fn();
-    const { result } = renderCategories({ onRefresh });
+    const { result } = await renderCategories({ onRefresh });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {
@@ -350,7 +350,7 @@ describe('useGroupCategories', () => {
   it('does nothing when swapThumbnail receives a category without an id', async () => {
     loadGroupCategoriesOptimistic.mockImplementation(optimisticFrom(null, []));
 
-    const { result } = renderCategories();
+    const { result } = await renderCategories();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
     await act(async () => {

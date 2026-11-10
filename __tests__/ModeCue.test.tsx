@@ -16,8 +16,8 @@
 
 import React from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
-import { act, render, screen } from '@testing-library/react-native';
+import type { TestInstance } from 'test-renderer';
+import { act, render, RenderResult } from '@testing-library/react-native';
 
 import ModeCue from '../components/Picture/ModeCue';
 import { GlobalStyle } from '../constants/theme';
@@ -64,11 +64,11 @@ const advance = async (ms: number) => {
 
 type Style = Record<string, any>;
 
-function renderCue() {
+async function renderCue(): Promise<RenderResult> {
   return render(<Cue imageDimensionStyle={IMAGE_DIMS} />);
 }
 
-function styleOf(node: ReactTestInstance): Style {
+function styleOf(node: TestInstance): Style {
   return StyleSheet.flatten(node.props.style ?? []) ?? {};
 }
 
@@ -76,16 +76,16 @@ function readValue(value: Animated.Value): number {
   return (value as unknown as { __getValue(): number }).__getValue();
 }
 
-function findLabeledNode(): ReactTestInstance | null {
-  const matches = screen.UNSAFE_root.findAll(
+function findLabeledNode(view: RenderResult): TestInstance | null {
+  const matches = view.container.queryAll(
     (node) => node.props.accessibilityLabel === LABEL,
   );
   return matches[0] ?? null;
 }
 
 // Host nodes only: composite Animated nodes duplicate every match.
-function findBars(): ReactTestInstance[] {
-  return screen.UNSAFE_root.findAll(
+function findBars(view: RenderResult): TestInstance[] {
+  return view.container.queryAll(
     (node) => typeof node.type === 'string' && matchesBarStyle(styleOf(node)),
   );
 }
@@ -107,18 +107,18 @@ function matchesBarStyle(style: Style): boolean {
   );
 }
 
-function hasAnimatedOpacity(node: ReactTestInstance): boolean {
+function hasAnimatedOpacity(node: TestInstance): boolean {
   const opacity = styleOf(node).opacity;
   return !!opacity && typeof (opacity as Style).__getValue === 'function';
 }
 
 // Wiring contract: one Animated.Value per segment + a parent fade-out value.
 // The parent value is the one carried by (or above) the labeled container.
-function cueOpacityValues(): {
+function cueOpacityValues(view: RenderResult): {
   segmentValues: Animated.Value[];
   containerValues: Animated.Value[];
 } {
-  const nodes = screen.UNSAFE_root.findAll(hasAnimatedOpacity);
+  const nodes = view.container.queryAll(hasAnimatedOpacity);
   const segmentValues: Animated.Value[] = [];
   const containerValues: Animated.Value[] = [];
   for (const node of nodes) {
@@ -131,8 +131,8 @@ function cueOpacityValues(): {
   return { segmentValues, containerValues };
 }
 
-function isOnContainerPath(node: ReactTestInstance): boolean {
-  let current: ReactTestInstance | null = node;
+function isOnContainerPath(node: TestInstance): boolean {
+  let current: TestInstance | null = node;
   while (current) {
     if (current.props.accessibilityLabel === LABEL) {
       return true;
@@ -146,7 +146,7 @@ function visibleCount(values: Animated.Value[]): number {
   return values.filter((value) => readValue(value) > 0).length;
 }
 
-function barSignature(node: ReactTestInstance): string {
+function barSignature(node: TestInstance): string {
   const style = styleOf(node);
   return JSON.stringify([
     style.left,
@@ -192,19 +192,19 @@ describe('ModeCue', () => {
     jest.restoreAllMocks();
   });
 
-  it('renders a pointerEvents="none" container labelled via game.picture.modeCueLabel', () => {
-    renderCue();
+  it('renders a pointerEvents="none" container labelled via game.picture.modeCueLabel', async () => {
+    const view = await renderCue();
 
-    const container = findLabeledNode();
+    const container = findLabeledNode(view);
     expect(container).not.toBeNull();
     expect(container!.props.pointerEvents).toBe('none');
   });
 
   it('draws exactly 7 closed-loop bars with the traceSegmentStyle stroke (primaryColor, ~4px)', async () => {
-    renderCue();
+    const view = await renderCue();
     await advance(250);
 
-    const bars = findBars();
+    const bars = findBars(view);
     expect(bars).toHaveLength(SEGMENT_COUNT);
     for (const bar of bars) {
       const style = styleOf(bar);
@@ -217,24 +217,24 @@ describe('ModeCue', () => {
   });
 
   it('renders the identical 7-point blob across separate mounts', async () => {
-    renderCue();
+    const view = await renderCue();
     await advance(250);
-    const first = findBars().map(barSignature);
+    const first = findBars(view).map(barSignature);
     expect(first).toHaveLength(SEGMENT_COUNT);
 
-    screen.unmount();
-    renderCue();
+    await view.unmount();
+    const secondView = await renderCue();
     await advance(250);
-    const second = findBars().map(barSignature);
+    const second = findBars(secondView).map(barSignature);
 
     expect(second).toEqual(first);
   });
 
   it('centres the blob on the image, sized ≈35–40% of the smaller image dimension', async () => {
-    renderCue();
+    const view = await renderCue();
     await advance(250);
 
-    const bars = findBars();
+    const bars = findBars(view);
     expect(bars).toHaveLength(SEGMENT_COUNT);
     const box = unionBox(bars.map((bar) => barBox(styleOf(bar))));
 
@@ -249,9 +249,9 @@ describe('ModeCue', () => {
   });
 
   it('reveals segments staggered ~30ms apart: 1 visible after one frame, 2 by ~48ms, all 7 by ≈210ms', async () => {
-    renderCue();
+    const view = await renderCue();
 
-    const { segmentValues, containerValues } = cueOpacityValues();
+    const { segmentValues, containerValues } = cueOpacityValues(view);
     expect(segmentValues).toHaveLength(SEGMENT_COUNT);
     expect(containerValues).toHaveLength(1);
 
@@ -267,9 +267,9 @@ describe('ModeCue', () => {
   });
 
   it('fades the whole cue to opacity 0 by ≈360ms and renders null afterwards', async () => {
-    renderCue();
+    const view = await renderCue();
 
-    const { containerValues } = cueOpacityValues();
+    const { containerValues } = cueOpacityValues(view);
     expect(containerValues).toHaveLength(1);
 
     await advance(216);
@@ -279,12 +279,12 @@ describe('ModeCue', () => {
     expect(readValue(containerValues[0])).toBeLessThan(0.05);
 
     await advance(64);
-    expect(screen.toJSON()).toBeNull();
+    expect(view.toJSON()).toBeNull();
   });
 
   it('drives every animation on the JS driver (useNativeDriver: false)', async () => {
     const timingSpy = jest.spyOn(Animated, 'timing');
-    renderCue();
+    await renderCue();
 
     await advance(400);
 
@@ -296,11 +296,12 @@ describe('ModeCue', () => {
 
   it('stops cleanly when unmounted mid-flash: no errors or warnings afterwards', async () => {
     const errorSpy = jest.spyOn(console, 'error');
-    const { unmount } = renderCue();
-    expect(findLabeledNode()).not.toBeNull();
+    const view = await renderCue();
+    const { unmount } = view;
+    expect(findLabeledNode(view)).not.toBeNull();
 
     await advance(100);
-    unmount();
+    await unmount();
     await advance(400);
 
     expect(errorSpy).not.toHaveBeenCalled();

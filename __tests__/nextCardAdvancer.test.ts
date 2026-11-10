@@ -143,7 +143,7 @@ async function serveFeed(
     return { isError: false, reason: 'empty', images: [] };
   }
   if (opts?.persistCursor !== false) {
-    await saveLastImageUuid(entry[entry.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope, (filters as { mode?: string }).mode);
+    await saveLastImageUuid(entry[entry.length - 1]!.pictureId, cursorCategoryOf(filters), (filters as { language?: string }).language, filters?.scope, (filters as { mode?: string }).mode);
   }
   return { isError: false, images: entry };
 }
@@ -819,6 +819,7 @@ describe('resolveNextCardWithServerFallback (behavior-driven)', () => {
 });
 
 describe('Task C6/D3: mode-filtered advance', () => {
+  let warnSpy: jest.SpyInstance;
   beforeEach(() => {
     feedChains.clear();
     headReplayQueues.clear();

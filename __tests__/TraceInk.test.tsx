@@ -47,15 +47,15 @@ function collectNodes(node: any, visit: (node: any) => void) {
 }
 
 describe('TraceInk', () => {
-  it('renders N−1 bars for N points under the trace-ink root testID', () => {
-    render(<TraceInk points={SQUARE_POINTS} />);
+  it('renders N−1 bars for N points under the trace-ink root testID', async () => {
+    await render(<TraceInk points={SQUARE_POINTS} />);
 
     const root = screen.getByTestId('game.picture.trace-ink');
     expect(root.props.children.length).toBe(3);
   });
 
-  it('renders the segment bar with the exact legacy segmentStyle geometry', () => {
-    render(<TraceInk points={HORIZONTAL_SEGMENT} />);
+  it('renders the segment bar with the exact legacy segmentStyle geometry', async () => {
+    await render(<TraceInk points={HORIZONTAL_SEGMENT} />);
 
     const bar =
       screen.getByTestId('game.picture.trace-ink').props.children[0];
@@ -70,8 +70,8 @@ describe('TraceInk', () => {
     expect(style.transform).toEqual([{ rotate: '0deg' }]);
   });
 
-  it('auto-closes nothing: 3 points produce exactly 2 bars (caller composes)', () => {
-    render(<TraceInk points={SQUARE_POINTS.slice(0, 3)} />);
+  it('auto-closes nothing: 3 points produce exactly 2 bars (caller composes)', async () => {
+    await render(<TraceInk points={SQUARE_POINTS.slice(0, 3)} />);
 
     const root = screen.getByTestId('game.picture.trace-ink');
     expect(root.props.children.length).toBe(2);
@@ -80,15 +80,15 @@ describe('TraceInk', () => {
   it.each([
     { name: 'empty', points: [] as Array<{ x: number; y: number }> },
     { name: 'single-point', points: [{ x: 10, y: 10 }] },
-  ])('renders nothing for a $name polyline (<2 points)', ({ points }) => {
-    render(<TraceInk points={points} />);
+  ])('renders nothing for a $name polyline (<2 points)', async ({ points }) => {
+    await render(<TraceInk points={points} />);
 
     expect(screen.queryByTestId('game.picture.trace-ink')).toBeNull();
     expect(screen.toJSON()).toBeNull();
   });
 
-  it('honors custom strokeWidth and color props', () => {
-    render(<TraceInk points={HORIZONTAL_SEGMENT} strokeWidth={5} color="#123456" />);
+  it('honors custom strokeWidth and color props', async () => {
+    await render(<TraceInk points={HORIZONTAL_SEGMENT} strokeWidth={5} color="#123456" />);
 
     const style =
       screen.getByTestId('game.picture.trace-ink').props.children[0].props
@@ -98,12 +98,12 @@ describe('TraceInk', () => {
     expect(style.backgroundColor).toBe('#123456');
   });
 
-  it('renders a caller-composed previewStyle bar after the consecutive bars', () => {
+  it('renders a caller-composed previewStyle bar after the consecutive bars', async () => {
     const preview = traceSegmentStyle(
       SQUARE_POINTS[2],
       SQUARE_POINTS[0]
     );
-    render(<TraceInk points={SQUARE_POINTS.slice(0, 3)} previewStyle={preview} />);
+    await render(<TraceInk points={SQUARE_POINTS.slice(0, 3)} previewStyle={preview} />);
 
     const children =
       screen.getByTestId('game.picture.trace-ink').props.children;
@@ -114,8 +114,8 @@ describe('TraceInk', () => {
     expect(lastBar.props.style).toEqual(expected);
   });
 
-  it('skips zero-length segments instead of rendering empty bars', () => {
-    render(
+  it('skips zero-length segments instead of rendering empty bars', async () => {
+    await render(
       <TraceInk
         points={[
           { x: 20, y: 20 },
@@ -130,7 +130,7 @@ describe('TraceInk', () => {
   });
 
   describe('memo effectiveness', () => {
-    it('compares segment styles by value (the memo gate)', () => {
+    it('compares segment styles by value (the memo gate)', async () => {
       const styleA = traceSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
       const styleA2 = traceSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
       const styleB = traceSegmentStyle({ x: 0, y: 0 }, { x: 10, y: 0 });
@@ -142,13 +142,13 @@ describe('TraceInk', () => {
       expect(areSegmentStylesEqual(null, styleA)).toBe(false);
     });
 
-    it('wires the value comparator into the memoized bar component', () => {
+    it('wires the value comparator into the memoized bar component', async () => {
       const memoTag = (TraceInkSegment as any).$$typeof;
       expect(memoTag).toBe(Symbol.for('react.memo'));
       expect((TraceInkSegment as any).compare).toBe(areSegmentPropsEqual);
     });
 
-    it('blocks re-renders for value-equal restyles through real React.memo', () => {
+    it('blocks re-renders for value-equal restyles through real React.memo', async () => {
       const renderBar = jest.fn(({ style }: { style: TraceSegmentStyle }) => (
         <View style={style} />
       ));
@@ -162,13 +162,13 @@ describe('TraceInk', () => {
         { x: 180, y: 100 }
       )!;
 
-      const { rerender } = render(<MemoDouble style={styleA} />);
+      const { rerender } = await render(<MemoDouble style={styleA} />);
       expect(renderBar).toHaveBeenCalledTimes(1);
 
-      rerender(<MemoDouble style={styleA2} />);
+      await rerender(<MemoDouble style={styleA2} />);
       expect(renderBar).toHaveBeenCalledTimes(1);
 
-      rerender(
+      await rerender(
         <MemoDouble
           style={traceSegmentStyle({ x: 0, y: 0 }, { x: 10, y: 0 })!}
         />
@@ -176,15 +176,15 @@ describe('TraceInk', () => {
       expect(renderBar).toHaveBeenCalledTimes(2);
     });
 
-    it('keeps untouched segments on their CACHED style objects when a point is appended (append-only cache: only the new segment is rebuilt)', () => {
-      const first = render(
+    it('keeps untouched segments on their CACHED style objects when a point is appended (append-only cache: only the new segment is rebuilt)', async () => {
+      const first = await render(
         <TraceInk points={SQUARE_POINTS.slice(0, 3)} />
       );
       const before = screen
         .getByTestId('game.picture.trace-ink')
         .props.children.map((bar: any) => bar.props.style);
 
-      first.rerender(<TraceInk points={SQUARE_POINTS} />);
+      await first.rerender(<TraceInk points={SQUARE_POINTS} />);
 
       const children =
         screen.getByTestId('game.picture.trace-ink').props.children;
@@ -195,10 +195,10 @@ describe('TraceInk', () => {
       expect(children[2].props.style).not.toBe(before[1]);
     });
 
-    it('builds every segment after an empty mount receives its first polyline (empty-cache append)', () => {
-      const first = render(<TraceInk points={[]} />);
+    it('builds every segment after an empty mount receives its first polyline (empty-cache append)', async () => {
+      const first = await render(<TraceInk points={[]} />);
 
-      first.rerender(<TraceInk points={SQUARE_POINTS} />);
+      await first.rerender(<TraceInk points={SQUARE_POINTS} />);
 
       const children =
         screen.getByTestId('game.picture.trace-ink').props.children;
@@ -208,7 +208,7 @@ describe('TraceInk', () => {
       );
     });
 
-    it('rebuilds the whole cache for a brand-new stroke that is not a prefix extension (all styles fresh, values correct)', () => {
+    it('rebuilds the whole cache for a brand-new stroke that is not a prefix extension (all styles fresh, values correct)', async () => {
       const firstStroke = [
         { x: 20, y: 20 },
         { x: 180, y: 20 },
@@ -219,12 +219,12 @@ describe('TraceInk', () => {
         { x: 160, y: 40 },
         { x: 160, y: 360 },
       ];
-      const first = render(<TraceInk points={firstStroke} />);
+      const first = await render(<TraceInk points={firstStroke} />);
       const before = screen
         .getByTestId('game.picture.trace-ink')
         .props.children.map((bar: any) => bar.props.style);
 
-      first.rerender(<TraceInk points={secondStroke} />);
+      await first.rerender(<TraceInk points={secondStroke} />);
 
       const children =
         screen.getByTestId('game.picture.trace-ink').props.children;
@@ -241,15 +241,15 @@ describe('TraceInk', () => {
       );
     });
 
-    it('recomputes value-equal styles for untouched segments when a point is appended (only 1 new bar)', () => {
-      const first = render(
+    it('recomputes value-equal styles for untouched segments when a point is appended (only 1 new bar)', async () => {
+      const first = await render(
         <TraceInk points={SQUARE_POINTS.slice(0, 3)} />
       );
       const before = screen
         .getByTestId('game.picture.trace-ink')
         .props.children.map((bar: any) => bar.props.style);
 
-      first.rerender(<TraceInk points={SQUARE_POINTS} />);
+      await first.rerender(<TraceInk points={SQUARE_POINTS} />);
 
       const children =
         screen.getByTestId('game.picture.trace-ink').props.children;
@@ -264,7 +264,7 @@ describe('TraceInk', () => {
 });
 
 describe('TraceInk exported style builder', () => {
-  it('produces the legacy geometry for a known 2-point fixture', () => {
+  it('produces the legacy geometry for a known 2-point fixture', async () => {
     const style = traceSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
     expect(style).toEqual({
       position: 'absolute',
@@ -278,11 +278,11 @@ describe('TraceInk exported style builder', () => {
     });
   });
 
-  it('returns null for a zero-length segment', () => {
+  it('returns null for a zero-length segment', async () => {
     expect(traceSegmentStyle({ x: 5, y: 5 }, { x: 5, y: 5 })).toBeNull();
   });
 
-  it('honors strokeWidth and color overrides', () => {
+  it('honors strokeWidth and color overrides', async () => {
     const style = traceSegmentStyle(
       { x: 0, y: 0 },
       { x: 30, y: 40 },
@@ -296,7 +296,7 @@ describe('TraceInk exported style builder', () => {
     expect(style?.transform).toEqual([{ rotate: `${(Math.atan2(40, 30) * 180) / Math.PI}deg` }]);
   });
 
-  it('rotates the bar around its midpoint for a diagonal segment', () => {
+  it('rotates the bar around its midpoint for a diagonal segment', async () => {
     const style = traceSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 300 })!;
     expect(style.left + style.width / 2).toBeCloseTo(100, 6);
     expect(style.top + style.height / 2).toBeCloseTo(200, 6);

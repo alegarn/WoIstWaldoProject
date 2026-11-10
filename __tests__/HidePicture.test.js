@@ -213,8 +213,8 @@ describe('HidePicture', () => {
   }
 
   async function renderToPicture(overrides = {}) {
-    const screen = render(<HidePicture {...baseProps} {...overrides} />);
-    fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
+    const screen = await render(<HidePicture {...baseProps} {...overrides} />);
+    await fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
     return screen;
   }
 
@@ -247,7 +247,7 @@ describe('HidePicture', () => {
 
       expect(screen.queryByTestId('game.picture.mode-sidebar.handle-open')).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
       expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
 
       const sidebarPan = findSidebarPan();
@@ -256,12 +256,12 @@ describe('HidePicture', () => {
         panCallback(sidebarPan, 'onEnd')({ translationX: 60, translationY: 0 }, true);
       });
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-sidebar.handle-open'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-sidebar.handle-open'));
 
       expect(screen.queryByTestId('game.picture.mode-sidebar.handle-open')).toBeNull();
       expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
     });
   });
@@ -275,7 +275,7 @@ describe('HidePicture', () => {
       expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
 
       expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
@@ -286,14 +286,14 @@ describe('HidePicture', () => {
       const screen = await renderToPicture();
 
       await firePrecisionPan();
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
 
       expect(confirmModalQuery(screen)).toBeNull();
 
       await fireShapePan(STROKE_VERTICES);
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
 
       expect(baseProps.navigation.navigate).toHaveBeenCalledTimes(1);
       expect(baseProps.navigation.navigate).toHaveBeenCalledWith('SetInstructions', expect.objectContaining({
@@ -310,10 +310,10 @@ describe('HidePicture', () => {
       await firePrecisionPan();
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).toBeNull();
       expect(screen.queryByTestId('game.picture.clear-hide')).toBeNull();
@@ -328,7 +328,7 @@ describe('HidePicture', () => {
     it('auto-opens the confirm modal when a drawable outline is drawn', async () => {
       const screen = await renderToPicture();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
       expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
       expect(confirmModalQuery(screen)).toBeNull();
 
@@ -337,7 +337,7 @@ describe('HidePicture', () => {
       expect(screen.queryByTestId('game.picture.shape-outline')).not.toBeNull();
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
 
       expect(baseProps.navigation.navigate).toHaveBeenCalledTimes(1);
       expect(baseProps.navigation.navigate).toHaveBeenCalledWith('SetInstructions', expect.objectContaining({
@@ -349,7 +349,7 @@ describe('HidePicture', () => {
     it('does not open the confirm modal on a degenerate stroke', async () => {
       const screen = await renderToPicture();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
 
       await fireShapePan([{ x: 32, y: 24 }, { x: 33, y: 25 }]);
 
@@ -363,12 +363,12 @@ describe('HidePicture', () => {
 
       expect(confirmModalQuery(screen)).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
 
       expect(screen.queryByTestId('game.picture.shape-outline')).not.toBeNull();
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
 
       expect(baseProps.navigation.navigate).toHaveBeenCalledWith('SetInstructions', expect.objectContaining({
         mode: 'shape',
@@ -382,12 +382,12 @@ describe('HidePicture', () => {
       setE2EMode(true);
       const screen = await renderToPicture();
 
-      fireEvent.press(screen.getByTestId('game.picture.hide-surface'));
+      await fireEvent.press(screen.getByTestId('game.picture.hide-surface'));
 
       expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
       expect(confirmModalQuery(screen)).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
+      await fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
 
       expect(confirmModalQuery(screen)).not.toBeNull();
     });

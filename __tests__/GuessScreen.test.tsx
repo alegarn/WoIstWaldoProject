@@ -206,7 +206,8 @@ jest.mock('../utils/shapeMatch', () => ({
 
 import React from 'react';
 import { AppState, Image } from 'react-native';
-import { act, cleanup, fireEvent, render, RenderAPI } from '@testing-library/react-native';
+import { act, cleanup, fireEvent, render, RenderResult } from '@testing-library/react-native';
+import type { TestInstance } from 'test-renderer';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
 import GuessPictureBase from '../components/Picture/GuessPicture';
@@ -363,27 +364,27 @@ const advance = async (ms: number) => {
 // --- interaction helpers ----------------------------------------------------
 
 type ScreenHandle = {
-  screen: RenderAPI;
+  screen: RenderResult;
   navigation: Nav;
   routeRef: { current: { params: Record<string, unknown> } };
   rerenderWithParams: (params: Record<string, unknown>) => Promise<void>;
 };
 
-function renderGuessScreen(
+async function renderGuessScreen(
   params: Record<string, unknown>,
   navigation: Nav = makeNav(),
   authValue?: Record<string, unknown>,
-): ScreenHandle {
+): Promise<ScreenHandle> {
   const routeRef = { current: { params: { ...params } } };
   const providerValue = authValue as React.ComponentProps<typeof AuthContext.Provider>['value'];
   const wrap = (ui: React.ReactElement) =>
     authValue ? <AuthContext.Provider value={providerValue}>{ui}</AuthContext.Provider> : ui;
 
-  const screen = render(wrap(<GuessScreen navigation={navigation} route={routeRef.current} />));
+  const screen = await render(wrap(<GuessScreen navigation={navigation} route={routeRef.current} />));
   const rerenderWithParams = async (next: Record<string, unknown>) => {
     routeRef.current = { params: { ...routeRef.current.params, ...next } };
     await act(async () => {
-      screen.rerender(wrap(<GuessScreen navigation={navigation} route={routeRef.current} />));
+      await screen.rerender(wrap(<GuessScreen navigation={navigation} route={routeRef.current} />));
     });
   };
   return { screen, navigation, routeRef, rerenderWithParams };
@@ -394,16 +395,16 @@ function renderGuessScreen(
 async function confirmGuess(handle: ScreenHandle) {
   await act(async () => {
     if (!handle.screen.queryByTestId('game.picture.clear-guess')) {
-      fireEvent.press(handle.screen.getByTestId('game.picture.guess-surface'));
+      await fireEvent.press(handle.screen.getByTestId('game.picture.guess-surface'));
       await Promise.resolve();
       await Promise.resolve();
     }
   });
   await act(async () => {
-    fireEvent.press(handle.screen.getByTestId('game.picture.clear-guess'));
+    await fireEvent.press(handle.screen.getByTestId('game.picture.clear-guess'));
   });
   await act(async () => {
-    fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
+    await fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
   });
   await flush();
 }
@@ -423,7 +424,7 @@ async function confirmShapeGuess(handle: ScreenHandle) {
     shapePan.onFinalizeHandler?.({}, true);
   });
   await act(async () => {
-    fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
+    await fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.confirm'));
   });
   await flush();
 }
@@ -465,9 +466,9 @@ async function fireSurfaceSwipe(translation: { translationX: number; translation
   });
 }
 
-function renderedImageUris(screen: RenderAPI): string[] {
-  return screen
-    .UNSAFE_getAllByType(Image as unknown as React.ComponentType<{ source?: { uri?: string } }>)
+function renderedImageUris(screen: RenderResult): string[] {
+  return screen.root!
+    .queryAll((node) => node.type === 'Image')
     .map((node) => node.props.source?.uri)
     .filter((uri): uri is string => typeof uri === 'string');
 }
@@ -528,7 +529,7 @@ describe('GuessScreen', () => {
   describe('placing a guess', () => {
     it('a correct guess plays the win animation and stays on the screen', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
 
@@ -538,7 +539,7 @@ describe('GuessScreen', () => {
     });
 
     it('a fast find earns the ×2 speed bonus: +2 points with a ×2 pill', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
 
@@ -548,7 +549,7 @@ describe('GuessScreen', () => {
     });
 
     it('a find over the 5s speed window earns no bonus: +1 point, no pill', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       // Reading grace (3s) holds the chrono; past 3s it runs, and 9s on the
       // clock is ~6s of elapsed time — over the 5s speed window.
@@ -562,7 +563,7 @@ describe('GuessScreen', () => {
     it('after the win animation the next card replaces the current picture', async () => {
       serveSuccessiveNextCards();
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await playWinCycle(handle);
 
@@ -579,7 +580,7 @@ describe('GuessScreen', () => {
 
     it('confirming a spot away from the hidden point ends the round on the failure screen', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
+      const handle = await renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
 
       await confirmGuess(handle);
 
@@ -595,28 +596,28 @@ describe('GuessScreen', () => {
 
     it('retrying a failed point card re-serves the card with the point params unchanged', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
+      const handle = await renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }), navigation);
 
       await confirmGuess(handle);
 
       const resultParams = navigation.replace.mock.calls[0][1] as Record<string, unknown>;
 
-      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      const failure = await render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
       await act(async () => {
-        fireEvent.press(failure.getByTestId('result.button.retry'));
+        await fireEvent.press(failure.getByTestId('result.button.retry'));
       });
 
       const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
       expect(retryParams).toMatchObject({ pictureId: 'image-1', isTutorial: false });
       expect(retryParams).not.toHaveProperty('mode');
       expect(retryParams).not.toHaveProperty('shape');
-      failure.unmount();
+      await failure.unmount();
     });
 
     it('a miss in a private group keeps the group context on the result screen', async () => {
       const navigation = makeNav();
       const scope = { kind: 'private', groupId: 'group-7' };
-      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION, scope }), navigation);
+      const handle = await renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION, scope }), navigation);
 
       await confirmGuess(handle);
 
@@ -628,7 +629,7 @@ describe('GuessScreen', () => {
 
     it('the played card is banked exactly once per win with the speed and streak values', async () => {
       serveSuccessiveNextCards();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
 
@@ -658,7 +659,7 @@ describe('GuessScreen', () => {
 
     it('seven consecutive wins bank the post-increment streak and show the tier-2 pill', async () => {
       serveSuccessiveNextCards();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       // Wins 3 and 6 park the cycle on the internal ad panel until it is
       // dismissed; continuing applies the staged next card (the idle gate
@@ -667,7 +668,7 @@ describe('GuessScreen', () => {
         const adContinue = handle.screen.queryByTestId('ad.internal.pro.continue');
         if (!adContinue) return;
         await act(async () => {
-          fireEvent.press(adContinue);
+          await fireEvent.press(adContinue);
         });
         await flush();
         const applied = handle.navigation.setParams.mock.calls.at(-1)?.[0] as Record<string, unknown> | undefined;
@@ -700,7 +701,7 @@ describe('GuessScreen', () => {
 
     it('a fresh screen after a miss starts the streak over', async () => {
       serveSuccessiveNextCards();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
       await playWinCycle(handle);
@@ -711,8 +712,8 @@ describe('GuessScreen', () => {
 
       // A miss replaces the screen in the real app; a fresh mount represents
       // the screen the player lands on next.
-      handle.screen.unmount();
-      const fresh = renderGuessScreen(baseParams());
+      await handle.screen.unmount();
+      const fresh = await renderGuessScreen(baseParams());
       await confirmGuess(fresh);
 
       expect(fresh.screen.queryByTestId('guess.success.streak.pill')).toBeNull();
@@ -726,7 +727,7 @@ describe('GuessScreen', () => {
 
     it('an empty deck ends the round on the "No more cards" panel with no retry loop', async () => {
       serveEmptyDeck();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -746,7 +747,7 @@ describe('GuessScreen', () => {
         .mockResolvedValueOnce({ params: nextCardParams(1) })
         .mockResolvedValueOnce({ params: nextCardParams(2) })
         .mockResolvedValue(null);
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
       await playWinCycle(handle);
@@ -760,7 +761,7 @@ describe('GuessScreen', () => {
     it('"Switch category" clears the exhausted marker and returns to the category picker', async () => {
       serveEmptyDeck();
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -768,7 +769,7 @@ describe('GuessScreen', () => {
       await expect(AsyncStorage.getItem('exhaustedCategory:nature:fr:any')).resolves.toBe('1');
 
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
+        await fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
       });
       await flush();
 
@@ -780,13 +781,13 @@ describe('GuessScreen', () => {
       serveEmptyDeck();
       const navigation = makeNav();
       const scope = { kind: 'private', groupId: 'g-42' };
-      const handle = renderGuessScreen(baseParams({ scope }), navigation);
+      const handle = await renderGuessScreen(baseParams({ scope }), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
 
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
+        await fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
       });
       await flush();
 
@@ -796,13 +797,13 @@ describe('GuessScreen', () => {
     it('"Leave game" on the exhausted panel goes home', async () => {
       serveEmptyDeck();
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
 
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess-exhausted-leave'));
+        await fireEvent.press(handle.screen.getByTestId('guess-exhausted-leave'));
       });
 
       expect(navigation.popToTop).toHaveBeenCalledTimes(1);
@@ -813,13 +814,13 @@ describe('GuessScreen', () => {
       serveEmptyDeck();
       const navigation = makeNav();
       const scope = { kind: 'private', groupId: 'g-1' };
-      const handle = renderGuessScreen(baseParams({ scope }), navigation);
+      const handle = await renderGuessScreen(baseParams({ scope }), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
 
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess-exhausted-leave'));
+        await fireEvent.press(handle.screen.getByTestId('guess-exhausted-leave'));
       });
 
       expect(navigation.reset).toHaveBeenCalledWith({
@@ -834,7 +835,7 @@ describe('GuessScreen', () => {
 
     it('a server failure ends on the exhausted panel without burning retries', async () => {
       resolveNextCardWithServerFallbackMock.mockResolvedValue({ next: null, reason: 'server' });
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -847,7 +848,7 @@ describe('GuessScreen', () => {
 
     it('a network hiccup retries 1s/2s/4s with a loader, then lands on the exhausted panel', async () => {
       resolveNextCardWithServerFallbackMock.mockResolvedValue({ next: null, reason: 'network' });
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -871,7 +872,7 @@ describe('GuessScreen', () => {
 
     it('an empty category consults the all-deck fallback before giving up', async () => {
       serveEmptyDeck();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await flush();
@@ -896,7 +897,7 @@ describe('GuessScreen', () => {
         .mockResolvedValueOnce({ next: null, reason: 'network' })
         .mockResolvedValueOnce({ next: { params: next }, reason: 'ok' });
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -934,7 +935,7 @@ describe('GuessScreen', () => {
         .mockResolvedValueOnce({ next: null, reason: 'network' })
         .mockResolvedValueOnce({ next: { params: nextCardParams(1) }, reason: 'ok' });
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -964,7 +965,7 @@ describe('GuessScreen', () => {
           settleResolve = resolve as typeof settleResolve;
         }),
       );
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -990,13 +991,13 @@ describe('GuessScreen', () => {
     it('leaving mid-warming cancels the retry loop without state updates after unmount', async () => {
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
       resolveNextCardWithServerFallbackMock.mockResolvedValue({ next: null, reason: 'network' });
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
       expect(handle.screen.queryByTestId('guess-advance-loader')).not.toBeNull();
 
-      handle.screen.unmount();
+      await handle.screen.unmount();
       await advance(10000);
 
       const setStateWarning = consoleErrorSpy.mock.calls.find((c: unknown[]) =>
@@ -1015,10 +1016,10 @@ describe('GuessScreen', () => {
           settleResolve = resolve as typeof settleResolve;
         }),
       );
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
-      handle.screen.unmount();
+      await handle.screen.unmount();
 
       await act(async () => {
         settleResolve({ next: { params: { listId: 4 } }, reason: 'ok' });
@@ -1039,12 +1040,12 @@ describe('GuessScreen', () => {
           }),
       );
       const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
       expect(applySuccessSideEffectsMock).toHaveBeenCalledTimes(1);
 
-      handle.screen.unmount();
+      await handle.screen.unmount();
       await act(async () => {
         finishSideEffects();
         await Promise.resolve();
@@ -1062,7 +1063,7 @@ describe('GuessScreen', () => {
 
     it('runs exactly one deck resolve per win (kicked off at confirm, awaited at dismiss)', async () => {
       serveEmptyDeck();
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       expect(resolveNextCardWithServerFallbackMock).not.toHaveBeenCalled();
 
@@ -1076,16 +1077,16 @@ describe('GuessScreen', () => {
 
   describe('hints', () => {
     it('the first card shows the swipe hints until the player interacts', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       expect(handle.screen.queryByTestId('guess.hint.swipe-halo')).not.toBeNull();
 
       // First interaction dismisses the hints even when the modal is cancelled.
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('game.picture.clear-guess'));
+        await fireEvent.press(handle.screen.getByTestId('game.picture.clear-guess'));
       });
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.close'));
+        await fireEvent.press(handle.screen.getByTestId('game.picture.guess-modal.close'));
       });
 
       expect(handle.screen.queryByTestId('guess.hint.swipe-halo')).toBeNull();
@@ -1093,7 +1094,7 @@ describe('GuessScreen', () => {
 
     it('e2e mode plays without hints', async () => {
       setE2EMode(true);
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
       // Let the mount-time deck-ahead warm-up settle inside act (it would
       // otherwise setState outside act between hooks).
       await flush();
@@ -1104,7 +1105,7 @@ describe('GuessScreen', () => {
 
   describe('exit menu', () => {
     it('a rightward swipe on the picture opens the exit menu', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       expect(handle.screen.queryByTestId('guess.exit.panel')).toBeNull();
 
@@ -1115,11 +1116,11 @@ describe('GuessScreen', () => {
     });
 
     it('closing the exit menu returns to the game', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await fireSurfaceSwipe({ translationX: 60, translationY: 0 });
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess.exit.close'));
+        await fireEvent.press(handle.screen.getByTestId('guess.exit.close'));
       });
 
       expect(handle.screen.queryByTestId('guess.exit.panel')).toBeNull();
@@ -1127,11 +1128,11 @@ describe('GuessScreen', () => {
 
     it('Home in a public game pops to the root', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await fireSurfaceSwipe({ translationX: 60, translationY: 0 });
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess.exit.home'));
+        await fireEvent.press(handle.screen.getByTestId('guess.exit.home'));
       });
 
       expect(navigation.popToTop).toHaveBeenCalledTimes(1);
@@ -1141,11 +1142,11 @@ describe('GuessScreen', () => {
     it('Home in a private game resets the stack to [Home, PrivateHome]', async () => {
       const navigation = makeNav();
       const scope = { kind: 'private', groupId: 'g-1' };
-      const handle = renderGuessScreen(baseParams({ scope }), navigation);
+      const handle = await renderGuessScreen(baseParams({ scope }), navigation);
 
       await fireSurfaceSwipe({ translationX: 60, translationY: 0 });
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('guess.exit.home'));
+        await fireEvent.press(handle.screen.getByTestId('guess.exit.home'));
       });
 
       expect(navigation.reset).toHaveBeenCalledWith({
@@ -1172,7 +1173,7 @@ describe('GuessScreen', () => {
 
     it('free tier: every 3rd win shows the internal ad panel once the animation ends', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await playTwoWinsAndStartThird(handle);
 
@@ -1191,14 +1192,14 @@ describe('GuessScreen', () => {
 
     it('tapping Continue on the ad reveals the next card', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await playTwoWinsAndStartThird(handle);
       await dismissWinOverlay(handle);
       expect(handle.screen.queryByTestId('ad.internal.pro.panel')).not.toBeNull();
 
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('ad.internal.pro.continue'));
+        await fireEvent.press(handle.screen.getByTestId('ad.internal.pro.continue'));
       });
       await flush();
 
@@ -1219,7 +1220,7 @@ describe('GuessScreen', () => {
         .mockResolvedValueOnce({ params: nextCardParams(1) })
         .mockResolvedValueOnce({ params: nextCardParams(2) })
         .mockResolvedValue(null);
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
       await playWinCycle(handle);
@@ -1248,7 +1249,7 @@ describe('GuessScreen', () => {
           settleResolve = resolve as typeof settleResolve;
         });
       });
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
       await playWinCycle(handle);
@@ -1271,7 +1272,7 @@ describe('GuessScreen', () => {
         .mockResolvedValueOnce({ params: nextCardParams(1) })
         .mockResolvedValueOnce({ params: nextCardParams(2) })
         .mockResolvedValue(null);
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await playWinCycle(handle);
       await playWinCycle(handle);
@@ -1287,7 +1288,7 @@ describe('GuessScreen', () => {
 
     it('a miss ends the round: the next game needs a fresh 3-win streak for an ad', async () => {
       serveSuccessiveNextCards();
-      const first = renderGuessScreen(baseParams());
+      const first = await renderGuessScreen(baseParams());
 
       await playWinCycle(first);
       await playWinCycle(first);
@@ -1297,9 +1298,9 @@ describe('GuessScreen', () => {
       // the fresh screen cannot be the "3rd win".
       await first.rerenderWithParams({ hiddenLocation: MISS_HIDDEN_LOCATION, pictureId: 'image-miss' });
       await confirmGuess(first);
-      first.screen.unmount();
+      await first.screen.unmount();
 
-      const next = renderGuessScreen(baseParams());
+      const next = await renderGuessScreen(baseParams());
       await playWinCycle(next);
       await playWinCycle(next);
       expect(next.screen.queryByTestId('ad.internal.pro.panel')).toBeNull();
@@ -1314,7 +1315,7 @@ describe('GuessScreen', () => {
       serveSuccessiveNextCards();
       const scope = { kind: 'private', groupId: 'g-9' };
       const activeGroup = { isOwnedByViewer: true, memberCount: 6 };
-      const handle = renderGuessScreen(baseParams({ scope, activeGroup }), makeNav(), {
+      const handle = await renderGuessScreen(baseParams({ scope, activeGroup }), makeNav(), {
         paidTier: 2,
       });
 
@@ -1337,7 +1338,7 @@ describe('GuessScreen', () => {
     it('e2e mode never shows ads', async () => {
       setE2EMode(true);
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await playTwoWinsAndStartThird(handle);
       await dismissWinOverlay(handle);
@@ -1358,7 +1359,7 @@ describe('GuessScreen', () => {
         isError: false,
         images: [{ pictureId: 'all-1', imageFile: 'file:///all-1.jpg', listId: 1 }],
       });
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
       await flush();
 
       const allFetches = fetchCardBatchMock.mock.calls.filter(
@@ -1378,7 +1379,7 @@ describe('GuessScreen', () => {
     });
 
     it('winning fires a background top-up fetch for the current public category', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
       await flush();
       const fetchesBefore = fetchCardBatchMock.mock.calls.length;
 
@@ -1396,7 +1397,7 @@ describe('GuessScreen', () => {
 
     it('a private top-up targets the group category id', async () => {
       const scope = { kind: 'private', groupId: 'group-7' };
-      const handle = renderGuessScreen(baseParams({ scope }));
+      const handle = await renderGuessScreen(baseParams({ scope }));
       await flush();
       const fetchesBefore = fetchCardBatchMock.mock.calls.length;
 
@@ -1414,7 +1415,7 @@ describe('GuessScreen', () => {
     });
 
     it('a miss never fires a top-up fetch', async () => {
-      const handle = renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }));
+      const handle = await renderGuessScreen(baseParams({ hiddenLocation: MISS_HIDDEN_LOCATION }));
       await flush();
       const fetchesBefore = fetchCardBatchMock.mock.calls.length;
 
@@ -1426,7 +1427,7 @@ describe('GuessScreen', () => {
 
     it('top-up fetches are skipped entirely in e2e mode', async () => {
       setE2EMode(true);
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
       await flush();
 
       await confirmGuess(handle);
@@ -1437,7 +1438,7 @@ describe('GuessScreen', () => {
 
     it('a stalled top-up never blocks the win animation', async () => {
       fetchCardBatchMock.mockReturnValue(new Promise(() => {}));
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
 
@@ -1448,7 +1449,7 @@ describe('GuessScreen', () => {
       fetchCardBatchMock.mockRejectedValue(new Error('network down'));
       serveSuccessiveNextCards();
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       expect(handle.screen.queryByTestId('guess.success.overlay')).not.toBeNull();
@@ -1467,7 +1468,7 @@ describe('GuessScreen', () => {
         { pictureId: 'ahead-1', imageFile: 'file:///ahead/1.jpg', listId: 4 },
         { pictureId: 'ahead-2', imageFile: 'file:///ahead/2.jpg', listId: 5 },
       ]);
-      const handle = renderGuessScreen(baseParams({ listId: 3 }));
+      const handle = await renderGuessScreen(baseParams({ listId: 3 }));
       await flush();
 
       const uris = renderedImageUris(handle.screen);
@@ -1487,7 +1488,7 @@ describe('GuessScreen', () => {
           listId: 4 + i,
         })),
       );
-      const handle = renderGuessScreen(baseParams({ listId: 3 }));
+      const handle = await renderGuessScreen(baseParams({ listId: 3 }));
       await flush();
 
       const warmCount = renderedImageUris(handle.screen).filter((uri) => uri.startsWith('file:///ahead/')).length;
@@ -1495,7 +1496,7 @@ describe('GuessScreen', () => {
     });
 
     it('an empty deck mounts no hidden warm images', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
       await flush();
 
       expect(renderedImageUris(handle.screen).filter((uri) => uri.startsWith('file:///ahead/'))).toHaveLength(0);
@@ -1511,7 +1512,7 @@ describe('GuessScreen', () => {
       };
       resolveNextGuessParamsMock.mockResolvedValue({ params: next });
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -1526,7 +1527,7 @@ describe('GuessScreen', () => {
     it('a second confirm during an in-flight advance cannot double-bank the win', async () => {
       resolveNextCardWithServerFallbackMock.mockReturnValue(new Promise(() => {}));
       const navigation = makeNav();
-      const handle = renderGuessScreen(baseParams(), navigation);
+      const handle = await renderGuessScreen(baseParams(), navigation);
 
       await confirmGuess(handle);
       await dismissWinOverlay(handle);
@@ -1547,12 +1548,12 @@ describe('GuessScreen', () => {
       // No skipInstructions → the instructions filter is mount-state owned by
       // the keyed GuessPicture subtree: it reappears only on a real remount.
       const noInstructions = { skipInstructions: undefined };
-      const handle = renderGuessScreen(
+      const handle = await renderGuessScreen(
         baseParams({ pictureId: undefined, imageFile: 'file:///card-a.jpg', ...noInstructions }),
       );
       expect(handle.screen.queryByTestId('game.instructions.guess.start')).not.toBeNull();
       await act(async () => {
-        fireEvent.press(handle.screen.getByTestId('game.instructions.guess.start'));
+        await fireEvent.press(handle.screen.getByTestId('game.instructions.guess.start'));
       });
       expect(handle.screen.queryByTestId('game.instructions.guess.start')).toBeNull();
 
@@ -1581,7 +1582,7 @@ describe('GuessScreen', () => {
     it('a matching shape outline plays the win animation via isWinningTrace, not isOnTarget', async () => {
       isWinningTraceMock.mockReturnValue(true);
       const navigation = makeNav();
-      const handle = renderGuessScreen(shapeParams(), navigation);
+      const handle = await renderGuessScreen(shapeParams(), navigation);
 
       await confirmShapeGuess(handle);
 
@@ -1607,7 +1608,7 @@ describe('GuessScreen', () => {
     it('a disjoint shape outline ends the round on the text-only failure screen', async () => {
       isWinningTraceMock.mockReturnValue(false);
       const navigation = makeNav();
-      const handle = renderGuessScreen(shapeParams(), navigation);
+      const handle = await renderGuessScreen(shapeParams(), navigation);
 
       await confirmShapeGuess(handle);
 
@@ -1623,7 +1624,7 @@ describe('GuessScreen', () => {
     it('retrying a failed shape card re-serves the shape surface with the stored outline', async () => {
       isWinningTraceMock.mockReturnValue(false);
       const navigation = makeNav();
-      const handle = renderGuessScreen(shapeParams(), navigation);
+      const handle = await renderGuessScreen(shapeParams(), navigation);
 
       await confirmShapeGuess(handle);
 
@@ -1632,23 +1633,23 @@ describe('GuessScreen', () => {
 
       // The real navigator renders the failure screen with the ResultScreen
       // params; pressing Retry replaces back onto GuessScreen.
-      const failure = render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
+      const failure = await render(<ShowFailure navigation={navigation} route={{ params: resultParams }} />);
       await act(async () => {
-        fireEvent.press(failure.getByTestId('result.button.retry'));
+        await fireEvent.press(failure.getByTestId('result.button.retry'));
       });
 
       const retryParams = navigation.replace.mock.calls.at(-1)![1] as Record<string, unknown>;
       expect(retryParams).toMatchObject({ mode: 'shape', shape: HIDDEN_SHAPE });
-      failure.unmount();
+      await failure.unmount();
 
       // The retried card renders the shape surface and the win check matches
       // against the STORED outline, not the failed guess outline. Retry params
       // carry no skipInstructions (same as a point retry), so the mount opens
       // on the instructions filter — dismiss it like the player would.
       isWinningTraceMock.mockReturnValue(true);
-      const retried = renderGuessScreen(retryParams);
+      const retried = await renderGuessScreen(retryParams);
       await act(async () => {
-        fireEvent.press(retried.screen.getByTestId('game.instructions.guess.start'));
+        await fireEvent.press(retried.screen.getByTestId('game.instructions.guess.start'));
       });
       expect(retried.screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
 
@@ -1661,7 +1662,7 @@ describe('GuessScreen', () => {
 
     it('a shape find past the 5s point window but under 10s still earns the ×2 bonus', async () => {
       isWinningTraceMock.mockReturnValue(true);
-      const handle = renderGuessScreen(shapeParams());
+      const handle = await renderGuessScreen(shapeParams());
 
       // Reading grace (3s) holds the chrono; 9s on the clock is ~6s elapsed —
       // over the 5s point window, inside the 10s shape window.
@@ -1674,7 +1675,7 @@ describe('GuessScreen', () => {
 
     it('a shape find over the 10s window earns no bonus', async () => {
       isWinningTraceMock.mockReturnValue(true);
-      const handle = renderGuessScreen(shapeParams());
+      const handle = await renderGuessScreen(shapeParams());
 
       await advance(14000);
       await confirmShapeGuess(handle);
@@ -1685,7 +1686,7 @@ describe('GuessScreen', () => {
 
     it('a shape card without image dimensions consults isWinningTrace with 0×0 and loses deterministically', async () => {
       const navigation = makeNav();
-      const handle = renderGuessScreen(
+      const handle = await renderGuessScreen(
         shapeParams({ imageWidth: undefined, imageHeight: undefined }),
         navigation,
       );
@@ -1715,7 +1716,7 @@ describe('GuessScreen', () => {
     });
 
     it('a point-mode card never consults isWinningTrace', async () => {
-      const handle = renderGuessScreen(baseParams());
+      const handle = await renderGuessScreen(baseParams());
 
       await confirmGuess(handle);
 
@@ -1752,7 +1753,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the win-advance resolve carries filterMode as mode — NEVER the card route mode', async () => {
     serveSuccessiveNextCards();
-    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
 
     await playWinCycle(handle);
 
@@ -1766,7 +1767,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the played-card side effects key on filterMode, not the card mode', async () => {
     serveSuccessiveNextCards();
-    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
 
     await playWinCycle(handle);
 
@@ -1784,7 +1785,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
       { listId: 4, pictureId: 'ahead-1', imageFile: 'file:///ahead-1.jpg' },
       { listId: 5, pictureId: 'ahead-2', imageFile: 'file:///ahead-2.jpg' },
     ], 'shape');
-    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
 
     await flush();
 
@@ -1793,7 +1794,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the win prefetch runs against the filter-mode namespace', async () => {
     serveSuccessiveNextCards();
-    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
 
     await playWinCycle(handle);
 
@@ -1809,13 +1810,13 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
     await AsyncStorage.setItem('exhaustedCategory:nature:fr:shape', '1');
     await AsyncStorage.setItem('exhaustedCategory:nature:fr:any', '1');
     const navigation = makeNav();
-    const handle = renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }), navigation);
+    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }), navigation);
 
     await confirmGuess(handle);
     await dismissWinOverlay(handle);
 
     await act(async () => {
-      fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
+      await fireEvent.press(handle.screen.getByTestId('guess-exhausted-switch'));
     });
     await flush();
 
@@ -1849,21 +1850,23 @@ describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan
     setE2EMode(false);
   });
 
-  function renderedGuessPicture(handle: ScreenHandle) {
-    return handle.screen.UNSAFE_getByType(
-      GuessPictureBase as unknown as React.ComponentType<Record<string, unknown>>,
+  function renderedGuessPicture(handle: ScreenHandle): TestInstance {
+    const matches = handle.screen.root!.queryAll(
+      (node) => node.unstable_fiber?.type === GuessPictureBase,
     );
+    if (matches.length === 0) throw new Error('GuessPicture not rendered');
+    return matches[0];
   }
 
   it('forwards the raw route filterMode to GuessPicture, unnormalized', async () => {
-    const handle = renderGuessScreen(baseParams({ filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ filterMode: 'shape' }));
     await flush();
 
     expect(renderedGuessPicture(handle).props.filterMode).toBe('shape');
   });
 
   it('forwards the route filterMode raw: absent stays absent (GuessPicture owns normalization)', async () => {
-    const handle = renderGuessScreen(baseParams());
+    const handle = await renderGuessScreen(baseParams());
     await flush();
 
     expect(renderedGuessPicture(handle).props.filterMode).toBeUndefined();

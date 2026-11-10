@@ -127,20 +127,20 @@ describe('ShapeCanvas', () => {
     mockPanGestures.length = 0;
   });
 
-  it('renders the shape-surface testID and attaches a single draw Pan recognizer', () => {
-    render(<ShapeCanvas {...baseProps} />);
+  it('renders the shape-surface testID and attaches a single draw Pan recognizer', async () => {
+    await render(<ShapeCanvas {...baseProps} />);
 
     expect(screen.getByTestId('game.picture.shape-surface')).toBeTruthy();
     expect(findDrawPan()).toBeDefined();
   });
 
-  it('renders no outline element while no outline is stored', () => {
-    render(<ShapeCanvas {...baseProps} />);
+  it('renders no outline element while no outline is stored', async () => {
+    await render(<ShapeCanvas {...baseProps} />);
 
     expect(screen.queryByTestId('game.picture.shape-outline')).toBeNull();
   });
 
-  it('renders the stored outline as rotated View segments (closed square → 4 segments)', () => {
+  it('renders the stored outline as rotated View segments (closed square → 4 segments)', async () => {
     const outline = [
       { x: 0.1, y: 0.05 },
       { x: 0.9, y: 0.05 },
@@ -148,7 +148,7 @@ describe('ShapeCanvas', () => {
       { x: 0.1, y: 0.95 },
       { x: 0.1, y: 0.05 },
     ];
-    render(<ShapeCanvas {...baseProps} outline={outline} />);
+    await render(<ShapeCanvas {...baseProps} outline={outline} />);
 
     const outlineEl = screen.getByTestId('game.picture.shape-outline');
     expect(outlineEl.props.children.length).toBe(4);
@@ -161,7 +161,7 @@ describe('ShapeCanvas', () => {
 
   it('converts a raw pixel stroke into the storage outline via simplify → normalize (px→[0,1] owner)', async () => {
     const onOutlineChange = jest.fn();
-    render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
+    await render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
 
     await fireStroke([
       { x: 20, y: 20 },
@@ -182,7 +182,7 @@ describe('ShapeCanvas', () => {
   });
 
   it('renders the live trace with the auto-close preview while the stroke is in progress', async () => {
-    render(<ShapeCanvas {...baseProps} />);
+    await render(<ShapeCanvas {...baseProps} />);
     const pan = findDrawPan();
 
     await act(async () => {
@@ -197,7 +197,7 @@ describe('ShapeCanvas', () => {
   });
 
   it('clears the live trace after the stroke finalizes', async () => {
-    render(<ShapeCanvas {...baseProps} />);
+    await render(<ShapeCanvas {...baseProps} />);
 
     await fireStroke([
       { x: 20, y: 20 },
@@ -210,7 +210,7 @@ describe('ShapeCanvas', () => {
 
   it('surfaces the redraw prompt and ships null when the outline is too simple', async () => {
     const onOutlineChange = jest.fn();
-    render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
+    await render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
 
     await fireStroke([
       { x: 50, y: 50 },
@@ -225,7 +225,7 @@ describe('ShapeCanvas', () => {
 
   it('clamps stroke points beyond the image edges (incl. negative coords) so the emitted outline stays in [0,1]', async () => {
     const onOutlineChange = jest.fn();
-    render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
+    await render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
 
     await fireStroke([
       { x: -50, y: -50 },
@@ -252,7 +252,7 @@ describe('ShapeCanvas', () => {
     { name: 'bottom', stroke: [{ x: 50, y: 200 }, { x: 150, y: 200 }, { x: 150, y: 420 }, { x: 50, y: 420 }] },
   ])('keeps the emitted outline within [0,1] for a stroke beyond the $name edge', async ({ stroke }) => {
     const onOutlineChange = jest.fn();
-    render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
+    await render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
 
     await fireStroke(stroke);
 
@@ -268,7 +268,7 @@ describe('ShapeCanvas', () => {
   });
 
   it('clamps the live trace and auto-close preview for out-of-bounds points', async () => {
-    render(<ShapeCanvas {...baseProps} />);
+    await render(<ShapeCanvas {...baseProps} />);
     const pan = findDrawPan();
 
     await act(async () => {
@@ -292,7 +292,7 @@ describe('ShapeCanvas', () => {
 
   it('stays degenerate when an out-of-bounds stroke collapses onto the edge', async () => {
     const onOutlineChange = jest.fn();
-    render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
+    await render(<ShapeCanvas {...baseProps} onOutlineChange={onOutlineChange} />);
 
     await fireStroke([
       { x: -50, y: 50 },
@@ -305,15 +305,15 @@ describe('ShapeCanvas', () => {
     ).toBeTruthy();
   });
 
-  it('disables the draw recognizer via enabled(false) when disabled', () => {
-    render(<ShapeCanvas {...baseProps} disabled={true} />);
+  it('disables the draw recognizer via enabled(false) when disabled', async () => {
+    await render(<ShapeCanvas {...baseProps} disabled={true} />);
 
     const pan = findDrawPan();
     expect(pan.enabledArg).toBe(false);
   });
 
-  it('keeps the draw recognizer enabled by default', () => {
-    render(<ShapeCanvas {...baseProps} />);
+  it('keeps the draw recognizer enabled by default', async () => {
+    await render(<ShapeCanvas {...baseProps} />);
 
     const pan = findDrawPan();
     expect(pan.enabledArg).toBe(true);
@@ -321,7 +321,7 @@ describe('ShapeCanvas', () => {
 
   describe('finger-true tracing (offset retired)', () => {
     it('renders the live trace under the finger with no offset prop', async () => {
-      render(<ShapeCanvas {...baseProps} />);
+      await render(<ShapeCanvas {...baseProps} />);
 
       await driveLiveStroke([
         { x: 20, y: 100 },
@@ -338,8 +338,8 @@ describe('ShapeCanvas', () => {
       expect(segment.props.style.borderRadius).toBe(1);
     });
 
-    it('attaches no hitSlop to the draw Pan (offset recognizer extension retired)', () => {
-      render(<ShapeCanvas {...baseProps} />);
+    it('attaches no hitSlop to the draw Pan (offset recognizer extension retired)', async () => {
+      await render(<ShapeCanvas {...baseProps} />);
 
       expect(findDrawPan().hitSlopArg).toBeUndefined();
     });
@@ -348,7 +348,7 @@ describe('ShapeCanvas', () => {
       const renderBand = jest.fn(
         (_renderPoints: Array<{ x: number; y: number }>) => null
       );
-      render(<ShapeCanvas {...baseProps} renderBand={renderBand} />);
+      await render(<ShapeCanvas {...baseProps} renderBand={renderBand} />);
 
       await driveLiveStroke([
         { x: 20, y: 100 },
@@ -381,7 +381,7 @@ describe('ShapeCanvas', () => {
     it('emits the same judged payload as the undecimated full raw polyline', async () => {
       const onOutlineChange = jest.fn();
       const onStrokeUpdate = jest.fn();
-      render(
+      await render(
         <ShapeCanvas
           {...baseProps}
           onOutlineChange={onOutlineChange}
@@ -399,7 +399,7 @@ describe('ShapeCanvas', () => {
 
     it('fires at most one non-null commit while every step is below the 4px gate', async () => {
       const onStrokeUpdate = jest.fn();
-      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+      await render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
 
       await fireStroke(MICRO_STEP_STROKE);
 
@@ -411,7 +411,7 @@ describe('ShapeCanvas', () => {
 
     it('always commits the first point of a stroke', async () => {
       const onStrokeUpdate = jest.fn();
-      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+      await render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
       const pan = findDrawPan();
 
       await act(async () => {
@@ -429,7 +429,7 @@ describe('ShapeCanvas', () => {
   describe('onStrokeUpdate reporting', () => {
     it('commits the clamped touch-down point at finger-down (onBegin, before any movement)', async () => {
       const onStrokeUpdate = jest.fn();
-      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+      await render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
 
       await act(async () => {
         findDrawPan().onBeginHandler?.({ x: 20, y: 100 });
@@ -445,7 +445,7 @@ describe('ShapeCanvas', () => {
     it('pairs an unactivated finger-down with onFinalize: loupe cleared, no outline judged', async () => {
       const onStrokeUpdate = jest.fn();
       const onOutlineChange = jest.fn();
-      render(
+      await render(
         <ShapeCanvas
           {...baseProps}
           onOutlineChange={onOutlineChange}
@@ -467,7 +467,7 @@ describe('ShapeCanvas', () => {
     it('fires {anchor, renderPoints} on start and on decimated commits, anchor = latest RAW point', async () => {
       const onStrokeUpdate = jest.fn();
       const onOutlineChange = jest.fn();
-      render(
+      await render(
         <ShapeCanvas
           {...baseProps}
           onOutlineChange={onOutlineChange}
@@ -503,7 +503,7 @@ describe('ShapeCanvas', () => {
         { x: 13, y: 10 },
         { x: 10, y: 14 },
       ];
-      render(
+      await render(
         <ShapeCanvas
           {...baseProps}
           onOutlineChange={onOutlineChange}
@@ -526,7 +526,7 @@ describe('ShapeCanvas', () => {
     it('fires null AFTER the finalize emission on stroke end', async () => {
       const onStrokeUpdate = jest.fn();
       const onOutlineChange = jest.fn();
-      render(
+      await render(
         <ShapeCanvas
           {...baseProps}
           onOutlineChange={onOutlineChange}
@@ -554,7 +554,7 @@ describe('ShapeCanvas', () => {
 
     it('fires at least two commits during a 12px move (start + decimated commit)', async () => {
       const onStrokeUpdate = jest.fn();
-      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+      await render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
       const pan = findDrawPan();
 
       await act(async () => {
@@ -570,7 +570,7 @@ describe('ShapeCanvas', () => {
 
     it('fires null on lift even for a degenerate single-point stroke', async () => {
       const onStrokeUpdate = jest.fn();
-      render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+      await render(<ShapeCanvas {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
       const pan = findDrawPan();
 
       await act(async () => {
@@ -590,7 +590,7 @@ describe('ShapeCanvas', () => {
       { x: 0.1, y: 0.95 },
       { x: 0.1, y: 0.05 },
     ];
-    render(
+    await render(
       <ShapeCanvas
         {...baseProps}
         outline={outline}
@@ -628,7 +628,7 @@ describe('ShapeCanvas', () => {
 
   it('renders the band only while the live stroke has at least 2 points', async () => {
     const renderBand = jest.fn(() => <View testID="test.band-marker" />);
-    render(<ShapeCanvas {...baseProps} renderBand={renderBand} />);
+    await render(<ShapeCanvas {...baseProps} renderBand={renderBand} />);
     const pan = findDrawPan();
 
     await act(async () => {
@@ -644,7 +644,7 @@ describe('ShapeCanvas', () => {
   });
 
   it('adds no band layer when renderBand is unset (zero render change)', async () => {
-    render(<ShapeCanvas {...baseProps} />);
+    await render(<ShapeCanvas {...baseProps} />);
 
     await driveLiveStroke([
       { x: 20, y: 100 },
@@ -659,7 +659,7 @@ describe('ShapeCanvas', () => {
   });
 
   it('renders the band node as-is without extra styling from ShapeCanvas', async () => {
-    render(
+    await render(
       <ShapeCanvas
         {...baseProps}
         renderBand={() => (

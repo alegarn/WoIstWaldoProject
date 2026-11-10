@@ -221,15 +221,15 @@ describe('private scope games', () => {
 
     async function confirmGuess(screen) {
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+        await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
         await Promise.resolve();
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
+        await fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+        await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
       });
       await flush();
     }
@@ -260,7 +260,7 @@ describe('private scope games', () => {
         { pictureId: 'img-2', imageFile: 'file:///waldo-2.jpg', listId: 2 },
       ]);
       const navigation = makeNav();
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <GuessScreen navigation={navigation} route={{ params: privateGuessParams() }} />
         </AuthContext.Provider>,
@@ -289,7 +289,7 @@ describe('private scope games', () => {
   describe('HideScreen', () => {
     it('hiding in a private group carries the group scope into the instructions step', async () => {
       const navigation = makeNav();
-      const screen = render(
+      const screen = await render(
         <HideScreen
           navigation={navigation}
           route={{
@@ -311,22 +311,22 @@ describe('private scope games', () => {
       expect(roots.length).toBeGreaterThanOrEqual(1);
 
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
+        await fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
       });
       expect(screen.queryByTestId('game.picture.hide-image')).not.toBeNull();
 
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.hide-surface'), {
+        await fireEvent.press(screen.getByTestId('game.picture.hide-surface'), {
           locationX: 50,
           locationY: 50,
           nativeEvent: { locationX: 50, locationY: 50 },
         });
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
+        await fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+        await fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
       });
       await flush();
 
@@ -361,7 +361,7 @@ describe('private scope games', () => {
       });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
@@ -419,7 +419,7 @@ describe('private scope games', () => {
       mockPrivateRankingAxios({ withGroup: true, withMe: true });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
@@ -448,14 +448,14 @@ describe('private scope games', () => {
       mockPrivateRankingAxios({ withGroup: true, withMe: false });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
       );
       await flush();
 
-      fireEvent.press(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' })[0]);
+      await fireEvent.press(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' })[0]);
       await flush();
 
       const leaderboardCalls = axios.get.mock.calls.filter(([url]) =>

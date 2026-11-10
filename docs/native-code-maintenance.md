@@ -4,8 +4,8 @@ Runbook for native-layer workarounds that must be re-checked on dependency upgra
 
 ## Status date / app state
 
-- Verified 2026-11-10.
-- Stack: RN 0.85.3, Expo SDK 56, compileSdk/targetSdk 36, `edgeToEdgeEnabled=true` (`android/gradle.properties`), minSdk 24.
+- Re-verified 2026-11-10 on Expo SDK 58 / RN 0.88.1 (regenerated `android/`, `:app:dependencies --configuration releaseRuntimeClasspath` exit 0, Material resolves 1.14.0).
+- Stack: Expo SDK 58, RN 0.88.1, compileSdk/targetSdk 36, `edgeToEdgeEnabled=true` (`android/gradle.properties`), minSdk 24. Kotlin: `kotlinVersion` pin removed from `expo-build-properties` — RN 0.88.1 ships Kotlin 2.2.0 (`react-native/gradle/libs.versions.toml`); Expo default rule applies.
 - The warning is **ADVISORY** — it does not block publishing. Play derives it from a static bytecode scan of the uploaded artifact.
 
 ## How the fixes persist (CNG)
@@ -13,7 +13,7 @@ Runbook for native-layer workarounds that must be re-checked on dependency upgra
 `android/` and `ios/` are gitignored — EAS builds (production profile → Play internal track) regenerate natives via `expo prebuild`, so manual edits to the local `android/` folder never reach the store artifact. The fixes persist across prebuilds ONLY via the local config plugin [`plugins/edge-to-edge-play-warning.js`](../plugins/edge-to-edge-play-warning.js), registered in `app.json` → `plugins`:
 
 - `withAppBuildGradle`: injects the `implementation("com.google.android.material:material:1.14.0")` force line into `dependencies {` (idempotent — skips if a material dependency ≥ 1.14.0 is already present).
-- `withAndroidStyles`: strips `android:statusBarColor` / `android:navigationBarColor` items from the `AppTheme` style (defensive — the Expo template regenerates them).
+- Styles strip (finalized mod): removes `android:statusBarColor` / `android:navigationBarColor` items from the `AppTheme` style AFTER all other mods. Since SDK 58, the built-in `AndroidConfig.SystemBars.withSystemBars` default plugin (dangerous/reverse-order section of `withAndroidExpoPlugins`) re-adds them (transparent) after out-of-tree `withAndroidStyles` mods run, so the strip must run in `withFinalizedMod`. It reads/writes `android/app/src/main/res/values/styles.xml` via `XML.readXMLAsync`/`writeXMLAsync`, and filters `style.item` (singular — Expo's resource XML shape; `style.items` was always an empty match and a silent no-op in the pre-SDK-58 version).
 
 The same edits were also applied manually to the local `android/` folder (2026-11-10); those keep local `expo run:android` builds consistent but are disposable.
 

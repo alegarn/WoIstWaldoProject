@@ -12,13 +12,17 @@
  *      edge-to-edge APIs guarded behind SDK_INT < 35; 1.14.0 (material-
  *      components commit c2051db2) removes them.
  *   2. Strips android:statusBarColor / android:navigationBarColor items from
- *      the AppTheme style — the Expo template regenerates them (transparent
- *      bar colors) and Play's scan flags them.
+ *      the AppTheme style. Since Expo SDK 58, the built-in
+ *      AndroidConfig.SystemBars.withSystemBars default plugin (dangerous /
+ *      reverse-order section of withAndroidExpoPlugins) re-adds them
+ *      (transparent) AFTER out-of-tree styles mods run, so the strip runs in
+ *      a finalized mod — after ALL other mods — to win.
  *
  * Re-check runbook: docs/native-code-maintenance.md
  */
 
-const { withAppBuildGradle, withAndroidStyles } = require('@expo/config-plugins');
+const path = require('path');
+const { withAppBuildGradle, withFinalizedMod, XML } = require('@expo/config-plugins');
 
 const MATERIAL_LINE = 'implementation("com.google.android.material:material:1.14.0")';
 const MATERIAL_COMMENT =
@@ -67,20 +71,45 @@ const BAR_COLOR_ITEM_NAMES = new Set([
   'android:navigationBarColor',
 ]);
 
-function withEdgeToEdgeStyleCleanup(config) {
-  return withAndroidStyles(config, (modConfig) => {
-    const styles = modConfig.modResults.resources.style || [];
-    for (const style of styles) {
-      if (style.$.name !== 'AppTheme' || !Array.isArray(style.items)) {
-        continue;
-      }
-      style.items = style.items.filter((item) => {
-        if (!item.$ || !item.$.name) return false;
-        return !BAR_COLOR_ITEM_NAMES.has(item.$.name);
-      });
+async function stripBarColorsFromStylesFile(projectRoot) {
+  const stylesPath = path.join(
+    projectRoot,
+    'android',
+    'app',
+    'src',
+    'main',
+    'res',
+    'values',
+    'styles.xml'
+  );
+  const xml = await XML.readXMLAsync({ path: stylesPath });
+  let removed = false;
+  for (const style of xml.resources.style || []) {
+    if (style.$.name !== 'AppTheme' || !Array.isArray(style.item)) {
+      continue;
     }
-    return modConfig;
-  });
+    const filtered = style.item.filter((item) => {
+      if (!item.$ || !item.$.name) return false;
+      return !BAR_COLOR_ITEM_NAMES.has(item.$.name);
+    });
+    if (filtered.length !== style.item.length) {
+      style.item = filtered;
+      removed = true;
+    }
+  }
+  if (removed) {
+    await XML.writeXMLAsync({ path: stylesPath, xml });
+  }
+}
+
+function withEdgeToEdgeStyleCleanup(config) {
+  return withFinalizedMod(config, [
+    'android',
+    async (config) => {
+      await stripBarColorsFromStylesFile(config.modRequest.projectRoot);
+      return config;
+    },
+  ]);
 }
 
 module.exports = function edgeToEdgePlayWarningPlugin(config) {

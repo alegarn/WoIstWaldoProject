@@ -192,7 +192,7 @@ async function renderSettingsScreen({
   navigation?: Nav;
   authOverrides?: Record<string, unknown>;
 } = {}) {
-  const view = render(
+  const view = await render(
     <AuthContext.Provider value={{ ...AUTH, ...authOverrides } as any}>
       <GroupSettingsScreen navigation={navigation as any} />
     </AuthContext.Provider>
@@ -235,7 +235,7 @@ describe('GroupSettingsScreen (private group)', () => {
 
     expect(view.getByText('Manage members')).toBeTruthy();
 
-    fireEvent.press(view.getByTestId('group-settings.button.members'));
+    await fireEvent.press(view.getByTestId('group-settings.button.members'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('MemberManagementScreen');
   });
@@ -245,7 +245,7 @@ describe('GroupSettingsScreen (private group)', () => {
     const tokens = getPrivateGroupSettingsTokens({
       primaryColor: OWNER_GROUP.primary_color,
       secondaryColor: OWNER_GROUP.secondary_color,
-    });
+    } as any);
     const { view } = await renderSettingsScreen();
 
     const identitySection = view.getByTestId('group-settings.section.identity');
@@ -285,8 +285,8 @@ describe('GroupSettingsScreen (private group)', () => {
     serveHub({ owned: [OWNER_GROUP], categoryQueue: [[]] });
     const { view } = await renderSettingsScreen();
 
-    fireEvent.changeText(view.getByTestId('group-settings.input.name'), 'Renamed');
-    fireEvent.press(view.getByTestId('group-settings.button.save-colors'));
+    await fireEvent.changeText(view.getByTestId('group-settings.input.name'), 'Renamed');
+    await fireEvent.press(view.getByTestId('group-settings.button.save-colors'));
     await flushEffects();
 
     expect(axios.patch).toHaveBeenCalledWith(
@@ -311,7 +311,7 @@ describe('GroupSettingsScreen (private group)', () => {
     serveHub({ owned: [OWNER_GROUP], categoryQueue: [[]] });
     const { view, navigation } = await renderSettingsScreen({ authOverrides: { paidTier: 0 } });
 
-    fireEvent.press(view.getByTestId('group-settings.button.save-colors'));
+    await fireEvent.press(view.getByTestId('group-settings.button.save-colors'));
     await flushEffects();
 
     expect(alertSpy).toHaveBeenCalledTimes(1);
@@ -336,7 +336,7 @@ describe('GroupSettingsScreen (private group)', () => {
     serveHub({ owned: [OWNER_GROUP], categoryQueue: [[{ id: 'cat-1', name: 'Cats' }]] });
     const { view } = await renderSettingsScreen();
 
-    fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
+    await fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
     await flushEffects();
 
     expect(mockLaunchImageLibraryAsync).toHaveBeenCalledWith({
@@ -380,7 +380,7 @@ describe('GroupSettingsScreen (private group)', () => {
     });
     const { view } = await renderSettingsScreen();
 
-    fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
+    await fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
     await flushEffects();
 
     expect(mockFileUpload).toHaveBeenCalled();
@@ -412,7 +412,7 @@ describe('GroupSettingsScreen (private group)', () => {
     });
     const { view } = await renderSettingsScreen();
 
-    fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
+    await fireEvent.press(view.getByTestId('group-settings.uploader.category-thumbnail'));
     await flushEffects();
 
     const deletedUris = mockFileDelete.mock.calls.map(([uri]) => uri as string);
@@ -436,7 +436,7 @@ describe('GroupSettingsScreen (private group)', () => {
     expect(view.queryByTestId('group-settings.category.add-composer')).toBeNull();
     expect(view.queryByTestId('group-settings.uploader.category-thumbnail')).toBeNull();
 
-    fireEvent.press(view.getByTestId('group-settings.category.locked'));
+    await fireEvent.press(view.getByTestId('group-settings.category.locked'));
 
     expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'personalize-group' });
   });
@@ -449,7 +449,7 @@ describe('GroupSettingsScreen (private group)', () => {
 
     const banner = view.getByTestId('group-settings.members.cap-banner');
     const bannerText = banner
-      .findAllByType(Text)
+      .queryAll((node) => node.type === 'Text')
       .map((node) => String(node.props.children))
       .join(' ');
     expect(bannerText).toContain('3/30 members');
@@ -466,7 +466,7 @@ describe('GroupSettingsScreen (private group)', () => {
 
     const banner = view.getByTestId('group-settings.members.cap-banner');
     const bannerText = banner
-      .findAllByType(Text)
+      .queryAll((node) => node.type === 'Text')
       .map((node) => String(node.props.children))
       .join(' ');
     expect(bannerText).toContain('3/10 members');
@@ -479,7 +479,7 @@ describe('GroupSettingsScreen (private group)', () => {
 
     const banner = view.getByTestId('group-settings.members.cap-banner');
     const bannerText = banner
-      .findAllByType(Text)
+      .queryAll((node) => node.type === 'Text')
       .map((node) => String(node.props.children))
       .join(' ');
     expect(bannerText).toContain('3/10 members');

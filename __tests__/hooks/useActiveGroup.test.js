@@ -30,8 +30,8 @@ describe('useActiveGroup — scope derivation', () => {
     jest.clearAllMocks();
   });
 
-  it('derives {kind:"public"} initially', () => {
-    const { result } = renderHook(() => useActiveGroup(), {
+  it('derives {kind:"public"} initially', async () => {
+    const { result } = await renderHook(() => useActiveGroup(), {
       wrapper: ({ children }) => (
         <ActiveGroupWrapper>{children}</ActiveGroupWrapper>
       ),
@@ -47,7 +47,7 @@ describe('useActiveGroup — scope derivation', () => {
     };
     setActiveGroup.mockResolvedValue(response);
 
-    const { result } = renderHook(() => useActiveGroup(), {
+    const { result } = await renderHook(() => useActiveGroup(), {
       wrapper: ({ children }) => (
         <ActiveGroupWrapper>{children}</ActiveGroupWrapper>
       ),
@@ -72,7 +72,7 @@ describe('useActiveGroup — scope derivation', () => {
       data: { active_group_id: 'group-123' },
     });
 
-    const { result } = renderHook(() => useActiveGroup(), {
+    const { result } = await renderHook(() => useActiveGroup(), {
       wrapper: ({ children }) => (
         <ActiveGroupWrapper>{children}</ActiveGroupWrapper>
       ),

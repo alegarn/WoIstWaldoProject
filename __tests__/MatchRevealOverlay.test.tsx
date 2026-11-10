@@ -11,7 +11,7 @@
 
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
+import type { TestInstance } from 'test-renderer';
 
 import MatchRevealOverlay from '../components/Picture/MatchRevealOverlay';
 import i18n from '../i18n';
@@ -38,15 +38,15 @@ const baseProps: OverlayProps = {
 };
 
 describe('MatchRevealOverlay', () => {
-  it('renders nothing when outcome is null', () => {
-    render(<MatchRevealOverlay {...baseProps} outcome={null} />);
+  it('renders nothing when outcome is null', async () => {
+    await render(<MatchRevealOverlay {...baseProps} outcome={null} />);
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
     expect(screen.toJSON()).toBeNull();
   });
 
-  it('renders the win verdict copy from en.json', () => {
-    render(<MatchRevealOverlay {...baseProps} outcome="win" />);
+  it('renders the win verdict copy from en.json', async () => {
+    await render(<MatchRevealOverlay {...baseProps} outcome="win" />);
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
@@ -54,32 +54,32 @@ describe('MatchRevealOverlay', () => {
     );
   });
 
-  it('renders the loseScore verdict copy from en.json', () => {
-    render(<MatchRevealOverlay {...baseProps} outcome="loseScore" />);
+  it('renders the loseScore verdict copy from en.json', async () => {
+    await render(<MatchRevealOverlay {...baseProps} outcome="loseScore" />);
 
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
       i18n.t('game.picture.traceLoseScore')
     );
   });
 
-  it('renders the loseLengthCap verdict copy from en.json', () => {
-    render(<MatchRevealOverlay {...baseProps} outcome="loseLengthCap" />);
+  it('renders the loseLengthCap verdict copy from en.json', async () => {
+    await render(<MatchRevealOverlay {...baseProps} outcome="loseLengthCap" />);
 
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
       i18n.t('game.picture.traceLoseLengthCap')
     );
   });
 
-  it('renders the match percent as its own numeric text with the % sign', () => {
-    render(<MatchRevealOverlay {...baseProps} scorePercent={87} />);
+  it('renders the match percent as its own numeric text with the % sign', async () => {
+    await render(<MatchRevealOverlay {...baseProps} scorePercent={87} />);
 
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
   });
 
-  it('renders continuously across rerenders while the outcome stays set', () => {
-    const { rerender } = render(<MatchRevealOverlay {...baseProps} />);
+  it('renders continuously across rerenders while the outcome stays set', async () => {
+    const { rerender } = await render(<MatchRevealOverlay {...baseProps} />);
 
-    rerender(<MatchRevealOverlay {...baseProps} />);
+    await rerender(<MatchRevealOverlay {...baseProps} />);
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
@@ -87,12 +87,12 @@ describe('MatchRevealOverlay', () => {
     );
   });
 
-  it('renders the hidden outline scaled to px, distinct, non-blocking', () => {
-    render(<MatchRevealOverlay {...baseProps} />);
+  it('renders the hidden outline scaled to px, distinct, non-blocking', async () => {
+    await render(<MatchRevealOverlay {...baseProps} />);
 
     const root = screen.getByTestId('game.picture.trace-reveal');
     // Repo pattern: pointerEvents lives in the layer style (ShapeCanvas seam).
-    const hasPointerEventsNone = (element: ReactTestInstance) => {
+    const hasPointerEventsNone = (element: TestInstance) => {
       const style = element.props.style as unknown;
       return (Array.isArray(style) ? style : [style]).some(
         (entry) => entry && entry.pointerEvents === 'none'

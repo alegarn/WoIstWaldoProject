@@ -39,6 +39,9 @@ import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/grou
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { probeAllPoolForUnplayed } from '../services/cardDeck';
 
+const mockReadGroupFeedCache = readGroupFeedCache as unknown as jest.Mock;
+const mockWriteGroupFeedCache = writeGroupFeedCache as unknown as jest.Mock;
+
 const STAMP_KEY = 'allPoolDrained:public:fr:drained';
 
 const mockAsyncStorage = AsyncStorage as unknown as {
@@ -79,7 +82,7 @@ function batch(prefix: string, count: number): Card[] {
 }
 
 function pictureIds(cards: Array<{ pictureId?: string }>): string[] {
-  return cards.map((c) => c.pictureId);
+  return cards.map((c) => c.pictureId) as string[];
 }
 
 /**
@@ -100,7 +103,7 @@ function mockCursorServer(batches: Card[][]) {
       return { isError: false, reason: 'empty', images: [] };
     }
     if (opts?.persistCursor !== false) {
-      await saveLastImageUuid(served[served.length - 1].pictureId, 'all', filters?.language, filters?.scope ?? null, filters?.mode);
+      await saveLastImageUuid(served[served.length - 1].pictureId, 'all', filters?.language, filters?.scope ?? null, (filters as { mode?: string }).mode);
     }
     return { isError: false, images: served };
   });
@@ -113,8 +116,8 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     jest.clearAllMocks();
     mockStore();
     mockGetImages.mockReset();
-    readGroupFeedCache.mockResolvedValue(null);
-    writeGroupFeedCache.mockResolvedValue(undefined);
+    mockReadGroupFeedCache.mockResolvedValue(null);
+    mockWriteGroupFeedCache.mockResolvedValue(undefined);
   });
 
   it('all-played batch pages forward, later unplayed batch appends to the "all" deck, cursor advances, no servingCycle writes', async () => {
@@ -309,8 +312,8 @@ describe('probeAllPoolForUnplayed (allPoolDrained wiring, Task 4b)', () => {
     jest.clearAllMocks();
     mockStore();
     mockGetImages.mockReset();
-    readGroupFeedCache.mockResolvedValue(null);
-    writeGroupFeedCache.mockResolvedValue(undefined);
+    mockReadGroupFeedCache.mockResolvedValue(null);
+    mockWriteGroupFeedCache.mockResolvedValue(undefined);
   });
 
   function storedDrainedKeys(store: Store): string[] {

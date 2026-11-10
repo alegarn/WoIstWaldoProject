@@ -251,8 +251,8 @@ describe('GuessPicture', () => {
   }
 
   async function renderToPicture(overrides = {}) {
-    const screen = render(<GuessPicture {...baseProps} {...overrides} />);
-    fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
+    const screen = await render(<GuessPicture {...baseProps} {...overrides} />);
+    await fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
     return screen;
   }
 
@@ -286,7 +286,7 @@ describe('GuessPicture', () => {
 
     await fireTargetPan({ begin: true, update: { translationX: 10, translationY: 0 } });
     await fireTargetPan({ begin: true, finalize: { translationX: 2, translationY: 2 } });
-    fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+    await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
     expect(toAdScreen).toHaveBeenCalledTimes(1);
     expect(toAdScreen).toHaveBeenCalledWith({
@@ -335,7 +335,7 @@ describe('GuessPicture', () => {
 
     const before = targetRingStyle(screen);
 
-    fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+    await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
 
     const after = targetRingStyle(screen);
     expect(ringCenter(after)).toEqual(ringCenter(before));
@@ -377,7 +377,7 @@ describe('GuessPicture', () => {
     expect(screen.queryByTestId('game.picture.guess-target-wrap')).toBeNull();
     expect(confirmModalQuery(screen)).toBeNull();
 
-    fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+    await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
 
     const ring = targetRingStyle(screen);
     expect(ring.width).toBe(DRAG_SIZE);
@@ -392,7 +392,7 @@ describe('GuessPicture', () => {
   });
 
   it('opens the description overlay immediately on a second card (skipInstructions=true)', async () => {
-    const screen = render(<GuessPicture {...baseProps} skipInstructions={true} />);
+    const screen = await render(<GuessPicture {...baseProps} skipInstructions={true} />);
 
     expect(screen.getByTestId('guess.enigma.panel')).toBeTruthy();
     expect(screen.getByText('Find the hidden point')).toBeTruthy();
@@ -400,12 +400,12 @@ describe('GuessPicture', () => {
 
   it('flipping skipInstructions to true after mount swaps the instructions for the picture reactively', async () => {
     setE2EMode(false);
-    const screen = render(<GuessPicture {...baseProps} skipInstructions={false} />);
+    const screen = await render(<GuessPicture {...baseProps} skipInstructions={false} />);
 
     expect(screen.queryByTestId('game.instructions.guess.start')).not.toBeNull();
     expect(screen.queryByTestId('game.picture.guess-image')).toBeNull();
 
-    screen.rerender(<GuessPicture {...baseProps} skipInstructions={true} />);
+    await screen.rerender(<GuessPicture {...baseProps} skipInstructions={true} />);
 
     expect(screen.queryByTestId('game.instructions.guess.start')).toBeNull();
     expect(screen.queryByTestId('game.picture.guess-image')).not.toBeNull();
@@ -440,7 +440,7 @@ describe('GuessPicture', () => {
 
       expect(findTargetPan()).toBeUndefined();
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
 
       expect(targetRingStyle(screen)).toBeTruthy();
       expect(ringCenter(targetRingStyle(screen)).x).toBeCloseTo(0.58 * IMAGE_WIDTH);
@@ -458,8 +458,8 @@ describe('GuessPicture', () => {
     expect(ringCenter(ring).x).toBeCloseTo(0.18 * IMAGE_WIDTH);
     expect(ringCenter(ring).y).toBeCloseTo(0.18 * IMAGE_HEIGHT);
 
-    fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
-    fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+    await fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
+    await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
     expect(confirmModalQuery(screen)).toBeNull();
 
@@ -482,9 +482,9 @@ describe('GuessPicture', () => {
       const toAdScreen = jest.fn();
       const screen = await renderToPicture({ toAdScreen });
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
-      fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+      await fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
       expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: 0 }));
     });
@@ -494,13 +494,13 @@ describe('GuessPicture', () => {
       const toAdScreen = jest.fn();
       jest.useFakeTimers();
       try {
-        const screen = render(<GuessPicture {...baseProps} toAdScreen={toAdScreen} />);
-        fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
+        const screen = await render(<GuessPicture {...baseProps} toAdScreen={toAdScreen} />);
+        await fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
         await act(async () => {
           jest.advanceTimersByTime(600);
         });
         await fireTargetPan({ begin: true, finalize: { translationX: 2, translationY: 2 } });
-        fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+        await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
         expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: expect.any(Number) }));
         const payload = toAdScreen.mock.calls[0][0];
@@ -515,8 +515,8 @@ describe('GuessPicture', () => {
       setE2EMode(false);
       jest.useFakeTimers();
       try {
-        const screen = render(<GuessPicture {...baseProps} />);
-        fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
+        const screen = await render(<GuessPicture {...baseProps} />);
+        await fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
         await act(async () => {
           jest.advanceTimersByTime(300);
         });
@@ -541,15 +541,15 @@ describe('GuessPicture', () => {
       return screen.queryByTestId('guess.speed-ring');
     }
 
-    it('on a first card (skipInstructions falsy) skips the grace: ring is active right after instructions dismiss', () => {
-      const screen = render(<GuessPicture {...baseProps} />);
-      fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
+    it('on a first card (skipInstructions falsy) skips the grace: ring is active right after instructions dismiss', async () => {
+      const screen = await render(<GuessPicture {...baseProps} />);
+      await fireEvent.press(screen.getByTestId('game.instructions.guess.start'));
 
       expect(speedRingQuery(screen)).not.toBeNull();
     });
 
-    it('on a second card (skipInstructions=true) the ring is inactive during the grace window', () => {
-      const screen = render(<GuessPicture {...baseProps} skipInstructions={true} />);
+    it('on a second card (skipInstructions=true) the ring is inactive during the grace window', async () => {
+      const screen = await render(<GuessPicture {...baseProps} skipInstructions={true} />);
 
       expect(speedRingQuery(screen)).toBeNull();
 
@@ -560,8 +560,8 @@ describe('GuessPicture', () => {
       expect(speedRingQuery(screen)).toBeNull();
     });
 
-    it('on a second card, the ring activates once the grace window elapses', () => {
-      const screen = render(<GuessPicture {...baseProps} skipInstructions={true} />);
+    it('on a second card, the ring activates once the grace window elapses', async () => {
+      const screen = await render(<GuessPicture {...baseProps} skipInstructions={true} />);
 
       expect(speedRingQuery(screen)).toBeNull();
 
@@ -572,19 +572,19 @@ describe('GuessPicture', () => {
       expect(speedRingQuery(screen)).not.toBeNull();
     });
 
-    it('on a second card, closing the description ends the grace immediately', () => {
-      const screen = render(<GuessPicture {...baseProps} skipInstructions={true} />);
+    it('on a second card, closing the description ends the grace immediately', async () => {
+      const screen = await render(<GuessPicture {...baseProps} skipInstructions={true} />);
 
       expect(speedRingQuery(screen)).toBeNull();
 
-      fireEvent.press(screen.getByTestId('guess.enigma.close'));
+      await fireEvent.press(screen.getByTestId('guess.enigma.close'));
 
       expect(speedRingQuery(screen)).not.toBeNull();
     });
 
     it('on a second card, elapsedMs stays 0 during the grace and only advances after', async () => {
       const toAdScreen = jest.fn();
-      const screen = render(
+      const screen = await render(
         <GuessPicture {...baseProps} skipInstructions={true} toAdScreen={toAdScreen} />
       );
 
@@ -601,7 +601,7 @@ describe('GuessPicture', () => {
       expect(speedRingQuery(screen)).not.toBeNull();
 
       await fireTargetPan({ begin: true, finalize: { translationX: 2, translationY: 2 } });
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
       expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({ elapsedMs: expect.any(Number) }));
       const payload = toAdScreen.mock.calls[0][0];
@@ -668,7 +668,7 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
       expect(toAdScreen).toHaveBeenCalledTimes(1);
 
       expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
@@ -723,7 +723,7 @@ describe('GuessPicture', () => {
 
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
       expect(toAdScreen).toHaveBeenCalledTimes(1);
       expect(toAdScreen).toHaveBeenCalledWith({
@@ -743,11 +743,11 @@ describe('GuessPicture', () => {
 
       const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
 
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
       expect(toAdScreen).toHaveBeenCalledTimes(1);
       expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({
@@ -765,7 +765,7 @@ describe('GuessPicture', () => {
 
       expect(confirmModalQuery(screen)).not.toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+      await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
 
       expect(toAdScreen).toHaveBeenCalledTimes(1);
       expect(toAdScreen).toHaveBeenCalledWith(expect.objectContaining({
@@ -795,7 +795,7 @@ describe('GuessPicture', () => {
       expect(screen.queryByTestId('game.picture.shape-exit')).not.toBeNull();
       expect(screen.queryByTestId('guess.enigma.panel')).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.shape-exit'));
+      await fireEvent.press(screen.getByTestId('game.picture.shape-exit'));
 
       expect(onEdgeSwipe).toHaveBeenCalledTimes(1);
     });
@@ -804,16 +804,16 @@ describe('GuessPicture', () => {
       setE2EMode(true);
 
       // skipInstructions=true renders the picture directly (no Start button).
-      const screen = render(
+      const screen = await render(
         <GuessPicture {...baseProps} mode="shape" shape={HIDDEN_SHAPE} skipInstructions={true} />
       );
 
       expect(screen.getByTestId('guess.enigma.panel')).toBeTruthy();
 
-      fireEvent.press(screen.getByTestId('guess.enigma.close'));
+      await fireEvent.press(screen.getByTestId('guess.enigma.close'));
       expect(screen.queryByTestId('guess.enigma.panel')).toBeNull();
 
-      fireEvent.press(screen.getByTestId('game.picture.shape-enigma'));
+      await fireEvent.press(screen.getByTestId('game.picture.shape-enigma'));
 
       expect(screen.getByTestId('guess.enigma.panel')).toBeTruthy();
     });
