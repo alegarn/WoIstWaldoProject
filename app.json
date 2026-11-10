@@ -119,7 +119,8 @@
           "checkAutomatically": "ON_LOAD",
           "fallbackToCacheTimeout": 0
         }
-      ]
+      ],
+      "./plugins/edge-to-edge-play-warning"
     ],
     "runtimeVersion": {
       "policy": "fingerprint"
