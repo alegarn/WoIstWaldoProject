@@ -23,7 +23,8 @@ const { withAppBuildGradle, withAndroidStyles } = require('@expo/config-plugins'
 const MATERIAL_LINE = 'implementation("com.google.android.material:material:1.14.0")';
 const MATERIAL_COMMENT =
   '// Force Material 1.14.0 — guards deprecated edge-to-edge APIs (SDK_INT < 35); clears Play Console Android-15 warning. See docs/native-code-maintenance.md.';
-const MATERIAL_DEPENDENCY_PATTERN = /com\.google\.android\.material:material/;
+const MATERIAL_DEPENDENCY_PATTERN =
+  /com\.google\.android\.material:material:(?:1\.(?:1[4-9]|[2-9]\d+)|[2-9]\d*\.)/;
 
 function withMaterialVersion(config) {
   return withAppBuildGradle(config, (modConfig) => {
@@ -73,9 +74,10 @@ function withEdgeToEdgeStyleCleanup(config) {
       if (style.$.name !== 'AppTheme' || !Array.isArray(style.items)) {
         continue;
       }
-      style.items = style.items.filter(
-        (item) => !BAR_COLOR_ITEM_NAMES.has(item.$.name)
-      );
+      style.items = style.items.filter((item) => {
+        if (!item.$ || !item.$.name) return false;
+        return !BAR_COLOR_ITEM_NAMES.has(item.$.name);
+      });
     }
     return modConfig;
   });
