@@ -96,7 +96,7 @@ jest.mock('react-native-gesture-handler', () => {
 });
 
 import React from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import RetractableSidebar from '../components/UI/RetractableSidebar';
@@ -131,7 +131,9 @@ function panConfigArgs(record: PanRecord, method: string): unknown[] {
 async function renderSidebar(testIDPrefix = 't', initiallyOpen = true) {
   return await render(
     <RetractableSidebar testIDPrefix={testIDPrefix} initiallyOpen={initiallyOpen} accessibilityLabel="Mode">
-      <View testID={`${testIDPrefix}.child-marker`}>chip</View>
+      <View testID={`${testIDPrefix}.child-marker`}>
+        <Text>chip</Text>
+      </View>
     </RetractableSidebar>
   );
 }
@@ -162,7 +164,7 @@ describe('RetractableSidebar', () => {
     it('retracts on a rightward swipe', async () => {
       const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
       });
 
@@ -173,7 +175,7 @@ describe('RetractableSidebar', () => {
     it('retracts on a leftward swipe', async () => {
       const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: -60, translationY: 0 }, true);
       });
 
@@ -184,7 +186,7 @@ describe('RetractableSidebar', () => {
     it('stays open on a vertical swipe', async () => {
       const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationY: 60, translationX: 2 }, true);
       });
 
@@ -196,7 +198,7 @@ describe('RetractableSidebar', () => {
   describe('A3 reopen + accessibility', () => {
     async function renderRetracted() {
       const screen = await renderSidebar();
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
       });
       return screen;

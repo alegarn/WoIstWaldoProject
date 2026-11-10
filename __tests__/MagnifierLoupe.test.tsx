@@ -211,7 +211,7 @@ describe('MagnifierLoupe', () => {
 
     // Live binding: the exact fixture Animated.Values drive the rendered
     // styles (setValue flows into the tree without re-rendering the host).
-    act(() => {
+    await act(async () => {
       fixture.frameX.setValue(10);
       fixture.contentX.setValue(-1);
     });

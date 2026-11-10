@@ -727,7 +727,7 @@ describe('useGroupsHub', () => {
       expect(resolveFetch).toBeInstanceOf(Function);
       expect(mockedAxiosGet).toHaveBeenCalledTimes(1);
 
-      act(() => {
+      await act(async () => {
         publish(`${TOKEN}|${USER_ID}`, HUB);
       });
 
@@ -735,8 +735,6 @@ describe('useGroupsHub', () => {
         resolveFetch({ status: 401, data: { error: 'unauthorized' } });
       });
 
-      // eslint-disable-next-line no-console
-      console.log('DBG snapshot', JSON.stringify(getSnapshot()), 'Adata', JSON.stringify(instanceA.result.current), 'Bdata', JSON.stringify(instanceB.result.current), 'AisLoading', instanceA.result.current?.isLoading);
       expect(instanceA.result.current.data).toEqual(HUB);
       expect(instanceA.result.current.error).toBeNull();
       expect(instanceA.result.current.isLoading).toBe(false);
@@ -803,14 +801,14 @@ describe('useGroupsHub', () => {
       });
       expect(result.current.data).toBeNull();
 
-      act(() => {
+      await act(async () => {
         publish('Bearer other-token|other-user', HUB);
       });
 
       expect(result.current.data).toBeNull();
       expect(result.current.error).toBeNull();
 
-      act(() => {
+      await act(async () => {
         publish(`${TOKEN}|${USER_ID}`, HUB);
       });
 
@@ -825,9 +823,10 @@ describe('useGroupsHub', () => {
       publish('Bearer token-2|user-2', G2B_HUB);
 
       let resolveFetch!: (payload: AxiosPayload) => void;
+      let resolveFresh!: (payload: AxiosPayload) => void;
       mockedAxiosGet
         .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFetch = resolve; }))
-        .mockResolvedValueOnce(groupsPayload(200, [{ id: 'g-2b-fresh', owner_id: 'user-2' }]));
+        .mockImplementationOnce(() => new Promise<AxiosPayload>((resolve) => { resolveFresh = resolve; }));
 
       const auth = { token: TOKEN, userId: USER_ID };
       const { result, rerender } = await renderHook((_props: void) => useGroupsHub(), {
@@ -849,7 +848,10 @@ describe('useGroupsHub', () => {
 
       await act(async () => {
         resolveFetch(groupsPayload(200, [{ id: 'g-2b-stale', owner_id: 'user-2' }]));
+        resolveFresh(groupsPayload(200, [{ id: 'g-2b-fresh', owner_id: 'user-2' }]));
         await jest.advanceTimersByTimeAsync(100);
+        await Promise.resolve();
+        await Promise.resolve();
       });
 
       expect(result.current.isLoading).toBe(false);

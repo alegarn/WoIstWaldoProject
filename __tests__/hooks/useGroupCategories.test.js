@@ -171,7 +171,7 @@ describe('useGroupCategories', () => {
     const { result } = await renderCategories();
     await waitFor(() => expect(result.current.categories).toEqual(initial));
 
-    act(() => result.current.setNewCategoryName('Animals'));
+    await act(async () => { result.current.setNewCategoryName('Animals'); });
 
     await act(async () => {
       await result.current.add();
@@ -198,7 +198,7 @@ describe('useGroupCategories', () => {
     const { result } = await renderCategories();
     await waitFor(() => expect(result.current.categories).toEqual(initial));
 
-    act(() => result.current.setNewCategoryName('Animals'));
+    await act(async () => { result.current.setNewCategoryName('Animals'); });
 
     await act(async () => {
       await result.current.add();
@@ -217,7 +217,7 @@ describe('useGroupCategories', () => {
     const { result } = await renderCategories({ onUpsell });
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => result.current.setNewCategoryName('Animals'));
+    await act(async () => { result.current.setNewCategoryName('Animals'); });
 
     await act(async () => {
       await result.current.add();
@@ -231,7 +231,7 @@ describe('useGroupCategories', () => {
     expect(storeCta).toBeTruthy();
     expect(onUpsell).not.toHaveBeenCalled();
 
-    act(() => {
+    await act(async () => {
       storeCta.onPress();
     });
     expect(onUpsell).toHaveBeenCalledTimes(1);
@@ -245,7 +245,7 @@ describe('useGroupCategories', () => {
     const { result } = await renderCategories();
     await waitFor(() => expect(result.current.loading).toBe(false));
 
-    act(() => result.current.setNewCategoryName('Animals'));
+    await act(async () => { result.current.setNewCategoryName('Animals'); });
 
     await act(async () => {
       await result.current.add();
@@ -272,7 +272,7 @@ describe('useGroupCategories', () => {
     // Dirty draft -> PATCH + write-through.
     updateGroupCategory.mockResolvedValue({ status: 200, data: {} });
     refreshGroupCategories.mockResolvedValue({ data: [{ id: 'cat-1', name: 'Nature 2' }] });
-    act(() => result.current.setDraft('cat-1', 'Nature 2'));
+    await act(async () => { result.current.setDraft('cat-1', 'Nature 2'); });
 
     await act(async () => {
       await result.current.save({ id: 'cat-1', name: 'Nature' });

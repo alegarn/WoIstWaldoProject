@@ -72,10 +72,6 @@ function styleOf(node: TestInstance): Style {
   return StyleSheet.flatten(node.props.style ?? []) ?? {};
 }
 
-function readValue(value: Animated.Value): number {
-  return (value as unknown as { __getValue(): number }).__getValue();
-}
-
 function findLabeledNode(view: RenderResult): TestInstance | null {
   const matches = view.container.queryAll(
     (node) => node.props.accessibilityLabel === LABEL,
@@ -107,28 +103,33 @@ function matchesBarStyle(style: Style): boolean {
   );
 }
 
+// v14 test-renderer snapshots Animated styles as plain numbers on host nodes,
+// so opacity state is read from the (per-access refreshed) style snapshot.
 function hasAnimatedOpacity(node: TestInstance): boolean {
-  const opacity = styleOf(node).opacity;
-  return !!opacity && typeof (opacity as Style).__getValue === 'function';
+  return typeof styleOf(node).opacity === 'number';
+}
+
+function opacityOf(node: TestInstance): number {
+  return styleOf(node).opacity as number;
 }
 
 // Wiring contract: one Animated.Value per segment + a parent fade-out value.
 // The parent value is the one carried by (or above) the labeled container.
-function cueOpacityValues(view: RenderResult): {
-  segmentValues: Animated.Value[];
-  containerValues: Animated.Value[];
+function cueOpacityNodes(view: RenderResult): {
+  segmentNodes: TestInstance[];
+  containerNodes: TestInstance[];
 } {
   const nodes = view.container.queryAll(hasAnimatedOpacity);
-  const segmentValues: Animated.Value[] = [];
-  const containerValues: Animated.Value[] = [];
+  const segmentNodes: TestInstance[] = [];
+  const containerNodes: TestInstance[] = [];
   for (const node of nodes) {
     if (isOnContainerPath(node)) {
-      containerValues.push(styleOf(node).opacity as Animated.Value);
+      containerNodes.push(node);
     } else {
-      segmentValues.push(styleOf(node).opacity as Animated.Value);
+      segmentNodes.push(node);
     }
   }
-  return { segmentValues, containerValues };
+  return { segmentNodes, containerNodes };
 }
 
 function isOnContainerPath(node: TestInstance): boolean {
@@ -142,8 +143,8 @@ function isOnContainerPath(node: TestInstance): boolean {
   return false;
 }
 
-function visibleCount(values: Animated.Value[]): number {
-  return values.filter((value) => readValue(value) > 0).length;
+function visibleCount(nodes: TestInstance[]): number {
+  return nodes.filter((node) => opacityOf(node) > 0).length;
 }
 
 function barSignature(node: TestInstance): string {
@@ -251,32 +252,32 @@ describe('ModeCue', () => {
   it('reveals segments staggered ~30ms apart: 1 visible after one frame, 2 by ~48ms, all 7 by ≈210ms', async () => {
     const view = await renderCue();
 
-    const { segmentValues, containerValues } = cueOpacityValues(view);
-    expect(segmentValues).toHaveLength(SEGMENT_COUNT);
-    expect(containerValues).toHaveLength(1);
+    const { segmentNodes, containerNodes } = cueOpacityNodes(view);
+    expect(segmentNodes).toHaveLength(SEGMENT_COUNT);
+    expect(containerNodes).toHaveLength(1);
 
     await advance(16);
-    expect(visibleCount(segmentValues)).toBe(1);
+    expect(visibleCount(segmentNodes)).toBe(1);
 
     await advance(32);
-    expect(visibleCount(segmentValues)).toBe(2);
+    expect(visibleCount(segmentNodes)).toBe(2);
 
     await advance(160);
-    expect(visibleCount(segmentValues)).toBe(SEGMENT_COUNT);
-    expect(readValue(containerValues[0])).toBeGreaterThan(0.8);
+    expect(visibleCount(segmentNodes)).toBe(SEGMENT_COUNT);
+    expect(opacityOf(containerNodes[0])).toBeGreaterThan(0.8);
   });
 
   it('fades the whole cue to opacity 0 by ≈360ms and renders null afterwards', async () => {
     const view = await renderCue();
 
-    const { containerValues } = cueOpacityValues(view);
-    expect(containerValues).toHaveLength(1);
+    const { containerNodes } = cueOpacityNodes(view);
+    expect(containerNodes).toHaveLength(1);
 
     await advance(216);
-    expect(readValue(containerValues[0])).toBeGreaterThan(0.8);
+    expect(opacityOf(containerNodes[0])).toBeGreaterThan(0.8);
 
     await advance(152);
-    expect(readValue(containerValues[0])).toBeLessThan(0.05);
+    expect(opacityOf(containerNodes[0])).toBeLessThan(0.05);
 
     await advance(64);
     expect(view.toJSON()).toBeNull();

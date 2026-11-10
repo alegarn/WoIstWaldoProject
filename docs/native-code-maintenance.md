@@ -4,8 +4,8 @@ Runbook for native-layer workarounds that must be re-checked on dependency upgra
 
 ## Status date / app state
 
-- Re-verified 2026-11-10 on Expo SDK 58 / RN 0.88.1 (regenerated `android/`, `:app:dependencies --configuration releaseRuntimeClasspath` exit 0, Material resolves 1.14.0).
-- Stack: Expo SDK 58, RN 0.88.1, compileSdk/targetSdk 36, `edgeToEdgeEnabled=true` (`android/gradle.properties`), minSdk 24. Kotlin: `kotlinVersion` pin removed from `expo-build-properties` — RN 0.88.1 ships Kotlin 2.2.0 (`react-native/gradle/libs.versions.toml`); Expo default rule applies.
+- Re-verified 2026-11-10 on Expo SDK 58 / RN 0.88.1 (regenerated `android/`, `:app:dependencies --configuration releaseRuntimeClasspath` exit 0, Material resolves `1.13.0 -> 1.14.0`, versionCode 8 synced, force line plugin-inserted exactly once, `styles.xml` clean).
+- Stack: Expo SDK 58, RN 0.88.1, compileSdk 37 / targetSdk 36 / minSdk 24 (Expo defaults, no version-catalog override), `edgeToEdgeEnabled=true` (`android/gradle.properties`). Kotlin: `kotlinVersion` pin removed from `expo-build-properties` 2026-11-10 — RN 0.88.1 ships Kotlin 2.2.0 (`react-native/gradle/libs.versions.toml`); let Expo defaults rule.
 - The warning is **ADVISORY** — it does not block publishing. Play derives it from a static bytecode scan of the uploaded artifact.
 
 ## How the fixes persist (CNG)
@@ -21,10 +21,10 @@ The same edits were also applied manually to the local `android/` folder (2026-1
 
 | Play-flagged location | Source | Status |
 |---|---|---|
-| material `BottomSheetDialog.onCreate`, sidesheet `SheetDialog.onCreate`, `EdgeToEdgeUtils.applyEdgeToEdge` | `com.google.android.material:material` 1.13.0, pulled transitively by react-native-screens 4.25.2 (`node_modules/react-native-screens/android/build.gradle:210`) and @expo/log-box@56.0.14 (`build.gradle:44`) | FIXED 2026-11-10: forced 1.14.0 in `android/app/build.gradle` (guards calls behind `SDK_INT < 35`; material-components commit c2051db2, releases 1.14.0 (2026-05-13)) |
+| material `BottomSheetDialog.onCreate`, sidesheet `SheetDialog.onCreate`, `EdgeToEdgeUtils.applyEdgeToEdge` | `com.google.android.material:material` 1.13.0, pulled transitively by react-native-screens 4.30.1 (`node_modules/react-native-screens/android/build.gradle:231`) — the sole contributor on SDK 58 (`@expo/log-box@58.0.15` no longer declares material) | FIXED 2026-11-10: forced 1.14.0 in `android/app/build.gradle` (guards calls behind `SDK_INT < 35`; material-components commit c2051db2, releases 1.14.0 (2026-05-13)). Gradle resolves `1.13.0 -> 1.14.0`. |
 | `android:statusBarColor` / `android:navigationBarColor` theme items (app-owned) | `android/app/src/main/res/values/styles.xml` | FIXED 2026-11-10: items removed (no-op under enforced edge-to-edge) |
-| `StatusBarModule$setColor$1.runGuarded` | RN core react-android 0.85.3 (`StatusBarModule.kt` `setColor`) | UNFIXABLE at app level. Removed upstream in RN 0.87 (PR facebook/react-native#57392). Clears when app upgrades to RN ≥ 0.87. |
-| `WindowUtilKt.enableEdgeToEdge` / `statusBarHide` / `statusBarShow` | RN core react-android 0.85.3 (`WindowUtil.kt`) | UNFIXABLE at app level. Still present on RN main (0.89 era); runtime-safe (no-op branches when `edgeToEdgeEnabled=true`). Track facebook/react-native#48256. |
+| `StatusBarModule$setColor$1.runGuarded` | RN core react-android (`StatusBarModule.kt` `setColor`) | GONE on RN 0.88.1 (removed upstream in RN 0.87, PR facebook/react-native#57392; verified absent in `node_modules/react-native/.../StatusBarModule.kt` 2026-11-10). Cleared by the 56→58 upgrade. |
+| `WindowUtilKt.enableEdgeToEdge` / `statusBarHide` / `statusBarShow` | RN core react-android 0.88.1 (`WindowUtil.kt`) | UNFIXABLE at app level. Still present on RN main (0.89 era); runtime-safe (no-op branches when `edgeToEdgeEnabled=true`). Track facebook/react-native#48256. |
 
 Note: react-native-purchases-ui 10.4.0 and react-native-google-mobile-ads 16.4.0 are NOT contributors (RevenueCat paywalls are Compose-only — no material dep; GMA ships no material). R8/minification does NOT clear the scan (RN keep-rules retain native module entry points).
 
@@ -38,7 +38,7 @@ Trigger: every RN / Expo SDK / react-native-screens upgrade, or a new Play Conso
    ```
    grep `com.google.android.material:material`. If ≥ 1.14.0 comes transitively, the force line in `android/app/build.gradle` can be dropped; keep it otherwise.
 2. grep `android/app/src/main/res/` for `statusBarColor|navigationBarColor|windowLayoutInDisplayCutoutMode|windowTranslucent` — must stay absent.
-3. After RN ≥ 0.87: confirm `StatusBarModule$setColor` gone. After a Meta fix lands for `WindowUtil` (watch facebook/react-native#48256), re-upload and confirm those 3 warning lines disappear from Play Console.
+3. `StatusBarModule$setColor` confirmed gone on RN 0.88.1 (2026-11-10) — no further action. Remaining Play-flagged lines are the 3 `WindowUtilKt` entries only; after a Meta fix lands (watch facebook/react-native#48256), re-upload and confirm those 3 warning lines disappear from Play Console.
 4. Natives are regenerated by `expo prebuild` (EAS builds and local sync) — `android/` and `ios/` are gitignored, so all native changes must go through the config plugin [`plugins/edge-to-edge-play-warning.js`](../plugins/edge-to-edge-play-warning.js). After any local `expo prebuild` / `npx expo run:android` sync, verify the force line landed in `android/app/build.gradle` and that `statusBarColor` / `navigationBarColor` are absent from `android/app/src/main/res/values/styles.xml`.
 5. Bump the Material floor when material-components releases a fix for remaining guarded references (e.g. the RN-core entries stay unfixable at app level regardless).
 6. On any change to `plugins/edge-to-edge-play-warning.js`, verify the plugin loads without touching natives: `npx expo config --type prebuild --platform android`.
@@ -59,7 +59,7 @@ Play vitals flagged DEX obfuscation at 1% (threshold: 25%). Root cause: R8 never
 
 At prebuild these land in `android/gradle.properties`, so release builds run R8 (shrink + obfuscate + optimize) plus resource shrinking. **Durable:** `app.json` is committed, so prebuild regeneration preserves the flags — NO manual re-modification of `android/` after new builds (contrast with the `styles.xml` entries above, which need the config plugin because the template regenerates them).
 
-The existing `expo-build-properties` keys (`kotlinVersion`, `extraProguardRules` consent_sdk keep) are untouched.
+The remaining `expo-build-properties` key (`extraProguardRules` consent_sdk keep) is untouched. The `kotlinVersion` pin was removed 2026-11-10 (RN 0.88.1 default 2.2.0 applies; see status block above).
 
 ### Local `android/` staleness
 

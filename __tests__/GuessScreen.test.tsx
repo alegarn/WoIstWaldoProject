@@ -207,7 +207,6 @@ jest.mock('../utils/shapeMatch', () => ({
 import React from 'react';
 import { AppState, Image } from 'react-native';
 import { act, cleanup, fireEvent, render, RenderResult } from '@testing-library/react-native';
-import type { TestInstance } from 'test-renderer';
 
 import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
 import GuessPictureBase from '../components/Picture/GuessPicture';
@@ -1372,7 +1371,7 @@ describe('GuessScreen', () => {
     });
 
     it('entering the all category skips the warm-up fetch', async () => {
-      renderGuessScreen(baseParams({ category: { id: 'cat-all', key: 'all' } }));
+      await renderGuessScreen(baseParams({ category: { id: 'cat-all', key: 'all' } }));
       await flush();
 
       expect(fetchCardBatchMock).not.toHaveBeenCalled();
@@ -1850,25 +1849,30 @@ describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan
     setE2EMode(false);
   });
 
-  function renderedGuessPicture(handle: ScreenHandle): TestInstance {
-    const matches = handle.screen.root!.queryAll(
-      (node) => node.unstable_fiber?.type === GuessPictureBase,
-    );
-    if (matches.length === 0) throw new Error('GuessPicture not rendered');
-    return matches[0];
+  function renderedGuessPictureProps(handle: ScreenHandle): Record<string, unknown> {
+    for (const node of handle.screen.root!.queryAll(() => true)) {
+      let fiber = node.unstable_fiber;
+      while (fiber) {
+        if (fiber.type === GuessPictureBase) {
+          return fiber.memoizedProps as Record<string, unknown>;
+        }
+        fiber = fiber.return;
+      }
+    }
+    throw new Error('GuessPicture not rendered');
   }
 
   it('forwards the raw route filterMode to GuessPicture, unnormalized', async () => {
     const handle = await renderGuessScreen(baseParams({ filterMode: 'shape' }));
     await flush();
 
-    expect(renderedGuessPicture(handle).props.filterMode).toBe('shape');
+    expect(renderedGuessPictureProps(handle).filterMode).toBe('shape');
   });
 
   it('forwards the route filterMode raw: absent stays absent (GuessPicture owns normalization)', async () => {
     const handle = await renderGuessScreen(baseParams());
     await flush();
 
-    expect(renderedGuessPicture(handle).props.filterMode).toBeUndefined();
+    expect(renderedGuessPictureProps(handle).filterMode).toBeUndefined();
   });
 });

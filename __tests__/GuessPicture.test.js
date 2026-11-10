@@ -232,9 +232,9 @@ describe('GuessPicture', () => {
     const nodes =
       root.props.testID === testID
         ? [root]
-        : root.findAll((candidate) => candidate.props.testID === testID);
+        : root.queryAll((candidate) => candidate.props.testID === testID, { includeSelf: true });
     for (const node of nodes) {
-      for (const segment of node.findAll(
+      for (const segment of node.queryAll(
         (child) =>
           !Array.isArray(child.props.style) &&
           child.props.style &&
@@ -452,7 +452,7 @@ describe('GuessPicture', () => {
 
     const screen = await renderToPicture({ toAdScreen });
 
-    fireEvent(screen.getByTestId('game.picture.guess-surface'), 'longPress');
+    await fireEvent(screen.getByTestId('game.picture.guess-surface'), 'longPress');
 
     const ring = targetRingStyle(screen);
     expect(ringCenter(ring).x).toBeCloseTo(0.18 * IMAGE_WIDTH);
@@ -553,7 +553,7 @@ describe('GuessPicture', () => {
 
       expect(speedRingQuery(screen)).toBeNull();
 
-      act(() => {
+      await act(async () => {
         jest.advanceTimersByTime(2999);
       });
 
@@ -565,7 +565,7 @@ describe('GuessPicture', () => {
 
       expect(speedRingQuery(screen)).toBeNull();
 
-      act(() => {
+      await act(async () => {
         jest.advanceTimersByTime(3000);
       });
 
@@ -588,13 +588,13 @@ describe('GuessPicture', () => {
         <GuessPicture {...baseProps} skipInstructions={true} toAdScreen={toAdScreen} />
       );
 
-      act(() => {
+      await act(async () => {
         jest.advanceTimersByTime(1000);
       });
 
       expect(toAdScreen).not.toHaveBeenCalled();
 
-      act(() => {
+      await act(async () => {
         jest.advanceTimersByTime(3000);
       });
 
@@ -761,7 +761,7 @@ describe('GuessPicture', () => {
 
       const screen = await renderToPicture({ mode: 'shape', shape: HIDDEN_SHAPE, toAdScreen });
 
-      fireEvent(screen.getByTestId('game.picture.guess-surface'), 'longPress');
+      await fireEvent(screen.getByTestId('game.picture.guess-surface'), 'longPress');
 
       expect(confirmModalQuery(screen)).not.toBeNull();
 
