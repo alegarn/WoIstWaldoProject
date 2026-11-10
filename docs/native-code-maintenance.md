@@ -43,3 +43,45 @@ Trigger: every RN / Expo SDK / react-native-screens upgrade, or a new Play Conso
 5. Bump the Material floor when material-components releases a fix for remaining guarded references (e.g. the RN-core entries stay unfixable at app level regardless).
 6. On any change to `plugins/edge-to-edge-play-warning.js`, verify the plugin loads without touching natives: `npx expo config --type prebuild --platform android`.
 7. The warning is advisory; treat as hygiene, not a release blocker.
+
+## R8 minify + obfuscation (Play vitals DEX warning)
+
+Play vitals flagged DEX obfuscation at 1% (threshold: 25%). Root cause: R8 never ran — `android/app/build.gradle` wires `minifyEnabled` to `android.enableMinifyInReleaseBuilds`, a property defined nowhere, so release builds shipped unminified, unobfuscated bytecode.
+
+### What changed
+
+`app.json` → `plugins` → `expo-build-properties` → `android` now sets:
+
+```json
+"enableMinifyInReleaseBuilds": true,
+"enableShrinkResourcesInReleaseBuilds": true
+```
+
+At prebuild these land in `android/gradle.properties`, so release builds run R8 (shrink + obfuscate + optimize) plus resource shrinking. **Durable:** `app.json` is committed, so prebuild regeneration preserves the flags — NO manual re-modification of `android/` after new builds (contrast with the `styles.xml` entries above, which need the config plugin because the template regenerates them).
+
+The existing `expo-build-properties` keys (`kotlinVersion`, `extraProguardRules` consent_sdk keep) are untouched.
+
+### Local `android/` staleness
+
+Local `android/` stays stale until regenerated: run `npx expo prebuild -p android` to see the flags locally. The next EAS build picks them up automatically — no manual step in the release flow.
+
+### Keep-rule posture
+
+Consumer ProGuard rules ship with the libraries that need them (RN core, expo-updates, expo-modules-core, purchases-android, play-services-ads). The existing `extraProguardRules` consent_sdk keep is preserved and stays necessary. The existing local `android/app/proguard-rules.pro` keeps (reanimated, turbomodule) become ACTIVE once R8 runs.
+
+**If an obfuscated release build crashes at runtime** (stack frames like `a.b.c`), a library is missing a keep rule: add the missing keep via `app.json` → `expo-build-properties` → `android` → `extraProguardRules` (durable across prebuilds). NEVER hand-edit `proguard-rules.pro` — it is wiped by prebuild.
+
+### Release obligations this creates
+
+1. **mapping.txt per versionCode** — deobfuscation file at `android/app/build/outputs/mapping/release/mapping.txt` inside the EAS build artifact. Upload to Play Console → release → Deobfuscation files, EVERY release. EAS does not auto-upload; with `autoIncrement=true`, one missed mapping means permanently obfuscated stacks for that versionCode.
+2. **Fingerprint impact** — this `app.json` change bumps the expo-updates runtimeVersion (policy `fingerprint`), so OTA updates stop reaching existing installs until they take the new binary. Publish any pending OTA BEFORE this release.
+3. **Obfuscated-build regression pass required before promote**, on a preview-profile build (production profile sets `EXPO_PUBLIC_ADS_DISABLED=true` — ads cannot be tested there): ads + UMP consent flow, RevenueCat paywall + purchase + restore, expo-updates OTA fetch/apply, ionicons rendering, full smoke test.
+4. **Rollback** — set both flags `false` (or just `enableShrinkResourcesInReleaseBuilds` first if only resource-related issues appear).
+
+### Verify after build
+
+```bash
+android analyze <app.aab>
+```
+
+Obfuscation must be ≥ 25% (Play threshold; expect far higher). Local fallback: `apkanalyzer` / Android Studio APK Analyzer (DEX sizes + class names) / `bundletool`.
