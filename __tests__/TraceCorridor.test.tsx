@@ -33,8 +33,8 @@ const SQUARE_TRACE = [
 ];
 
 describe('TraceCorridor', () => {
-  it('renders the band layer with N−1 segments plus the auto-close preview', () => {
-    render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
+  it('renders the band layer with N−1 segments plus the auto-close preview', async () => {
+    await render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
 
     const band = screen.getByTestId('game.picture.trace-band');
     // 3 consecutive segments + 1 auto-close preview segment (length >= 3),
@@ -45,21 +45,21 @@ describe('TraceCorridor', () => {
   it.each([
     { name: 'empty', trace: [] as Array<{ x: number; y: number }> },
     { name: 'single-point', trace: [{ x: 10, y: 10 }] },
-  ])('renders nothing for a $name trace (<2 points → no band layer)', ({ trace }) => {
-    render(<TraceCorridor trace={trace} bandWidth={BAND_WIDTH} />);
+  ])('renders nothing for a $name trace (<2 points → no band layer)', async ({ trace }) => {
+    await render(<TraceCorridor trace={trace} bandWidth={BAND_WIDTH} />);
 
     expect(screen.queryByTestId('game.picture.trace-band')).toBeNull();
     expect(screen.toJSON()).toBeNull();
   });
 
-  it('has no hidden-outline dependency: band only, no outline layer, extra props change nothing', () => {
+  it('has no hidden-outline dependency: band only, no outline layer, extra props change nothing', async () => {
     // Compile-time guard: fails tsc if the props type ever carries
     // `hiddenOutline` (band must not depend on the stored outline).
     const noHiddenOutlineGuard: 'hiddenOutline' extends keyof CorridorProps
       ? never
       : true = true;
 
-    const { rerender } = render(
+    const { rerender } = await render(
       <TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />
     );
 
@@ -76,15 +76,15 @@ describe('TraceCorridor', () => {
       bandWidth: BAND_WIDTH,
       hiddenOutline: SQUARE_TRACE,
     } as unknown as CorridorProps;
-    rerender(<TraceCorridor {...extraProps} />);
+    await rerender(<TraceCorridor {...extraProps} />);
 
     expect(screen.queryByTestId('game.picture.shape-outline')).toBeNull();
     expect(screen.toJSON()).toEqual(bandOnly);
     expect(noHiddenOutlineGuard).toBe(true);
   });
 
-  it('renders band geometry: segment height = bandWidth, translucent ≠ opaque', () => {
-    render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
+  it('renders band geometry: segment height = bandWidth, translucent ≠ opaque', async () => {
+    await render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
 
     const band = screen.getByTestId('game.picture.trace-band');
     const firstSegment = band.props.children[0];
@@ -97,8 +97,8 @@ describe('TraceCorridor', () => {
     expect(style.opacity).toBeLessThan(1);
   });
 
-  it('derives segment transform math from midpoint + hypot, same as ShapeCanvas', () => {
-    render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
+  it('derives segment transform math from midpoint + hypot, same as ShapeCanvas', async () => {
+    await render(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
 
     const band = screen.getByTestId('game.picture.trace-band');
     const firstSegment = band.props.children[0];
@@ -128,7 +128,7 @@ describe('TraceCorridor', () => {
       opacity: 0.25,
     });
 
-    it('compares band segment styles by value (the memo gate)', () => {
+    it('compares band segment styles by value (the memo gate)', async () => {
       const styleA = bandSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
       const styleA2 = bandSegmentStyle({ x: 20, y: 100 }, { x: 180, y: 100 });
       const styleB = bandSegmentStyle({ x: 0, y: 0 }, { x: 10, y: 0 });
@@ -144,7 +144,7 @@ describe('TraceCorridor', () => {
       ).toBe(false);
     });
 
-    it('wires the value comparator into the memoized band bar component', () => {
+    it('wires the value comparator into the memoized band bar component', async () => {
       const memoTag = (TraceCorridorSegment as any).$$typeof;
       expect(memoTag).toBe(Symbol.for('react.memo'));
       expect((TraceCorridorSegment as any).compare).toBe(
@@ -152,7 +152,7 @@ describe('TraceCorridor', () => {
       );
     });
 
-    it('blocks re-renders of previously-rendered bars when a point is appended (only the new bar renders)', () => {
+    it('blocks re-renders of previously-rendered bars when a point is appended (only the new bar renders)', async () => {
       const renderBar = jest.fn(({ style }: { style: BandSegmentStyle }) => (
         <View style={style} />
       ));
@@ -167,7 +167,7 @@ describe('TraceCorridor', () => {
         bandSegmentStyle(SQUARE_TRACE[2], SQUARE_TRACE[3]),
       ];
 
-      const { rerender } = render(
+      const { rerender } = await render(
         <>
           <MemoDouble style={threePointStyles[0]} />
           <MemoDouble style={threePointStyles[1]} />
@@ -177,7 +177,7 @@ describe('TraceCorridor', () => {
 
       // Appending a point rebuilds every style object per commit; only the
       // NEW bar's render function may fire.
-      rerender(
+      await rerender(
         <>
           <MemoDouble style={fourPointStyles[0]} />
           <MemoDouble style={fourPointStyles[1]} />
@@ -187,15 +187,15 @@ describe('TraceCorridor', () => {
       expect(renderBar).toHaveBeenCalledTimes(3);
     });
 
-    it('recomputes value-equal styles for untouched band segments when a point is appended', () => {
-      const first = render(
+    it('recomputes value-equal styles for untouched band segments when a point is appended', async () => {
+      const first = await render(
         <TraceCorridor trace={SQUARE_TRACE.slice(0, 3)} bandWidth={BAND_WIDTH} />
       );
       const before = screen
         .getByTestId('game.picture.trace-band')
         .props.children.map((bar: any) => bar.props.style);
 
-      first.rerender(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
+      await first.rerender(<TraceCorridor trace={SQUARE_TRACE} bandWidth={BAND_WIDTH} />);
 
       const children =
         screen.getByTestId('game.picture.trace-band').props.children;

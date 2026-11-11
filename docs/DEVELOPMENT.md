@@ -1,7 +1,7 @@
 # Development Guide - WoIstWaldo Mobile
 
 ## Prerequisites
-- **Node.js**: Recommended version 20.x or higher.
+- **Node.js**: RN 0.88 `engines` require `^22.13 || ^24.3 || >=26`. Node 24 LTS is recommended (a repo-root `.nvmrc` pins `24` for nvm users). Node 25.x installs work but emits `EBADENGINE` warnings.
 - **Dev build on a physical device (NOT Expo Go compatible)**: the app uses custom native
   code (react-native-google-mobile-ads, etc.) that requires a development build — install a
   dev build APK on your phone via `npx expo run:android` or an EAS development build, then
@@ -23,6 +23,24 @@
    ```bash
    npx expo start
    ```
+
+## Dev environment gotchas
+- **Dev backend URL comes from the local `.env`, not `eas.json`**: dev clients embed no JS bundle —
+  JS is served by Metro at runtime, and `EXPO_PUBLIC_*` values are inlined from the machine running
+  `npx expo start` (local `.env` wins). `eas.json` profiles only apply to embedded-bundle EAS builds.
+  Keep `.env` pointing at the active ngrok tunnel **with a trailing slash** (see Setup step 2). When
+  the app "points at prod" in dev, check `.env` first. After editing `.env`, restart Metro with
+  `npx expo start --clear`; ngrok URLs are ephemeral — each rotation = edit `.env` + restart, no rebuild.
+- **Dev AdMob `[googleMobileAds/app-id-missing] Not supported`**: if a dev build logs
+  `WARN [AdMobInterstitial] interstitial load failed: [Error: [googleMobileAds/app-id-missing] Not supported]`,
+  the config is fine (app ID verified in the Android manifest, `app.json`, and the built APK) — it is a
+  **device-side** Google Play services AdError (stale/missing GMS ads module), Android-only. Update
+  Google Play services on the emulator/device or test on a physical device; verify with
+  `adb shell dumpsys package com.google.android.gms`. If it persists, suspect the `play-services-ads`
+  `24.0.0` pin in the checked-in patch vs the `react-native-google-mobile-ads` default (`25.4.0`) —
+  a client↔device GMS mismatch; unpinning = patch rework = native change, which must be recorded in
+  `docs/native-code-maintenance.md`. Dev builds always use Google **test** ad unit IDs (`__DEV__` →
+  `TestIds.INTERSTITIAL`, `services/ads/AdMobInterstitialBridge.tsx:31-34`); real IDs are release-only.
 
 ## Development Client
 This project uses `expo-dev-client`. To run on a physical device or emulator with native modules:
@@ -47,7 +65,7 @@ The guess feed renders one card per image. Two interaction contracts are owned b
 
 - **Enigma preview**: Each card shows the enigma text directly, clamped to at most 2 lines. A chevron button and a vertical swipe expand the full enigma. Implemented in `components/Picture/Descriptions/GuessDescription.js`.
 - **Star/? badge detail modal**: The badge in the top-left of a card shows a star (rated) or a "?" (unrated). Tapping it opens a detail modal, hoisted once in `SwipeImage` (`components/UI/SwipeImage.js`) and rendered by `components/UI/BadgeDetailModal.js`. When available, the modal shows the enigma (full description), language, category, tags, creator, created date, the global rating (average), and the detailed ratings (Image Quality, Enigma Quality, Fun, Difficulty). Tags are fetched on open via `getImageTags` and the detailed ratings via `getImageRating`, both from `utils/ratingRequests.js`. Fetching is owned by the `useBadgeDetail` hook (`components/UI/useBadgeDetail.js`).
-- **Fullscreen layout**: The app runs fullscreen so the bottom of the screen (and with it the card enigma band) is not clipped by system bars. The status bar is hidden via `app.json` (`expo-status-bar` plugin configuration `statusBarHidden`). On Android the navigation bar is hidden at runtime in `App.js` via the declarative `expo-navigation-bar` component `<NavigationBar hidden />` rendered at the app root (the idiomatic API for `expo-navigation-bar@56`; `setPositionAsync`/`setBehaviorAsync` were removed in this version). iOS is fullscreen via `app.json` (`ios.requireFullScreen`).
+- **Fullscreen layout**: The app runs fullscreen so the bottom of the screen (and with it the card enigma band) is not clipped by system bars. The status bar is hidden via `app.json` (`expo-status-bar` plugin configuration `statusBarHidden`). On Android the navigation bar is hidden at runtime in `App.js` via the declarative `expo-navigation-bar` component `<NavigationBar hidden />` rendered at the app root (the idiomatic API for `expo-navigation-bar@58`; `setPositionAsync`/`setBehaviorAsync` were removed). iOS is fullscreen via `app.json` (`ios.requireFullScreen`).
 - **Swipe-feedback overlay does not block the badge**: The swipe-feedback overlay (`Animated.Image` in `components/UI/SwipeableCard.js`) is rendered with `pointerEvents="none"`, so it never intercepts taps on the star/? badge even though it overlays the card.
 
 ## Guess play screen

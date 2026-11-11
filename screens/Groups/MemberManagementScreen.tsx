@@ -174,7 +174,7 @@ export default function MemberManagementScreen({ navigation }: MemberManagementS
             mutedColor={theme.muted}
             accentColor={theme.warning}
           />
-        ) : null}
+        ) : undefined}
         ListEmptyComponent={<Text style={[styles.empty, { color: theme.text }]}>{t('groups.members.empty')}</Text>}
         renderItem={({ item }) => (
           <View

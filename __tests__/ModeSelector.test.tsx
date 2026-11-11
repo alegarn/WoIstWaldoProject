@@ -1,7 +1,7 @@
 jest.mock('react-native', () => {
   const React = require('react');
 
-  function MockModal({ children, visible }) {
+  function MockModal({ children, visible }: { children?: React.ReactNode; visible?: boolean }) {
     if (!visible) {
       return null;
     }
@@ -16,7 +16,7 @@ jest.mock('react-native', () => {
     Modal: MockModal,
     ScrollView: 'ScrollView',
     StyleSheet: {
-      create: (styles) => styles,
+      create: (styles: Record<string, unknown>) => styles,
       hairlineWidth: 1,
     },
   };
@@ -24,13 +24,13 @@ jest.mock('react-native', () => {
 
 import React from 'react';
 import { Modal } from 'react-native';
-import { act, create } from 'react-test-renderer';
+import { act, create, ReactTestRenderer } from 'react-test-renderer';
 
 import ModeSelector from '../components/UI/ModeSelector';
 
 describe('ModeSelector', () => {
-  async function renderControlled(overrides = {}) {
-    let renderer;
+  async function renderControlled(overrides = {}): Promise<ReactTestRenderer> {
+    let renderer!: ReactTestRenderer;
 
     await act(async () => {
       renderer = create(
@@ -73,13 +73,13 @@ describe('ModeSelector', () => {
     const renderer = await renderControlled({ visible: true });
 
     expect(
-      renderer.root.findByProps({ testID: 'mode.option.any' }).findByType('Text').props.children
+      renderer.root.findByProps({ testID: 'mode.option.any' }).findByType('Text' as unknown as React.ComponentType).props.children
     ).toBe('Any mode');
     expect(
-      renderer.root.findByProps({ testID: 'mode.option.point' }).findByType('Text').props.children
+      renderer.root.findByProps({ testID: 'mode.option.point' }).findByType('Text' as unknown as React.ComponentType).props.children
     ).toBe('Point');
     expect(
-      renderer.root.findByProps({ testID: 'mode.option.shape' }).findByType('Text').props.children
+      renderer.root.findByProps({ testID: 'mode.option.shape' }).findByType('Text' as unknown as React.ComponentType).props.children
     ).toBe('Shape');
   });
 

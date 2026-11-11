@@ -213,13 +213,13 @@ describe('GuessShapeSurface', () => {
     isWinningTraceMock.mockReturnValue(false);
     const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+      const { rerender } = await render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
       await fireShapePan(STROKE_VERTICES);
       expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
       await act(async () => {
-        rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+        await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
       });
       expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
@@ -235,8 +235,8 @@ describe('GuessShapeSurface', () => {
     }
   });
 
-  it('renders the surface root and mounts the draw surface visible through it', () => {
-    render(<GuessShapeSurface {...baseProps} />);
+  it('renders the surface root and mounts the draw surface visible through it', async () => {
+    await render(<GuessShapeSurface {...baseProps} />);
 
     expect(screen.queryByTestId('game.picture.guess-shape-surface')).not.toBeNull();
     expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
@@ -246,7 +246,7 @@ describe('GuessShapeSurface', () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
     const onOutlineChange = jest.fn();
-    const { rerender } = render(
+    const { rerender } = await render(
       <GuessShapeSurface {...baseProps} revealToken={0} onOutlineChange={onOutlineChange} />
     );
 
@@ -260,7 +260,7 @@ describe('GuessShapeSurface', () => {
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
     await act(async () => {
-      rerender(<GuessShapeSurface {...baseProps} revealToken={1} onOutlineChange={onOutlineChange} />);
+      await rerender(<GuessShapeSurface {...baseProps} revealToken={1} onOutlineChange={onOutlineChange} />);
     });
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
@@ -273,13 +273,13 @@ describe('GuessShapeSurface', () => {
   it('on a losing lift within the length cap, reveals the loseScore verdict after the confirm token', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
-    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+    const { rerender } = await render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
     await act(async () => {
-      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+      await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
     });
 
     expect(screen.getByTestId('game.picture.trace-reveal-verdict').props.children).toBe(
@@ -291,7 +291,7 @@ describe('GuessShapeSurface', () => {
   it('on a losing lift past the length cap, the cap beats the score (loseLengthCap) after the confirm token', async () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
-    const { rerender } = render(
+    const { rerender } = await render(
       <GuessShapeSurface {...baseProps} revealToken={0} hiddenOutline={SMALL_SQUARE_OUTLINE} />
     );
 
@@ -299,7 +299,7 @@ describe('GuessShapeSurface', () => {
     expect(screen.queryByTestId('game.picture.trace-reveal')).toBeNull();
 
     await act(async () => {
-      rerender(
+      await rerender(
         <GuessShapeSurface {...baseProps} revealToken={1} hiddenOutline={SMALL_SQUARE_OUTLINE} />
       );
     });
@@ -312,11 +312,11 @@ describe('GuessShapeSurface', () => {
   it('clears the unmasked reveal when hiddenOutline changes identity (card swap without remount)', async () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
-    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+    const { rerender } = await render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
     await act(async () => {
-      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+      await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
     });
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
@@ -329,7 +329,7 @@ describe('GuessShapeSurface', () => {
       { x: 0.2, y: 0.2 },
     ];
     await act(async () => {
-      rerender(
+      await rerender(
         <GuessShapeSurface {...baseProps} revealToken={1} hiddenOutline={nextCardOutline} />
       );
     });
@@ -340,11 +340,11 @@ describe('GuessShapeSurface', () => {
   it('clears the unmasked reveal at finger-down (stroke begin), before any second point commits', async () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
-    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+    const { rerender } = await render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
     await act(async () => {
-      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+      await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
     });
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
@@ -362,15 +362,15 @@ describe('GuessShapeSurface', () => {
   it('keeps the unmasked reveal rendered across rerenders while the confirm token holds', async () => {
     outlineMatchScoreMock.mockReturnValue(0.87);
     isWinningTraceMock.mockReturnValue(true);
-    const { rerender } = render(<GuessShapeSurface {...baseProps} revealToken={0} />);
+    const { rerender } = await render(<GuessShapeSurface {...baseProps} revealToken={0} />);
 
     await fireShapePan(STROKE_VERTICES);
     await act(async () => {
-      rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+      await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
     });
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
 
-    rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
+    await rerender(<GuessShapeSurface {...baseProps} revealToken={1} />);
 
     expect(screen.queryByTestId('game.picture.trace-reveal')).not.toBeNull();
     expect(screen.getByTestId('game.picture.trace-reveal-percent').props.children).toBe('87%');
@@ -380,13 +380,13 @@ describe('GuessShapeSurface', () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
     const onOutlineChange = jest.fn();
-    const { rerender } = render(
+    const { rerender } = await render(
       <GuessShapeSurface {...baseProps} revealToken={0} onOutlineChange={onOutlineChange} />
     );
 
     await fireShapePan(STROKE_VERTICES);
     await act(async () => {
-      rerender(
+      await rerender(
         <GuessShapeSurface {...baseProps} revealToken={1} onOutlineChange={onOutlineChange} />
       );
     });
@@ -409,7 +409,7 @@ describe('GuessShapeSurface', () => {
     expect(onOutlineChange).toHaveBeenLastCalledWith(NORMALIZED_STROKE);
 
     await act(async () => {
-      rerender(
+      await rerender(
         <GuessShapeSurface {...baseProps} revealToken={2} onOutlineChange={onOutlineChange} />
       );
     });
@@ -426,7 +426,7 @@ describe('GuessShapeSurface', () => {
     outlineMatchScoreMock.mockReturnValue(0.5);
     isWinningTraceMock.mockReturnValue(false);
     const onOutlineChange = jest.fn();
-    const { unmount } = render(
+    const { unmount } = await render(
       <GuessShapeSurface {...baseProps} onOutlineChange={onOutlineChange} />
     );
 
@@ -448,10 +448,10 @@ describe('GuessShapeSurface', () => {
     // The parent receives the SAME normalized outline that was scored.
     expect(onOutlineChange).toHaveBeenCalledWith(NORMALIZED_STROKE);
 
-    unmount();
+    await unmount();
 
     const { imageWidth: _omitWidth, imageHeight: _omitHeight, ...propsWithoutDims } = baseProps;
-    render(<GuessShapeSurface {...propsWithoutDims} onOutlineChange={onOutlineChange} />);
+    await render(<GuessShapeSurface {...propsWithoutDims} onOutlineChange={onOutlineChange} />);
     await fireShapePan(STROKE_VERTICES);
 
     const lastCall = outlineMatchScoreMock.mock.calls[outlineMatchScoreMock.mock.calls.length - 1][0];
@@ -473,7 +473,7 @@ describe('GuessShapeSurface', () => {
     // identity (a new literal per render reads as a card swap and clears the
     // reveal).
     const emptyOutline: Point[] = [];
-    const { rerender } = render(
+    const { rerender } = await render(
       <GuessShapeSurface
         {...baseProps}
         revealToken={0}
@@ -492,7 +492,7 @@ describe('GuessShapeSurface', () => {
     await fireShapePan(STROKE_VERTICES);
 
     await act(async () => {
-      rerender(
+      await rerender(
         <GuessShapeSurface
           {...baseProps}
           revealToken={1}
@@ -514,7 +514,7 @@ describe('GuessShapeSurface', () => {
 
   it('forwards ShapeCanvas stroke updates through onStrokeUpdate (anchor + renderPoints, null on lift)', async () => {
     const onStrokeUpdate = jest.fn();
-    render(<GuessShapeSurface {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
+    await render(<GuessShapeSurface {...baseProps} onStrokeUpdate={onStrokeUpdate} />);
 
     await startStroke(STROKE_VERTICES);
 
@@ -534,12 +534,12 @@ describe('GuessShapeSurface', () => {
   });
 
   it('keeps the lift-handler (onOutlineChange) identity stable across two mirror commits (no gesture-object churn)', async () => {
-    const { rerender } = render(<GuessShapeSurface {...baseProps} />);
+    const { rerender } = await render(<GuessShapeSurface {...baseProps} />);
 
     await startStroke(STROKE_VERTICES);
     const handlerAfterFirstCommit = lastShapeCanvasProps().onOutlineChange;
 
-    rerender(<GuessShapeSurface {...baseProps} />);
+    await rerender(<GuessShapeSurface {...baseProps} />);
     await startStroke(STROKE_VERTICES);
     const handlerAfterSecondCommit = lastShapeCanvasProps().onOutlineChange;
 
@@ -547,7 +547,7 @@ describe('GuessShapeSurface', () => {
   });
 
   it('renders the corridor band finger-true from the live stroke (no offset)', async () => {
-    render(<GuessShapeSurface {...baseProps} />);
+    await render(<GuessShapeSurface {...baseProps} />);
 
     await startStroke(STROKE_VERTICES);
 
@@ -560,7 +560,7 @@ describe('GuessShapeSurface', () => {
   });
 
   it('derives the band width from corridorBandWidthPx with SHAPE_TOLERANCE_RATIO (1000×1000 image at style 500 → 50)', async () => {
-    render(
+    await render(
       <GuessShapeSurface
         imageDimensionStyle={{ width: 500, height: 500 }}
         hiddenOutline={TRIANGLE_OUTLINE}

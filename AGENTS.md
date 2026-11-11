@@ -12,7 +12,7 @@
 
 ## Local Contracts
 
-- Stack: Expo SDK 56, React Native 0.85.3, React 19.2.3, TypeScript (migrating from JavaScript). Verified against `package.json` July 2026.
+- Stack: Expo SDK 58, React Native 0.88.1, React 19.3.0, TypeScript (migrating from JavaScript). Jest 30 + @testing-library/react-native 14 (v14 async test API). Verified against `package.json` November 2026.
 - Entry: `App.js` (or `App.tsx`) wires `AuthContextProvider` and navigation.
 - Routing: `@react-navigation/native-stack`, not Expo Router.
 - Auth: JWT tokens in `expo-secure-store`; `store/auth-context.js` restores session through `utils/auth.js`.

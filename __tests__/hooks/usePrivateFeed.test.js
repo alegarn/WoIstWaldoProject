@@ -38,12 +38,10 @@ describe('usePrivateFeed', () => {
     const page = { images: [{ id: 'pi-1' }], nextCursor: null };
     fetchPrivateFeedPage.mockResolvedValue({ status: 200, data: page });
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => usePrivateFeed({ groupId: 'g-123' }),
       { wrapper: Wrapper }
     );
-
-    expect(result.current.isLoading).toBe(true);
 
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
@@ -69,7 +67,7 @@ describe('usePrivateFeed', () => {
       data: { error: 'boom' },
     });
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => usePrivateFeed({ groupId: 'g-123' }),
       { wrapper: Wrapper }
     );
@@ -92,7 +90,7 @@ describe('usePrivateFeed', () => {
 
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
 
-    const { result, unmount } = renderHook(
+    const { result, unmount } = await renderHook(
       () => usePrivateFeed({ groupId: 'g-123' }),
       { wrapper: Wrapper }
     );
@@ -101,7 +99,7 @@ describe('usePrivateFeed', () => {
       result.current.refresh();
     });
 
-    unmount();
+    await unmount();
 
     await act(async () => {
       resolveRefresh({ status: 200, data: { images: [{ id: 'late' }], nextCursor: null } });
@@ -130,7 +128,7 @@ describe('usePrivateFeed', () => {
     fetchPrivateFeedPage.mockReturnValueOnce(new Promise((resolve) => { resolveFirst = resolve; }));
     fetchPrivateFeedPage.mockReturnValueOnce(new Promise((resolve) => { resolveSecond = resolve; }));
 
-    const { result } = renderHook(
+    const { result } = await renderHook(
       () => usePrivateFeed({ groupId: 'g-123' }),
       { wrapper: Wrapper }
     );

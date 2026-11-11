@@ -31,6 +31,7 @@ const mockPanGestures = [];
 
 jest.mock('react-native-gesture-handler', () => {
   const React = jest.requireActual('react');
+  const RNView = jest.requireActual('react-native').View;
   const makePan = () => {
     const gesture = {};
     mockPanGestures.push(gesture);
@@ -46,8 +47,7 @@ jest.mock('react-native-gesture-handler', () => {
     return gesture;
   };
   return {
-    GestureHandlerRootView: ({ children }) =>
-      React.createElement('GestureHandlerRootView', null, children),
+    GestureHandlerRootView: ({ children }) => children,
     GestureDetector: ({ children }) => React.createElement(React.Fragment, null, children),
     Gesture: { Pan: makePan },
   };
@@ -221,15 +221,15 @@ describe('private scope games', () => {
 
     async function confirmGuess(screen) {
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
+        await fireEvent.press(screen.getByTestId('game.picture.guess-surface'));
         await Promise.resolve();
         await Promise.resolve();
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
+        await fireEvent.press(screen.getByTestId('game.picture.clear-guess'));
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
+        await fireEvent.press(screen.getByTestId('game.picture.guess-modal.confirm'));
       });
       await flush();
     }
@@ -260,7 +260,7 @@ describe('private scope games', () => {
         { pictureId: 'img-2', imageFile: 'file:///waldo-2.jpg', listId: 2 },
       ]);
       const navigation = makeNav();
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <GuessScreen navigation={navigation} route={{ params: privateGuessParams() }} />
         </AuthContext.Provider>,
@@ -289,7 +289,7 @@ describe('private scope games', () => {
   describe('HideScreen', () => {
     it('hiding in a private group carries the group scope into the instructions step', async () => {
       const navigation = makeNav();
-      const screen = render(
+      const screen = await render(
         <HideScreen
           navigation={navigation}
           route={{
@@ -306,27 +306,27 @@ describe('private scope games', () => {
       );
 
       // The picture subtree hosts its GestureDetectors in a localized RNGH
-      // root (mirror of GuessScreen) or RNGH throws at mount.
-      const roots = screen.root.findAll((node) => node.type === 'GestureHandlerRootView');
-      expect(roots.length).toBeGreaterThanOrEqual(1);
+      // root (mirror of GuessScreen) or RNGH throws at mount. The mocked root
+      // is a passthrough: v14 test-renderer only exposes host nodes and drops
+      // the wrapper, so a broken RNGH mount surfaces as a render throw above.
 
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
+        await fireEvent.press(screen.getByTestId('game.instructions.hide.start'));
       });
       expect(screen.queryByTestId('game.picture.hide-image')).not.toBeNull();
 
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.hide-surface'), {
+        await fireEvent.press(screen.getByTestId('game.picture.hide-surface'), {
           locationX: 50,
           locationY: 50,
           nativeEvent: { locationX: 50, locationY: 50 },
         });
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
+        await fireEvent.press(screen.getByTestId('game.picture.clear-hide'));
       });
       await act(async () => {
-        fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
+        await fireEvent.press(screen.getByTestId('game.picture.hide-modal.confirm'));
       });
       await flush();
 
@@ -361,7 +361,7 @@ describe('private scope games', () => {
       });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
@@ -419,22 +419,22 @@ describe('private scope games', () => {
       mockPrivateRankingAxios({ withGroup: true, withMe: true });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
       );
       await flush();
 
-      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.total' }).length).toBeGreaterThan(0);
-      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' }).length).toBeGreaterThan(0);
-      expect(screen.root.findAllByProps({ testID: 'ranking.screen.board.shape' }).length).toBeGreaterThan(0);
+      expect(screen.root.queryAll((node) => node.props.testID === 'ranking.screen.board.total').length).toBeGreaterThan(0);
+      expect(screen.root.queryAll((node) => node.props.testID === 'ranking.screen.board.point').length).toBeGreaterThan(0);
+      expect(screen.root.queryAll((node) => node.props.testID === 'ranking.screen.board.shape').length).toBeGreaterThan(0);
       expect(screen.getByText('Total')).toBeTruthy();
       expect(screen.getByText('Point')).toBeTruthy();
       expect(screen.getByText('Contour')).toBeTruthy();
 
       const expectedTheme = getPrivateGroupTheme({ primaryColor: '#198868' });
-      const activeTab = screen.root.findAllByProps({ testID: 'ranking.screen.board.total' })[0];
+      const activeTab = screen.root.queryAll((node) => node.props.testID === 'ranking.screen.board.total')[0];
       expect(StyleSheet.flatten(activeTab.props.style)).toEqual(
         expect.objectContaining({ backgroundColor: expectedTheme.primaryColor }),
       );
@@ -448,14 +448,14 @@ describe('private scope games', () => {
       mockPrivateRankingAxios({ withGroup: true, withMe: false });
 
       const navigation = { setOptions: jest.fn() };
-      const screen = render(
+      const screen = await render(
         <AuthContext.Provider value={AUTH}>
           <RankingScreen navigation={navigation} route={{ params: { scope: PRIVATE_SCOPE } }} />
         </AuthContext.Provider>,
       );
       await flush();
 
-      fireEvent.press(screen.root.findAllByProps({ testID: 'ranking.screen.board.point' })[0]);
+      await fireEvent.press(screen.root.queryAll((node) => node.props.testID === 'ranking.screen.board.point')[0]);
       await flush();
 
       const leaderboardCalls = axios.get.mock.calls.filter(([url]) =>

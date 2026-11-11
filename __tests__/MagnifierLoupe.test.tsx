@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import type { ReactTestInstance } from 'react-test-renderer';
+import type { TestInstance } from 'test-renderer';
 import { act, render, screen } from '@testing-library/react-native';
 
 import MagnifierLoupe, {
@@ -87,7 +87,7 @@ function baseProps(
   };
 }
 
-function styleOf(node: ReactTestInstance | null): Record<string, any> {
+function styleOf(node: TestInstance | null): Record<string, any> {
   return StyleSheet.flatten(node?.props.style ?? {}) ?? {};
 }
 
@@ -96,20 +96,21 @@ function readValue(value: Animated.Value): number {
 }
 
 function findAllByStyle(
-  root: ReactTestInstance,
+  root: TestInstance,
   predicate: (style: Record<string, any>) => boolean,
-): ReactTestInstance[] {
+): TestInstance[] {
   // Host nodes only: composite Animated nodes carry the raw pre-resolved
   // style and would duplicate every match.
-  return root.findAll(
+  return root.queryAll(
     (node) => typeof node.type === 'string' && predicate(styleOf(node)),
+    { includeSelf: true },
   );
 }
 
 describe('MagnifierLoupe', () => {
-  it('stays mounted when hidden: present, opacity 0 via the hook frameStyle, pointerEvents none (D4)', () => {
+  it('stays mounted when hidden: present, opacity 0 via the hook frameStyle, pointerEvents none (D4)', async () => {
     const fixture = buildFixture();
-    render(
+    await render(
       <MagnifierLoupe
         {...baseProps(fixture, {
           // Hidden visibility rides the hook's frameStyle (opacity 0) — the
@@ -125,9 +126,9 @@ describe('MagnifierLoupe', () => {
     expect(loupe.props.pointerEvents).toBe('none');
   });
 
-  it('renders the clipped circle with a centred crosshair cursor when visible', () => {
+  it('renders the clipped circle with a centred crosshair cursor when visible', async () => {
     const fixture = buildFixture();
-    render(<MagnifierLoupe {...baseProps(fixture)} />);
+    await render(<MagnifierLoupe {...baseProps(fixture)} />);
 
     const loupe = screen.getByTestId('game.picture.loupe');
     expect(loupe.props.pointerEvents).toBe('none');
@@ -149,17 +150,17 @@ describe('MagnifierLoupe', () => {
     expect(cursorStyle.top).toBe(LOUPE_DIAMETER_PX / 2 - LOUPE_CURSOR_SIZE_PX / 2);
   });
 
-  it('keeps elevation off the frame (Android shadow re-raster per invalidation, V3/D3)', () => {
+  it('keeps elevation off the frame (Android shadow re-raster per invalidation, V3/D3)', async () => {
     const fixture = buildFixture();
-    render(<MagnifierLoupe {...baseProps(fixture)} />);
+    await render(<MagnifierLoupe {...baseProps(fixture)} />);
 
     const frameStyle = styleOf(screen.getByTestId('game.picture.loupe'));
     expect(frameStyle.elevation).toBeUndefined();
   });
 
-  it('renders the zoomed image with the passed uri and imageDimensionStyle × zoom', () => {
+  it('renders the zoomed image with the passed uri and imageDimensionStyle × zoom', async () => {
     const fixture = buildFixture();
-    render(<MagnifierLoupe {...baseProps(fixture)} />);
+    await render(<MagnifierLoupe {...baseProps(fixture)} />);
 
     const image = screen.getByTestId('game.picture.loupe-image');
     expect(image.props.source).toEqual({ uri: URI });
@@ -169,9 +170,9 @@ describe('MagnifierLoupe', () => {
     expect(imageStyle.height).toBe(IMAGE_DIMS.height * LOUPE_ZOOM);
   });
 
-  it('threads the passed animated frame/content styles live and aligns the zoom-scale wrapper (D9)', () => {
+  it('threads the passed animated frame/content styles live and aligns the zoom-scale wrapper (D9)', async () => {
     const fixture = buildFixture();
-    const { rerender } = render(<MagnifierLoupe {...baseProps(fixture)} />);
+    const { rerender } = await render(<MagnifierLoupe {...baseProps(fixture)} />);
 
     const loupe = screen.getByTestId('game.picture.loupe');
     const frameStyle = styleOf(loupe);
@@ -210,7 +211,7 @@ describe('MagnifierLoupe', () => {
 
     // Live binding: the exact fixture Animated.Values drive the rendered
     // styles (setValue flows into the tree without re-rendering the host).
-    act(() => {
+    await act(async () => {
       fixture.frameX.setValue(10);
       fixture.contentX.setValue(-1);
     });
@@ -225,19 +226,19 @@ describe('MagnifierLoupe', () => {
     expect(frameLeft + contentTranslateX + IMAGE_ANCHOR.x * LOUPE_ZOOM).toBe(
       glassCentreX,
     );
-    rerender(<MagnifierLoupe {...baseProps(fixture)} />);
+    await rerender(<MagnifierLoupe {...baseProps(fixture)} />);
     expect(styleOf(screen.getByTestId('game.picture.loupe')).transform[0]).toEqual({
       translateX: 10,
     });
   });
 
-  it('carries no outline-like secret prop and ignores unknown extra props (ISP)', () => {
+  it('carries no outline-like secret prop and ignores unknown extra props (ISP)', async () => {
     type Props = MagnifierLoupeProps;
     const noHiddenOutlineGuard: 'hiddenOutline' extends keyof Props ? never : true =
       true;
 
     const fixture = buildFixture();
-    const { rerender } = render(<MagnifierLoupe {...baseProps(fixture)} />);
+    const { rerender } = await render(<MagnifierLoupe {...baseProps(fixture)} />);
     const baseline = screen.toJSON();
 
     const extraProps = {
@@ -247,16 +248,16 @@ describe('MagnifierLoupe', () => {
         { x: 3, y: 4 },
       ],
     } as unknown as MagnifierLoupeProps;
-    rerender(<MagnifierLoupe {...extraProps} />);
+    await rerender(<MagnifierLoupe {...extraProps} />);
 
     expect(screen.queryByTestId('game.picture.shape-outline')).toBeNull();
     expect(screen.toJSON()).toEqual(baseline);
     expect(noHiddenOutlineGuard).toBe(true);
   });
 
-  it('contains no gesture internals', () => {
+  it('contains no gesture internals', async () => {
     const fixture = buildFixture();
-    render(<MagnifierLoupe {...baseProps(fixture)} />);
+    await render(<MagnifierLoupe {...baseProps(fixture)} />);
 
     expect(JSON.stringify(screen.toJSON())).not.toContain('GestureDetector');
   });

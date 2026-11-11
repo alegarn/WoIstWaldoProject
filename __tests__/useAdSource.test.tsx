@@ -62,7 +62,7 @@ describe('useAdSource', () => {
     const snapshot: HookSnapshot = { isLoaded: true, show: nativeShow };
     setBridgeSnapshot(snapshot);
 
-    const { result } = renderHook(() => useAdSource());
+    const { result } = await renderHook(() => useAdSource());
 
     expect(result.current.isReady()).toBe(true);
 
@@ -91,10 +91,10 @@ describe('useAdSource', () => {
     const nativeShow = jest.fn().mockResolvedValue(undefined);
     setBridgeSnapshot({ isLoaded: true, show: nativeShow });
 
-    const { result } = renderHook(() => useAdSource());
+    const { result } = await renderHook(() => useAdSource());
 
     expect(result.current.isReady()).toBe(true);
-    const surface = render(result.current.renderSurface() as ReactElement);
+    const surface = await render(result.current.renderSurface() as ReactElement);
     expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
 
     const shown = result.current.show();
@@ -112,10 +112,10 @@ describe('useAdSource', () => {
     const nativeShow = jest.fn().mockResolvedValue(undefined);
     setBridgeSnapshot({ isLoaded: false, show: nativeShow });
 
-    const { result } = renderHook(() => useAdSource());
+    const { result } = await renderHook(() => useAdSource());
 
     expect(result.current.isReady()).toBe(true);
-    const surface = render(result.current.renderSurface() as ReactElement);
+    const surface = await render(result.current.renderSurface() as ReactElement);
     expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
     expect(surface.getByTestId(INTERNAL_AD_CONTINUE_TESTID)).toBeTruthy();
 
@@ -132,15 +132,15 @@ describe('useAdSource', () => {
     setPlatformOS('android');
     setBridgeSnapshot({ isLoaded: false, show: jest.fn() });
 
-    const { result } = renderHook(() => useAdSource());
-    const surface = render(result.current.renderSurface() as ReactElement);
+    const { result } = await renderHook(() => useAdSource());
+    const surface = await render(result.current.renderSurface() as ReactElement);
 
     let resolved = false;
     const shown = result.current.show().then(() => {
       resolved = true;
     });
 
-    fireEvent.press(surface.getByTestId(INTERNAL_AD_CONTINUE_TESTID));
+    await fireEvent.press(surface.getByTestId(INTERNAL_AD_CONTINUE_TESTID));
     await shown;
 
     expect(resolved).toBe(true);
@@ -155,15 +155,15 @@ describe('useAdSource', () => {
 
     _setAdSourceFactoryForTests(() => customSource);
 
-    const { result: overridden } = renderHook(() => useAdSource());
+    const { result: overridden } = await renderHook(() => useAdSource());
     expect(overridden.current).toBe(customSource);
 
     _setAdSourceFactoryForTests(undefined);
 
-    const { result: restored } = renderHook(() => useAdSource());
+    const { result: restored } = await renderHook(() => useAdSource());
     expect(restored.current).not.toBe(customSource);
     expect(restored.current.isReady()).toBe(true);
-    const surface = render(restored.current.renderSurface() as ReactElement);
+    const surface = await render(restored.current.renderSurface() as ReactElement);
     expect(surface.getByTestId(INTERNAL_AD_PANEL_TESTID)).toBeTruthy();
   });
 });

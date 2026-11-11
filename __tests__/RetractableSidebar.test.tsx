@@ -96,7 +96,7 @@ jest.mock('react-native-gesture-handler', () => {
 });
 
 import React from 'react';
-import { View } from 'react-native';
+import { Text, View } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import RetractableSidebar from '../components/UI/RetractableSidebar';
@@ -128,17 +128,19 @@ function panConfigArgs(record: PanRecord, method: string): unknown[] {
   return call ? call.args : [];
 }
 
-function renderSidebar(testIDPrefix = 't', initiallyOpen = true) {
-  return render(
+async function renderSidebar(testIDPrefix = 't', initiallyOpen = true) {
+  return await render(
     <RetractableSidebar testIDPrefix={testIDPrefix} initiallyOpen={initiallyOpen} accessibilityLabel="Mode">
-      <View testID={`${testIDPrefix}.child-marker`}>chip</View>
+      <View testID={`${testIDPrefix}.child-marker`}>
+        <Text>chip</Text>
+      </View>
     </RetractableSidebar>
   );
 }
 
 describe('RetractableSidebar', () => {
-  it('renders open with children inside the panel, container passthrough, no handle', () => {
-    const screen = renderSidebar();
+  it('renders open with children inside the panel, container passthrough, no handle', async () => {
+    const screen = await renderSidebar();
 
     const container = screen.getByTestId('t.container');
     expect(container.props.pointerEvents).toBe('box-none');
@@ -150,8 +152,8 @@ describe('RetractableSidebar', () => {
   });
 
   describe('A2 retract on horizontal swipe', () => {
-    it('gates the pan for horizontal-only activation (either direction)', () => {
-      renderSidebar();
+    it('gates the pan for horizontal-only activation (either direction)', async () => {
+      await renderSidebar();
 
       const record = latestPanRecord();
       expect(record).toBeTruthy();
@@ -159,10 +161,10 @@ describe('RetractableSidebar', () => {
       expect(panConfigArgs(record, 'failOffsetY')).toEqual([[-40, 40]]);
     });
 
-    it('retracts on a rightward swipe', () => {
-      const screen = renderSidebar();
+    it('retracts on a rightward swipe', async () => {
+      const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
       });
 
@@ -170,10 +172,10 @@ describe('RetractableSidebar', () => {
       expect(screen.getByTestId('t.handle-open')).toBeTruthy();
     });
 
-    it('retracts on a leftward swipe', () => {
-      const screen = renderSidebar();
+    it('retracts on a leftward swipe', async () => {
+      const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: -60, translationY: 0 }, true);
       });
 
@@ -181,10 +183,10 @@ describe('RetractableSidebar', () => {
       expect(screen.getByTestId('t.handle-open')).toBeTruthy();
     });
 
-    it('stays open on a vertical swipe', () => {
-      const screen = renderSidebar();
+    it('stays open on a vertical swipe', async () => {
+      const screen = await renderSidebar();
 
-      act(() => {
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationY: 60, translationX: 2 }, true);
       });
 
@@ -194,39 +196,39 @@ describe('RetractableSidebar', () => {
   });
 
   describe('A3 reopen + accessibility', () => {
-    function renderRetracted() {
-      const screen = renderSidebar();
-      act(() => {
+    async function renderRetracted() {
+      const screen = await renderSidebar();
+      await act(async () => {
         panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
       });
       return screen;
     }
 
-    it('reopens from the handle: translateX back to 0 and handle unmounted', () => {
-      const screen = renderRetracted();
+    it('reopens from the handle: translateX back to 0 and handle unmounted', async () => {
+      const screen = await renderRetracted();
 
-      fireEvent.press(screen.getByTestId('t.handle-open'));
+      await fireEvent.press(screen.getByTestId('t.handle-open'));
 
       expect(getTranslateX(screen)).toBe(0);
       expect(screen.queryByTestId('t.handle-open')).toBeNull();
     });
 
-    it('exposes the retracted handle as a collapsed expand button', () => {
-      const screen = renderRetracted();
+    it('exposes the retracted handle as a collapsed expand button', async () => {
+      const screen = await renderRetracted();
 
       const handle = screen.getByTestId('t.handle-open');
       expect(handle.props.accessibilityRole).toBe('button');
       expect(handle.props.accessibilityState).toEqual({ expanded: false });
     });
 
-    it('passes accessibilityLabel through to the panel', () => {
-      const screen = renderSidebar();
+    it('passes accessibilityLabel through to the panel', async () => {
+      const screen = await renderSidebar();
 
       expect(screen.getByTestId('t.panel').props.accessibilityLabel).toBe('Mode');
     });
 
-    it('labels the handle-open button with the sidebar accessibilityLabel', () => {
-      const screen = renderRetracted();
+    it('labels the handle-open button with the sidebar accessibilityLabel', async () => {
+      const screen = await renderRetracted();
 
       const handle = screen.getByTestId('t.handle-open');
       expect(handle.props.accessibilityLabel).toBe('Mode');

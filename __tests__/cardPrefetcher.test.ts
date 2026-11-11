@@ -133,7 +133,7 @@ async function serveFeed(
     return { isError: false, reason: 'empty', images: [] };
   }
   if (opts?.persistCursor !== false) {
-    await saveLastImageUuid(cards[cards.length - 1]!.pictureId, cursorCategoryOf(filters), filters?.language, filters?.scope, filters?.mode);
+    await saveLastImageUuid(cards[cards.length - 1]!.pictureId, cursorCategoryOf(filters), (filters as { language?: string }).language, filters?.scope, (filters as { mode?: string }).mode);
   }
   return { isError: false, images: cards };
 }
@@ -542,8 +542,9 @@ describe('cardPrefetcher (behavior-driven)', () => {
     });
 
     it('a warm failure is reported even when __DEV__ is false', async () => {
-      const priorDev = global.__DEV__;
-      global.__DEV__ = false;
+      const devFlag = globalThis as { __DEV__?: boolean };
+      const priorDev = devFlag.__DEV__;
+      devFlag.__DEV__ = false;
       chain('__all__', [cardBatch('a', 5)]);
       const restore = failDeckWrites(ALL_DECK_KEY);
 
@@ -553,7 +554,7 @@ describe('cardPrefetcher (behavior-driven)', () => {
         expect(warnSpy).toHaveBeenCalledWith('[cardPrefetcher] warm-all failed', expect.any(String), expect.any(Error));
       } finally {
         restore();
-        global.__DEV__ = priorDev;
+        devFlag.__DEV__ = priorDev;
       }
     });
 

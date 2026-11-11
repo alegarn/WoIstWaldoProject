@@ -61,7 +61,7 @@ import { AuthContext } from '../store/auth-context';
 const WELCOME_MODAL_TEXT = /Welcome, do you want to do the tutorial/;
 const QUICK_TUTORIAL_TITLE = 'How to play';
 
-function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}) {
+async function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}) {
   const contextValue = {
     token: 'Bearer persisted-token',
     userId: '42',
@@ -78,7 +78,7 @@ function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}) {
     reset: jest.fn(),
   };
 
-  const screen = render(
+  const screen = await render(
     <AuthContext.Provider value={contextValue}>
       <HomeScreen navigation={navigation} route={{ params: routeParams }} />
     </AuthContext.Provider>
@@ -87,9 +87,10 @@ function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}) {
   return { ...screen, contextValue, navigation };
 }
 
-function revealTutorialOverlayActions(screen) {
-  const overlayScroll = screen.UNSAFE_getByType(ScrollView);
-  fireEvent.scroll(overlayScroll, {
+async function revealTutorialOverlayActions(screen) {
+  const scrollables = screen.root.queryAll((node) => node.props.onScroll !== undefined);
+  if (scrollables.length === 0) throw new Error('no scrollable overlay found');
+  await fireEvent.scroll(scrollables[scrollables.length - 1], {
     nativeEvent: {
       contentOffset: { y: 1000 },
       layoutMeasurement: { height: 600 },
@@ -98,8 +99,8 @@ function revealTutorialOverlayActions(screen) {
   });
 }
 
-function finishQuickTutorial(screen) {
-  fireEvent.press(screen.getByTestId('tutorial.quick.skip'));
+async function finishQuickTutorial(screen) {
+  await fireEvent.press(screen.getByTestId('tutorial.quick.skip'));
 }
 
 describe('HomeScreen', () => {
@@ -116,7 +117,7 @@ describe('HomeScreen', () => {
   it('logs the user out and warns that the session expired when the persisted session is no longer valid', async () => {
     axios.get.mockResolvedValue({ status: 401, data: {} });
 
-    const { contextValue, navigation } = renderHomeScreen({
+    const { contextValue, navigation } = await renderHomeScreen({
       contextOverrides: {
         verifyIsLoggedIn: jest.fn().mockResolvedValue(false),
       },
@@ -136,15 +137,15 @@ describe('HomeScreen', () => {
   });
 
   it('routes the home actions to the hide, guess and ranking paths', async () => {
-    const screen = renderHomeScreen();
+    const screen = await renderHomeScreen();
 
     expect(screen.getByText('Hide Waldo')).toBeTruthy();
     expect(screen.getByText('Find Waldo')).toBeTruthy();
     expect(screen.getByText('Ranking')).toBeTruthy();
 
-    fireEvent.press(screen.getByTestId('home.button.hide'));
-    fireEvent.press(screen.getByTestId('home.button.guess'));
-    fireEvent.press(screen.getByTestId('home.button.ranking'));
+    await fireEvent.press(screen.getByTestId('home.button.hide'));
+    await fireEvent.press(screen.getByTestId('home.button.guess'));
+    await fireEvent.press(screen.getByTestId('home.button.ranking'));
 
     expect(screen.navigation.navigate).toHaveBeenNthCalledWith(1, 'HidingPathScreen');
     expect(screen.navigation.navigate).toHaveBeenNthCalledWith(2, 'GuessPathScreen');
@@ -152,7 +153,7 @@ describe('HomeScreen', () => {
   });
 
   it('walks first-time users through the quick tutorial, then offers the full tutorial', async () => {
-    const screen = renderHomeScreen({
+    const screen = await renderHomeScreen({
       contextOverrides: {
         isTutorialFinished: {
           isTutorial: true,
@@ -165,7 +166,7 @@ describe('HomeScreen', () => {
     expect(screen.getByText(QUICK_TUTORIAL_TITLE)).toBeTruthy();
     expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
 
-    finishQuickTutorial(screen);
+    await finishQuickTutorial(screen);
 
     expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
     expect(screen.getByText(WELCOME_MODAL_TEXT)).toBeTruthy();
@@ -174,7 +175,7 @@ describe('HomeScreen', () => {
   it('cancelling the tutorial offer marks the tutorial as finished and closes the offer', async () => {
     axios.put.mockResolvedValue({ status: 200, data: {} });
 
-    const screen = renderHomeScreen({
+    const screen = await renderHomeScreen({
       contextOverrides: {
         isTutorialFinished: {
           isTutorial: true,
@@ -184,9 +185,9 @@ describe('HomeScreen', () => {
       },
     });
 
-    finishQuickTutorial(screen);
+    await finishQuickTutorial(screen);
 
-    fireEvent.press(screen.getByTestId('home.tutorial-modal.close'));
+    await fireEvent.press(screen.getByTestId('home.tutorial-modal.close'));
 
     await waitFor(() =>
       expect(axios.put).toHaveBeenCalledWith(
@@ -206,17 +207,17 @@ describe('HomeScreen', () => {
   });
 
   it('reopens the quick tutorial from the in-tutorial overlay without re-offering the full tutorial', async () => {
-    const screen = renderHomeScreen({ routeParams: { tutorialToken: 1234 } });
+    const screen = await renderHomeScreen({ routeParams: { tutorialToken: 1234 } });
 
     expect(screen.getByText(/Welcome to WoIstWaldo tutorial/)).toBeTruthy();
 
-    revealTutorialOverlayActions(screen);
+    await revealTutorialOverlayActions(screen);
 
-    fireEvent.press(screen.getByTestId('tutorial.overlay.quickBtn'));
+    await fireEvent.press(screen.getByTestId('tutorial.overlay.quickBtn'));
 
     expect(screen.getByText(QUICK_TUTORIAL_TITLE)).toBeTruthy();
 
-    finishQuickTutorial(screen);
+    await finishQuickTutorial(screen);
 
     expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
     expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
@@ -224,7 +225,7 @@ describe('HomeScreen', () => {
   });
 
   it('routes the in-tutorial overlay to the guess and hide paths', async () => {
-    const screen = renderHomeScreen({
+    const screen = await renderHomeScreen({
       contextOverrides: {
         isTutorialFinished: {
           isTutorial: true,
@@ -235,10 +236,10 @@ describe('HomeScreen', () => {
       routeParams: { isTutorial: true },
     });
 
-    revealTutorialOverlayActions(screen);
+    await revealTutorialOverlayActions(screen);
 
-    fireEvent.press(screen.getByText('Hide the Waldo'));
-    fireEvent.press(screen.getByText('Guess the Waldo'));
+    await fireEvent.press(screen.getByText('Hide the Waldo'));
+    await fireEvent.press(screen.getByText('Guess the Waldo'));
 
     expect(screen.navigation.replace).toHaveBeenNthCalledWith(1, 'HidingPathScreen', {
       isTutorial: true,
