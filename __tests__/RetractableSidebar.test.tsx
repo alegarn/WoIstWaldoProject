@@ -3,6 +3,11 @@ const mockCapturedPanRecords: PanRecord[] = [];
 type PanCall = { method: string; args: unknown[] };
 type PanRecord = { __type: string; calls: PanCall[] };
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 jest.mock('react-native', () => {
   const React = require('react');
 
@@ -28,6 +33,12 @@ jest.mock('react-native', () => {
     };
   }
 
+  type MockAnimation = {
+    start: (callback?: (result: { finished: boolean }) => void) => void;
+    stop: () => void;
+    reset: () => void;
+  };
+
   return {
     Animated: {
       Value: MockAnimatedValue,
@@ -35,6 +46,31 @@ jest.mock('react-native', () => {
         (value: MockAnimatedValue, config: { toValue?: number }) =>
           buildAnimation(value, config)
       ),
+      delay: jest.fn((_duration: number): MockAnimation => ({
+        start: () => {},
+        stop: () => {},
+        reset: () => {},
+      })),
+      sequence: jest.fn((animations: MockAnimation[]) => {
+        let timer: ReturnType<typeof setTimeout> | null = null;
+        return {
+          start: (callback?: (result: { finished: boolean }) => void) => {
+            for (const animation of animations) {
+              animation.start();
+            }
+            if (callback) {
+              timer = setTimeout(() => callback({ finished: true }), 0);
+            }
+          },
+          stop: () => {
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
+          },
+          reset: () => {},
+        };
+      }),
       View: ({ children, ...props }: any) =>
         React.createElement('AnimatedView', props, children),
     },
@@ -128,9 +164,22 @@ function panConfigArgs(record: PanRecord, method: string): unknown[] {
   return call ? call.args : [];
 }
 
-async function renderSidebar(testIDPrefix = 't', initiallyOpen = true) {
+type SidebarExtraProps = {
+  closeButtonAccessibilityLabel?: string;
+  reopenHintLabel?: string;
+};
+
+async function renderSidebar(
+  testIDPrefix = 't',
+  initiallyOpen = true,
+  extraProps: SidebarExtraProps = {},
+) {
   return await render(
-    <RetractableSidebar testIDPrefix={testIDPrefix} initiallyOpen={initiallyOpen} accessibilityLabel="Mode">
+    <RetractableSidebar
+      testIDPrefix={testIDPrefix}
+      initiallyOpen={initiallyOpen}
+      accessibilityLabel="Mode"
+      {...extraProps}>
       <View testID={`${testIDPrefix}.child-marker`}>
         <Text>chip</Text>
       </View>
@@ -232,6 +281,150 @@ describe('RetractableSidebar', () => {
 
       const handle = screen.getByTestId('t.handle-open');
       expect(handle.props.accessibilityLabel).toBe('Mode');
+    });
+  });
+
+  describe('A4 arrow close button', () => {
+    it('retracts via the arrow pinned to the panel tip: translateX to slide distance, handle mounted', async () => {
+      const screen = await renderSidebar();
+
+      const arrow = screen.getByTestId('t.handle-close');
+      expect(arrow.props.accessibilityRole).toBe('button');
+      expect(arrow.props.accessibilityLabel).toBe('Mode');
+
+      await fireEvent.press(arrow);
+
+      expect(getTranslateX(screen)).toBe(240);
+      expect(screen.getByTestId('t.handle-open')).toBeTruthy();
+    });
+
+    it('labels the arrow with closeButtonAccessibilityLabel when provided', async () => {
+      const screen = await renderSidebar('t', true, {
+        closeButtonAccessibilityLabel: 'Close sidebar',
+      });
+
+      expect(screen.getByTestId('t.handle-close').props.accessibilityLabel).toBe('Close sidebar');
+    });
+
+    it('pins the arrow vertically centered on the panel and fully outside it', async () => {
+      const screen = await renderSidebar();
+
+      const flattened = require('react-native').StyleSheet.flatten(
+        screen.getByTestId('t.handle-close').props.style
+      );
+      expect(flattened).toMatchObject({ left: -28, top: '50%', marginTop: -22 });
+    });
+  });
+
+  describe('A5 swipe-left reopen on collapsed handle', () => {
+    async function renderRetracted() {
+      const screen = await renderSidebar();
+      await act(async () => {
+        panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
+      });
+      return screen;
+    }
+
+    it('gates the collapsed-handle pan for horizontal-only activation', async () => {
+      await renderRetracted();
+
+      const record = latestPanRecord();
+      expect(panConfigArgs(record, 'activeOffsetX')).toEqual([[-40, 40]]);
+      expect(panConfigArgs(record, 'failOffsetY')).toEqual([[-40, 40]]);
+    });
+
+    it('reopens on a leftward swipe on the collapsed handle', async () => {
+      const screen = await renderRetracted();
+
+      await act(async () => {
+        panHandler(latestPanRecord(), 'onEnd')({ translationX: -60, translationY: 0 }, true);
+      });
+
+      expect(getTranslateX(screen)).toBe(0);
+      expect(screen.queryByTestId('t.handle-open')).toBeNull();
+    });
+
+    it('stays retracted on a rightward swipe on the collapsed handle', async () => {
+      const screen = await renderRetracted();
+
+      await act(async () => {
+        panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
+      });
+
+      expect(getTranslateX(screen)).toBe(240);
+      expect(screen.getByTestId('t.handle-open')).toBeTruthy();
+    });
+  });
+
+  describe('A6 transient reopen hint', () => {
+    beforeEach(() => {
+      jest.useFakeTimers();
+    });
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    // The mock sequence defers its completion callback via setTimeout(0);
+    // advancing fake timers inside act deterministically fires it.
+    async function flushSequenceCompletion() {
+      await act(async () => {
+        jest.advanceTimersByTime(0);
+        await Promise.resolve();
+      });
+    }
+
+    it('shows a pointerEvents="none" hint with the reopenHintLabel while retracted', async () => {
+      const screen = await renderSidebar('t', false, {
+        reopenHintLabel: 'Swipe left to reopen',
+      });
+
+      const hint = screen.getByTestId('t.hint-reopen');
+      expect(hint.props.pointerEvents).toBe('none');
+      expect(within(hint).getByText('Swipe left to reopen')).toBeTruthy();
+
+      await flushSequenceCompletion();
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+    });
+
+    it('does not render the hint when reopenHintLabel is omitted', async () => {
+      const screen = await renderSidebar();
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+
+      await act(async () => {
+        panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
+      });
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+    });
+
+    it('unmounts the hint after its animation sequence completes', async () => {
+      const screen = await renderSidebar('t', false, {
+        reopenHintLabel: 'Swipe left to reopen',
+      });
+      expect(screen.getByTestId('t.hint-reopen')).toBeTruthy();
+
+      await flushSequenceCompletion();
+
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+    });
+
+    it('replays the hint on each close (hint remounts per retraction)', async () => {
+      const screen = await renderSidebar('t', false, {
+        reopenHintLabel: 'Swipe left to reopen',
+      });
+      expect(screen.getByTestId('t.hint-reopen')).toBeTruthy();
+
+      await flushSequenceCompletion();
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+
+      await fireEvent.press(screen.getByTestId('t.handle-open'));
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
+
+      await fireEvent.press(screen.getByTestId('t.handle-close'));
+      expect(screen.getByTestId('t.hint-reopen')).toBeTruthy();
+
+      await flushSequenceCompletion();
+      expect(screen.queryByTestId('t.hint-reopen')).toBeNull();
     });
   });
 });

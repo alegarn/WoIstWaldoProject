@@ -389,6 +389,8 @@
     "tryAgainLater": "Veuillez réessayer plus tard",
     "invalidTypeTitle": "Type d'image invalide",
     "invalidTypeMessage": "Veuillez sélectionner un type d'image valide (png, jpg ou jpeg)",
+    "sidebarClose": "Fermer la barre de mode",
+    "reopenHint": "Balayer vers la gauche pour rouvrir la barre de mode",
     "modeLabel": "Mode",
     "modePoint": "Point",
     "modeShape": "Contour"

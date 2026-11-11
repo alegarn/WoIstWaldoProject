@@ -388,6 +388,8 @@
     "tryAgainLater": "後でもう一度お試しください",
     "invalidTypeTitle": "無効な画像形式",
     "invalidTypeMessage": "有効な画像形式（png、jpg、jpeg）を選択してください",
+    "sidebarClose": "モードバーを閉じる",
+    "reopenHint": "左にスワイプするとモードバーが再度開きます",
     "modeLabel": "モード",
     "modePoint": "ポイント",
     "modeShape": "なぞる"
