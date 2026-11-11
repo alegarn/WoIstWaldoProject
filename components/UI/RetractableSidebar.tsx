@@ -139,14 +139,16 @@ export default function RetractableSidebar({
           style={[styles.panel, { transform: [{ translateX }] }]}
           accessibilityLabel={accessibilityLabel}>
           {children}
-          <Pressable
-            testID={`${testIDPrefix}.handle-close`}
-            style={styles.closeButton}
-            onPress={close}
-            accessibilityRole="button"
-            accessibilityLabel={closeButtonAccessibilityLabel ?? accessibilityLabel}>
-            <Ionicons name={"chevron-forward"} color={"white"} size={20} />
-          </Pressable>
+          {!retracted && (
+            <Pressable
+              testID={`${testIDPrefix}.handle-close`}
+              style={styles.closeButton}
+              onPress={close}
+              accessibilityRole="button"
+              accessibilityLabel={closeButtonAccessibilityLabel ?? accessibilityLabel}>
+              <Ionicons name={"chevron-forward"} color={"white"} size={20} />
+            </Pressable>
+          )}
         </Animated.View>
       </GestureDetector>
       {retracted && reopenPan && (
@@ -183,7 +185,7 @@ const styles = StyleSheet.create({
     top: '50%',
     width: 16,
     height: 64,
-    backgroundColor: HANDLE_COLOR,
+    backgroundColor: 'transparent',
   },
   closeButton: {
     position: 'absolute',

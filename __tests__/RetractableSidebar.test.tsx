@@ -356,6 +356,41 @@ describe('RetractableSidebar', () => {
     });
   });
 
+  describe('A7 arrow visibility + transparent reopen handle', () => {
+    async function renderRetracted() {
+      const screen = await renderSidebar();
+      await act(async () => {
+        panHandler(latestPanRecord(), 'onEnd')({ translationX: 60, translationY: 0 }, true);
+      });
+      return screen;
+    }
+
+    it('unmounts the arrow when retracted via swipe while keeping the reopen handle', async () => {
+      const screen = await renderRetracted();
+
+      expect(screen.queryByTestId('t.handle-close')).toBeNull();
+      expect(screen.getByTestId('t.handle-open')).toBeTruthy();
+    });
+
+    it('unmounts the arrow when closed via the arrow press while keeping the reopen handle', async () => {
+      const screen = await renderSidebar();
+
+      await fireEvent.press(screen.getByTestId('t.handle-close'));
+
+      expect(screen.queryByTestId('t.handle-close')).toBeNull();
+      expect(screen.getByTestId('t.handle-open')).toBeTruthy();
+    });
+
+    it('renders the reopen handle with a transparent background', async () => {
+      const screen = await renderRetracted();
+
+      const flattened = require('react-native').StyleSheet.flatten(
+        screen.getByTestId('t.handle-open').props.style
+      );
+      expect(flattened).toMatchObject({ backgroundColor: 'transparent' });
+    });
+  });
+
   describe('A6 transient reopen hint', () => {
     beforeEach(() => {
       jest.useFakeTimers();
