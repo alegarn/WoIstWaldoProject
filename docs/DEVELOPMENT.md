@@ -24,6 +24,24 @@
    npx expo start
    ```
 
+## Dev environment gotchas
+- **Dev backend URL comes from the local `.env`, not `eas.json`**: dev clients embed no JS bundle —
+  JS is served by Metro at runtime, and `EXPO_PUBLIC_*` values are inlined from the machine running
+  `npx expo start` (local `.env` wins). `eas.json` profiles only apply to embedded-bundle EAS builds.
+  Keep `.env` pointing at the active ngrok tunnel **with a trailing slash** (see Setup step 2). When
+  the app "points at prod" in dev, check `.env` first. After editing `.env`, restart Metro with
+  `npx expo start --clear`; ngrok URLs are ephemeral — each rotation = edit `.env` + restart, no rebuild.
+- **Dev AdMob `[googleMobileAds/app-id-missing] Not supported`**: if a dev build logs
+  `WARN [AdMobInterstitial] interstitial load failed: [Error: [googleMobileAds/app-id-missing] Not supported]`,
+  the config is fine (app ID verified in the Android manifest, `app.json`, and the built APK) — it is a
+  **device-side** Google Play services AdError (stale/missing GMS ads module), Android-only. Update
+  Google Play services on the emulator/device or test on a physical device; verify with
+  `adb shell dumpsys package com.google.android.gms`. If it persists, suspect the `play-services-ads`
+  `24.0.0` pin in the checked-in patch vs the `react-native-google-mobile-ads` default (`25.4.0`) —
+  a client↔device GMS mismatch; unpinning = patch rework = native change, which must be recorded in
+  `docs/native-code-maintenance.md`. Dev builds always use Google **test** ad unit IDs (`__DEV__` →
+  `TestIds.INTERSTITIAL`, `services/ads/AdMobInterstitialBridge.tsx:31-34`); real IDs are release-only.
+
 ## Development Client
 This project uses `expo-dev-client`. To run on a physical device or emulator with native modules:
 ```bash
