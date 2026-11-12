@@ -1,9 +1,10 @@
 import * as ImagePicker from 'expo-image-picker';
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
 
 import { preparePrivateUpload } from './groupUploadApi';
 import { performImageUpload } from '../../utils/imagesRequests';
+import { scrubImageMetadata } from '../../utils/imageMetadataScrub';
 
 const MAX_WIDTH = 1080;
 
@@ -44,14 +45,11 @@ export async function uploadHomeBackground({ context, groupId }: {
 
   const asset = result.assets[0];
 
-  const manipulator = ImageManipulator.manipulate(asset.uri);
-  if (asset.width && asset.width > MAX_WIDTH) {
-    manipulator.resize({ width: MAX_WIDTH });
-  }
-  const rendered = await manipulator.renderAsync();
-  const saved = await rendered.saveAsync({
-    compress: 0.7,
+  const saved = await scrubImageMetadata({
+    uri: asset.uri,
     format: SaveFormat.JPEG,
+    compress: 0.7,
+    resize: asset.width && asset.width > MAX_WIDTH ? { width: MAX_WIDTH } : undefined,
   });
   const fileExtension = 'jpeg';
 

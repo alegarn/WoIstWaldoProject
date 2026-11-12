@@ -1,17 +1,8 @@
 import type { ImageResult } from 'expo-image-manipulator';
 
-const mockManipulate = jest.fn();
-const mockResize = jest.fn();
-const mockRenderAsync = jest.fn();
-const mockSaveAsync = jest.fn();
-const mockContextRelease = jest.fn();
-const mockRefRelease = jest.fn();
 const mockFileSizeFor = jest.fn();
 
 jest.mock('expo-image-manipulator', () => ({
-  ImageManipulator: {
-    manipulate: (...args: unknown[]) => mockManipulate(...args),
-  },
   SaveFormat: { JPEG: 'jpeg', PNG: 'png', WEBP: 'webp' },
 }));
 
@@ -22,50 +13,27 @@ jest.mock('expo-file-system', () => ({
   },
 }));
 
+jest.mock('../../utils/imageMetadataScrub', () => ({
+  scrubImageMetadata: jest.fn(),
+}));
+
 import { SaveFormat } from 'expo-image-manipulator';
+import { scrubImageMetadata } from '../../utils/imageMetadataScrub';
 import { resizeImage } from '../../utils/resizeImage';
 
 const SAVED_URI = 'file:///tmp/resized.jpeg';
+const SCRUBBED: ImageResult = { uri: SAVED_URI, width: 120, height: 90 };
 
-type ManipulatorContextMock = {
-  resize: typeof mockResize;
-  renderAsync: typeof mockRenderAsync;
-  release: typeof mockContextRelease;
-};
-
-function resetManipulatorChain() {
-  mockManipulate.mockReset();
-  mockResize.mockReset();
-  mockRenderAsync.mockReset();
-  mockSaveAsync.mockReset();
-
-  mockManipulate.mockImplementation(() => {
-    const context: ManipulatorContextMock = {
-      resize: mockResize,
-      renderAsync: mockRenderAsync,
-      release: mockContextRelease,
-    };
-    mockResize.mockReturnValue(context);
-    mockRenderAsync.mockResolvedValue({
-      saveAsync: mockSaveAsync.mockResolvedValue({
-        uri: SAVED_URI,
-        width: 120,
-        height: 90,
-      } satisfies ImageResult),
-      release: mockRefRelease,
-    });
-    return context;
-  });
-}
+const mockScrubImageMetadata = jest.mocked(scrubImageMetadata);
 
 describe('utils/resizeImage', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    resetManipulatorChain();
+    mockScrubImageMetadata.mockResolvedValue(SCRUBBED);
     mockFileSizeFor.mockImplementation((uri: string) => (uri === SAVED_URI ? 12_345 : undefined));
   });
 
-  it('resizes by width when the landscape side exceeds maxLongestSide', async () => {
+  it('routes through the metadata scrub and resizes by width when the landscape side exceeds maxLongestSide', async () => {
     const result = await resizeImage({
       uri: 'file:///photos/landscape.jpg',
       width: 800,
@@ -73,28 +41,46 @@ describe('utils/resizeImage', () => {
       maxLongestSide: 120,
     });
 
-    expect(mockManipulate).toHaveBeenCalledWith('file:///photos/landscape.jpg');
-    expect(mockResize).toHaveBeenCalledWith({ width: 120 });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith({
+      uri: 'file:///photos/landscape.jpg',
+      format: 'jpeg',
+      compress: 0.7,
+      resize: { width: 120 },
+    });
     expect(result).toEqual({ uri: SAVED_URI, contentLength: 12_345, fileExtension: 'jpeg' });
   });
 
-  it('resizes by height when the portrait side exceeds maxLongestSide', async () => {
+  it('routes through the metadata scrub and resizes by height when the portrait side exceeds maxLongestSide', async () => {
     await resizeImage({ uri: 'file:///photos/portrait.jpg', width: 400, height: 800, maxLongestSide: 120 });
 
-    expect(mockResize).toHaveBeenCalledWith({ height: 120 });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ resize: { height: 120 } }),
+    );
   });
 
-  it('never upscales when the longest side is already within maxLongestSide', async () => {
-    await resizeImage({ uri: 'file:///photos/small.jpg', width: 100, height: 80, maxLongestSide: 120 });
+  it('never upscales and still re-encodes when the longest side is already within maxLongestSide', async () => {
+    const result = await resizeImage({
+      uri: 'file:///photos/small.jpg',
+      width: 100,
+      height: 80,
+      maxLongestSide: 120,
+    });
 
-    expect(mockResize).not.toHaveBeenCalled();
-    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.7, format: 'jpeg' });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith({
+      uri: 'file:///photos/small.jpg',
+      format: 'jpeg',
+      compress: 0.7,
+      resize: undefined,
+    });
+    expect(result).toEqual({ uri: SAVED_URI, contentLength: 12_345, fileExtension: 'jpeg' });
   });
 
   it('does not resize when the longest side equals maxLongestSide exactly', async () => {
     await resizeImage({ uri: 'file:///photos/exact.jpg', width: 120, height: 90, maxLongestSide: 120 });
 
-    expect(mockResize).not.toHaveBeenCalled();
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ resize: undefined }),
+    );
   });
 
   it('re-encodes to JPEG with the default compress quality by default', async () => {
@@ -105,7 +91,12 @@ describe('utils/resizeImage', () => {
       maxLongestSide: 120,
     });
 
-    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.7, format: 'jpeg' });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith({
+      uri: 'file:///photos/any.webp',
+      format: 'jpeg',
+      compress: 0.7,
+      resize: { width: 120 },
+    });
     expect(result.fileExtension).toBe('jpeg');
   });
 
@@ -119,7 +110,12 @@ describe('utils/resizeImage', () => {
       compress: 0.85,
     });
 
-    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.85, format: 'webp' });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith({
+      uri: 'file:///photos/any.jpg',
+      format: 'webp',
+      compress: 0.85,
+      resize: { width: 600 },
+    });
     expect(result.fileExtension).toBe('webp');
   });
 
@@ -132,15 +128,10 @@ describe('utils/resizeImage', () => {
       format: SaveFormat.PNG,
     });
 
-    expect(mockSaveAsync).toHaveBeenCalledWith({ compress: 0.7, format: 'png' });
+    expect(mockScrubImageMetadata).toHaveBeenCalledWith(
+      expect.objectContaining({ format: 'png', compress: 0.7 }),
+    );
     expect(result.fileExtension).toBe('png');
-  });
-
-  it('releases both manipulator handles on success', async () => {
-    await resizeImage({ uri: 'file:///photos/landscape.jpg', width: 800, height: 400, maxLongestSide: 120 });
-
-    expect(mockContextRelease).toHaveBeenCalledTimes(1);
-    expect(mockRefRelease).toHaveBeenCalledTimes(1);
   });
 
   it('rejects when the saved file size cannot be determined', async () => {
@@ -149,8 +140,6 @@ describe('utils/resizeImage', () => {
     await expect(
       resizeImage({ uri: 'file:///photos/broken.jpg', width: 800, height: 400, maxLongestSide: 120 }),
     ).rejects.toThrow('Could not determine resized image size.');
-    expect(mockContextRelease).toHaveBeenCalledTimes(1);
-    expect(mockRefRelease).toHaveBeenCalledTimes(1);
   });
 
   it('rejects when reading the saved file size throws', async () => {
@@ -161,7 +150,5 @@ describe('utils/resizeImage', () => {
     await expect(
       resizeImage({ uri: 'file:///photos/broken.jpg', width: 800, height: 400, maxLongestSide: 120 }),
     ).rejects.toThrow('file system unavailable');
-    expect(mockContextRelease).toHaveBeenCalledTimes(1);
-    expect(mockRefRelease).toHaveBeenCalledTimes(1);
   });
 });

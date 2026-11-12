@@ -1,6 +1,6 @@
-import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
-import type { ImageResult } from 'expo-image-manipulator';
+import { SaveFormat } from 'expo-image-manipulator';
 import { File } from 'expo-file-system';
+import { scrubImageMetadata } from './imageMetadataScrub';
 
 export type ResizeImageResult = {
   uri: string;
@@ -24,32 +24,17 @@ export async function resizeImage({
   format?: SaveFormat;
 }): Promise<ResizeImageResult> {
   const hasDims = Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0;
-  const context = ImageManipulator.manipulate(uri);
+  const resize = hasDims && Math.max(width, height) > maxLongestSide
+    ? (height >= width
+      ? { height: maxLongestSide }
+      : { width: maxLongestSide })
+    : undefined;
 
-  try {
+  const saved = await scrubImageMetadata({ uri, format, compress, resize });
 
-    if (hasDims && Math.max(width, height) > maxLongestSide) {
-      if (height >= width) {
-        context.resize({ height: maxLongestSide });
-      } else {
-        context.resize({ width: maxLongestSide });
-      }
-    }
-
-    const ref = await context.renderAsync();
-
-    try {
-      const saved: ImageResult = await ref.saveAsync({ compress, format });
-      const contentLength = new File(saved.uri).size;
-      if (!Number.isFinite(contentLength) || contentLength <= 0) {
-        throw new Error('Could not determine resized image size.');
-      }
-      return { uri: saved.uri, contentLength, fileExtension: format };
-    } finally {
-      ref.release();
-    }
-
-  } finally {
-    context.release();
+  const contentLength = new File(saved.uri).size;
+  if (!Number.isFinite(contentLength) || contentLength <= 0) {
+    throw new Error('Could not determine resized image size.');
   }
+  return { uri: saved.uri, contentLength, fileExtension: format };
 }
