@@ -389,6 +389,8 @@
     "tryAgainLater": "Bitte versuche es später erneut",
     "invalidTypeTitle": "Ungültiger Bildtyp",
     "invalidTypeMessage": "Bitte wähle einen gültigen Bildtyp (png, jpg oder jpeg)",
+    "sidebarClose": "Modusleiste schließen",
+    "reopenHint": "Nach links wischen, um die Modusleiste wieder zu öffnen",
     "modeLabel": "Modus",
     "modePoint": "Punkt",
     "modeShape": "Umriss"

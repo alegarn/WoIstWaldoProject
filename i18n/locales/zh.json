@@ -388,6 +388,8 @@
     "tryAgainLater": "请稍后重试",
     "invalidTypeTitle": "无效的图片类型",
     "invalidTypeMessage": "请选择有效的图片类型（png、jpg 或 jpeg）",
+    "sidebarClose": "关闭模式栏",
+    "reopenHint": "向左滑动以重新打开模式栏",
     "modeLabel": "模式",
     "modePoint": "点选",
     "modeShape": "圈画"

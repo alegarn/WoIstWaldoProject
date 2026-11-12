@@ -388,6 +388,8 @@
     "tryAgainLater": "Silakan coba lagi nanti",
     "invalidTypeTitle": "Jenis gambar tidak valid",
     "invalidTypeMessage": "Pilih jenis gambar yang valid (png, jpg atau jpeg)",
+    "sidebarClose": "Tutup bilah mode",
+    "reopenHint": "Geser ke kiri untuk membuka kembali bilah mode",
     "modeLabel": "Mode",
     "modePoint": "Titik",
     "modeShape": "Bentuk"

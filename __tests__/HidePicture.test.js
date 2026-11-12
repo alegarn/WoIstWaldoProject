@@ -29,6 +29,31 @@ jest.mock('react-native', () => {
       callback?.();
     },
   });
+  actualRN.Animated.delay = () => ({
+    start: () => {},
+    stop: () => {},
+    reset: () => {},
+  });
+  actualRN.Animated.sequence = (animations) => {
+    let timer = null;
+    return {
+      start: (callback) => {
+        for (const animation of animations) {
+          animation.start();
+        }
+        if (callback) {
+          timer = setTimeout(() => callback({ finished: true }), 0);
+        }
+      },
+      stop: () => {
+        if (timer) {
+          clearTimeout(timer);
+          timer = null;
+        }
+      },
+      reset: () => {},
+    };
+  };
   // Start the pulse child once; never re-iterate (a sync timing would make a
   // real loop recurse infinitely).
   actualRN.Animated.loop = (animation) => ({
@@ -89,6 +114,7 @@ import { StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 import HidePicture from '../components/Picture/HidePicture';
+import enLocale from '../i18n/locales/en.json';
 import { E2E_SHAPE_POLYGON } from '../utils/e2eMode';
 import { LOUPE_LONG_PRESS_MS } from '../utils/loupeGeometry';
 
@@ -263,6 +289,27 @@ describe('HidePicture', () => {
 
       await fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
       expect(screen.queryByTestId('game.picture.shape-surface')).toBeNull();
+    });
+
+    describe('reopen hint', () => {
+      beforeEach(() => {
+        jest.useFakeTimers();
+      });
+
+      afterEach(() => {
+        jest.useRealTimers();
+      });
+
+      it('renders the arrow close button initially and shows the reopen hint after closing', async () => {
+        const screen = await renderToPicture();
+
+        expect(screen.queryByTestId('game.picture.mode-sidebar.handle-close')).not.toBeNull();
+
+        await fireEvent.press(screen.getByTestId('game.picture.mode-sidebar.handle-close'));
+
+        const hint = screen.getByTestId('game.picture.mode-sidebar.hint-reopen');
+        expect(within(hint).getByText(enLocale.hide.reopenHint)).not.toBeNull();
+      });
     });
   });
 

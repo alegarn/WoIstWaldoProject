@@ -133,7 +133,9 @@ export default function HidePicture({
       <RetractableSidebar
         initiallyOpen
         testIDPrefix="game.picture.mode-sidebar"
-        accessibilityLabel={t('hide.modeLabel')}>
+        accessibilityLabel={t('hide.modeLabel')}
+        closeButtonAccessibilityLabel={t('hide.sidebarClose')}
+        reopenHintLabel={t('hide.reopenHint')}>
         <View style={styles.modePanelContent} testID="game.picture.mode-picker">
           <Text style={styles.modeLabel}>{t('hide.modeLabel')}</Text>
           {MODE_OPTIONS.map(({ value, labelKey }) => (
