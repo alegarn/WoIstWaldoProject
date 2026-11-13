@@ -12,6 +12,9 @@ export default function HideDescription({
   onRetryCategories,
   selectedCategory,
   onCategorySelect,
+  isPortrait,
+  windowWidth,
+  windowHeight,
 }) {
 
   const [descriptionText, setDescriptionText] = useState({});
@@ -41,7 +44,10 @@ export default function HideDescription({
       categoriesError={categoriesError}
       onRetryCategories={onRetryCategories}
       selectedCategory={selectedCategory}
-      onCategorySelect={onCategorySelect} />
+      onCategorySelect={onCategorySelect}
+      isPortrait={isPortrait}
+      windowWidth={windowWidth}
+      windowHeight={windowHeight} />
   );
 };
 

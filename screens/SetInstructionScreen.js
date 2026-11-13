@@ -1,5 +1,5 @@
 import { useRef, useState, useContext, useEffect } from 'react';
-import { View, ImageBackground, StyleSheet, Alert } from 'react-native';
+import { View, ImageBackground, StyleSheet, Alert, useWindowDimensions } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 import * as MediaLibrary from 'expo-media-library';
@@ -97,6 +97,8 @@ export default function SetInstructionsScreen({ navigation, route }) {
     mode,
     shape,
   } = route?.params;
+
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const context = useContext(AuthContext);
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
@@ -397,22 +399,25 @@ export default function SetInstructionsScreen({ navigation, route }) {
           style={imageDimensionStyle}
           testID="set-instructions.image"
         >
-          <HideDescription
-            onSubmit={handlePressDescription}
-            onCancel={onCancelGoBack}
-            language={language}
-            onLanguageChange={handleLanguageChange}
-            languageError={languageError}
-            categories={selectableCategories}
-            categoriesError={categoriesError}
-            onRetryCategories={loadCategories}
-            selectedCategory={selectedCategory}
-            onCategorySelect={handleCategorySelect}
-          />
           {target && (
             <Ionicons name={"close-circle-outline"} color={"white"} size={target.targetSize} style={[target.targetStyle, { opacity: 0.5 }]}/>
           )}
         </ImageBackground>
+        <HideDescription
+          onSubmit={handlePressDescription}
+          onCancel={onCancelGoBack}
+          language={language}
+          onLanguageChange={handleLanguageChange}
+          languageError={languageError}
+          categories={selectableCategories}
+          categoriesError={categoriesError}
+          onRetryCategories={loadCategories}
+          selectedCategory={selectedCategory}
+          onCategorySelect={handleCategorySelect}
+          isPortrait={isPortrait}
+          windowWidth={windowWidth}
+          windowHeight={windowHeight}
+        />
         {
           showModal &&
             <CenteredModal
