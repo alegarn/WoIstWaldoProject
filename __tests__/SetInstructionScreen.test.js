@@ -42,8 +42,7 @@ jest.mock('../store/auth-context', () => {
 
 jest.mock('../components/Picture/Descriptions/HideDescription', () => {
   return function MockHideDescription(props) {
-    mockHideDescription(props);
-    return null;
+    return mockHideDescription(props);
   };
 });
 
@@ -143,8 +142,10 @@ jest.mock('../utils/languageDefaults', () => ({
 }));
 
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, ImageBackground, View } from 'react-native';
 import { act, create } from 'react-test-renderer';
+
+const reactNativeModule = require('react-native');
 
 import SetInstructionsScreen from '../screens/SetInstructionScreen';
 import { AuthContext } from '../store/auth-context';
@@ -196,6 +197,9 @@ describe('SetInstructionScreen', () => {
     { id: 'grp-cat-1', key: 'nature', name: 'Nature', thumbnailUrl: 'https://example.com/nature.webp' },
     { id: 'grp-cat-2', key: 'city', name: 'City', thumbnailUrl: 'https://example.com/city.webp' },
   ];
+  let useWindowDimensionsSpy;
+
+  const mockWindowDimensions = { width: 800, height: 360, scale: 1, fontScale: 1 };
 
   function emitCategoriesViaStore(list) {
     loadGroupCategoriesOptimistic.mockImplementation(async ({ onCategories }) => {
@@ -239,10 +243,14 @@ describe('SetInstructionScreen', () => {
     getCategories.mockResolvedValue({ data: categoriesFixture });
     resolveDefaultLanguage.mockReturnValue('en');
     loadGroupCategoriesOptimistic.mockResolvedValue(undefined);
+    useWindowDimensionsSpy = jest
+      .spyOn(reactNativeModule, 'useWindowDimensions')
+      .mockImplementation(() => mockWindowDimensions);
   });
 
   afterEach(() => {
     Alert.alert.mockRestore();
+    useWindowDimensionsSpy.mockRestore();
   });
 
   async function flushEffects() {
@@ -970,6 +978,19 @@ describe('SetInstructionScreen', () => {
     );
   });
 
+  it('threads isPortrait from route params to HideDescription for keyboard avoidance gating', async () => {
+    await renderScreen({ params: { isPortrait: false } });
+
+    expect(getHideDescriptionProps().isPortrait).toBe(false);
+  });
+
+  it('passes current window dimensions to HideDescription instead of stale route-param dims', async () => {
+    await renderScreen({ params: { isPortrait: false } });
+
+    expect(getHideDescriptionProps().windowWidth).toBe(800);
+    expect(getHideDescriptionProps().windowHeight).toBe(360);
+  });
+
   it('lets e2e mode bypass the language requirement while still rendering the selectors', async () => {
     isE2EMode.mockReturnValue(true);
     getPreferredLanguage.mockResolvedValue(null);
@@ -1010,5 +1031,35 @@ describe('SetInstructionScreen', () => {
         },
       ],
     });
+  });
+
+  function hasAncestor(instance, ancestor) {
+    let node = instance.parent;
+    while (node) {
+      if (node === ancestor) {
+        return true;
+      }
+      node = node.parent;
+    }
+    return false;
+  }
+
+  it('renders the HideDescription overlay as a sibling of the image rather than inside it', async () => {
+    mockHideDescription.mockImplementation(
+      () => React.createElement(View, { testID: 'hide-description.overlay-marker' })
+    );
+
+    try {
+      const renderer = await renderScreen();
+
+      const screenInstance = renderer.root.findByProps({ testID: 'set-instructions.screen' });
+      const imageBackgroundInstance = renderer.root.findByType(ImageBackground);
+      const overlayInstance = renderer.root.findByProps({ testID: 'hide-description.overlay-marker' });
+
+      expect(hasAncestor(overlayInstance, screenInstance)).toBe(true);
+      expect(hasAncestor(overlayInstance, imageBackgroundInstance)).toBe(false);
+    } finally {
+      mockHideDescription.mockImplementation(() => null);
+    }
   });
 });
