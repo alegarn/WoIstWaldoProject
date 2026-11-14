@@ -231,7 +231,9 @@
       "deleteCategories": "Eliminar categorías",
       "closeManageCategories": "Cerrar gestión de categorías",
       "openLanguageFilter": "Abrir filtro de idioma",
+      "currentLanguage": "Idioma actual",
       "openModeFilter": "Abrir filtro de modo",
+      "openHelp": "Cómo funciona esta pantalla",
       "editThumbnailLabel": "Editar miniatura de {{name}}",
       "deleteCategoryLabel": "Eliminar {{name}}"
     },
@@ -320,6 +322,15 @@
       "skip": "Saltar",
       "done": "¡Entendido!",
       "openBtn": "Cómo jugar (rápido)"
+    },
+    "guessWalkthrough": {
+      "title": "Cómo funciona esta pantalla",
+      "page1": "Elige una categoría para empezar a adivinar.\n\nCada carta oculta un enigma creado por otro jugador: elige una para empezar.",
+      "page2": "El control \"{{button}}\" filtra de qué idiomas provienen los enigmas.\n\nEl chip de al lado muestra el idioma que estás navegando actualmente.",
+      "page3": "Cambia entre enigmas de puntos y de formas con \"{{button}}\".\n\nLos propietarios de grupos pueden añadir y gestionar sus propias categorías con los botones + y gestionar.",
+      "next": "Siguiente",
+      "skip": "Saltar",
+      "done": "¡Entendido!"
     }
   },
   "auth": {
@@ -586,6 +597,7 @@
       "switchToPublic": "Cambiar a público",
       "switchToPrivate": "Cambiar a privado",
       "tutorial": "Tutorial",
+      "guessWalkthrough": "Guía de la pantalla de adivinar",
       "moreOptions": "Más opciones",
       "switchFailed": "No se pudo cambiar de modo."
     }

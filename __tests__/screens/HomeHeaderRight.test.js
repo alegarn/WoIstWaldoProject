@@ -52,7 +52,7 @@ describe('HomeHeaderRight', () => {
     Alert.alert.mockRestore();
   });
 
-  function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() }, authContext = {} } = {}) {
+  function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() }, authContext = {}, onOpenGuessWalkthrough } = {}) {
     useActiveGroup.mockReturnValue(activeGroup);
     const refresh = jest.fn();
     useGroupsHub.mockReturnValue({ data: groupsHubData, refresh });
@@ -60,7 +60,7 @@ describe('HomeHeaderRight', () => {
     act(() => {
       renderer = create(
         <AuthContext.Provider value={authContext}>
-          <HomeHeaderRight navigation={navigation} tintColor="#fff" />
+          <HomeHeaderRight navigation={navigation} tintColor="#fff" onOpenGuessWalkthrough={onOpenGuessWalkthrough} />
         </AuthContext.Provider>
       );
     });
@@ -246,5 +246,29 @@ describe('HomeHeaderRight', () => {
     expect(setActive).not.toHaveBeenCalled();
     expect(navigation.navigate).toHaveBeenCalledWith('GroupsListScreen');
     expect(navigation.navigate).not.toHaveBeenCalledWith('PrivateHomeScreen', expect.anything());
+  });
+
+  it('invokes onOpenGuessWalkthrough when pressing the guess walkthrough menu item', () => {
+    const onOpenGuessWalkthrough = jest.fn();
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+      onOpenGuessWalkthrough,
+    });
+
+    openMenu(renderer);
+
+    const row = renderer.root.findByProps({ testID: 'home.menu.guess-walkthrough' });
+    expect(row).toBeTruthy();
+    act(() => {
+      row.props.onPress();
+    });
+
+    expect(onOpenGuessWalkthrough).toHaveBeenCalledTimes(1);
   });
 });

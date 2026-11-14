@@ -231,7 +231,9 @@
       "deleteCategories": "Kategorien löschen",
       "closeManageCategories": "Kategorienverwaltung schließen",
       "openLanguageFilter": "Sprachfilter öffnen",
+      "currentLanguage": "Aktuelle Sprache",
       "openModeFilter": "Modusfilter öffnen",
+      "openHelp": "So funktioniert dieser Bildschirm",
       "editThumbnailLabel": "Miniaturbild von {{name}} bearbeiten",
       "deleteCategoryLabel": "{{name}} löschen"
     },
@@ -320,6 +322,15 @@
       "skip": "Überspringen",
       "done": "Verstanden!",
       "openBtn": "Spielanleitung (kurz)"
+    },
+    "guessWalkthrough": {
+      "title": "So funktioniert dieser Bildschirm",
+      "page1": "Wähle eine Kategorie, um mit dem Raten zu beginnen.\n\nJede Karte verbirgt ein Rätsel eines anderen Spielers — wähle eine, um zu beginnen.",
+      "page2": "Das Steuerelement \"{{button}}\" filtert, aus welchen Sprachen die Rätsel stammen.\n\nDer Chip daneben zeigt die Sprache, die du gerade durchschaust.",
+      "page3": "Wechsle mit \"{{button}}\" zwischen Punkt- und Formrätseln.\n\nGruppenbesitzer können über die Schaltflächen + und Verwalten eigene Kategorien hinzufügen und verwalten.",
+      "next": "Weiter",
+      "skip": "Überspringen",
+      "done": "Verstanden!"
     }
   },
   "auth": {
@@ -586,6 +597,7 @@
       "switchToPublic": "Zum öffentlichen Modus wechseln",
       "switchToPrivate": "Zum privaten Modus wechseln",
       "tutorial": "Tutorial",
+      "guessWalkthrough": "Anleitung zum Rate-Bildschirm",
       "moreOptions": "Weitere Optionen",
       "switchFailed": "Moduswechsel fehlgeschlagen."
     }

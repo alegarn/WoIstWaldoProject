@@ -9,6 +9,7 @@ import { handleOrientation } from '../utils/orientation';
 import { AuthContext } from '../store/auth-context';
 import { getScoreId } from '../utils/auth';
 import { isTutorialFinished } from '../utils/tutorialHandler';
+import { getQuickTutorialSeen, setQuickTutorialSeen } from '../utils/storageDatum';
 
 import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
@@ -74,16 +75,25 @@ export default function HomeScreen({ navigation, route }) {
     return null;
   };
  */
-  const handleTutorialModalToShow = (isTutorial, guessPathDone, hidePathDone) => {
+  const handleTutorialModalToShow = async (isTutorial, guessPathDone, hidePathDone) => {
 
     // Not doing the tutorial yet
     if ((isTutorial === true) && (route?.params?.isTutorial === undefined)) {
-      // First connect: quick tutorial first, welcome modal follows via handleQuickTutorialDone
-      if (quickTutorialShownRef.current !== true) {
+      // First connect: quick tutorial once per device, welcome modal follows via handleQuickTutorialDone
+      let quickTutorialSeen = false;
+      try {
+        quickTutorialSeen = (await getQuickTutorialSeen()) === true;
+      } catch {
+        quickTutorialSeen = false;
+      };
+      if (quickTutorialShownRef.current !== true && quickTutorialSeen !== true) {
         quickTutorialShownRef.current = true;
+        setQuickTutorialSeen(true).catch(() => {});
         setQuickTutorialFromWelcome(true);
         setShowQuickTutorial(true);
+        return;
       };
+      setShowModal(true);
       return;
     };
 
@@ -100,11 +110,11 @@ export default function HomeScreen({ navigation, route }) {
 
   };
 
-  const isTutorialNeeded = () => {
+  const isTutorialNeeded = async () => {
     const isTutorial = context.isTutorialFinished?.isTutorial;
     const guessPathDone = context.isTutorialFinished?.guessPathDone;
     const hidePathDone = context.isTutorialFinished?.hidePathDone;
-    isTutorial && handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
+    isTutorial && await handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
   };
 
   /* Functions _______________________________ */

@@ -27,6 +27,11 @@ type MockTutorialOverlayProps = {
   instructionsPosition?: { top: number; left: number };
 };
 
+type MockCategoryWalkthroughProps = {
+  visible?: boolean;
+  onDone?: () => void;
+};
+
 type PrivateCategory = {
   id: string;
   key: string;
@@ -41,6 +46,7 @@ type FocusEffectCallback = () => void | (() => void);
 
 const mockGuessCategoryCard = jest.fn((_props: MockCardProps) => null);
 const mockTutorialOverlay = jest.fn((_props: MockTutorialOverlayProps) => null);
+const mockCategoryWalkthrough = jest.fn((_props: MockCategoryWalkthroughProps) => null);
 const mockIconButton = jest.fn((_props: MockIconButtonProps) => null);
 const mockUseGroupsHub = jest.fn();
 const mockFocusEffects = new Set<FocusEffectCallback>();
@@ -77,12 +83,25 @@ jest.mock('../components/UI/TutorialOverlay', () => {
   };
 });
 
+jest.mock('../components/UI/CategoryWalkthrough', () => {
+  return function MockCategoryWalkthrough(props: MockCategoryWalkthroughProps) {
+    mockCategoryWalkthrough(props);
+    return null;
+  };
+});
+
 jest.mock('../components/UI/IconButton', () => {
   return function MockIconButton(props: MockIconButtonProps) {
     mockIconButton(props);
     return null;
   };
 });
+
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  __esModule: true,
+  default: () => null,
+  Ionicons: () => null,
+}));
 
 jest.mock('../hooks/useGroupsHub', () => ({
   useGroupsHub: (...args: unknown[]) => mockUseGroupsHub(...args),
@@ -98,6 +117,8 @@ jest.mock('../utils/storageDatum', () => ({
   saveSessionLanguageFilter: (...args: unknown[]) => mockSaveSessionLanguageFilter(...args),
   getSessionModeFilter: (...args: unknown[]) => mockGetSessionModeFilter(...args),
   saveSessionModeFilter: (...args: unknown[]) => mockSaveSessionModeFilter(...args),
+  getGuessPathWalkthroughSeen: (...args: unknown[]) => mockGetGuessPathWalkthroughSeen(...args),
+  setGuessPathWalkthroughSeen: (...args: unknown[]) => mockSetGuessPathWalkthroughSeen(...args),
 }));
 
 jest.mock('../utils/e2eMode', () => ({
@@ -141,6 +162,8 @@ const mockGetSessionLanguageFilter = jest.fn();
 const mockSaveSessionLanguageFilter = jest.fn();
 const mockGetSessionModeFilter = jest.fn();
 const mockSaveSessionModeFilter = jest.fn();
+const mockGetGuessPathWalkthroughSeen = jest.fn();
+const mockSetGuessPathWalkthroughSeen = jest.fn();
 const mockIsE2EMode = jest.fn();
 const mockCreateGroupCategory = jest.fn();
 const mockUpdateGroupCategory = jest.fn();
@@ -203,6 +226,7 @@ describe('GuessPathScreen', () => {
     popToTop: jest.Mock;
     goBack: jest.Mock;
     setOptions: jest.Mock;
+    setParams: jest.Mock;
   };
   let alertSpy: jest.SpyInstance;
   let dimensionsGetSpy: jest.SpyInstance;
@@ -231,9 +255,11 @@ describe('GuessPathScreen', () => {
     mockSaveSessionLanguageFilter.mockResolvedValue(undefined);
     mockGetSessionModeFilter.mockResolvedValue(null);
     mockSaveSessionModeFilter.mockResolvedValue(undefined);
+    mockGetGuessPathWalkthroughSeen.mockResolvedValue(false);
+    mockSetGuessPathWalkthroughSeen.mockResolvedValue(null);
     mockUseGroupsHub.mockReturnValue({ data: null, refresh: jest.fn() });
     emitCategoriesViaStore([]);
-    navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn(), setOptions: jest.fn() };
+    navigation = { navigate: jest.fn(), popToTop: jest.fn(), goBack: jest.fn(), setOptions: jest.fn(), setParams: jest.fn() };
   });
 
   afterEach(async () => {
@@ -259,7 +285,13 @@ describe('GuessPathScreen', () => {
   }
 
   async function renderScreen(
-    route: { params?: { isTutorial?: boolean; scope?: { kind: 'private'; groupId: string } } } = { params: {} }
+    route: {
+      params?: {
+        isTutorial?: boolean;
+        showWalkthrough?: boolean;
+        scope?: { kind: 'private'; groupId: string };
+      };
+    } = { params: {} }
   ) {
     let renderer!: ReactTestRenderer;
 
@@ -295,13 +327,6 @@ describe('GuessPathScreen', () => {
     return undefined;
   }
 
-  function getDetailsButtonProps(): MockIconButtonProps | undefined {
-    const call = mockIconButton.mock.calls.find(
-      ([props]) => props.testID === 'guess-path.button.details'
-    );
-    return call?.[0];
-  }
-
   function getModeButtonProps(): MockIconButtonProps | undefined {
     const call = mockIconButton.mock.calls.find(
       ([props]) => props.testID === 'guess-path.button.mode'
@@ -328,6 +353,22 @@ describe('GuessPathScreen', () => {
       ([props]) => props.testID === 'guess-path.button.manage'
     );
     return call?.[0];
+  }
+
+  function getHelpButtonProps(): MockIconButtonProps | undefined {
+    const call = mockIconButton.mock.calls.find(
+      ([props]) => props.testID === 'guess-path.button.help'
+    );
+    return call?.[0];
+  }
+
+  function getWalkthroughProps(): MockCategoryWalkthroughProps | undefined {
+    const calls = mockCategoryWalkthrough.mock.calls;
+    return calls[calls.length - 1]?.[0];
+  }
+
+  function wasWalkthroughEverVisible(): boolean {
+    return mockCategoryWalkthrough.mock.calls.some(([props]) => props.visible === true);
   }
 
   function getDeleteButtonProps(categoryId: string): MockIconButtonProps | undefined {
@@ -688,6 +729,9 @@ describe('GuessPathScreen', () => {
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
         .children
     ).toBe('en');
+
+    const chip = renderer.root.findByProps({ testID: 'guess-path.filter.language.chip' });
+    expect(chip.props.children).toBe('EN');
   });
 
   it('opens the language filter modal when the details button is tapped', async () => {
@@ -698,7 +742,7 @@ describe('GuessPathScreen', () => {
     ).toThrow();
 
     await act(async () => {
-      getDetailsButtonProps()!.onPress();
+      renderer.root.findByProps({ testID: 'guess-path.button.details' }).props.onPress();
     });
 
     expect(
@@ -713,7 +757,7 @@ describe('GuessPathScreen', () => {
     const renderer = await renderScreen();
 
     await act(async () => {
-      getDetailsButtonProps()!.onPress();
+      renderer.root.findByProps({ testID: 'guess-path.button.details' }).props.onPress();
     });
 
     expect(
@@ -731,6 +775,9 @@ describe('GuessPathScreen', () => {
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
         .children
     ).toBe('fr');
+
+    const chip = renderer.root.findByProps({ testID: 'guess-path.filter.language.chip' });
+    expect(chip.props.children).toBe('FR');
   });
 
   it('renders the mode filter button beside the language filter with the openModeFilter label', async () => {
@@ -1616,5 +1663,108 @@ describe('GuessPathScreen', () => {
     });
 
     expect(mockDeleteGroupCategory).toHaveBeenCalledTimes(1);
+  });
+
+  describe('category walkthrough', () => {
+    it('auto-shows the walkthrough once and persists the seen flag when unseen', async () => {
+      const renderer = await renderScreen();
+
+      expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledWith(true);
+      expect(getWalkthroughProps()?.visible).toBe(true);
+
+      await act(async () => {
+        getWalkthroughProps()?.onDone?.();
+      });
+
+      expect(getWalkthroughProps()?.visible).toBe(false);
+      expect(renderer).toBeDefined();
+    });
+
+    it('never auto-shows the walkthrough when the seen flag is true', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
+
+      await renderScreen();
+
+      expect(wasWalkthroughEverVisible()).toBe(false);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('never auto-shows the walkthrough during an active tutorial and keeps the overlays from co-rendering', async () => {
+      await renderScreen({ params: { isTutorial: true } });
+
+      expect(mockTutorialOverlay).toHaveBeenCalledWith(
+        expect.objectContaining({ screen: 'GuessPathScreen' })
+      );
+      expect(wasWalkthroughEverVisible()).toBe(false);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('never auto-shows the walkthrough in e2e mode', async () => {
+      mockIsE2EMode.mockReturnValue(true);
+
+      await renderScreen();
+
+      expect(wasWalkthroughEverVisible()).toBe(false);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('auto-shows via the showWalkthrough param even when seen, without writing the flag', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
+
+      await renderScreen({ params: { showWalkthrough: true } });
+
+      expect(wasWalkthroughEverVisible()).toBe(true);
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(navigation.setParams).toHaveBeenCalledWith({ showWalkthrough: undefined });
+    });
+
+    it('renders the help button that reopens the walkthrough without touching the seen flag', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
+
+      await renderScreen();
+
+      const helpButton = getHelpButtonProps();
+
+      expect(helpButton).toBeDefined();
+      expect(helpButton?.icon).toBe('help-circle-outline');
+
+      await act(async () => {
+        helpButton?.onPress();
+      });
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('does not write the seen flag when unmounted before the getter resolves', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+      let renderer!: ReactTestRenderer;
+
+      try {
+        await act(async () => {
+          renderer = create(
+            <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
+              <GuessPathScreen navigation={navigation} route={{ params: {} }} />
+            </AuthContext.Provider>
+          );
+          renderer.unmount();
+        });
+
+        await flushEffects();
+
+        expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+        expect(
+          errorSpy.mock.calls.some((args) =>
+            args.some((arg) => String(arg).includes('state update'))
+          )
+        ).toBe(false);
+      } finally {
+        errorSpy.mockRestore();
+      }
+    });
   });
 });

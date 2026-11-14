@@ -49,6 +49,12 @@ jest.mock('@react-native-vector-icons/ionicons', () => ({
   default: () => null,
 }));
 
+jest.mock('../utils/storageDatum', () => ({
+  getQuickTutorialSeen: jest.fn(() => Promise.resolve(false)),
+  setQuickTutorialSeen: jest.fn(() => Promise.resolve(null)),
+  wipePublicGuessStorage: jest.fn(() => Promise.resolve(null)),
+}));
+
 import React from 'react';
 import { Alert, ScrollView } from 'react-native';
 import axios from 'axios';
@@ -57,6 +63,7 @@ import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import { AuthContext } from '../store/auth-context';
+import { getQuickTutorialSeen } from '../utils/storageDatum';
 
 const WELCOME_MODAL_TEXT = /Welcome, do you want to do the tutorial/;
 const QUICK_TUTORIAL_TITLE = 'How to play';
@@ -106,6 +113,7 @@ async function finishQuickTutorial(screen) {
 describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    getQuickTutorialSeen.mockResolvedValue(false);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     ScreenOrientation.getOrientationAsync.mockResolvedValue(1);
   });
@@ -167,6 +175,45 @@ describe('HomeScreen', () => {
     expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
 
     await finishQuickTutorial(screen);
+
+    expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
+    expect(screen.getByText(WELCOME_MODAL_TEXT)).toBeTruthy();
+  });
+
+  it('keeps the quick-then-welcome chain when reading the seen flag fails', async () => {
+    getQuickTutorialSeen.mockRejectedValue(new Error('storage unavailable'));
+
+    const screen = await renderHomeScreen({
+      contextOverrides: {
+        isTutorialFinished: {
+          isTutorial: true,
+          guessPathDone: false,
+          hidePathDone: false,
+        },
+      },
+    });
+
+    expect(screen.getByText(QUICK_TUTORIAL_TITLE)).toBeTruthy();
+    expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
+
+    await finishQuickTutorial(screen);
+
+    expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
+    expect(screen.getByText(WELCOME_MODAL_TEXT)).toBeTruthy();
+  });
+
+  it('offers the full tutorial directly when the quick tutorial was already shown once', async () => {
+    getQuickTutorialSeen.mockResolvedValue(true);
+
+    const screen = await renderHomeScreen({
+      contextOverrides: {
+        isTutorialFinished: {
+          isTutorial: true,
+          guessPathDone: false,
+          hidePathDone: false,
+        },
+      },
+    });
 
     expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
     expect(screen.getByText(WELCOME_MODAL_TEXT)).toBeTruthy();

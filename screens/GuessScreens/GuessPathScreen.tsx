@@ -14,9 +14,11 @@ import {
 } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import Ionicons from '@react-native-vector-icons/ionicons';
 
 import { GlobalStyle } from '../../constants/theme';
 import GuessCategoryCard from '../../components/UI/GuessCategoryCard';
+import CategoryWalkthrough from '../../components/UI/CategoryWalkthrough';
 import TutorialOverlayDefault from '../../components/UI/TutorialOverlay';
 import IconButtonDefault from '../../components/UI/IconButton';
 import ButtonDefault from '../../components/UI/Button';
@@ -31,6 +33,8 @@ import {
   saveSessionLanguageFilter,
   getSessionModeFilter,
   saveSessionModeFilter,
+  getGuessPathWalkthroughSeen,
+  setGuessPathWalkthroughSeen,
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
 import { ANY_FILTER, loadSessionFilter } from '../../utils/sessionFilter';
@@ -132,6 +136,7 @@ type GuessPathCategory = {
 
 type GuessPathRouteParams = {
   isTutorial?: boolean;
+  showWalkthrough?: boolean;
   scope?: PrivateScope;
 };
 
@@ -139,6 +144,7 @@ type GuessPathNavigation = {
   navigate(name: 'GuessFeedScreen', params?: Record<string, unknown>): void;
   popToTop(): void;
   setOptions(options: { headerStyle?: { backgroundColor?: string }; headerTintColor?: string }): void;
+  setParams(params: Record<string, unknown>): void;
 };
 
 type GuessPathScreenProps = {
@@ -236,6 +242,7 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const [isPickingCreateThumbnail, setIsPickingCreateThumbnail] = useState(false);
   const [manageMode, setManageMode] = useState<'update' | 'delete' | null>(null);
   const [isManageModalVisible, setIsManageModalVisible] = useState(false);
+  const [walkthroughVisible, setWalkthroughVisible] = useState(false);
   const lateAttachRef = useRef<LateAttachState>({ createdCategoryId: null, pendingImageId: null });
 
   const isTutorial = route?.params?.isTutorial;
@@ -329,6 +336,30 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
       isCancelled: () => cancelled,
     });
 
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (route?.params?.showWalkthrough === true) {
+      navigation.setParams({ showWalkthrough: undefined });
+      setWalkthroughVisible(true);
+      return;
+    }
+    if (route?.params?.isTutorial || isE2EMode()) {
+      return;
+    }
+    let cancelled = false;
+    getGuessPathWalkthroughSeen()
+      .then((seen) => {
+        if (cancelled || seen) {
+          return;
+        }
+        setGuessPathWalkthroughSeen(true).catch(() => {});
+        setWalkthroughVisible(true);
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -602,14 +633,26 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
                 accessibilityLabel={t('guess.path.manageCategories')}
               />
             )}
-            <IconButton
-              icon="ellipsis-horizontal"
-              color="GlobalStyle.color.tertiaryColor900"
-              size={24}
-              onPress={() => setIsFilterModalVisible(true)}
-              testID="guess-path.button.details"
+            <Pressable
               accessibilityLabel={t('guess.path.openLanguageFilter')}
-            />
+              accessibilityRole="button"
+              onPress={() => setIsFilterModalVisible(true)}
+              style={styles.languageButton}
+              testID="guess-path.button.details"
+            >
+              <Ionicons
+                name="language-outline"
+                size={24}
+                color={GlobalStyle.color.tertiaryColor900}
+              />
+              <Text
+                style={styles.languageChip}
+                testID="guess-path.filter.language.chip"
+                accessibilityLabel={t('guess.path.currentLanguage')}
+              >
+                {resolvedLanguage.toUpperCase()}
+              </Text>
+            </Pressable>
             <IconButton
               icon="shapes-outline"
               color="GlobalStyle.color.tertiaryColor900"
@@ -617,6 +660,14 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
               onPress={() => setIsModeFilterModalVisible(true)}
               testID="guess-path.button.mode"
               accessibilityLabel={t('guess.path.openModeFilter')}
+            />
+            <IconButton
+              icon="help-circle-outline"
+              color={GlobalStyle.color.tertiaryColor900}
+              size={24}
+              onPress={() => setWalkthroughVisible(true)}
+              testID="guess-path.button.help"
+              accessibilityLabel={t('guess.path.openHelp')}
             />
           </View>
         </View>
@@ -701,6 +752,11 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
         onClose={() => setIsModeFilterModalVisible(false)}
         testIDPrefix="guess-path.filter.mode"
         visible={isModeFilterModalVisible}
+      />
+
+      <CategoryWalkthrough
+        visible={walkthroughVisible}
+        onDone={() => setWalkthroughVisible(false)}
       />
 
       <CenteredModal
@@ -823,6 +879,19 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  languageButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 6,
+    borderRadius: 8,
+  },
+  languageChip: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: GlobalStyle.color.tertiaryColor900,
   },
   manageBanner: {
     flexDirection: 'row',

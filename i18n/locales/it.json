@@ -231,7 +231,9 @@
       "deleteCategories": "Elimina categorie",
       "closeManageCategories": "Chiudi gestione categorie",
       "openLanguageFilter": "Apri filtro lingua",
+      "currentLanguage": "Lingua attuale",
       "openModeFilter": "Apri filtro modalità",
+      "openHelp": "Come funziona questa schermata",
       "editThumbnailLabel": "Modifica miniatura di {{name}}",
       "deleteCategoryLabel": "Elimina {{name}}"
     },
@@ -320,6 +322,15 @@
       "skip": "Salta",
       "done": "Capito!",
       "openBtn": "Come si gioca (veloce)"
+    },
+    "guessWalkthrough": {
+      "title": "Come funziona questa schermata",
+      "page1": "Scegli una categoria per iniziare a indovinare.\n\nOgni carta nasconde un enigma creato da un altro giocatore: scegline una per iniziare.",
+      "page2": "Il controllo \"{{button}}\" filtra da quali lingue provengono gli enigmi.\n\nIl chip accanto mostra la lingua che stai sfogliando.",
+      "page3": "Passa dagli enigmi a punti a quelli a forme con \"{{button}}\".\n\nI proprietari dei gruppi possono aggiungere e gestire le proprie categorie con i pulsanti + e gestisci.",
+      "next": "Avanti",
+      "skip": "Salta",
+      "done": "Capito!"
     }
   },
   "auth": {
@@ -586,6 +597,7 @@
       "switchToPublic": "Passa alla modalità pubblica",
       "switchToPrivate": "Passa alla modalità privata",
       "tutorial": "Tutorial",
+      "guessWalkthrough": "Guida alla schermata di indovina",
       "moreOptions": "Altre opzioni",
       "switchFailed": "Impossibile cambiare modalità."
     }

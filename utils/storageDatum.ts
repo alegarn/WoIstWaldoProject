@@ -19,6 +19,8 @@ const SESSION_MODE_FILTER_KEY = 'sessionModeFilter';
 const PREFERRED_LANGUAGE_KEY = 'preferredLanguage';
 const UI_LOCALE_KEY = 'uiLocale';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
+const GUESS_PATH_WALKTHROUGH_SEEN_KEY = 'guessPathWalkthroughSeen';
+const QUICK_TUTORIAL_SEEN_KEY = 'quickTutorialSeen';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
 export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
@@ -564,6 +566,26 @@ export async function getOnboardingCompleted(): Promise<boolean> {
 
 export async function setOnboardingCompleted(value: boolean): Promise<null> {
   await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+export async function getGuessPathWalkthroughSeen(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY);
+  return stored === 'true';
+}
+
+export async function setGuessPathWalkthroughSeen(value: boolean): Promise<null> {
+  await AsyncStorage.setItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+export async function getQuickTutorialSeen(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(QUICK_TUTORIAL_SEEN_KEY);
+  return stored === 'true';
+}
+
+export async function setQuickTutorialSeen(value: boolean): Promise<null> {
+  await AsyncStorage.setItem(QUICK_TUTORIAL_SEEN_KEY, value ? 'true' : 'false');
   return null;
 }
 

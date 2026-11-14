@@ -2,7 +2,7 @@ import { Image as ReactNativeImage } from 'react-native';
 
 import { RANKING as DUMMY_RANKING } from '../data/dummy-data';
 import ImageModel from '../models/image';
-import { savePreferredLanguage, setOnboardingCompleted } from './storageDatum';
+import { savePreferredLanguage, setGuessPathWalkthroughSeen, setOnboardingCompleted, setQuickTutorialSeen } from './storageDatum';
 import { getCategoryAsset } from './categoryAssets';
 import { handlePicturePress } from './targetLocation';
 
@@ -175,6 +175,8 @@ export async function ensureE2EOnboardingBypass() {
   await Promise.all([
     savePreferredLanguage('en'),
     setOnboardingCompleted(true),
+    setGuessPathWalkthroughSeen(true),
+    setQuickTutorialSeen(true),
   ]);
 
   return true;

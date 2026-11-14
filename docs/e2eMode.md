@@ -33,6 +33,13 @@ When the backend is unavailable or needs to be static for a test:
 - **Mock Rankings**: `buildE2ERankingResponse()` provides fake leaderboard data.
 - **Mock User Scores**: `buildE2EUserScores()` returns predictable stats.
 
+### 4. Onboarding bypass (`ensureE2EOnboardingBypass`)
+Called once at app boot (`App.tsx`), this bypass writes deterministic onboarding state so automated runs never see first-visit modals:
+- **Pinned UI locale**: `savePreferredLanguage('en')`.
+- **Onboarding completed**: `setOnboardingCompleted(true)`.
+- **Guess-path walkthrough seen**: `setGuessPathWalkthroughSeen(true)` — the paged category walkthrough on `GuessPathScreen` never auto-shows in E2E mode (an in-screen `isE2EMode()` guard provides a second layer).
+- **Quick tutorial seen**: `setQuickTutorialSeen(true)` — the home quick-tutorial modal never shows in E2E mode.
+
 ## Practical Usage in Tests
 When writing a Maestro flow:
 1. Ensure the app is built with `EXPO_PUBLIC_E2E_MODE=true`.

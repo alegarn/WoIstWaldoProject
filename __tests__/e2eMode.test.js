@@ -11,6 +11,8 @@ jest.mock('react-native', () => ({
 jest.mock('../utils/storageDatum', () => ({
   savePreferredLanguage: jest.fn(() => Promise.resolve(null)),
   setOnboardingCompleted: jest.fn(() => Promise.resolve(null)),
+  setGuessPathWalkthroughSeen: jest.fn(() => Promise.resolve(null)),
+  setQuickTutorialSeen: jest.fn(() => Promise.resolve(null)),
 }));
 
 import {
@@ -29,12 +31,14 @@ import {
   buildE2ERankingResponse,
   buildE2ERankingRows,
   buildE2EUserScores,
+  ensureE2EOnboardingBypass,
   getE2EAdDelayMs,
   getE2EIncorrectHideLocation,
   getE2EShapeOutline,
   isE2EMode,
 } from '../utils/e2eMode';
 import { isWinningTrace } from '../utils/shapeMatch';
+import { setGuessPathWalkthroughSeen, setQuickTutorialSeen } from '../utils/storageDatum';
 
 describe('e2eMode helpers', () => {
   const originalE2EMode = process.env.EXPO_PUBLIC_E2E_MODE;
@@ -321,6 +325,20 @@ describe('e2eMode helpers', () => {
 
     expect(isE2EMode()).toBe(true);
     expect(getE2EAdDelayMs()).toBe(0);
+  });
+
+  it('marks the guess-path walkthrough seen during the e2e onboarding bypass only', async () => {
+    expect(await ensureE2EOnboardingBypass()).toBe(false);
+    expect(setGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    expect(setQuickTutorialSeen).not.toHaveBeenCalled();
+
+    process.env.EXPO_PUBLIC_E2E_MODE = 'true';
+
+    expect(await ensureE2EOnboardingBypass()).toBe(true);
+    expect(setGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+    expect(setGuessPathWalkthroughSeen).toHaveBeenCalledWith(true);
+    expect(setQuickTutorialSeen).toHaveBeenCalledTimes(1);
+    expect(setQuickTutorialSeen).toHaveBeenCalledWith(true);
   });
 
   it('builds a deterministic e2e image rating with snake_case keys', () => {

@@ -10,7 +10,7 @@ import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
 import { GlobalStyle } from '../../constants/theme';
 
-export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
+export function HomeHeaderRight({ navigation, tintColor, onStartTutorial, onOpenGuessWalkthrough }) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const authContext = useContext(AuthContext);
@@ -85,6 +85,13 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial }) {
       icon: 'book',
       testID: 'home.menu.tutorial',
       onPress: select(() => onStartTutorial?.()),
+    },
+    {
+      key: 'guess-walkthrough',
+      label: t('groups.menu.guessWalkthrough'),
+      icon: 'help-circle-outline',
+      testID: 'home.menu.guess-walkthrough',
+      onPress: select(() => onOpenGuessWalkthrough?.()),
     },
   ];
 
