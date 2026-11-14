@@ -231,7 +231,9 @@
       "deleteCategories": "删除类别",
       "closeManageCategories": "关闭类别管理",
       "openLanguageFilter": "打开语言筛选",
+      "currentLanguage": "当前语言",
       "openModeFilter": "打开模式筛选",
+      "openHelp": "本屏幕使用说明",
       "editThumbnailLabel": "编辑 {{name}} 的缩略图",
       "deleteCategoryLabel": "删除 {{name}}"
     },
@@ -319,6 +321,15 @@
       "skip": "跳过",
       "done": "明白了！",
       "openBtn": "玩法简介"
+    },
+    "guessWalkthrough": {
+      "title": "本屏幕使用说明",
+      "page1": "选择一个分类即可开始猜谜。\n\n每张卡片都藏着其他玩家创作的谜题——选一张开始吧。",
+      "page2": "“{{button}}”控件可筛选谜题来源的语言。\n\n旁边的标签显示你当前浏览的语言。",
+      "page3": "使用“{{button}}”可在点谜题和形状谜题之间切换。\n\n群组所有者可以通过 + 按钮和管理按钮添加并管理自己的分类。",
+      "next": "下一步",
+      "skip": "跳过",
+      "done": "明白了！"
     }
   },
   "auth": {
@@ -585,6 +596,7 @@
       "switchToPublic": "切换到公开",
       "switchToPrivate": "切换到私人",
       "tutorial": "教程",
+      "guessWalkthrough": "猜谜屏幕使用指南",
       "moreOptions": "更多选项",
       "switchFailed": "无法切换模式。"
     }

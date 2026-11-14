@@ -231,7 +231,9 @@
       "deleteCategories": "カテゴリーを削除",
       "closeManageCategories": "カテゴリー管理を閉じる",
       "openLanguageFilter": "言語フィルターを開く",
+      "currentLanguage": "現在の言語",
       "openModeFilter": "モードフィルターを開く",
+      "openHelp": "この画面の使い方",
       "editThumbnailLabel": "{{name}} のサムネイルを編集",
       "deleteCategoryLabel": "{{name}} を削除"
     },
@@ -319,6 +321,15 @@
       "skip": "スキップ",
       "done": "わかった！",
       "openBtn": "遊び方（クイック）"
+    },
+    "guessWalkthrough": {
+      "title": "この画面の使い方",
+      "page1": "カテゴリーを選ぶと、当てゲームが始まります。\n\n各カードには他のプレイヤーが作ったなぞなぞが隠されています。1つ選んで始めましょう。",
+      "page2": "「{{button}}」で、なぞなぞの元になる言語を絞り込めます。\n\n隣のチップには、現在閲覧している言語が表示されます。",
+      "page3": "「{{button}}」で、ドットなぞなぞとシェイプなぞなぞを切り替えられます。\n\nグループのオーナーは、+ ボタンと管理ボタンから自分のカテゴリーを追加・管理できます。",
+      "next": "次へ",
+      "skip": "スキップ",
+      "done": "わかった！"
     }
   },
   "auth": {
@@ -585,6 +596,7 @@
       "switchToPublic": "パブリックに切り替え",
       "switchToPrivate": "プライベートに切り替え",
       "tutorial": "チュートリアル",
+      "guessWalkthrough": "クイズ画面の使い方",
       "moreOptions": "その他のオプション",
       "switchFailed": "モードを切り替えられませんでした。"
     }

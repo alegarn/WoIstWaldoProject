@@ -231,7 +231,9 @@
       "deleteCategories": "Hapus kategori",
       "closeManageCategories": "Tutup kelola kategori",
       "openLanguageFilter": "Buka filter bahasa",
+      "currentLanguage": "Bahasa saat ini",
       "openModeFilter": "Buka filter mode",
+      "openHelp": "Cara kerja layar ini",
       "editThumbnailLabel": "Edit gambar mini {{name}}",
       "deleteCategoryLabel": "Hapus {{name}}"
     },
@@ -319,6 +321,15 @@
       "skip": "Lewati",
       "done": "Mengerti!",
       "openBtn": "Cara bermain (singkat)"
+    },
+    "guessWalkthrough": {
+      "title": "Cara kerja layar ini",
+      "page1": "Pilih kategori untuk mulai menebak.\n\nSetiap kartu menyembunyikan teka-teki buatan pemain lain — pilih satu untuk mulai.",
+      "page2": "Kontrol \"{{button}}\" menyaring bahasa asal teka-teki.\n\nChip di sebelahnya menampilkan bahasa yang sedang kamu jelajahi.",
+      "page3": "Beralih antara teka-teki titik dan teka-teki bentuk dengan \"{{button}}\".\n\nPemilik grup dapat menambahkan dan mengelola kategori mereka sendiri dengan tombol + dan kelola.",
+      "next": "Lanjut",
+      "skip": "Lewati",
+      "done": "Mengerti!"
     }
   },
   "auth": {
@@ -585,6 +596,7 @@
       "switchToPublic": "Beralih ke publik",
       "switchToPrivate": "Beralih ke privat",
       "tutorial": "Tutorial",
+      "guessWalkthrough": "Panduan layar tebak",
       "moreOptions": "Opsi lainnya",
       "switchFailed": "Gagal mengganti mode."
     }

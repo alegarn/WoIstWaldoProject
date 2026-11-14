@@ -69,6 +69,7 @@ import {
   exhaustedCategoryKey,
   getDeckCountForScope,
   getE2EHiddenGuessCard,
+  getGuessPathWalkthroughSeen,
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
@@ -77,6 +78,7 @@ import {
   getNextImagesForScope,
   getOnboardingCompleted,
   getPreferredLanguage,
+  getQuickTutorialSeen,
   getRemainingDeckCount,
   getSessionLanguageFilter,
   getSessionModeFilter,
@@ -91,7 +93,9 @@ import {
   saveSessionLanguageFilter,
   saveSessionModeFilter,
   saveUserTag,
+  setGuessPathWalkthroughSeen,
   setOnboardingCompleted,
+  setQuickTutorialSeen,
   storeImageList,
   sweepPlayedOrphanCacheFiles,
   updateImageList,
@@ -281,6 +285,40 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     expect(await getOnboardingCompleted()).toBe(false);
+  });
+
+  it('stores the guess path walkthrough seen flag as string booleans and treats missing values as false', async () => {
+    await setGuessPathWalkthroughSeen(true);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('guessPathWalkthroughSeen', 'true');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('true');
+    expect(await getGuessPathWalkthroughSeen()).toBe(true);
+
+    await setGuessPathWalkthroughSeen(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('guessPathWalkthroughSeen', 'false');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('false');
+    expect(await getGuessPathWalkthroughSeen()).toBe(false);
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getGuessPathWalkthroughSeen()).toBe(false);
+  });
+
+  it('stores the quick tutorial seen flag as string booleans and treats missing values as false', async () => {
+    await setQuickTutorialSeen(true);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('quickTutorialSeen', 'true');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('true');
+    expect(await getQuickTutorialSeen()).toBe(true);
+
+    await setQuickTutorialSeen(false);
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith('quickTutorialSeen', 'false');
+
+    AsyncStorage.getItem.mockResolvedValueOnce('false');
+    expect(await getQuickTutorialSeen()).toBe(false);
+
+    AsyncStorage.getItem.mockResolvedValueOnce(null);
+    expect(await getQuickTutorialSeen()).toBe(false);
   });
 
   it('reads saved user tags and falls back to an empty list when unset or invalid', async () => {

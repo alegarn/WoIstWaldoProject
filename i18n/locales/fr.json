@@ -231,7 +231,9 @@
       "deleteCategories": "Supprimer les catégories",
       "closeManageCategories": "Fermer la gestion des catégories",
       "openLanguageFilter": "Ouvrir le filtre de langue",
+      "currentLanguage": "Langue actuelle",
       "openModeFilter": "Ouvrir le filtre de mode",
+      "openHelp": "Comment fonctionne cet écran",
       "editThumbnailLabel": "Modifier la miniature de {{name}}",
       "deleteCategoryLabel": "Supprimer {{name}}"
     },
@@ -320,6 +322,15 @@
       "skip": "Passer",
       "done": "Compris !",
       "openBtn": "Comment jouer (rapide)"
+    },
+    "guessWalkthrough": {
+      "title": "Comment fonctionne cet écran",
+      "page1": "Choisissez une catégorie pour commencer à deviner.\n\nChaque carte cache une énigme créée par un autre joueur — choisissez-en une pour commencer.",
+      "page2": "Le contrôle \"{{button}}\" filtre la langue d'origine des énigmes.\n\nLe chip à côté affiche la langue que vous parcourez actuellement.",
+      "page3": "Passez des énigmes à points aux énigmes à formes avec \"{{button}}\".\n\nLes propriétaires de groupes peuvent ajouter et gérer leurs propres catégories avec les boutons + et gérer.",
+      "next": "Suivant",
+      "skip": "Passer",
+      "done": "Compris !"
     }
   },
   "auth": {
@@ -586,6 +597,7 @@
       "switchToPublic": "Passer au mode public",
       "switchToPrivate": "Passer au mode privé",
       "tutorial": "Tutoriel",
+      "guessWalkthrough": "Guide de l'écran de devinette",
       "moreOptions": "Plus d'options",
       "switchFailed": "Impossible de changer de mode."
     }

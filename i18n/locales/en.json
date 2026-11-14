@@ -231,7 +231,9 @@
       "deleteCategories": "Delete categories",
       "closeManageCategories": "Close manage categories",
       "openLanguageFilter": "Open language filter",
+      "currentLanguage": "Current language",
       "openModeFilter": "Open mode filter",
+      "openHelp": "How this screen works",
       "editThumbnailLabel": "Edit {{name}} thumbnail",
       "deleteCategoryLabel": "Delete {{name}}"
     },
@@ -320,6 +322,15 @@
       "skip": "Skip",
       "done": "Got it!",
       "openBtn": "How to play (quick)"
+    },
+    "guessWalkthrough": {
+      "title": "How this screen works",
+      "page1": "Pick a category to start guessing.\n\nEach card hides an enigma made by another player — choose one to begin.",
+      "page2": "The \"{{button}}\" control filters which language the enigmas come from.\n\nThe chip beside it shows the language you are currently browsing.",
+      "page3": "Switch between point and shape enigmas with \"{{button}}\".\n\nGroup owners can add and manage their own categories with the + and manage buttons.",
+      "next": "Next",
+      "skip": "Skip",
+      "done": "Got it!"
     }
   },
   "auth": {
@@ -586,6 +597,7 @@
       "switchToPublic": "Switch to public",
       "switchToPrivate": "Switch to private",
       "tutorial": "Tutorial",
+      "guessWalkthrough": "Guess screen how-to",
       "moreOptions": "More options",
       "switchFailed": "Could not switch scope."
     }

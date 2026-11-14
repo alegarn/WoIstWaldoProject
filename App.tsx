@@ -200,6 +200,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
                   navigation={navigation}
                   tintColor={tintColor}
                   onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
+                  onOpenGuessWalkthrough={() => navigation.navigate('GuessPathScreen', { showWalkthrough: true })}
                 />
                 <IconButton
                   accessibilityLabel={t('app.openSettings')}
