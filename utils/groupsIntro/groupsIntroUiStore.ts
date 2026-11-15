@@ -3,21 +3,28 @@
 // one module store, every consumer subscribes/unsubscribes itself.
 // `tapCount` is event-as-state-diff: the Gate diffs it against a lastTapCount
 // ref; phase patches never resemble taps.
-const INITIAL_UI_STATE = { ringPhase: 'off', tapCount: 0 };
+export type GroupsIntroRingPhase = 'off' | 'active' | 'settle';
 
-let latest = { ...INITIAL_UI_STATE };
-const listeners = new Set();
+export type GroupsIntroUiState = {
+  ringPhase: GroupsIntroRingPhase;
+  tapCount: number;
+};
 
-export function getUiState() {
+const INITIAL_UI_STATE: GroupsIntroUiState = { ringPhase: 'off', tapCount: 0 };
+
+let latest: GroupsIntroUiState = { ...INITIAL_UI_STATE };
+const listeners = new Set<(state: GroupsIntroUiState) => void>();
+
+export function getUiState(): GroupsIntroUiState {
   return latest;
 }
 
-export function publish(patch) {
+export function publish(patch: Partial<GroupsIntroUiState>) {
   latest = { ...latest, ...patch };
   listeners.forEach((listener) => listener(latest));
 }
 
-export function subscribe(listener) {
+export function subscribe(listener: (state: GroupsIntroUiState) => void): () => void {
   listeners.add(listener);
   return () => {
     listeners.delete(listener);

@@ -66,6 +66,7 @@ describe('utils/groupsIntro/groupsIntroUiStore', () => {
     const listener = jest.fn();
     subscribe(listener);
     publish({ ringPhase: 'settle', tapCount: 5 });
+    listener.mockClear();
 
     resetGroupsIntroUiStoreForTests();
 
