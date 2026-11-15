@@ -35,7 +35,6 @@ const PULSE_MS = 700;
 
 let fakeLoops;
 let motionSubscriptions;
-let valueSpy;
 let timingSpy;
 let loopSpy;
 
@@ -109,7 +108,6 @@ describe('IconPulseRing', () => {
       return subscription;
     });
 
-    valueSpy = jest.spyOn(Animated, 'Value');
     timingSpy = jest.spyOn(Animated, 'timing');
     loopSpy = jest.spyOn(Animated, 'loop').mockImplementation(makeFakeLoop);
   });
@@ -301,8 +299,14 @@ describe('IconPulseRing', () => {
 
   it('keeps one stable Animated.Value identity across re-renders', async () => {
     const renderer = await renderRing('active');
-    const initialCreateCount = valueSpy.mock.calls.length;
-    expect(initialCreateCount).toBeGreaterThanOrEqual(1);
+
+    // Animated.timing receives the ring's pulse value as its first argument;
+    // every re-armed loop must reuse the SAME instance. The spy records each
+    // timing call, so identity drift (a second `new Animated.Value`) shows up
+    // as differing references here.
+    const initialPulseValue = timingSpy.mock.calls[0][0];
+    const initialTimingCount = timingSpy.mock.calls.length;
+    expect(initialTimingCount).toBeGreaterThanOrEqual(1);
 
     act(() => {
       renderer.update(
@@ -319,7 +323,10 @@ describe('IconPulseRing', () => {
       );
     });
 
-    expect(valueSpy.mock.calls.length).toBe(initialCreateCount);
+    expect(timingSpy.mock.calls.length).toBeGreaterThan(initialTimingCount);
+    for (const [pulseValue] of timingSpy.mock.calls) {
+      expect(pulseValue).toBe(initialPulseValue);
+    }
     renderer.unmount();
   });
 

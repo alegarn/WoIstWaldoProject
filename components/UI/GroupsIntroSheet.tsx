@@ -37,7 +37,7 @@ export default function GroupsIntroSheet({ visible, onOpen, onLater }: GroupsInt
         accessibilityRole="button"
         accessibilityLabel={t('groupsIntro.ctaLater')}
       />
-      <View style={[styles.card, { paddingBottom: insets.bottom }]}>
+      <View style={[styles.card, { paddingBottom: insets.bottom + 12 }]}>
         <Text style={styles.title}>{t('groupsIntro.title')}</Text>
         <Text style={styles.body}>{t('groupsIntro.body')}</Text>
         <Text style={styles.pointer}>{t('groupsIntro.iconPointer')}</Text>
@@ -72,7 +72,7 @@ const styles = StyleSheet.create({
   },
   scrim: {
     position: 'absolute',
-    top: '60%',
+    top: '50%',
     left: 0,
     right: 0,
     bottom: -10,
@@ -87,7 +87,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 24,
     gap: 10,
     alignItems: 'center',
   },
@@ -111,6 +111,7 @@ const styles = StyleSheet.create({
     backgroundColor: GlobalStyle.color.primaryColor,
     borderRadius: 5,
     paddingVertical: 10,
+    marginTop: 6,
     width: '100%',
     alignItems: 'center',
   },

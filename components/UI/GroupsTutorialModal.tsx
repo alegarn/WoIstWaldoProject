@@ -4,6 +4,7 @@ import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle } from '../../constants/theme';
+import { PULSE_PERIOD_MS } from '../../constants/groupsIntro';
 
 type GroupTutorialPanel = {
   key: 'page1' | 'page2' | 'page3' | 'page4';
@@ -40,7 +41,6 @@ const GROUP_TUTORIAL_PANELS: GroupTutorialPanel[] = [
 ];
 
 const ENTRANCE_DURATION_MS = 350;
-const PULSE_PERIOD_MS = 700;
 
 type GroupsTutorialModalProps = {
   visible: boolean;

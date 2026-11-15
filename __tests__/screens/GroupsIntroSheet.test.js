@@ -11,7 +11,7 @@
 import { readFileSync } from 'fs';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
-import { BackHandler, Pressable, Text, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 
 import GroupsIntroSheet from '../../components/UI/GroupsIntroSheet';
 import i18n from '../../i18n';
@@ -31,10 +31,7 @@ const COPY = {
 };
 
 function flattenStyle(style) {
-  if (Array.isArray(style)) {
-    return style.reduce((merged, entry) => ({ ...merged, ...flattenStyle(entry) }), {});
-  }
-  return style || {};
+  return StyleSheet.flatten(style) ?? {};
 }
 
 async function renderSheet({ visible = true, onOpen = jest.fn(), onLater = jest.fn() } = {}) {
@@ -119,7 +116,7 @@ describe('GroupsIntroSheet', () => {
     const scrimStyle = flattenStyle(scrim.props.style);
     expect(scrimStyle.position).toBe('absolute');
     expect(scrimStyle.bottom).toBe(-10);
-    expect(scrimStyle.top).not.toBe(0);
+    expect(scrimStyle.top).toBe('50%');
 
     const parentCard = renderer.root.findByProps({ testID: 'sheet-test.parent-card' });
     await act(async () => {
@@ -129,13 +126,16 @@ describe('GroupsIntroSheet', () => {
     expect(parentOnPress).toHaveBeenCalledTimes(1);
   });
 
-  it('pads the sheet bottom with the safe-area inset', async () => {
+  it('raises the card copy (paddingTop 24) and clears the home indicator (insets.bottom + 12)', async () => {
     const { renderer } = await renderSheet();
+    const insets = mockUseSafeAreaInsets();
 
-    const paddedNodes = renderer.root.findAll(
-      (node) => flattenStyle(node.props?.style)?.paddingBottom === 34
+    const cardNodes = renderer.root.findAll(
+      (node) =>
+        flattenStyle(node.props?.style)?.paddingTop === 24 &&
+        flattenStyle(node.props?.style)?.paddingBottom === insets.bottom + 12
     );
-    expect(paddedNodes.length).toBeGreaterThan(0);
+    expect(cardNodes.length).toBeGreaterThan(0);
   });
 
   it('invokes onLater when the scrim is pressed', async () => {

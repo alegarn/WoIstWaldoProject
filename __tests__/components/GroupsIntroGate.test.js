@@ -251,15 +251,13 @@ describe('GroupsIntroGate', () => {
   });
 
   it('writes both seen flags silently for members exactly once across repeated settled loads', async () => {
-    const memberHub = { owned: [{ id: 'g-1', role: 'owner', name: 'Mine' }], joined: [], pendingInvites: [] };
-
-    const { renderer, updateHub } = await renderGate({ hub: memberHub });
+    const { renderer, updateHub } = await renderGate({ hub: MEMBER_HUB });
 
     expect(setGroupsIntroSeen).toHaveBeenCalledWith(true);
     expect(setGroupsDetailSeen).toHaveBeenCalledWith(true);
     expect(sheetVisible(renderer)).toBe(false);
 
-    await updateHub({ owned: [{ id: 'g-1', role: 'owner', name: 'Mine' }], joined: [], pendingInvites: [] });
+    await updateHub(MEMBER_HUB);
     await updateHub({ owned: [], joined: [{ id: 'g-2', role: 'member', name: 'Theirs' }], pendingInvites: [] });
 
     expect(setGroupsIntroSeen).toHaveBeenCalledTimes(1);

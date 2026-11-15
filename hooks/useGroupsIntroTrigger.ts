@@ -65,15 +65,10 @@ export default function useGroupsIntroTrigger({
 }: UseGroupsIntroTriggerArgs): void {
   const groupsIntroShownRef = useRef(false);
   const leftHomeThisSessionRef = useRef(false);
-  const argsRef = useRef<UseGroupsIntroTriggerArgs>({
-    chainQuiet,
-    context,
-    navigation,
-    getHasAnyMembership,
-    hubReady,
-    onShow,
-  });
-  argsRef.current = { chainQuiet, context, navigation, getHasAnyMembership, hubReady, onShow };
+  const args = { chainQuiet, context, navigation, getHasAnyMembership, hubReady, onShow };
+  const argsRef = useRef(args);
+  // Mirror the latest args every render; effect bodies read argsRef.current.
+  argsRef.current = args;
 
   const evaluateArmsRef = useRef(async () => {
     if (groupsIntroShownRef.current) return;

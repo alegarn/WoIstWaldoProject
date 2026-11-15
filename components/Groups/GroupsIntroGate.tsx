@@ -17,6 +17,7 @@ import {
   publish,
   subscribe,
 } from '../../utils/groupsIntro/groupsIntroUiStore';
+import type { GroupsIntroUiState } from '../../utils/groupsIntro/groupsIntroUiStore';
 import type { GroupsHubData } from '../../types/groups';
 
 type GroupsIntroGateProps = {
@@ -34,7 +35,7 @@ export default function GroupsIntroGate({
 }: GroupsIntroGateProps) {
   const contextNavigation = useContext(NavigationContext);
   const navigation: GroupsIntroNavigation | undefined =
-    navigationProp ?? (contextNavigation as GroupsIntroNavigation | undefined) ?? undefined;
+    navigationProp ?? (contextNavigation as GroupsIntroNavigation | undefined);
   const context = useContext(AuthContext);
   const { data, isLoading } = useGroupsHub();
 
@@ -63,16 +64,13 @@ export default function GroupsIntroGate({
     navigateToGroupsList();
   }, [dismissSheet, navigateToGroupsList]);
 
-  const handleUiState = useCallback(
-    (state: { ringPhase: string; tapCount: number }) => {
-      if (state.tapCount === lastTapCountRef.current) return;
-      lastTapCountRef.current = state.tapCount;
-      if (sheetVisibleRef.current) {
-        dismissSheet();
-      }
-    },
-    [dismissSheet]
-  );
+  const handleUiState = useCallback((state: GroupsIntroUiState) => {
+    if (state.tapCount === lastTapCountRef.current) return;
+    lastTapCountRef.current = state.tapCount;
+    if (sheetVisibleRef.current) {
+      dismissSheet();
+    }
+  }, [dismissSheet]);
 
   const handleUiStateRef = useRef(handleUiState);
   handleUiStateRef.current = handleUiState;

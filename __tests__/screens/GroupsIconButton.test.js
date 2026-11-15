@@ -79,13 +79,6 @@ function ringProbe(renderer) {
   return renderer.root.findByProps({ testID: 'groups-intro.ring.probe' });
 }
 
-function subtreeContains(node, target) {
-  if (node === target) {
-    return true;
-  }
-  return (node.children ?? []).some((child) => subtreeContains(child, target));
-}
-
 function flattenedStyle(node) {
   return StyleSheet.flatten(node.props.style ?? []) ?? {};
 }
@@ -161,12 +154,19 @@ describe('GroupsIconButton', () => {
       });
 
       const button = iconProbe(renderer);
-      const wrappers = renderer.root
-        .findAll((node) => flattenedStyle(node).marginRight === HEADER_MARGIN)
-        .filter((node) => subtreeContains(node, button));
-
-      expect(wrappers).toHaveLength(1);
       expect(flattenedStyle(button).marginRight).toBeUndefined();
+
+      // Nearest styled ancestor must carry the header margin (composite/host
+      // node pairs collapse here because the walk stops at the first match).
+      let wrapper = null;
+      let node = button.parent;
+      while (node && wrapper === null) {
+        if (flattenedStyle(node).marginRight === HEADER_MARGIN) {
+          wrapper = node;
+        }
+        node = node.parent;
+      }
+      expect(wrapper).not.toBeNull();
     }
   });
 });

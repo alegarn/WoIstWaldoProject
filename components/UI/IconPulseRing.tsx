@@ -3,11 +3,11 @@ import type { StyleProp, ViewStyle } from 'react-native';
 import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
+import { PULSE_PERIOD_MS } from '../../constants/groupsIntro';
 import { isE2EMode } from '../../utils/e2eMode';
 
 export type IconPulseRingPhase = 'active' | 'settle' | 'off';
 
-const PULSE_PERIOD_MS = 700;
 const REST_SCALE = 1.12;
 // Glyph footprint only: 24 icon + 4 breathing room each side. Header spacing
 // lives OUTSIDE the ring (callers use wrapperStyle), so the ring centers on
@@ -17,23 +17,26 @@ const REST_RING_SIZE = RING_SIZE * REST_SCALE;
 const RING_BORDER_WIDTH = 2;
 const DEFAULT_ITERATIONS = { active: 3, settle: 2 } as const;
 
-// Real class captured at module load: jest-mock spies cannot construct ES
-// classes, so suites spying on Animated.Value still get a working instance
-// while the call itself stays recorded on the spied property.
-const PulseValueClass = Animated.Value;
-
-function createPulseValue(): Animated.Value {
-  return Reflect.construct(Animated.Value, [1], PulseValueClass);
-}
-
 type IconPulseRingProps = {
   phase: IconPulseRingPhase;
   onLoopEnd?: () => void;
   iterations?: number;
   testID?: string;
-  wrapperStyle?: React.StyleProp<ViewStyle>;
+  wrapperStyle?: StyleProp<ViewStyle>;
   children?: React.ReactNode;
 };
+
+// The accent circle itself: both the static and the pulse branch render the
+// same geometry shape, only sized/offset differently. testIDs stay distinct
+// so tests can tell which branch is showing.
+function renderRing(testID: string, size: number, offset: number) {
+  return (
+    <View
+      testID={testID}
+      style={[styles.ring, { width: size, height: size, borderRadius: size / 2, left: offset, top: offset }]}
+    />
+  );
+}
 
 export default function IconPulseRing({
   phase,
@@ -45,7 +48,7 @@ export default function IconPulseRing({
 }: IconPulseRingProps) {
   const pulseRef = useRef<Animated.Value | null>(null);
   if (pulseRef.current === null) {
-    pulseRef.current = createPulseValue();
+    pulseRef.current = new Animated.Value(1);
   }
   const pulse = pulseRef.current;
 
@@ -53,6 +56,8 @@ export default function IconPulseRing({
   const [reduceMotion, setReduceMotion] = useState<boolean | null>(null);
   const [restPhase, setRestPhase] = useState<IconPulseRingPhase | null>(null);
 
+  // 'off' has no loop (never animated), but shares 'active' iterations should
+  // a loop ever arm while off — the branch below returns before that point.
   const resolvedIterations = iterations ?? DEFAULT_ITERATIONS[phase === 'settle' ? 'settle' : 'active'];
 
   useEffect(() => {
@@ -113,19 +118,7 @@ export default function IconPulseRing({
 
     return (
       <View testID={testID} style={[styles.ringWrapper, wrapperStyle]}>
-        <View
-          testID="groups-intro.ring.static"
-          style={[
-            styles.staticRing,
-            {
-              width: REST_RING_SIZE,
-              height: REST_RING_SIZE,
-              borderRadius: REST_RING_SIZE / 2,
-              left: ringOffset,
-              top: ringOffset,
-            },
-          ]}
-        />
+        {renderRing('groups-intro.ring.static', REST_RING_SIZE, ringOffset)}
         {children}
       </View>
     );
@@ -133,19 +126,7 @@ export default function IconPulseRing({
 
   return (
     <Animated.View testID={testID} style={[styles.ringWrapper, wrapperStyle, { transform: [{ scale: pulse }] }]}>
-      <View
-        testID="groups-intro.ring.pulse"
-        style={[
-          styles.pulseRing,
-          {
-            width: RING_SIZE,
-            height: RING_SIZE,
-            borderRadius: RING_SIZE / 2,
-            left: 0,
-            top: 0,
-          },
-        ]}
-      />
+      {renderRing('groups-intro.ring.pulse', RING_SIZE, 0)}
       {children}
     </Animated.View>
   );
@@ -158,12 +139,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  staticRing: {
-    position: 'absolute',
-    borderWidth: RING_BORDER_WIDTH,
-    borderColor: GlobalStyle.color.secondaryColor,
-  },
-  pulseRing: {
+  ring: {
     position: 'absolute',
     borderWidth: RING_BORDER_WIDTH,
     borderColor: GlobalStyle.color.secondaryColor,
