@@ -464,7 +464,8 @@
       "store": "商店",
       "owner": "所有者",
       "open": "打开",
-      "openFailed": "无法打开群组。"
+      "openFailed": "无法打开群组。",
+      "backToGroups": "群组"
     },
     "create": {
       "loading": "加载中...",
@@ -591,7 +592,6 @@
       "groupUnavailable": "该群组当前在此账户上不可用。"
     },
     "menu": {
-      "groups": "群组",
       "store": "商店",
       "switchToPublic": "切换到公开",
       "switchToPrivate": "切换到私人",
@@ -599,6 +599,16 @@
       "guessWalkthrough": "猜谜屏幕使用指南",
       "moreOptions": "更多选项",
       "switchFailed": "无法切换模式。"
+    },
+    "empty": {
+      "title": "还没有群组",
+      "subtitle": "免费加入，免费创建。",
+      "detailCreate": "创建群组免费——1 个群组，最多 10 名成员。",
+      "detailJoin": "有朋友的邀请码？几秒即可加入他们的群组。",
+      "storeLink": "在商店个性化",
+      "storeCaption": "个性化",
+      "whyTitle": "为什么要群组？",
+      "whyBody": "离开公开动态，和你选择的朋友私密地隐藏与寻找。"
     }
   },
   "billing": {
@@ -669,5 +679,36 @@
         "cta": "订阅"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "和朋友一起玩",
+    "body": "私密群组完全免费——加入和创建（1 个群组，最多 10 名成员）。",
+    "iconPointer": "点按群组图标即可随时打开你的群组。",
+    "ctaOpen": "打开群组",
+    "ctaLater": "以后再说",
+    "iconLabel": "群组"
+  },
+  "groupsTutorial": {
+    "title": "群组如何运作",
+    "skip": "跳过",
+    "next": "下一步",
+    "done": "完成",
+    "page1": {
+      "title": "私密游玩",
+      "body": "创建一个私密空间，只为你邀请的人隐藏 Waldo。"
+    },
+    "page2": {
+      "title": "免费加入",
+      "body": "输入朋友的群组邀请码即可加入——加入永远免费。"
+    },
+    "page3": {
+      "title": "免费创建",
+      "body": "创建群组免费：1 个群组，最多 10 名成员。"
+    },
+    "page4": {
+      "title": "打造专属风格",
+      "body": "在商店个性化你的群组——自定义图片、分类和颜色。"
+    },
+    "storeLink": "在商店个性化"
   }
 }

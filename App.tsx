@@ -51,6 +51,7 @@ import GroupSettingsScreen from './screens/Groups/GroupSettingsScreen';
 import JoinByCodeScreen from './screens/Groups/JoinByCodeScreen';
 import MemberManagementScreen from './screens/Groups/MemberManagementScreen';
 import { HomeHeaderRight } from './screens/Groups/HomeHeaderRight';
+import GroupsIconButton from './components/UI/GroupsIconButton';
 
 // Billing screens
 import _PaywallScreen from './screens/Billing/PaywallScreen';
@@ -83,8 +84,17 @@ import {
   validateStoredSession,
 } from './utils/auth';
 import { ensureE2EOnboardingBypass, isE2EMode } from './utils/e2eMode';
-import { getOnboardingCompleted } from './utils/storageDatum';
+import { getOnboardingCompleted, incrementAppOpenCount } from './utils/storageDatum';
 import { flush, getPending } from './utils/sessionScoreStore';
+
+// The app-open counter bumps ONCE per authenticated launch per app process.
+// Module-scope so Navigation remounts (and React strict-mode double-invoke)
+// cannot bump again; suites rendering the app reset it via the exported hook.
+let appOpenLaunchCounted = false;
+
+export function resetAppOpenLaunchGuardForTests() {
+  appOpenLaunchCounted = false;
+}
 
 // File-local structural view of the auth context. No central ParamList exists;
 // .js screens/contexts stay loosely typed via allowJs, so this captures only
@@ -202,6 +212,7 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
                   onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
                   onOpenGuessWalkthrough={() => navigation.navigate('GuessPathScreen', { showWalkthrough: true })}
                 />
+                <GroupsIconButton onPress={() => navigation.navigate('GroupsListScreen')} />
                 <IconButton
                   accessibilityLabel={t('app.openSettings')}
                   icon="settings"
@@ -498,6 +509,22 @@ function Navigation({ authContext }: { authContext: AuthContextValue }) {
       clearTimeout(e2eHomeResetTimerRef.current);
       e2eHomeResetTimerRef.current = null;
     }
+  }, [authContext.IsAuthenticated]);
+
+  useEffect(() => {
+    if (!authContext.IsAuthenticated) {
+      return undefined;
+    }
+
+    if (isE2EMode() || appOpenLaunchCounted) {
+      return undefined;
+    }
+
+    appOpenLaunchCounted = true;
+
+    incrementAppOpenCount().catch(() => {});
+
+    return undefined;
   }, [authContext.IsAuthenticated]);
 
   useEffect(() => {

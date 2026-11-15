@@ -464,7 +464,8 @@
       "store": "Toko",
       "owner": "Pemilik",
       "open": "Buka",
-      "openFailed": "Gagal membuka grup."
+      "openFailed": "Gagal membuka grup.",
+      "backToGroups": "Grup"
     },
     "create": {
       "loading": "Memuat...",
@@ -591,7 +592,6 @@
       "groupUnavailable": "Grup ini tidak tersedia di akun ini untuk saat ini."
     },
     "menu": {
-      "groups": "Grup",
       "store": "Toko",
       "switchToPublic": "Beralih ke publik",
       "switchToPrivate": "Beralih ke privat",
@@ -599,6 +599,16 @@
       "guessWalkthrough": "Panduan layar tebak",
       "moreOptions": "Opsi lainnya",
       "switchFailed": "Gagal mengganti mode."
+    },
+    "empty": {
+      "title": "Belum ada grup",
+      "subtitle": "Gratis untuk bergabung dan membuat.",
+      "detailCreate": "Membuat grup itu gratis — 1 grup dengan hingga 10 anggota.",
+      "detailJoin": "Punya kode dari teman? Gabung ke grupnya dalam hitungan detik.",
+      "storeLink": "Personalisasi di Toko",
+      "storeCaption": "Personalisasi",
+      "whyTitle": "Kenapa grup?",
+      "whyBody": "Sembunyikan dan tebak secara privat bersama teman pilihanmu — di luar feed publik."
     }
   },
   "billing": {
@@ -669,5 +679,36 @@
         "cta": "Berlangganan"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Bermain dengan teman",
+    "body": "Grup privat gratis — untuk bergabung dan membuat (1 grup dengan hingga 10 anggota).",
+    "iconPointer": "Ketuk ikon grup untuk membuka grupmu kapan saja.",
+    "ctaOpen": "Buka grup",
+    "ctaLater": "Nanti saja",
+    "iconLabel": "Grup"
+  },
+  "groupsTutorial": {
+    "title": "Cara kerja grup",
+    "skip": "Lewati",
+    "next": "Lanjut",
+    "done": "Selesai",
+    "page1": {
+      "title": "Bermain secara privat",
+      "body": "Buat ruang privat dan sembunyikan Waldo hanya untuk orang yang kamu undang."
+    },
+    "page2": {
+      "title": "Bergabung gratis",
+      "body": "Masukkan kode grup dari teman dan kamu langsung masuk — bergabung selalu gratis."
+    },
+    "page3": {
+      "title": "Membuat gratis",
+      "body": "Membuat grup itu gratis: 1 grup dengan hingga 10 anggota."
+    },
+    "page4": {
+      "title": "Jadikan milikmu",
+      "body": "Personalisasi grupmu di Toko — gambar, kategori, dan warna pilihanmu."
+    },
+    "storeLink": "Personalisasi di Toko"
   }
 }

@@ -133,6 +133,8 @@ jest.mock('react-native-safe-area-context', () => {
 jest.mock('../components/UI/IconButton', () => () => null);
 jest.mock('../components/UI/LoadingOverlay', () => () => null);
 
+jest.mock('../components/UI/GroupsIconButton', () => () => null);
+
 jest.mock('../screens/Groups/HomeHeaderRight', () => ({
   HomeHeaderRight: () => null,
 }));
@@ -186,7 +188,7 @@ import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
 
-import { Root } from '../App';
+import { Root, resetAppOpenLaunchGuardForTests } from '../App';
 import { AuthContext } from '../store/auth-context';
 
 const asyncStorageMock = jest.requireMock('@react-native-async-storage/async-storage');
@@ -262,6 +264,7 @@ afterEach(async () => {
 describe('App root', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    resetAppOpenLaunchGuardForTests();
     SecureStore.getItemAsync.mockResolvedValue(null);
     SecureStore.setItemAsync.mockResolvedValue(undefined);
     SecureStore.deleteItemAsync.mockResolvedValue(undefined);

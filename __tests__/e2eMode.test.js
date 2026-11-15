@@ -13,6 +13,9 @@ jest.mock('../utils/storageDatum', () => ({
   setOnboardingCompleted: jest.fn(() => Promise.resolve(null)),
   setGuessPathWalkthroughSeen: jest.fn(() => Promise.resolve(null)),
   setQuickTutorialSeen: jest.fn(() => Promise.resolve(null)),
+  setGroupsIntroSeen: jest.fn(() => Promise.resolve(null)),
+  setGroupsDetailSeen: jest.fn(() => Promise.resolve(null)),
+  setAppOpenCount: jest.fn(() => Promise.resolve(null)),
 }));
 
 import {
@@ -38,7 +41,7 @@ import {
   isE2EMode,
 } from '../utils/e2eMode';
 import { isWinningTrace } from '../utils/shapeMatch';
-import { setGuessPathWalkthroughSeen, setQuickTutorialSeen } from '../utils/storageDatum';
+import { setAppOpenCount, setGroupsDetailSeen, setGroupsIntroSeen, setGuessPathWalkthroughSeen, setQuickTutorialSeen } from '../utils/storageDatum';
 
 describe('e2eMode helpers', () => {
   const originalE2EMode = process.env.EXPO_PUBLIC_E2E_MODE;
@@ -331,6 +334,9 @@ describe('e2eMode helpers', () => {
     expect(await ensureE2EOnboardingBypass()).toBe(false);
     expect(setGuessPathWalkthroughSeen).not.toHaveBeenCalled();
     expect(setQuickTutorialSeen).not.toHaveBeenCalled();
+    expect(setGroupsIntroSeen).not.toHaveBeenCalled();
+    expect(setGroupsDetailSeen).not.toHaveBeenCalled();
+    expect(setAppOpenCount).not.toHaveBeenCalled();
 
     process.env.EXPO_PUBLIC_E2E_MODE = 'true';
 
@@ -339,6 +345,12 @@ describe('e2eMode helpers', () => {
     expect(setGuessPathWalkthroughSeen).toHaveBeenCalledWith(true);
     expect(setQuickTutorialSeen).toHaveBeenCalledTimes(1);
     expect(setQuickTutorialSeen).toHaveBeenCalledWith(true);
+    expect(setGroupsIntroSeen).toHaveBeenCalledTimes(1);
+    expect(setGroupsIntroSeen).toHaveBeenCalledWith(true);
+    expect(setGroupsDetailSeen).toHaveBeenCalledTimes(1);
+    expect(setGroupsDetailSeen).toHaveBeenCalledWith(true);
+    expect(setAppOpenCount).toHaveBeenCalledTimes(1);
+    expect(setAppOpenCount).toHaveBeenCalledWith(99);
   });
 
   it('builds a deterministic e2e image rating with snake_case keys', () => {

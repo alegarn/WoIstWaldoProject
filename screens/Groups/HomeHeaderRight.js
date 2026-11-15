@@ -58,13 +58,6 @@ export function HomeHeaderRight({ navigation, tintColor, onStartTutorial, onOpen
 
   const items = [
     {
-      key: 'groups',
-      label: t('groups.menu.groups'),
-      icon: 'people',
-      testID: 'home.menu.groups',
-      onPress: select(() => navigation.navigate('GroupsListScreen')),
-    },
-    {
       key: 'store',
       label: t('groups.menu.store'),
       icon: 'diamond-outline',

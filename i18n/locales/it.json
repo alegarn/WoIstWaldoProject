@@ -465,7 +465,8 @@
       "store": "Negozio",
       "owner": "Proprietario",
       "open": "Apri",
-      "openFailed": "Impossibile aprire il gruppo."
+      "openFailed": "Impossibile aprire il gruppo.",
+      "backToGroups": "Gruppi"
     },
     "create": {
       "loading": "Caricamento...",
@@ -592,7 +593,6 @@
       "groupUnavailable": "Questo gruppo non è disponibile su questo account al momento."
     },
     "menu": {
-      "groups": "Gruppi",
       "store": "Negozio",
       "switchToPublic": "Passa alla modalità pubblica",
       "switchToPrivate": "Passa alla modalità privata",
@@ -600,6 +600,16 @@
       "guessWalkthrough": "Guida alla schermata di indovina",
       "moreOptions": "Altre opzioni",
       "switchFailed": "Impossibile cambiare modalità."
+    },
+    "empty": {
+      "title": "Ancora nessun gruppo",
+      "subtitle": "Gratis aderire e gratis creare.",
+      "detailCreate": "Creare un gruppo è gratuito — 1 gruppo con fino a 10 membri.",
+      "detailJoin": "Hai un codice da un amico? Entra nel suo gruppo in pochi secondi.",
+      "storeLink": "Personalizza nello Store",
+      "storeCaption": "Personalizza",
+      "whyTitle": "Perché i gruppi?",
+      "whyBody": "Nascondi e indovina in privato con gli amici che scegli, lontano dal feed pubblico."
     }
   },
   "billing": {
@@ -670,5 +680,36 @@
         "cta": "Abbonati"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Gioca con gli amici",
+    "body": "I gruppi privati sono gratuiti: aderire e creare (1 gruppo con fino a 10 membri).",
+    "iconPointer": "Tocca l'icona dei gruppi per aprire i tuoi gruppi in qualsiasi momento.",
+    "ctaOpen": "Apri i gruppi",
+    "ctaLater": "Forse più tardi",
+    "iconLabel": "Gruppi"
+  },
+  "groupsTutorial": {
+    "title": "Come funzionano i gruppi",
+    "skip": "Salta",
+    "next": "Avanti",
+    "done": "Fatto",
+    "page1": {
+      "title": "Gioca in privato",
+      "body": "Crea uno spazio privato e nascondi Waldo solo per le persone che inviti."
+    },
+    "page2": {
+      "title": "Unisciti gratis",
+      "body": "Inserisci il codice del gruppo di un amico e sei dentro: aderire è sempre gratuito."
+    },
+    "page3": {
+      "title": "Crea gratis",
+      "body": "Creare un gruppo è gratuito: 1 gruppo con fino a 10 membri."
+    },
+    "page4": {
+      "title": "Rendilo tuo",
+      "body": "Personalizza il tuo gruppo nello Store — immagini, categorie e colori."
+    },
+    "storeLink": "Personalizza nello Store"
   }
 }

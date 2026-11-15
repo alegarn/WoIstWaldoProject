@@ -15,6 +15,7 @@ import * as SecureStore from 'expo-secure-store';
 import CenteredModal from '../components/UI/CenteredModal';
 import TutorialOverlay from '../components/UI/TutorialOverlay';
 import QuickTutorial from '../components/UI/QuickTutorial';
+import GroupsIntroGate from '../components/Groups/GroupsIntroGate';
 
 const HideImage = require('../assets/home/WoIstWaldo-character-hide.webp');
 const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.webp');
@@ -263,6 +264,10 @@ export default function HomeScreen({ navigation, route }) {
         <QuickTutorial
           visible={showQuickTutorial}
           onDone={handleQuickTutorialDone}
+          />
+
+        <GroupsIntroGate
+          chainQuiet={!showModal && !showQuickTutorial && !isTutorial}
           />
 
       </View>

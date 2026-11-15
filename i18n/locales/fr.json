@@ -465,7 +465,8 @@
       "store": "Boutique",
       "owner": "Propriétaire",
       "open": "Ouvrir",
-      "openFailed": "Impossible d'ouvrir le groupe."
+      "openFailed": "Impossible d'ouvrir le groupe.",
+      "backToGroups": "Groupes"
     },
     "create": {
       "loading": "Chargement...",
@@ -592,7 +593,6 @@
       "groupUnavailable": "Ce groupe n'est pas disponible sur ce compte pour le moment."
     },
     "menu": {
-      "groups": "Groupes",
       "store": "Boutique",
       "switchToPublic": "Passer au mode public",
       "switchToPrivate": "Passer au mode privé",
@@ -600,6 +600,16 @@
       "guessWalkthrough": "Guide de l'écran de devinette",
       "moreOptions": "Plus d'options",
       "switchFailed": "Impossible de changer de mode."
+    },
+    "empty": {
+      "title": "Pas encore de groupes",
+      "subtitle": "Gratuit pour rejoindre et pour créer.",
+      "detailCreate": "Créer un groupe est gratuit — 1 groupe avec jusqu'à 10 membres.",
+      "detailJoin": "Un code d'un ami ? Rejoins son groupe en quelques secondes.",
+      "storeLink": "Personnaliser dans la Boutique",
+      "storeCaption": "Personnaliser",
+      "whyTitle": "Pourquoi des groupes ?",
+      "whyBody": "Cache et devine en privé avec les amis que tu choisis, à l'écart du fil public."
     }
   },
   "billing": {
@@ -670,5 +680,36 @@
         "cta": "S'abonner"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Joue avec tes amis",
+    "body": "Les groupes privés sont gratuits — rejoindre et créer (1 groupe avec jusqu'à 10 membres).",
+    "iconPointer": "Touche l'icône des groupes pour ouvrir tes groupes à tout moment.",
+    "ctaOpen": "Ouvrir les groupes",
+    "ctaLater": "Peut-être plus tard",
+    "iconLabel": "Groupes"
+  },
+  "groupsTutorial": {
+    "title": "Comment fonctionnent les groupes",
+    "skip": "Passer",
+    "next": "Suivant",
+    "done": "Terminé",
+    "page1": {
+      "title": "Joue en privé",
+      "body": "Crée un espace privé et cache Waldo uniquement pour les personnes que tu invites."
+    },
+    "page2": {
+      "title": "Rejoins gratuitement",
+      "body": "Saisis le code de groupe d'un ami et c'est parti — rejoindre est toujours gratuit."
+    },
+    "page3": {
+      "title": "Crée gratuitement",
+      "body": "Créer un groupe est gratuit : 1 groupe avec jusqu'à 10 membres."
+    },
+    "page4": {
+      "title": "Personnalise",
+      "body": "Personnalise ton groupe dans la Boutique — images, catégories et couleurs."
+    },
+    "storeLink": "Personnaliser dans la Boutique"
   }
 }

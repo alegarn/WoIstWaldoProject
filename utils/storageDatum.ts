@@ -21,6 +21,9 @@ const UI_LOCALE_KEY = 'uiLocale';
 const ONBOARDING_COMPLETED_KEY = 'onboardingCompleted';
 const GUESS_PATH_WALKTHROUGH_SEEN_KEY = 'guessPathWalkthroughSeen';
 const QUICK_TUTORIAL_SEEN_KEY = 'quickTutorialSeen';
+const GROUPS_INTRO_SEEN_KEY = 'groupsIntroSeen';
+const GROUPS_DETAIL_SEEN_KEY = 'groupsDetailSeen';
+const APP_OPEN_COUNT_KEY = 'appOpenCount';
 const USER_TAGS_KEY = 'userTags';
 const DEFAULT_LANGUAGE = 'en';
 export const PUBLIC_FEED_END_CURSOR = '__public_feed_end__';
@@ -586,6 +589,43 @@ export async function getQuickTutorialSeen(): Promise<boolean> {
 
 export async function setQuickTutorialSeen(value: boolean): Promise<null> {
   await AsyncStorage.setItem(QUICK_TUTORIAL_SEEN_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+export async function getGroupsIntroSeen(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(GROUPS_INTRO_SEEN_KEY);
+  return stored === 'true';
+}
+
+export async function setGroupsIntroSeen(value: boolean): Promise<null> {
+  await AsyncStorage.setItem(GROUPS_INTRO_SEEN_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+export async function getGroupsDetailSeen(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(GROUPS_DETAIL_SEEN_KEY);
+  return stored === 'true';
+}
+
+export async function setGroupsDetailSeen(value: boolean): Promise<null> {
+  await AsyncStorage.setItem(GROUPS_DETAIL_SEEN_KEY, value ? 'true' : 'false');
+  return null;
+}
+
+export async function getAppOpenCount(): Promise<number> {
+  const stored = await AsyncStorage.getItem(APP_OPEN_COUNT_KEY);
+  const parsed = Number.parseInt(stored ?? '', 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export async function incrementAppOpenCount(): Promise<null> {
+  const current = await getAppOpenCount();
+  await AsyncStorage.setItem(APP_OPEN_COUNT_KEY, String(current + 1));
+  return null;
+}
+
+export async function setAppOpenCount(value: number): Promise<null> {
+  await AsyncStorage.setItem(APP_OPEN_COUNT_KEY, String(value));
   return null;
 }
 

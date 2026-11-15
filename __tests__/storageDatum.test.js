@@ -73,6 +73,9 @@ import {
   getLastImageId,
   getLastImageUuid,
   getLocalImages,
+  getAppOpenCount,
+  getGroupsDetailSeen,
+  getGroupsIntroSeen,
   getNextImage,
   getNextImageForScope,
   getNextImagesForScope,
@@ -83,6 +86,7 @@ import {
   getSessionLanguageFilter,
   getSessionModeFilter,
   getUserTags,
+  incrementAppOpenCount,
   isCategoryExhausted,
   markCategoryExhausted,
   normalizeListIds,
@@ -93,6 +97,9 @@ import {
   saveSessionLanguageFilter,
   saveSessionModeFilter,
   saveUserTag,
+  setAppOpenCount,
+  setGroupsDetailSeen,
+  setGroupsIntroSeen,
   setGuessPathWalkthroughSeen,
   setOnboardingCompleted,
   setQuickTutorialSeen,
@@ -319,6 +326,88 @@ describe('storageDatum utilities', () => {
 
     AsyncStorage.getItem.mockResolvedValueOnce(null);
     expect(await getQuickTutorialSeen()).toBe(false);
+  });
+
+  describe('private groups intro flags + app open counter (Task 1a)', () => {
+    it('stores the groups intro seen flag as string booleans and treats missing values as false', async () => {
+      await setGroupsIntroSeen(true);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsIntroSeen', 'true');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('true');
+      expect(await getGroupsIntroSeen()).toBe(true);
+
+      await setGroupsIntroSeen(false);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsIntroSeen', 'false');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('false');
+      expect(await getGroupsIntroSeen()).toBe(false);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      expect(await getGroupsIntroSeen()).toBe(false);
+    });
+
+    it('stores the groups detail seen flag as string booleans and treats missing values as false', async () => {
+      await setGroupsDetailSeen(true);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsDetailSeen', 'true');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('true');
+      expect(await getGroupsDetailSeen()).toBe(true);
+
+      await setGroupsDetailSeen(false);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('groupsDetailSeen', 'false');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('false');
+      expect(await getGroupsDetailSeen()).toBe(false);
+
+      AsyncStorage.getItem.mockResolvedValueOnce(null);
+      expect(await getGroupsDetailSeen()).toBe(false);
+    });
+
+    it('reads the app open count as a coerced integer and defaults to 0 when absent', async () => {
+      let storedCount = null;
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'appOpenCount' ? storedCount : null));
+
+      expect(await getAppOpenCount()).toBe(0);
+
+      storedCount = '7';
+      expect(await getAppOpenCount()).toBe(7);
+
+      storedCount = '0';
+      expect(await getAppOpenCount()).toBe(0);
+      expect(AsyncStorage.getItem).toHaveBeenCalledWith('appOpenCount');
+    });
+
+    it('increments the app open count persistently from 0 to 1 to 2', async () => {
+      let storedCount = null;
+      AsyncStorage.getItem.mockImplementation(async (key) => (key === 'appOpenCount' ? storedCount : null));
+      AsyncStorage.setItem.mockImplementation(async (key, value) => {
+        if (key === 'appOpenCount') {
+          storedCount = value;
+        }
+      });
+
+      expect(await getAppOpenCount()).toBe(0);
+
+      await incrementAppOpenCount();
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('appOpenCount', '1');
+      expect(await getAppOpenCount()).toBe(1);
+
+      await incrementAppOpenCount();
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('appOpenCount', '2');
+      expect(await getAppOpenCount()).toBe(2);
+    });
+
+    it('pins the app open count with a single deterministic decimal-string write', async () => {
+      await setAppOpenCount(99);
+      expect(AsyncStorage.setItem).toHaveBeenCalledTimes(1);
+      expect(AsyncStorage.setItem).toHaveBeenCalledWith('appOpenCount', '99');
+
+      AsyncStorage.getItem.mockResolvedValueOnce('99');
+      expect(await getAppOpenCount()).toBe(99);
+
+      await setAppOpenCount(0);
+      expect(AsyncStorage.setItem).toHaveBeenLastCalledWith('appOpenCount', '0');
+    });
   });
 
   it('reads saved user tags and falls back to an empty list when unset or invalid', async () => {
