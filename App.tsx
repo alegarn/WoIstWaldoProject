@@ -212,7 +212,10 @@ function AuthenticatedStack({ authContext }: { authContext: AuthContextValue }) 
                   onStartTutorial={() => navigation.setParams({ tutorialToken: Date.now() })}
                   onOpenGuessWalkthrough={() => navigation.navigate('GuessPathScreen', { showWalkthrough: true })}
                 />
-                <GroupsIconButton onPress={() => navigation.navigate('GroupsListScreen')} />
+                <GroupsIconButton
+                  color={tintColor}
+                  onPress={() => navigation.navigate('GroupsListScreen')}
+                />
                 <IconButton
                   accessibilityLabel={t('app.openSettings')}
                   icon="settings"

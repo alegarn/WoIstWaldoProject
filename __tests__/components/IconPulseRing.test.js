@@ -68,12 +68,12 @@ async function bareChildrenJson() {
 // Both helpers await the ring's reduce-motion init so the loop-start effects
 // settle inside act before assertions run (sync act does not flush native
 // promise jobs — without the await, loop creation would land after the test).
-async function renderRing(phase, extraProps = {}) {
+async function renderRing(phase, extraProps = {}, childStyle = undefined) {
   let renderer;
   await act(async () => {
     renderer = create(
       <IconPulseRing phase={phase} testID="ring-under-test" {...extraProps}>
-        <View testID="ring-child" />
+        <View testID="ring-child" style={childStyle} />
       </IconPulseRing>
     );
     await Promise.resolve();
@@ -227,13 +227,15 @@ describe('IconPulseRing', () => {
     expect(pulseStyle.height).toBe(wrapperStyle.height);
     expect(pulseStyle.borderRadius).toBeCloseTo(wrapperStyle.width / 2, 2);
     expect(typeof pulseStyle.position).toBe('string');
+    expect(pulseStyle.width).toBe(32);
+    expect(pulseStyle.height).toBe(32);
 
     finishLoop(fakeLoops[0]);
 
     const staticRing = renderer.root.findByProps({ testID: 'groups-intro.ring.static' });
     const staticStyle = styleOf(staticRing);
-    expect(staticStyle.width).toBeCloseTo(pulseStyle.width * 1.12, 2);
-    expect(staticStyle.height).toBeCloseTo(pulseStyle.height * 1.12, 2);
+    expect(staticStyle.width).toBeCloseTo(35.84, 2);
+    expect(staticStyle.height).toBeCloseTo(35.84, 2);
     renderer.unmount();
   });
 
@@ -248,6 +250,8 @@ describe('IconPulseRing', () => {
     const activeStyle = styleOf(activeRing);
     expect(typeof activeStyle.width).toBe('number');
     expect(typeof activeStyle.height).toBe('number');
+    expect(activeStyle.width).toBe(32);
+    expect(activeStyle.height).toBe(32);
 
     finishLoop(fakeLoops[0]);
 
@@ -255,8 +259,8 @@ describe('IconPulseRing', () => {
     const staticStyle = styleOf(staticRing);
     expect(typeof staticStyle.width).toBe('number');
     expect(typeof staticStyle.height).toBe('number');
-    expect(staticStyle.width).toBeCloseTo(activeStyle.width * 1.12, 2);
-    expect(staticStyle.height).toBeCloseTo(activeStyle.height * 1.12, 2);
+    expect(staticStyle.width).toBeCloseTo(35.84, 2);
+    expect(staticStyle.height).toBeCloseTo(35.84, 2);
     expect(staticStyle.opacity).toBeUndefined();
     expect(renderer.root.findAllByType(Animated.View)).toHaveLength(0);
     renderer.unmount();
@@ -273,6 +277,8 @@ describe('IconPulseRing', () => {
     const staticStyle = styleOf(staticRing);
     expect(typeof staticStyle.width).toBe('number');
     expect(typeof staticStyle.height).toBe('number');
+    expect(staticStyle.width).toBeCloseTo(35.84, 2);
+    expect(staticStyle.height).toBeCloseTo(35.84, 2);
     expect(staticStyle.opacity).toBeUndefined();
     renderer.unmount();
   });
@@ -369,5 +375,74 @@ describe('IconPulseRing', () => {
       renderer2.unmount();
     });
     expect(motionSubscriptions[1].remove).toHaveBeenCalledTimes(1);
+  });
+
+  it('sizes the ring box to the glyph-only footprint of 32, not the 44 header-spacing box', async () => {
+    const renderer = await renderRing('active');
+
+    const wrapper = renderer.root
+      .findAllByProps({ testID: 'ring-under-test' })
+      .find((node) => node.props.style !== undefined);
+    const wrapperStyle = styleOf(wrapper);
+    expect(wrapperStyle.width).toBe(32);
+    expect(wrapperStyle.height).toBe(32);
+
+    const pulseStyle = styleOf(renderer.root.findByProps({ testID: 'groups-intro.ring.pulse' }));
+    expect(pulseStyle.width).toBe(32);
+    expect(pulseStyle.height).toBe(32);
+    renderer.unmount();
+  });
+
+  it('centers the pulse and static rings on the center of a 24x24 child', async () => {
+    const renderer = await renderRing('active', {}, { width: 24, height: 24 });
+
+    const wrapper = renderer.root
+      .findAllByProps({ testID: 'ring-under-test' })
+      .find((node) => node.props.style !== undefined);
+    const wrapperStyle = styleOf(wrapper);
+    expect(wrapperStyle.alignItems).toBe('center');
+    expect(wrapperStyle.justifyContent).toBe('center');
+
+    const childCenter = wrapperStyle.width / 2;
+
+    const pulseStyle = styleOf(renderer.root.findByProps({ testID: 'groups-intro.ring.pulse' }));
+    expect(pulseStyle.left + pulseStyle.width / 2).toBe(childCenter);
+    expect(pulseStyle.top + pulseStyle.height / 2).toBe(childCenter);
+    expect(childCenter).toBe(16);
+
+    finishLoop(fakeLoops[0]);
+
+    const staticStyle = styleOf(renderer.root.findByProps({ testID: 'groups-intro.ring.static' }));
+    expect(staticStyle.left + staticStyle.width / 2).toBeCloseTo(childCenter, 2);
+    expect(staticStyle.top + staticStyle.height / 2).toBeCloseTo(childCenter, 2);
+    renderer.unmount();
+  });
+
+  it('applies wrapperStyle to the animated wrapper without touching ring geometry', async () => {
+    const renderer = await renderRing('active', { wrapperStyle: { marginRight: 20 } });
+
+    const wrapper = renderer.root
+      .findAllByProps({ testID: 'ring-under-test' })
+      .find((node) => node.props.style !== undefined);
+    const wrapperStyle = styleOf(wrapper);
+    expect(wrapperStyle.marginRight).toBe(20);
+    expect(wrapperStyle.width).toBe(32);
+    expect(wrapperStyle.height).toBe(32);
+    renderer.unmount();
+  });
+
+  it('keeps wrapperStyle on the static wrapper after the loop finishes', async () => {
+    const renderer = await renderRing('settle', { wrapperStyle: { marginRight: 20 } });
+
+    finishLoop(fakeLoops[0]);
+
+    const wrapper = renderer.root
+      .findAllByProps({ testID: 'ring-under-test' })
+      .find((node) => node.props.style !== undefined);
+    const wrapperStyle = styleOf(wrapper);
+    expect(wrapperStyle.marginRight).toBe(20);
+    expect(wrapperStyle.width).toBe(32);
+    expect(wrapperStyle.height).toBe(32);
+    renderer.unmount();
   });
 });

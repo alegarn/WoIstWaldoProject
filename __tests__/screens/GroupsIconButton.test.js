@@ -49,6 +49,7 @@ jest.mock('../../utils/groupsIntro/groupsIntroUiStore', () => ({
 }));
 
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { act, create } from 'react-test-renderer';
 
 import GroupsIconButton from '../../components/UI/GroupsIconButton';
@@ -56,6 +57,11 @@ import { signalIconTap, subscribe } from '../../utils/groupsIntro/groupsIntroUiS
 import i18n from '../../i18n';
 
 const ICON_LABEL = i18n.t('groupsIntro.iconLabel');
+
+// The header tint the gear/logout icons receive in App.tsx (screenOptions
+// `headerTintColor: "white"` → `headerRight: ({ tintColor })` → color={tintColor}).
+const HEADER_TINT = 'white';
+const HEADER_MARGIN = 20;
 
 function renderButton(props = {}) {
   let renderer;
@@ -71,6 +77,17 @@ function iconProbe(renderer) {
 
 function ringProbe(renderer) {
   return renderer.root.findByProps({ testID: 'groups-intro.ring.probe' });
+}
+
+function subtreeContains(node, target) {
+  if (node === target) {
+    return true;
+  }
+  return (node.children ?? []).some((child) => subtreeContains(child, target));
+}
+
+function flattenedStyle(node) {
+  return StyleSheet.flatten(node.props.style ?? []) ?? {};
 }
 
 describe('GroupsIconButton', () => {
@@ -126,5 +143,30 @@ describe('GroupsIconButton', () => {
     });
 
     expect(mockUnsubscribe).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the header tint color through to the IconButton glyph', () => {
+    const renderer = renderButton({ onPress: jest.fn(), color: HEADER_TINT });
+
+    expect(iconProbe(renderer).props.color).toBe(HEADER_TINT);
+  });
+
+  it('carries the 20px header margin on an outer wrapper View, never on the IconButton, in every phase', () => {
+    const renderer = renderButton({ onPress: jest.fn() });
+    const listener = subscribe.mock.calls[0][0];
+
+    for (const phase of ['off', 'active', 'settle']) {
+      act(() => {
+        listener({ ringPhase: phase, tapCount: 0 });
+      });
+
+      const button = iconProbe(renderer);
+      const wrappers = renderer.root
+        .findAll((node) => flattenedStyle(node).marginRight === HEADER_MARGIN)
+        .filter((node) => subtreeContains(node, button));
+
+      expect(wrappers).toHaveLength(1);
+      expect(flattenedStyle(button).marginRight).toBeUndefined();
+    }
   });
 });

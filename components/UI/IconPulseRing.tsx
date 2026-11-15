@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { AccessibilityInfo, Animated, StyleSheet, View } from 'react-native';
 
 import { GlobalStyle } from '../../constants/theme';
@@ -8,8 +9,10 @@ export type IconPulseRingPhase = 'active' | 'settle' | 'off';
 
 const PULSE_PERIOD_MS = 700;
 const REST_SCALE = 1.12;
-// 24 icon + 20 header spacing (matches the gear's marginRight footprint).
-const RING_SIZE = 44;
+// Glyph footprint only: 24 icon + 4 breathing room each side. Header spacing
+// lives OUTSIDE the ring (callers use wrapperStyle), so the ring centers on
+// the glyph itself.
+const RING_SIZE = 32;
 const REST_RING_SIZE = RING_SIZE * REST_SCALE;
 const RING_BORDER_WIDTH = 2;
 const DEFAULT_ITERATIONS = { active: 3, settle: 2 } as const;
@@ -28,10 +31,18 @@ type IconPulseRingProps = {
   onLoopEnd?: () => void;
   iterations?: number;
   testID?: string;
+  wrapperStyle?: React.StyleProp<ViewStyle>;
   children?: React.ReactNode;
 };
 
-export default function IconPulseRing({ phase, onLoopEnd, iterations, testID, children }: IconPulseRingProps) {
+export default function IconPulseRing({
+  phase,
+  onLoopEnd,
+  iterations,
+  testID,
+  wrapperStyle,
+  children,
+}: IconPulseRingProps) {
   const pulseRef = useRef<Animated.Value | null>(null);
   if (pulseRef.current === null) {
     pulseRef.current = createPulseValue();
@@ -101,7 +112,7 @@ export default function IconPulseRing({ phase, onLoopEnd, iterations, testID, ch
     const ringOffset = (RING_SIZE - REST_RING_SIZE) / 2;
 
     return (
-      <View testID={testID} style={styles.ringWrapper}>
+      <View testID={testID} style={[styles.ringWrapper, wrapperStyle]}>
         <View
           testID="groups-intro.ring.static"
           style={[
@@ -121,7 +132,7 @@ export default function IconPulseRing({ phase, onLoopEnd, iterations, testID, ch
   }
 
   return (
-    <Animated.View testID={testID} style={[styles.ringWrapper, { transform: [{ scale: pulse }] }]}>
+    <Animated.View testID={testID} style={[styles.ringWrapper, wrapperStyle, { transform: [{ scale: pulse }] }]}>
       <View
         testID="groups-intro.ring.pulse"
         style={[

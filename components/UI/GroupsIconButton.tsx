@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import _IconButton from './IconButton';
@@ -15,9 +16,10 @@ const IconButton = _IconButton as React.ComponentType<any>;
 
 type GroupsIconButtonProps = {
   onPress?: () => void;
+  color?: string;
 };
 
-export default function GroupsIconButton({ onPress }: GroupsIconButtonProps) {
+export default function GroupsIconButton({ onPress, color }: GroupsIconButtonProps) {
   const { t } = useTranslation();
   const [ringPhase, setRingPhase] = useState<'active' | 'settle' | 'off'>(() => getUiState().ringPhase);
 
@@ -41,15 +43,17 @@ export default function GroupsIconButton({ onPress }: GroupsIconButtonProps) {
   }, [onPress]);
 
   return (
-    <IconPulseRing phase={ringPhase} onLoopEnd={handleLoopEnd}>
-      <IconButton
-        accessibilityLabel={t('groupsIntro.iconLabel')}
-        icon="people"
-        size={24}
-        onPress={handlePress}
-        testID="home.header.groups"
-        style={{ marginRight: 20 }}
-      />
-    </IconPulseRing>
+    <View style={{ marginRight: 20 }}>
+      <IconPulseRing phase={ringPhase} onLoopEnd={handleLoopEnd}>
+        <IconButton
+          accessibilityLabel={t('groupsIntro.iconLabel')}
+          icon="people"
+          color={color}
+          size={24}
+          onPress={handlePress}
+          testID="home.header.groups"
+        />
+      </IconPulseRing>
+    </View>
   );
 }
