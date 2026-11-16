@@ -121,6 +121,7 @@ jest.mock('../utils/storageDatum', () => ({
   saveSessionLanguageFilter: jest.fn(),
   getSessionModeFilter: jest.fn(),
   saveSessionModeFilter: jest.fn(),
+  incrementAppOpenCount: jest.fn(() => Promise.resolve(null)),
 }));
 
 jest.mock('../hooks/useGroupsHub', () => ({

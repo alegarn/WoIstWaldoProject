@@ -139,6 +139,109 @@ describe('locale files', () => {
   });
 });
 
+describe('private groups intro billing copy guard', () => {
+  function readLocale(code) {
+    return JSON.parse(readFileSync(resolve(__dirname, '..', 'i18n', 'locales', `${code}.json`), 'utf8'));
+  }
+
+  function getValue(bundle, path) {
+    return path.split('.').reduce((node, segment) => (node === undefined || node === null ? undefined : node[segment]), bundle);
+  }
+
+  function flattenEntries(value, prefix = '') {
+    return Object.entries(value).flatMap(([key, child]) =>
+      typeof child === 'object' && child !== null
+        ? flattenEntries(child, `${prefix}${key}.`)
+        : [[`${prefix}${key}`, child]],
+    );
+  }
+
+  const GROUPS_INTRO_KEYS = ['title', 'body', 'iconPointer', 'ctaOpen', 'ctaLater', 'iconLabel'];
+  const GROUPS_TUTORIAL_KEYS = [
+    'title',
+    'skip',
+    'next',
+    'done',
+    'page1.title',
+    'page1.body',
+    'page2.title',
+    'page2.body',
+    'page3.title',
+    'page3.body',
+    'page4.title',
+    'page4.body',
+    'storeLink',
+  ];
+  const GROUPS_EMPTY_KEYS = [
+    'title',
+    'subtitle',
+    'detailCreate',
+    'detailJoin',
+    'storeLink',
+    'storeCaption',
+    'whyTitle',
+    'whyBody',
+  ];
+
+  it('pins the exact groupsIntro / groupsTutorial / groups.empty key sets in en.json', () => {
+    const en = readLocale('en');
+
+    expect(Object.keys(getValue(en, 'groupsIntro') ?? {}).sort()).toEqual(GROUPS_INTRO_KEYS.slice().sort());
+    expect(flattenEntries(getValue(en, 'groupsTutorial') ?? {}).map(([key]) => key).sort()).toEqual(
+      GROUPS_TUTORIAL_KEYS.slice().sort(),
+    );
+    expect(flattenEntries(getValue(en, 'groups.empty') ?? {}).map(([key]) => key).sort()).toEqual(
+      GROUPS_EMPTY_KEYS.slice().sort(),
+    );
+  });
+
+  it('never says "unlock" in groupsIntro / groupsTutorial / groups.empty copy (creation is free, ADR 0016)', () => {
+    const en = readLocale('en');
+
+    for (const [block, keys] of [
+      ['groupsIntro', GROUPS_INTRO_KEYS],
+      ['groupsTutorial', GROUPS_TUTORIAL_KEYS],
+      ['groups.empty', GROUPS_EMPTY_KEYS],
+    ]) {
+      expect(keys.length).toBeGreaterThan(0);
+      for (const key of keys) {
+        const value = getValue(en, block === 'groups.empty' ? `groups.empty.${key}` : `${block}.${key}`);
+        expect(typeof value).toBe('string');
+        expect(value).not.toMatch(/unlock/i);
+      }
+    }
+  });
+
+  it('pitches creation as free in the create-related copy', () => {
+    const en = readLocale('en');
+
+    for (const key of [
+      'groups.empty.detailCreate',
+      'groupsTutorial.page3.title',
+      'groupsTutorial.page3.body',
+    ]) {
+      const value = getValue(en, key);
+      expect(typeof value).toBe('string');
+      expect(value).toMatch(/free/i);
+    }
+  });
+
+  it('ships groups.list.backToGroups in every locale', () => {
+    for (const { code } of LANGUAGES) {
+      const parsed = readLocale(code);
+      expect(typeof parsed.groups?.list?.backToGroups).toBe('string');
+      expect(parsed.groups.list.backToGroups.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('no longer defines groups.menu.groups in any locale', () => {
+    for (const { code } of LANGUAGES) {
+      const parsed = readLocale(code);
+      expect(parsed.groups?.menu?.groups).toBeUndefined();
+    }
+  });
+});
+
 describe('fallback mechanics', () => {
   async function createScratchInstance() {
     const instance = i18next.createInstance();

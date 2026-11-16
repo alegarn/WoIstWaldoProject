@@ -53,20 +53,51 @@ jest.mock('../utils/storageDatum', () => ({
   getQuickTutorialSeen: jest.fn(() => Promise.resolve(false)),
   setQuickTutorialSeen: jest.fn(() => Promise.resolve(null)),
   wipePublicGuessStorage: jest.fn(() => Promise.resolve(null)),
+  getGroupsIntroSeen: jest.fn(() => Promise.resolve(false)),
+  setGroupsIntroSeen: jest.fn(() => Promise.resolve(null)),
+  getGroupsDetailSeen: jest.fn(() => Promise.resolve(false)),
+  setGroupsDetailSeen: jest.fn(() => Promise.resolve(null)),
+  getAppOpenCount: jest.fn(() => Promise.resolve(1)),
+  incrementAppOpenCount: jest.fn(() => Promise.resolve(null)),
+}));
+
+const mockUseGroupsHub = jest.fn();
+const mockGroupsIntroGate = jest.fn();
+let mockGroupsIntroEnabled = true;
+
+jest.mock('../hooks/useGroupsHub', () => ({
+  useGroupsHub: () => mockUseGroupsHub(),
+}));
+
+jest.mock('../components/Groups/GroupsIntroGate', () => {
+  const React = require('react');
+  return function MockGroupsIntroGate(props) {
+    mockGroupsIntroGate(props);
+    return React.createElement('View', { testID: 'groups-intro.gate-probe' });
+  };
+});
+
+jest.mock('../components/UI/GroupsIconButton', () => () => null);
+
+jest.mock('../constants/featureFlags', () => ({
+  get GROUPS_INTRO_ENABLED() {
+    return mockGroupsIntroEnabled;
+  },
 }));
 
 import React from 'react';
 import { Alert, ScrollView } from 'react-native';
 import axios from 'axios';
 import * as ScreenOrientation from 'expo-screen-orientation';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import { AuthContext } from '../store/auth-context';
-import { getQuickTutorialSeen } from '../utils/storageDatum';
+import { getAppOpenCount, getGroupsIntroSeen, getQuickTutorialSeen } from '../utils/storageDatum';
 
 const WELCOME_MODAL_TEXT = /Welcome, do you want to do the tutorial/;
 const QUICK_TUTORIAL_TITLE = 'How to play';
+const EMPTY_HUB = { owned: [], joined: [], pendingInvites: [] };
 
 async function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}) {
   const contextValue = {
@@ -83,6 +114,7 @@ async function renderHomeScreen({ contextOverrides = {}, routeParams = {} } = {}
     navigate: jest.fn(),
     replace: jest.fn(),
     reset: jest.fn(),
+    addListener: jest.fn(() => () => {}),
   };
 
   const screen = await render(
@@ -114,6 +146,16 @@ describe('HomeScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getQuickTutorialSeen.mockResolvedValue(false);
+    getGroupsIntroSeen.mockResolvedValue(false);
+    getAppOpenCount.mockResolvedValue(1);
+    mockGroupsIntroEnabled = true;
+    mockUseGroupsHub.mockReturnValue({
+      data: EMPTY_HUB,
+      isLoading: false,
+      error: null,
+      isFresh: true,
+      refresh: jest.fn(),
+    });
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     ScreenOrientation.getOrientationAsync.mockResolvedValue(1);
   });
@@ -293,6 +335,108 @@ describe('HomeScreen', () => {
     });
     expect(screen.navigation.replace).toHaveBeenNthCalledWith(2, 'GuessPathScreen', {
       isTutorial: true,
+    });
+  });
+
+  describe('groups intro gate mounting', () => {
+    const COMPLETED_TUTORIAL = { isTutorial: true, guessPathDone: true, hidePathDone: true };
+
+    function gateProps() {
+      return mockGroupsIntroGate.mock.calls[mockGroupsIntroGate.mock.calls.length - 1]?.[0];
+    }
+
+    async function closeWelcomeModal(screen) {
+      axios.put.mockResolvedValue({ status: 200, data: {} });
+      await fireEvent.press(screen.getByTestId('home.tutorial-modal.close'));
+      await waitFor(() => expect(gateProps().chainQuiet).toBe(true));
+    }
+
+    async function refocusHome(screen) {
+      await act(async () => {
+        screen.rerender(
+          <AuthContext.Provider value={screen.contextValue}>
+            <HomeScreen navigation={screen.navigation} route={{ params: {} }} />
+          </AuthContext.Provider>
+        );
+      });
+    }
+
+    it('renders the groups intro gate probe once the tutorial chain goes quiet for a completed tutorial', async () => {
+      getQuickTutorialSeen.mockResolvedValue(true);
+
+      const screen = await renderHomeScreen({
+        contextOverrides: { isTutorialFinished: COMPLETED_TUTORIAL },
+      });
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+      expect(gateProps().chainQuiet).toBe(false);
+
+      await closeWelcomeModal(screen);
+
+      expect(gateProps().chainQuiet).toBe(true);
+
+      await refocusHome(screen);
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+      expect(gateProps().chainQuiet).toBe(true);
+      expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
+      expect(screen.queryByText(QUICK_TUTORIAL_TITLE)).toBeNull();
+    });
+
+    it('keeps the gate probe mounted with a quiet chain when the intro was already seen (inertness asserted in the gate suite)', async () => {
+      getQuickTutorialSeen.mockResolvedValue(true);
+      getGroupsIntroSeen.mockResolvedValue(true);
+
+      const screen = await renderHomeScreen({
+        contextOverrides: { isTutorialFinished: COMPLETED_TUTORIAL },
+      });
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+
+      await closeWelcomeModal(screen);
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+      expect(gateProps().chainQuiet).toBe(true);
+      expect(screen.queryByText(WELCOME_MODAL_TEXT)).toBeNull();
+    });
+
+    it('renders the gate probe for a user with group memberships (silent flag-write asserted in the gate suite)', async () => {
+      getQuickTutorialSeen.mockResolvedValue(true);
+      mockUseGroupsHub.mockReturnValue({
+        data: { owned: [{ id: 'g-1', role: 'owner', name: 'Mine' }], joined: [], pendingInvites: [] },
+        isLoading: false,
+        error: null,
+        isFresh: true,
+        refresh: jest.fn(),
+      });
+
+      const screen = await renderHomeScreen({
+        contextOverrides: { isTutorialFinished: COMPLETED_TUTORIAL },
+      });
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+
+      await closeWelcomeModal(screen);
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+      expect(gateProps().chainQuiet).toBe(true);
+      expect(screen.getByText('Find Waldo')).toBeTruthy();
+    });
+
+    it('keeps the gate probe mounted when GROUPS_INTRO_ENABLED is false (kill-switch inertness asserted in the gate suite)', async () => {
+      mockGroupsIntroEnabled = false;
+      getQuickTutorialSeen.mockResolvedValue(true);
+
+      const screen = await renderHomeScreen({
+        contextOverrides: { isTutorialFinished: COMPLETED_TUTORIAL },
+      });
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+
+      await closeWelcomeModal(screen);
+
+      expect(screen.getByTestId('groups-intro.gate-probe')).toBeTruthy();
+      expect(gateProps().chainQuiet).toBe(true);
     });
   });
 });

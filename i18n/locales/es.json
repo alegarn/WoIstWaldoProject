@@ -460,12 +460,13 @@
       "loading": "Cargando grupos...",
       "loadFailed": "No se pudieron cargar los grupos.",
       "empty": "Todavía no estás en ningún grupo privado.",
-      "joinAnother": "Unirse a otro grupo",
+      "joinAnother": "Unirse a grupo",
       "create": "Crear grupo",
       "store": "Tienda",
       "owner": "Propietario",
       "open": "Abrir",
-      "openFailed": "No se pudo abrir el grupo."
+      "openFailed": "No se pudo abrir el grupo.",
+      "backToGroups": "Grupos"
     },
     "create": {
       "loading": "Cargando...",
@@ -592,7 +593,6 @@
       "groupUnavailable": "Este grupo no está disponible en esta cuenta por ahora."
     },
     "menu": {
-      "groups": "Grupos",
       "store": "Tienda",
       "switchToPublic": "Cambiar a público",
       "switchToPrivate": "Cambiar a privado",
@@ -600,6 +600,16 @@
       "guessWalkthrough": "Guía de la pantalla de adivinar",
       "moreOptions": "Más opciones",
       "switchFailed": "No se pudo cambiar de modo."
+    },
+    "empty": {
+      "title": "Aún no hay grupos",
+      "subtitle": "Gratis para unirse y para crear.",
+      "detailCreate": "Crear un grupo es gratis: 1 grupo con hasta 10 miembros.",
+      "detailJoin": "¿Tienes un código de un amigo? Únete a su grupo en segundos.",
+      "storeLink": "Personalizar en la tienda",
+      "storeCaption": "Personalizar",
+      "whyTitle": "¿Por qué grupos?",
+      "whyBody": "Esconde y adivina en privado con los amigos que elijas, lejos del feed público."
     }
   },
   "billing": {
@@ -670,5 +680,36 @@
         "cta": "Suscribirse"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Juega con tus amigos",
+    "body": "Los grupos privados son gratis: unirse y crear (1 grupo con hasta 10 miembros).",
+    "iconPointer": "Toca el icono de grupos para abrir tus grupos en cualquier momento.",
+    "ctaOpen": "Abrir grupos",
+    "ctaLater": "Quizás más tarde",
+    "iconLabel": "Grupos"
+  },
+  "groupsTutorial": {
+    "title": "Cómo funcionan los grupos",
+    "skip": "Omitir",
+    "next": "Siguiente",
+    "done": "Listo",
+    "page1": {
+      "title": "Juega en privado",
+      "body": "Crea un espacio privado y esconde a Waldo solo para la gente que invitas."
+    },
+    "page2": {
+      "title": "Únete gratis",
+      "body": "Introduce el código de grupo de un amigo y ya estás dentro: unirse siempre es gratis."
+    },
+    "page3": {
+      "title": "Crea gratis",
+      "body": "Crear un grupo es gratis: 1 grupo con hasta 10 miembros."
+    },
+    "page4": {
+      "title": "Hazlo tuyo",
+      "body": "Personaliza tu grupo en la tienda: imágenes, categorías y colores propios."
+    },
+    "storeLink": "Personalizar en la tienda"
   }
 }

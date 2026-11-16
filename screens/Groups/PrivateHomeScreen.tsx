@@ -401,7 +401,7 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
           testID="private-home.button.retry-group"
         />
         <BigButton
-          text={t('groups.menu.groups')}
+          text={t('groups.list.backToGroups')}
           onPress={() => {
             clear();
             navigation.navigate('GroupsListScreen');

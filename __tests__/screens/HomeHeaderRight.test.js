@@ -271,4 +271,20 @@ describe('HomeHeaderRight', () => {
 
     expect(onOpenGuessWalkthrough).toHaveBeenCalledTimes(1);
   });
+
+  it('no longer offers the groups row in the overflow menu', () => {
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    openMenu(renderer);
+
+    expect(renderer.root.findAllByProps({ testID: 'home.menu.groups' })).toHaveLength(0);
+  });
 });

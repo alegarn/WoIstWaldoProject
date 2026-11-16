@@ -465,7 +465,8 @@
       "store": "Store",
       "owner": "Owner",
       "open": "Open",
-      "openFailed": "Could not open the group."
+      "openFailed": "Could not open the group.",
+      "backToGroups": "Groups"
     },
     "create": {
       "loading": "Loading...",
@@ -592,7 +593,6 @@
       "groupUnavailable": "This group isn't available on this account right now."
     },
     "menu": {
-      "groups": "Groups",
       "store": "Store",
       "switchToPublic": "Switch to public",
       "switchToPrivate": "Switch to private",
@@ -600,6 +600,16 @@
       "guessWalkthrough": "Guess screen how-to",
       "moreOptions": "More options",
       "switchFailed": "Could not switch scope."
+    },
+    "empty": {
+      "title": "No groups yet",
+      "subtitle": "Free to join and free to create.",
+      "detailCreate": "Creating a group is free — 1 group with up to 10 members.",
+      "detailJoin": "Got a code from a friend? Join their group in seconds.",
+      "storeLink": "Personalize in the Store",
+      "storeCaption": "Personalize",
+      "whyTitle": "Why groups?",
+      "whyBody": "Hide and guess privately with the friends you choose — away from the public feed."
     }
   },
   "billing": {
@@ -670,5 +680,36 @@
         "cta": "Subscribe"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Play with friends",
+    "body": "Private groups are free to join and free to create — 1 group with up to 10 members.",
+    "iconPointer": "Tap the groups icon to open your groups anytime.",
+    "ctaOpen": "Open groups",
+    "ctaLater": "Maybe later",
+    "iconLabel": "Groups"
+  },
+  "groupsTutorial": {
+    "title": "How groups work",
+    "skip": "Skip",
+    "next": "Next",
+    "done": "Done",
+    "page1": {
+      "title": "Play privately",
+      "body": "Create a private space and hide Waldo just for the people you invite."
+    },
+    "page2": {
+      "title": "Join for free",
+      "body": "Enter a friend's group code and you're in — joining is always free."
+    },
+    "page3": {
+      "title": "Create for free",
+      "body": "Creating a group is free: 1 group with up to 10 members."
+    },
+    "page4": {
+      "title": "Make it yours",
+      "body": "Personalize your group in the Store — custom images, categories and colors."
+    },
+    "storeLink": "Personalize in the Store"
   }
 }

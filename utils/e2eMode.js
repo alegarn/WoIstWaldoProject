@@ -2,7 +2,7 @@ import { Image as ReactNativeImage } from 'react-native';
 
 import { RANKING as DUMMY_RANKING } from '../data/dummy-data';
 import ImageModel from '../models/image';
-import { savePreferredLanguage, setGuessPathWalkthroughSeen, setOnboardingCompleted, setQuickTutorialSeen } from './storageDatum';
+import { savePreferredLanguage, setAppOpenCount, setGroupsDetailSeen, setGroupsIntroSeen, setGuessPathWalkthroughSeen, setOnboardingCompleted, setQuickTutorialSeen } from './storageDatum';
 import { getCategoryAsset } from './categoryAssets';
 import { handlePicturePress } from './targetLocation';
 
@@ -10,6 +10,7 @@ const E2E_HIDE_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_GUESS_ASSET = require('../assets/tutorial/farm_pict_320.jpg');
 const E2E_HIDE_LOCATION = { x: 0.58, y: 0.46 };
 const E2E_INCORRECT_HIDE_LOCATION = { x: 0.18, y: 0.18 };
+const E2E_APP_OPEN_COUNT_PIN = 99;
 
 export const E2E_SHAPE_POLYGON = [
   { x: 0.5, y: 0.3 },
@@ -177,6 +178,9 @@ export async function ensureE2EOnboardingBypass() {
     setOnboardingCompleted(true),
     setGuessPathWalkthroughSeen(true),
     setQuickTutorialSeen(true),
+    setGroupsIntroSeen(true),
+    setGroupsDetailSeen(true),
+    setAppOpenCount(E2E_APP_OPEN_COUNT_PIN),
   ]);
 
   return true;

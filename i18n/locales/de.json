@@ -460,12 +460,13 @@
       "loading": "Gruppen werden geladen...",
       "loadFailed": "Gruppen konnten nicht geladen werden.",
       "empty": "Du bist noch in keiner privaten Gruppe.",
-      "joinAnother": "Anderer Gruppe beitreten",
+      "joinAnother": "Gruppe beitreten",
       "create": "Gruppe erstellen",
       "store": "Shop",
       "owner": "Besitzer",
       "open": "Öffnen",
-      "openFailed": "Gruppe konnte nicht geöffnet werden."
+      "openFailed": "Gruppe konnte nicht geöffnet werden.",
+      "backToGroups": "Gruppen"
     },
     "create": {
       "loading": "Wird geladen...",
@@ -592,7 +593,6 @@
       "groupUnavailable": "Diese Gruppe ist auf diesem Konto gerade nicht verfügbar."
     },
     "menu": {
-      "groups": "Gruppen",
       "store": "Shop",
       "switchToPublic": "Zum öffentlichen Modus wechseln",
       "switchToPrivate": "Zum privaten Modus wechseln",
@@ -600,6 +600,16 @@
       "guessWalkthrough": "Anleitung zum Rate-Bildschirm",
       "moreOptions": "Weitere Optionen",
       "switchFailed": "Moduswechsel fehlgeschlagen."
+    },
+    "empty": {
+      "title": "Noch keine Gruppen",
+      "subtitle": "Kostenlos beitreten und kostenlos erstellen.",
+      "detailCreate": "Eine Gruppe zu erstellen ist kostenlos — 1 Gruppe mit bis zu 10 Mitgliedern.",
+      "detailJoin": "Du hast einen Code von einem Freund? Tritt der Gruppe in Sekunden bei.",
+      "storeLink": "Im Shop personalisieren",
+      "storeCaption": "Personalisieren",
+      "whyTitle": "Warum Gruppen?",
+      "whyBody": "Verstecke und rate privat mit den Freunden, die du wählst — abseits des öffentlichen Feeds."
     }
   },
   "billing": {
@@ -670,5 +680,36 @@
         "cta": "Abonnieren"
       }
     }
+  },
+  "groupsIntro": {
+    "title": "Spiele mit Freunden",
+    "body": "Private Gruppen sind kostenlos — beim Beitreten und beim Erstellen (1 Gruppe mit bis zu 10 Mitgliedern).",
+    "iconPointer": "Tippe auf das Gruppen-Symbol, um jederzeit zu deinen Gruppen zu gelangen.",
+    "ctaOpen": "Gruppen öffnen",
+    "ctaLater": "Vielleicht später",
+    "iconLabel": "Gruppen"
+  },
+  "groupsTutorial": {
+    "title": "So funktionieren Gruppen",
+    "skip": "Überspringen",
+    "next": "Weiter",
+    "done": "Fertig",
+    "page1": {
+      "title": "Privat spielen",
+      "body": "Schaffe einen privaten Raum und verstecke Waldo nur für die Menschen, die du einlädst."
+    },
+    "page2": {
+      "title": "Kostenlos beitreten",
+      "body": "Gib den Gruppen-Code eines Freundes ein und du bist dabei — Beitreten ist immer kostenlos."
+    },
+    "page3": {
+      "title": "Kostenlos erstellen",
+      "body": "Eine Gruppe zu erstellen ist kostenlos: 1 Gruppe mit bis zu 10 Mitgliedern."
+    },
+    "page4": {
+      "title": "Mach es zu deinem",
+      "body": "Personalisiere deine Gruppe im Shop — eigene Bilder, Kategorien und Farben."
+    },
+    "storeLink": "Im Shop personalisieren"
   }
 }
