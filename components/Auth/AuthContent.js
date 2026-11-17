@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import {
-  SafeAreaView,
   ScrollView,
   KeyboardAvoidingView,
   StyleSheet,
@@ -8,6 +7,7 @@ import {
   Text,
   Platform,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +73,7 @@ const AuthContent = ({ isLogin, onAuthenticate, authenticating }) => {
 
   return (
     <SafeAreaView
+      edges={Platform.OS === 'ios' ? ['top', 'bottom'] : []}
       style={[
         styles.authContent,
         isLogin ? styles.authContentLogin : styles.authContentSignup,

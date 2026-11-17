@@ -5,7 +5,20 @@ import { useTranslation } from 'react-i18next';
 import Input from './Input';
 import { GlobalStyle, spacing, radius, typography, touchTarget } from '../../constants/theme';
 
-const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => {
+export type CredentialsKey = 'email' | 'confirmEmail' | 'password' | 'confirmPassword' | 'username';
+
+export type Credentials = Record<CredentialsKey, string>;
+
+export type CredentialsInvalid = Record<CredentialsKey, boolean>;
+
+type AuthFormProps = {
+  isLogin: boolean;
+  onSubmit: (credentials: Credentials) => void | Promise<void>;
+  credentialsInvalid: CredentialsInvalid;
+  authenticating: boolean;
+};
+
+const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }: AuthFormProps) => {
   const { t } = useTranslation();
   const [enteredEmail, setEnteredEmail] = useState('');
   const [enteredConfirmEmail, setEnteredConfirmEmail] = useState('');
@@ -21,7 +34,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
     username: usernameIsInvalid,
   } = credentialsInvalid;
 
-  function updateInputValueHandler(inputType, enteredValue) {
+  function updateInputValueHandler(inputType: CredentialsKey, enteredValue: string) {
     switch (inputType) {
       case 'email':
         setEnteredEmail(enteredValue);
@@ -61,7 +74,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
       <Input
         accessibilityLabel={t('auth.emailAddress')}
         label={t('auth.emailAddress')}
-        onUpdateValue={updateInputValueHandler.bind(this, 'email')}
+        onUpdateValue={(enteredValue) => updateInputValueHandler('email', enteredValue)}
         testID="auth.input.email"
         value={enteredEmail}
         keyboardType="email-address"
@@ -74,7 +87,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
         <Input
           accessibilityLabel={t('auth.confirmEmailAddress')}
           label={t('auth.confirmEmailAddress')}
-          onUpdateValue={updateInputValueHandler.bind(this, 'confirmEmail')}
+          onUpdateValue={(enteredValue) => updateInputValueHandler('confirmEmail', enteredValue)}
           testID="auth.input.confirm-email"
           value={enteredConfirmEmail}
           keyboardType="email-address"
@@ -87,7 +100,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
       <Input
         accessibilityLabel={t('auth.password')}
         label={t('auth.password')}
-        onUpdateValue={updateInputValueHandler.bind(this, 'password')}
+        onUpdateValue={(enteredValue) => updateInputValueHandler('password', enteredValue)}
         secure
         testID="auth.input.password"
         value={enteredPassword}
@@ -101,10 +114,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
           <Input
             accessibilityLabel={t('auth.confirmPassword')}
             label={t('auth.confirmPassword')}
-            onUpdateValue={updateInputValueHandler.bind(
-              this,
-              'confirmPassword'
-            )}
+            onUpdateValue={(enteredValue) => updateInputValueHandler('confirmPassword', enteredValue)}
             secure
             testID="auth.input.confirm-password"
             value={enteredConfirmPassword}
@@ -116,10 +126,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => 
           <Input
             accessibilityLabel={t('auth.username')}
             label={t('auth.username')}
-            onUpdateValue={updateInputValueHandler.bind(
-              this,
-              'username'
-            )}
+            onUpdateValue={(enteredValue) => updateInputValueHandler('username', enteredValue)}
             testID="auth.input.username"
             value={enteredUsername}
             textContentType="username"

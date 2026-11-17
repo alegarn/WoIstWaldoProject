@@ -1,9 +1,24 @@
 import { useState } from 'react';
+import type { KeyboardTypeOptions, TextInputProps } from 'react-native';
 import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@react-native-vector-icons/ionicons';
 import { useTranslation } from 'react-i18next';
 
 import { GlobalStyle, spacing, radius, typography, touchTarget } from '../../constants/theme';
+
+type InputProps = {
+  label: string;
+  keyboardType?: KeyboardTypeOptions;
+  secure?: boolean;
+  onUpdateValue: (enteredValue: string) => void;
+  value: string;
+  isInvalid?: boolean;
+  error?: string;
+  testID?: string;
+  accessibilityLabel?: string;
+  textContentType?: TextInputProps['textContentType'];
+  autoComplete?: TextInputProps['autoComplete'];
+};
 
 export default function Input({
   label,
@@ -17,7 +32,7 @@ export default function Input({
   accessibilityLabel,
   textContentType,
   autoComplete,
-}) {
+}: InputProps) {
   const [isFocused, setIsFocused] = useState(false);
   const [isSecureVisible, setIsSecureVisible] = useState(false);
   const { t } = useTranslation();
