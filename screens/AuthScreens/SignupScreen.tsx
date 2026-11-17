@@ -3,16 +3,9 @@ import { Alert } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import AuthContent from '../../components/Auth/AuthContent';
+import { Credentials } from '../../components/Auth/AuthForm';
 import { createUser } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
-
-interface Credentials {
-  email: string;
-  confirmEmail: string;
-  password: string;
-  confirmPassword: string;
-  username: string;
-}
 
 interface AuthUserFields {
   id?: string;

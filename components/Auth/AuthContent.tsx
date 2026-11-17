@@ -12,15 +12,29 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import Button from '../UI/Button';
-import AuthForm from './AuthForm';
+import _Button from '../UI/Button';
+import AuthForm, { Credentials, CredentialsInvalid } from './AuthForm';
 import { GlobalStyle, spacing, radius, typography, shadow } from '../../constants/theme';
 
-const AuthContent = ({ isLogin, onAuthenticate, authenticating }) => {
-  const navigation = useNavigation();
+type AuthContentProps = {
+  isLogin: boolean;
+  authenticating?: boolean;
+  onAuthenticate: (credentials: Credentials) => void;
+};
+
+type AuthNavigation = {
+  replace: (screen: string) => void;
+};
+
+// Button.js is unmigrated; its destructured props (style / cancel / textStyle /
+// mode / thin) TS infers as all-required — cast keeps usage shape-identical.
+const Button = _Button as React.ComponentType<any>;
+
+const AuthContent = ({ isLogin, onAuthenticate, authenticating }: AuthContentProps) => {
+  const navigation = useNavigation() as unknown as AuthNavigation;
   const { t } = useTranslation();
 
-  const [credentialsInvalid, setCredentialsInvalid] = useState({
+  const [credentialsInvalid, setCredentialsInvalid] = useState<CredentialsInvalid>({
     email: false,
     password: false,
     confirmEmail: false,
@@ -38,7 +52,7 @@ const AuthContent = ({ isLogin, onAuthenticate, authenticating }) => {
     };
   };
 
-  function submitHandler(credentials) {
+  function submitHandler(credentials: Credentials) {
     let { email, confirmEmail, password, confirmPassword, username } = credentials;
 
     email = email.trim();
@@ -68,7 +82,7 @@ const AuthContent = ({ isLogin, onAuthenticate, authenticating }) => {
       });
       return;
     };
-    onAuthenticate({ email, password, confirmPassword, username });
+    onAuthenticate({ email, password, confirmEmail, confirmPassword, username });
   }
 
   return (
@@ -101,7 +115,7 @@ const AuthContent = ({ isLogin, onAuthenticate, authenticating }) => {
               isLogin={isLogin}
               onSubmit={submitHandler}
               credentialsInvalid={credentialsInvalid}
-              authenticating={authenticating}
+              authenticating={authenticating ?? false}
             />
             <View style={styles.buttons}>
               <Button
