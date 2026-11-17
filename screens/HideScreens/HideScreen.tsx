@@ -68,10 +68,7 @@ export default function HideScreen({ navigation, route }: HideScreenProps) {
   const screenDimensions = { width: screenWidth, height: screenHeight };
 
   const { scope: activeScope } = useActiveGroup();
-  // useActiveGroup lives in an unmigrated .js module whose inferred scope
-  // literal widens `kind` to string. Cast preserves runtime shape against
-  // the AdScope contract — behavior unchanged.
-  const scope = (routeScope ?? activeScope) as AdScope | undefined;
+  const scope = routeScope ?? activeScope;
   const { group, theme }: ScopedTheme = useScopedPrivateGroupTheme(routeScope);
   const backgroundColor = group?.primary_color ?? FALLBACK_BACKGROUND_COLOR;
 

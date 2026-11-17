@@ -37,7 +37,7 @@ type GroupSettingsScreenProps = {
 export default function GroupSettingsScreen({ navigation }: GroupSettingsScreenProps) {
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
-  const { scope } = useActiveGroup() as { scope: GroupScope };
+  const { scope } = useActiveGroup();
   const { data, isLoading, refresh } = useGroupsHub() as {
     data: GroupsHubData | null;
     isLoading: boolean;

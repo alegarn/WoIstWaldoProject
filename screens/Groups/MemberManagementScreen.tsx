@@ -60,7 +60,7 @@ export default function MemberManagementScreen({ navigation }: MemberManagementS
   const authContext = useContext(AuthContext);
 
   const translateTransferError = (raw: string) => t(TRANSFER_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
-  const { scope } = useActiveGroup() as { scope: GroupScope };
+  const { scope } = useActiveGroup();
   const { data, refresh } = useGroupsHub() as {
     data: GroupsHubData | null;
     refresh: () => Promise<void>;

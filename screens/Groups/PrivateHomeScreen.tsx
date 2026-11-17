@@ -80,10 +80,7 @@ type PrivateHomeScreenProps = {
 export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScreenProps) {
   const { t } = useTranslation();
   const routeScope = route?.params?.scope;
-  const { scope, clear } = useActiveGroup() as {
-    scope: GroupScope;
-    clear: () => void | Promise<void>;
-  };
+  const { scope, clear } = useActiveGroup();
   // auth-context.js infers its provider callbacks as zero-arg; this screen
   // calls setPrivateMode with a boolean.
   const authContext = useContext(AuthContext) as {

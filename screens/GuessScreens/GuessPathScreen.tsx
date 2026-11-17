@@ -247,8 +247,7 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
-  // useActiveGroup.js is untyped JS returning the same scope union; keep the cast local.
-  const { scope: activeScope } = useActiveGroup() as { scope: GuessPathScope };
+  const { scope: activeScope } = useActiveGroup();
   const scope: GuessPathScope = routeScope ?? activeScope;
   const isPrivateScope = scope?.kind === 'private' && !!scope?.groupId;
   // hooks/useGroupsHub.ts is typed TS; data is GroupsHubData | null from the groups hub.

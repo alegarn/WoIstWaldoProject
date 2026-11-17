@@ -35,7 +35,7 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const { data, isLoading } = useGroupsHub() as { data: GroupsHubData | null; isLoading: boolean };
-  const { setActive } = useActiveGroup() as { setActive: (groupId: string | null) => Promise<unknown> };
+  const { setActive } = useActiveGroup();
 
   const [name, setName] = useState('');
   const [primaryColor, setPrimaryColor] = useState(GlobalStyle.color.primaryColor);
