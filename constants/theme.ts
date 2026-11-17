@@ -1,3 +1,39 @@
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+} as const;
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 20,
+  pill: 999,
+} as const;
+
+export const typography = {
+  title: { fontSize: 28, fontWeight: '700' as const },
+  subtitle: { fontSize: 15, fontWeight: '400' as const },
+  body: { fontSize: 16 as const },
+  label: { fontSize: 13, fontWeight: '600' as const },
+};
+
+export const touchTarget = {
+  minHeight: 48,
+} as const;
+
+export const shadow = {
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+} as const;
+
 export const adPanel = {
   padding: 24,
   titleFontSize: 20,

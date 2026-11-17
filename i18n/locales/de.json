@@ -362,7 +362,18 @@
     "userCreationFailedEmail": "{{status}}: Bitte wähle eine andere E-Mail-Adresse.",
     "userCreationFailedServer": "{{status}}: Sorry, es ist der Server... oder dein Benutzername ist bereits vergeben. Bitte versuche es später erneut.",
     "userCreationFailedRetry": "Bitte versuche es später erneut.",
-    "creatingUser": "Benutzer wird erstellt..."
+    "creatingUser": "Benutzer wird erstellt...",
+    "loginTitle": "Willkommen zurück",
+    "loginSubtitle": "Melde dich an, um weiterzuspielen",
+    "signupTitle": "Erstelle dein Konto",
+    "signupSubtitle": "Tritt in wenigen Sekunden dem Spiel bei",
+    "errorEmail": "Gib eine gültige E-Mail-Adresse ein.",
+    "errorConfirmEmail": "E-Mail-Adressen stimmen nicht überein.",
+    "errorPassword": "Das Passwort muss mindestens 6 Zeichen lang sein.",
+    "errorConfirmPassword": "Passwörter stimmen nicht überein.",
+    "errorUsername": "Benutzername ist erforderlich.",
+    "showPassword": "Passwort anzeigen",
+    "hidePassword": "Passwort verbergen"
   },
   "onboarding": {
     "title": "Wähle deine bevorzugte Sprache",

@@ -361,7 +361,18 @@
     "userCreationFailedEmail": "{{status}}: Silakan pilih email lain.",
     "userCreationFailedServer": "{{status}}: Maaf, ini servernya... atau nama penggunamu sudah diambil. Coba lagi nanti.",
     "userCreationFailedRetry": "Silakan coba lagi nanti.",
-    "creatingUser": "Membuat pengguna..."
+    "creatingUser": "Membuat pengguna...",
+    "loginTitle": "Selamat datang kembali",
+    "loginSubtitle": "Masuk untuk terus bermain",
+    "signupTitle": "Buat akun kamu",
+    "signupSubtitle": "Bergabung dengan permainan dalam beberapa detik",
+    "errorEmail": "Masukkan alamat email yang valid.",
+    "errorConfirmEmail": "Alamat email tidak cocok.",
+    "errorPassword": "Kata sandi harus terdiri dari minimal 6 karakter.",
+    "errorConfirmPassword": "Kata sandi tidak cocok.",
+    "errorUsername": "Nama pengguna wajib diisi.",
+    "showPassword": "Tampilkan kata sandi",
+    "hidePassword": "Sembunyikan kata sandi"
   },
   "onboarding": {
     "title": "Pilih bahasa pilihanmu",

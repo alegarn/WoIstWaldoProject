@@ -361,7 +361,18 @@
     "userCreationFailedEmail": "{{status}}: 別のメールアドレスを選んでください。",
     "userCreationFailedServer": "{{status}}: 申し訳ありません、サーバーです... またはユーザー名が既に使われています。後でもう一度お試しください。",
     "userCreationFailedRetry": "後でもう一度お試しください。",
-    "creatingUser": "ユーザー作成中..."
+    "creatingUser": "ユーザー作成中...",
+    "loginTitle": "おかえりなさい",
+    "loginSubtitle": "ログインしてプレイを続けよう",
+    "signupTitle": "アカウントを作成",
+    "signupSubtitle": "数秒でゲームに参加しよう",
+    "errorEmail": "有効なメールアドレスを入力してください。",
+    "errorConfirmEmail": "メールアドレスが一致しません。",
+    "errorPassword": "パスワードは6文字以上で入力してください。",
+    "errorConfirmPassword": "パスワードが一致しません。",
+    "errorUsername": "ユーザー名は必須です。",
+    "showPassword": "パスワードを表示",
+    "hidePassword": "パスワードを隠す"
   },
   "onboarding": {
     "title": "希望する言語を選択",

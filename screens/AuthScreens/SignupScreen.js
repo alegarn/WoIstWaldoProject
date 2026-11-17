@@ -6,8 +6,6 @@ import AuthContent from '../../components/Auth/AuthContent';
 import { createUser } from '../../utils/auth';
 import { AuthContext } from '../../store/auth-context';
 
-import LoadingOverlay from '../../components/UI/LoadingOverlay';
-
 function SignupScreen({navigation}) {
   const { t } = useTranslation();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
@@ -62,13 +60,7 @@ function SignupScreen({navigation}) {
     }
   };
 
-  if (isAuthenticating) {
-    return (
-      <LoadingOverlay message={t('auth.creatingUser')} />
-    );
-  }
-
-  return <AuthContent onAuthenticate={signUpHandler}/>;
+  return <AuthContent isLogin={false} authenticating={isAuthenticating} onAuthenticate={signUpHandler}/>;
 }
 
 export default SignupScreen;

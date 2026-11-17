@@ -23,6 +23,11 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
+jest.mock('@react-native-vector-icons/ionicons', () => ({
+  Ionicons: () => null,
+  default: () => null,
+}));
+
 import React from 'react';
 import { Alert } from 'react-native';
 import axios from 'axios';

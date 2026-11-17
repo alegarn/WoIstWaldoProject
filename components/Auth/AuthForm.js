@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import { View, Platform } from 'react-native';
+import { View, Platform, Pressable, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import Button from '../UI/Button';
 import Input from './Input';
+import { GlobalStyle, spacing, radius, typography, touchTarget } from '../../constants/theme';
 
-const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
+const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, authenticating }) => {
   const { t } = useTranslation();
   const [enteredEmail, setEnteredEmail] = useState('');
   const [enteredConfirmEmail, setEnteredConfirmEmail] = useState('');
@@ -18,6 +18,7 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
     confirmEmail: emailsDontMatch,
     password: passwordIsInvalid,
     confirmPassword: passwordsDontMatch,
+    username: usernameIsInvalid,
   } = credentialsInvalid;
 
   function updateInputValueHandler(inputType, enteredValue) {
@@ -41,6 +42,9 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
   }
 
   function submitHandler() {
+    if (authenticating) {
+      return;
+    }
     onSubmit({
       email: enteredEmail,
       confirmEmail: enteredConfirmEmail,
@@ -50,78 +54,132 @@ const AuthForm = ({ isLogin, onSubmit, credentialsInvalid, height }) => {
     });
   }
 
+  const loadingText = isLogin ? t('auth.authenticating') : t('auth.creatingUser');
+
   return (
     <View>
-      <View>
+      <Input
+        accessibilityLabel={t('auth.emailAddress')}
+        label={t('auth.emailAddress')}
+        onUpdateValue={updateInputValueHandler.bind(this, 'email')}
+        testID="auth.input.email"
+        value={enteredEmail}
+        keyboardType="email-address"
+        textContentType="emailAddress"
+        autoComplete="email"
+        isInvalid={emailIsInvalid}
+        error={t('auth.errorEmail')}
+      />
+      {!isLogin && (
         <Input
-          accessibilityLabel={t('auth.emailAddress')}
-          label={t('auth.emailAddress')}
-          onUpdateValue={updateInputValueHandler.bind(this, 'email')}
-          testID="auth.input.email"
-          value={enteredEmail}
+          accessibilityLabel={t('auth.confirmEmailAddress')}
+          label={t('auth.confirmEmailAddress')}
+          onUpdateValue={updateInputValueHandler.bind(this, 'confirmEmail')}
+          testID="auth.input.confirm-email"
+          value={enteredConfirmEmail}
           keyboardType="email-address"
-          isInvalid={emailIsInvalid}
+          textContentType="emailAddress"
+          autoComplete="email"
+          isInvalid={emailsDontMatch}
+          error={t('auth.errorConfirmEmail')}
         />
-        {!isLogin && (
+      )}
+      <Input
+        accessibilityLabel={t('auth.password')}
+        label={t('auth.password')}
+        onUpdateValue={updateInputValueHandler.bind(this, 'password')}
+        secure
+        testID="auth.input.password"
+        value={enteredPassword}
+        textContentType={isLogin ? 'password' : 'newPassword'}
+        autoComplete={isLogin ? 'password' : 'new-password'}
+        isInvalid={passwordIsInvalid}
+        error={t('auth.errorPassword')}
+      />
+      {!isLogin && (
+        <>
           <Input
-            accessibilityLabel={t('auth.confirmEmailAddress')}
-            label={t('auth.confirmEmailAddress')}
-            onUpdateValue={updateInputValueHandler.bind(this, 'confirmEmail')}
-            testID="auth.input.confirm-email"
-            value={enteredConfirmEmail}
-            keyboardType="email-address"
-            isInvalid={emailsDontMatch}
+            accessibilityLabel={t('auth.confirmPassword')}
+            label={t('auth.confirmPassword')}
+            onUpdateValue={updateInputValueHandler.bind(
+              this,
+              'confirmPassword'
+            )}
+            secure
+            testID="auth.input.confirm-password"
+            value={enteredConfirmPassword}
+            textContentType="newPassword"
+            autoComplete="new-password"
+            isInvalid={passwordsDontMatch}
+            error={t('auth.errorConfirmPassword')}
           />
-        )}
-        <Input
-          accessibilityLabel={t('auth.password')}
-          label={t('auth.password')}
-          onUpdateValue={updateInputValueHandler.bind(this, 'password')}
-          secure
-          testID="auth.input.password"
-          value={enteredPassword}
-          isInvalid={passwordIsInvalid}
-        />
-        {!isLogin && (
+          <Input
+            accessibilityLabel={t('auth.username')}
+            label={t('auth.username')}
+            onUpdateValue={updateInputValueHandler.bind(
+              this,
+              'username'
+            )}
+            testID="auth.input.username"
+            value={enteredUsername}
+            textContentType="username"
+            autoComplete="username"
+            isInvalid={usernameIsInvalid}
+            error={t('auth.errorUsername')}
+          />
+        </>
+      )}
+      <Pressable
+        accessibilityLabel={isLogin ? t('auth.submitLoginLabel') : t('auth.submitSignupLabel')}
+        accessibilityRole="button"
+        accessibilityState={authenticating ? { disabled: true, busy: true } : undefined}
+        onPress={submitHandler}
+        disabled={authenticating}
+        style={({ pressed }) => [
+          styles.submitButton,
+          authenticating && styles.submitButtonLoading,
+          pressed && !authenticating && styles.submitButtonPressed,
+        ]}
+        testID={isLogin ? 'auth.button.login-submit' : 'auth.button.signup-submit'}
+      >
+        {authenticating ? (
           <>
-            <Input
-              accessibilityLabel={t('auth.confirmPassword')}
-              label={t('auth.confirmPassword')}
-              onUpdateValue={updateInputValueHandler.bind(
-                this,
-                'confirmPassword'
-              )}
-              secure
-              testID="auth.input.confirm-password"
-              value={enteredConfirmPassword}
-              isInvalid={passwordsDontMatch}
-            />
-            <Input
-              accessibilityLabel={t('auth.username')}
-              label={t('auth.username')}
-              onUpdateValue={updateInputValueHandler.bind(
-                this,
-                'username'
-              )}
-              testID="auth.input.username"
-              value={enteredUsername}
-            />
+            <ActivityIndicator size="small" color="white" />
+            <Text style={styles.submitButtonText}>{loadingText}</Text>
           </>
-        )}
-        <View style={{ marginTop: height * 0.02 }}>
-          <Button
-            accessibilityLabel={isLogin ? t('auth.submitLoginLabel') : t('auth.submitSignupLabel')}
-            onPress={submitHandler}
-            mode={Platform.OS === "ios" ? "flat" : null}
-            testID={isLogin ? 'auth.button.login-submit' : 'auth.button.signup-submit'}
-            thin={true}
-            >
+        ) : (
+          <Text style={styles.submitButtonText}>
             {isLogin ? t('auth.logIn') : t('auth.signUp')}
-          </Button>
-        </View>
-      </View>
+          </Text>
+        )}
+      </Pressable>
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  submitButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: spacing.sm,
+    minHeight: touchTarget.minHeight,
+    marginTop: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
+    backgroundColor: GlobalStyle.color.primaryColor100,
+  },
+  submitButtonPressed: {
+    opacity: 0.8,
+  },
+  submitButtonLoading: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    ...typography.body,
+    fontWeight: 'bold',
+    color: 'white',
+  },
+});
 
 export default AuthForm;
