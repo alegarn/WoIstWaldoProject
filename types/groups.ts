@@ -1,7 +1,7 @@
 // Shared runtime shapes for private groups. Fields mirror what the group
 // services and hooks actually produce/consume (groupApi.ts
 // normalizeGroupsPayload, groupCategoriesStore.js normalizePrivateCategory,
-// groupMembershipApi.js listMembers, hooks/useActiveGroup.js). Rows come from
+// groupMembershipApi.js listMembers, hooks/useActiveGroup.ts). Rows come from
 // axios JSON, so optional fields + index signatures keep the boundary honest.
 
 export type GroupRole = 'owner' | 'member';
@@ -38,7 +38,7 @@ export type GroupsHubData = {
   pendingInvites?: unknown[];
 };
 
-// Private-group screen routing scope (hooks/useActiveGroup.js and the
+// Private-group screen routing scope (hooks/useActiveGroup.ts and the
 // `scope` route param). The optional-undefined on `public` keeps `scope?.groupId`
 // honest at every access site without a discriminant dance.
 export type GroupScope =

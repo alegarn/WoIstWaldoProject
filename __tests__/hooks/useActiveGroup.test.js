@@ -66,6 +66,27 @@ describe('useActiveGroup — scope derivation', () => {
     expect(result.current.scope).toEqual({ kind: 'private', groupId: 'group-123' });
   });
 
+  it('rejects without touching client state when setActiveGroup resolves a non-2xx (dead group)', async () => {
+    const failure = {
+      status: 422,
+      data: { error: 'not_member', message: 'Not a member of this group' },
+    };
+    setActiveGroup.mockResolvedValue(failure);
+
+    const { result } = await renderHook(() => useActiveGroup(), {
+      wrapper: ({ children }) => (
+        <ActiveGroupWrapper>{children}</ActiveGroupWrapper>
+      ),
+    });
+
+    await act(async () => {
+      await expect(result.current.setActive('g-dead')).rejects.toEqual(failure);
+    });
+
+    expect(result.current.scope).toEqual({ kind: 'public' });
+    expect(result.current.activeGroupId).toBeNull();
+  });
+
   it('reverts to {kind:"public"} after clear() while retaining activeGroupId', async () => {
     setActiveGroup.mockResolvedValue({
       status: 200,

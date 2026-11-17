@@ -152,12 +152,13 @@ describe('PrivateHomeScreen', () => {
     const refresh = jest.fn();
     mockUseGroupsHub.mockReturnValue({ data: groupsData, isLoading, error, isFresh, refresh });
 
-    const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+    const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
+    const providerValue = { setPrivateMode: jest.fn(), ...authContext };
 
     let renderer;
     await act(async () => {
       renderer = create(
-        <AuthContext.Provider value={{ setPrivateMode: jest.fn(), ...authContext }}>
+        <AuthContext.Provider value={providerValue}>
           <PrivateHomeScreen
             navigation={navigation}
             route={{ params: { scope } }}
@@ -167,7 +168,7 @@ describe('PrivateHomeScreen', () => {
       await Promise.resolve();
     });
 
-    return { renderer, navigation, refresh, clear };
+    return { renderer, navigation, refresh, clear, providerValue };
   }
 
   function lastSetOptions(navigation) {
@@ -1169,64 +1170,11 @@ describe('PrivateHomeScreen', () => {
       expect(StyleSheet.flatten(container.props.style).backgroundColor).toBe(expectedTheme.screen);
     });
 
-    it('shows the retry-group error block when the hub settled but the scoped group is missing from the payload', async () => {
-      const { renderer, refresh } = await renderScreen({
-        groupsData: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
-      });
-
-      expect(renderer.root.findByProps({ testID: 'private-home.not-found' })).toBeTruthy();
-      expect(() => renderer.root.findByProps({ testID: 'private-home.error' })).toThrow();
-      expect(mockHomeCard.mock.calls.some(([props]) => props?.testID === 'private-home.button.hide')).toBe(false);
-
-      const callsBefore = refresh.mock.calls.length;
-
-      await act(async () => {
-        renderer.root.findByProps({ testID: 'private-home.button.retry-group' }).props.onPress();
-      });
-
-      expect(refresh.mock.calls.length).toBe(callsBefore + 1);
-    });
-
-    it('does not show the not-found block while the hub data is only cache-hydrated (isFresh false)', async () => {
+    it('auto-recovers when a fresh hub payload is missing the scoped group', async () => {
       const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
-      const { renderer } = await renderScreen({
-        groupsData: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
-        isFresh: false,
-      });
-
-      expect(() => renderer.root.findByProps({ testID: 'private-home.not-found' })).toThrow();
-      expect(warn).not.toHaveBeenCalledWith('[PrivateHomeScreen] group not found', expect.anything());
-
-      warn.mockRestore();
-    });
-
-    it('shows the group-unavailable copy with retry and back-to-groups actions in the not-found branch', async () => {
-      const { renderer, navigation, refresh, clear } = await renderScreen({
-        groupsData: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
-      });
-
-      expect(renderer.root.findByProps({ testID: 'private-home.not-found' })).toBeTruthy();
-      expect(renderer.root.findByProps({ children: "This group isn't available on this account right now." })).toBeTruthy();
-
-      const callsBefore = refresh.mock.calls.length;
-
-      await act(async () => {
-        renderer.root.findByProps({ testID: 'private-home.button.retry-group' }).props.onPress();
-      });
-      expect(refresh.mock.calls.length).toBe(callsBefore + 1);
-
-      await act(async () => {
-        renderer.root.findByProps({ testID: 'private-home.button.back-to-groups' }).props.onPress();
-      });
-      expect(clear).toHaveBeenCalled();
-      expect(navigation.navigate).toHaveBeenCalledWith('GroupsListScreen');
-    });
-
-    it('warns group-not-found at most once per signature across re-renders with unchanged data', async () => {
-      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
-
-      mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-7' }, clear: jest.fn() });
+      const clear = jest.fn();
+      mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-dead' }, clear });
       const refresh = jest.fn();
       mockUseGroupsHub.mockReturnValue({
         data: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
@@ -1236,9 +1184,90 @@ describe('PrivateHomeScreen', () => {
         refresh,
       });
 
-      const navigation = { navigate: jest.fn(), setOptions: jest.fn() };
+      const setActiveGroupId = jest.fn();
+      const setPrivateMode = jest.fn();
+      const providerValue = { setPrivateMode, setActiveGroupId, paidTier: 2 };
+      const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
+      const route = { params: { scope: { kind: 'private', groupId: 'g-dead' } } };
+
+      let renderer;
+      await act(async () => {
+        renderer = create(
+          <AuthContext.Provider value={providerValue}>
+            <PrivateHomeScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await Promise.resolve();
+      });
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.not-found' })).toThrow();
+      expect(() => renderer.root.findByProps({ testID: 'private-home.button.retry-group' })).toThrow();
+      expect(() => renderer.root.findByProps({ testID: 'private-home.button.back-to-groups' })).toThrow();
+      expect(mockHomeCard.mock.calls.some(([props]) => props?.testID === 'private-home.button.hide')).toBe(false);
+
+      expect(setActiveGroupId).toHaveBeenCalledWith(null);
+      expect(clear).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledWith('GroupsListScreen');
+      expect(navigation.navigate).not.toHaveBeenCalled();
+      expect(refresh).toHaveBeenCalledTimes(1);
+
+      warn.mockRestore();
+    });
+
+    it('does not show the not-found block or trigger recovery while the hub data is only cache-hydrated (isFresh false)', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const { renderer, navigation, clear, providerValue } = await renderScreen({
+        groupsData: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
+        isFresh: false,
+        authContext: { paidTier: 2, setActiveGroupId: jest.fn() },
+      });
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.not-found' })).toThrow();
+      expect(warn).not.toHaveBeenCalledWith('[PrivateHomeScreen] group not found', expect.anything());
+      expect(clear).not.toHaveBeenCalled();
+      expect(providerValue.setActiveGroupId).not.toHaveBeenCalled();
+      expect(navigation.replace).not.toHaveBeenCalled();
+
+      warn.mockRestore();
+    });
+
+    it('does not recover while a hub refresh is still in flight (isLoading with data present)', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const { renderer, navigation, clear, providerValue } = await renderScreen({
+        groupsData: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
+        isLoading: true,
+        authContext: { paidTier: 2, setActiveGroupId: jest.fn() },
+      });
+
+      expect(() => renderer.root.findByProps({ testID: 'private-home.not-found' })).toThrow();
+      expect(warn).not.toHaveBeenCalledWith('[PrivateHomeScreen] group not found', expect.anything());
+      expect(clear).not.toHaveBeenCalled();
+      expect(providerValue.setActiveGroupId).not.toHaveBeenCalled();
+      expect(navigation.replace).not.toHaveBeenCalled();
+
+      warn.mockRestore();
+    });
+
+    it('recovers at most once per dead groupId signature across re-renders with unchanged data', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+      const clear = jest.fn();
+      mockUseActiveGroup.mockReturnValue({ scope: { kind: 'private', groupId: 'g-7' }, clear });
+      const refresh = jest.fn();
+      mockUseGroupsHub.mockReturnValue({
+        data: { owned: [{ id: 'g-other', name: 'Other', role: 'owner' }], joined: [] },
+        isLoading: false,
+        error: null,
+        isFresh: true,
+        refresh,
+      });
+
+      const navigation = { navigate: jest.fn(), replace: jest.fn(), setOptions: jest.fn() };
       const route = { params: { scope: { kind: 'private', groupId: 'g-7' } } };
-      const providerValue = { setPrivateMode: jest.fn(), paidTier: 2 };
+      const providerValue = { setPrivateMode: jest.fn(), setActiveGroupId: jest.fn(), paidTier: 2 };
       const ui = (
         <AuthContext.Provider value={providerValue}>
           <PrivateHomeScreen navigation={navigation} route={route} />
@@ -1255,6 +1284,9 @@ describe('PrivateHomeScreen', () => {
         renderer.update(ui);
         await Promise.resolve();
       });
+
+      expect(clear).toHaveBeenCalledTimes(1);
+      expect(navigation.replace).toHaveBeenCalledTimes(1);
 
       const notFoundWarns = warn.mock.calls.filter(([message]) => message === '[PrivateHomeScreen] group not found');
       expect(notFoundWarns).toHaveLength(1);

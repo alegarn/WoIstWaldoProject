@@ -35,7 +35,7 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
   const { t } = useTranslation();
   const authContext = useContext(AuthContext);
   const { data, isLoading } = useGroupsHub() as { data: GroupsHubData | null; isLoading: boolean };
-  const { setActive } = useActiveGroup() as { setActive: (groupId: string | null) => Promise<unknown> };
+  const { setActive } = useActiveGroup();
 
   const [name, setName] = useState('');
   const [primaryColor, setPrimaryColor] = useState(GlobalStyle.color.primaryColor);
@@ -54,7 +54,12 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
     const goToGroup = async () => {
       const groupId = owned[0]?.id;
       if (!groupId) return;
-      await setActive(groupId);
+      try {
+        await setActive(groupId);
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message ?? t('groups.create.createFailed'));
+        return;
+      }
       navigation.replace('PrivateHomeScreen', {
         scope: { kind: 'private', groupId },
       });
