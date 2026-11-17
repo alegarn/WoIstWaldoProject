@@ -1,5 +1,6 @@
 import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import {  SafeAreaView, StyleSheet, Text, View, Alert } from 'react-native';
+import {  StyleSheet, Text, View, Alert, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
 
@@ -628,7 +629,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   }, [detailImage, detailTags, detailRating]);
 
   return (
-    <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack">
+    <SafeAreaView style={styles.screen} testID="guess-path.swipe-stack" edges={Platform.OS === 'ios' ? ['top', 'bottom'] : []}>
       {(imageList === null) || (imageList !== null && imageList?.length === 0 && asyncImagesAreLoading) ? (
         showIsLoading()
       ) : (noMoreCard === 'error') && (imageList?.length === 0) && (!asyncImagesAreLoading) ? (

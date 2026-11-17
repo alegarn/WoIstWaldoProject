@@ -1,5 +1,6 @@
 import { useContext, useLayoutEffect, useState } from 'react';
-import { View, Text, Alert, StyleSheet, SafeAreaView, ScrollView } from 'react-native';
+import { Platform, View, Text, Alert, StyleSheet, ScrollView } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import Button from '../components/UI/Button';
 import Input from '../components/Auth/Input';
@@ -242,7 +243,7 @@ const SettingsScreen = ({ navigation }) => {
 
   if (!isLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={Platform.OS === 'ios' ? ['top', 'bottom'] : []}>
         <ScrollView contentContainerStyle={styles.scrollContainer}>
           <View style={styles.screenBody} testID="settings.screen">
             <View style={styles.section}>
