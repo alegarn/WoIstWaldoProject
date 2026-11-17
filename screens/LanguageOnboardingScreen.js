@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { SafeAreaView, StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import Button from '../components/UI/Button';
@@ -30,7 +31,11 @@ export default function LanguageOnboardingScreen({ onDone }) {
   };
 
   return (
-    <SafeAreaView style={styles.container} testID="language-onboarding.screen">
+    <SafeAreaView
+      edges={Platform.OS === 'ios' ? ['top', 'bottom'] : []}
+      style={styles.container}
+      testID="language-onboarding.screen"
+    >
       <View style={styles.content}>
         <Text accessibilityRole="header" style={styles.title}>
           {t('onboarding.title')}
