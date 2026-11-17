@@ -91,8 +91,9 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     earnedGroupCreator?: boolean;
     earnedPremium?: boolean;
     setPrivateMode?: (isPrivate: boolean) => void | Promise<void>;
+    setActiveGroupId?: (groupId: string | number | null) => void | Promise<void>;
   };
-  const { setPrivateMode } = authContext;
+  const { setPrivateMode, setActiveGroupId } = authContext;
   const effectiveTier = effectiveTierFor(authContext);
   const activeScope = routeScope ?? scope;
   const { data, isLoading, error, isFresh = true, refresh } = useGroupsHub() as {
@@ -364,6 +365,25 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     setDismissedGroupId(groupId);
   }, [groupId]);
 
+  // A fresh hub 200 (isFresh, not cache-hydrated) that lacks the scoped group
+  // means the active group vanished server-side. Recover once per dead
+  // groupId signature: clear the stored id, exit private mode, and replace
+  // onto the Groups list so the user lands on its empty state. Loading and
+  // network-error branches are untouched.
+  useEffect(() => {
+    if (isLoading || error || !data || !isFresh) return;
+    if (!groupId) return;
+    const dataGroupIds = [...(data?.owned ?? []), ...(data?.joined ?? [])].map((g) => g?.id);
+    if (dataGroupIds.some((id) => id != null && String(id) === String(groupId))) return;
+    const warnSignature = `${groupId}|${dataGroupIds.join(',')}`;
+    if (lastNotFoundWarnRef.current === warnSignature) return;
+    lastNotFoundWarnRef.current = warnSignature;
+    console.warn('[PrivateHomeScreen] group not found', { scopeGroupId: groupId, dataGroupIds });
+    setActiveGroupId?.(null);
+    clear();
+    navigation.replace('GroupsListScreen');
+  }, [data, isLoading, error, isFresh, groupId, setActiveGroupId, clear, navigation]);
+
   if (isLoading && !data) {
     return <LoadingOverlay message={t('groups.list.loading')} />;
   }
@@ -381,35 +401,8 @@ export default function PrivateHomeScreen({ navigation, route }: PrivateHomeScre
     );
   }
 
-  // Hub settled but the active private group is not in the payload (e.g. the
-  // group vanished server-side): fail loudly instead of a degraded ungated body.
-  // isFresh gates this on a completed 200 for the current credentials, so a
-  // stale cache-only payload cannot masquerade as a server-side not-found.
   if (!isLoading && !error && data && isFresh && activeScope?.kind === 'private' && !group) {
-    const dataGroupIds = [...(data?.owned ?? []), ...(data?.joined ?? [])].map((g) => g?.id);
-    const warnSignature = `${groupId}|${dataGroupIds.join(',')}`;
-    if (lastNotFoundWarnRef.current !== warnSignature) {
-      lastNotFoundWarnRef.current = warnSignature;
-      console.warn('[PrivateHomeScreen] group not found', { scopeGroupId: groupId, dataGroupIds });
-    }
-    return (
-      <View style={styles.errorContainer} testID="private-home.not-found">
-        <Text style={styles.errorText}>{t('groups.home.groupUnavailable')}</Text>
-        <BigButton
-          text={t('common.retry')}
-          onPress={() => refresh()}
-          testID="private-home.button.retry-group"
-        />
-        <BigButton
-          text={t('groups.list.backToGroups')}
-          onPress={() => {
-            clear();
-            navigation.navigate('GroupsListScreen');
-          }}
-          testID="private-home.button.back-to-groups"
-        />
-      </View>
-    );
+    return null;
   }
 
   const goScoped = (target: 'HidingPathScreen' | 'GuessPathScreen' | 'RankingScreen') =>

@@ -15,11 +15,13 @@ export function useActiveGroup() {
   const setActive = useCallback(async (groupId) => {
     const response = await setActiveGroup({ token, userId }, groupId ?? null);
 
-    if (response?.status === 200 || response?.status === 204) {
-      const nextGroupId = response?.data?.active_group_id ?? groupId ?? null;
-      await setActiveGroupId(nextGroupId);
-      await setPrivateMode(!!nextGroupId);
+    if (response?.status !== 200 && response?.status !== 204) {
+      throw response;
     }
+
+    const nextGroupId = response?.data?.active_group_id ?? groupId ?? null;
+    await setActiveGroupId(nextGroupId);
+    await setPrivateMode(!!nextGroupId);
 
     return response;
   }, [token, userId, setActiveGroupId, setPrivateMode]);

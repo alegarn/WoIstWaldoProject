@@ -218,6 +218,28 @@ describe('CreateGroupScreen', () => {
     });
   });
 
+  it('surfaces an Alert and does not navigate when setActive rejects in goToGroup', async () => {
+    mockUseGroupsHub.mockReturnValue({
+      data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },
+      isLoading: false,
+      error: null,
+      refresh: jest.fn(),
+    });
+    const setActive = jest.fn().mockRejectedValue({ status: 500, data: { error: 'boom' } });
+    mockUseActiveGroup.mockReturnValue({ setActive });
+
+    const navigation = { replace: jest.fn(), navigate: jest.fn() };
+    const { renderer } = await renderScreen({ authContext: { paidTier: 2 }, navigation });
+
+    await act(async () => {
+      await renderer.root.findByProps({ testID: 'create-group.button.go-to-group' }).props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith('Error', 'Could not create the group. Please try again.');
+    expect(navigation.replace).not.toHaveBeenCalled();
+  });
+
   it('shows the already-owns message without the unlock CTA even when the viewer lacks paid creator access', async () => {
     mockUseGroupsHub.mockReturnValue({
       data: { owned: [{ id: 'g-owned' }], joined: [], pendingInvites: [] },

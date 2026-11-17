@@ -54,7 +54,12 @@ export default function CreateGroupScreen({ navigation }: CreateGroupScreenProps
     const goToGroup = async () => {
       const groupId = owned[0]?.id;
       if (!groupId) return;
-      await setActive(groupId);
+      try {
+        await setActive(groupId);
+      } catch (err: any) {
+        Alert.alert(t('common.error'), err?.message ?? t('groups.create.createFailed'));
+        return;
+      }
       navigation.replace('PrivateHomeScreen', {
         scope: { kind: 'private', groupId },
       });
