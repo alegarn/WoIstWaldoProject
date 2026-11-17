@@ -333,8 +333,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "无效输入",
-    "invalidInputMessage": "请检查你输入的凭据。",
     "switchToSignupLabel": "切换到注册",
     "switchToLoginLabel": "切换到登录",
     "createAccount": "创建新用户",
@@ -361,7 +359,18 @@
     "userCreationFailedEmail": "{{status}}: 请选择其他邮箱。",
     "userCreationFailedServer": "{{status}}: 抱歉，是服务器的问题... 或者你的用户名已被占用。请稍后重试。",
     "userCreationFailedRetry": "请稍后重试。",
-    "creatingUser": "正在创建用户..."
+    "creatingUser": "正在创建用户...",
+    "loginTitle": "欢迎回来",
+    "loginSubtitle": "登录以继续游戏",
+    "signupTitle": "创建你的账号",
+    "signupSubtitle": "几秒钟即可加入游戏",
+    "errorEmail": "请输入有效的电子邮箱地址。",
+    "errorConfirmEmail": "两次输入的邮箱不一致。",
+    "errorPassword": "密码至少需要6个字符。",
+    "errorConfirmPassword": "两次输入的密码不一致。",
+    "errorUsername": "用户名为必填项。",
+    "showPassword": "显示密码",
+    "hidePassword": "隐藏密码"
   },
   "onboarding": {
     "title": "选择你的首选语言",

@@ -1,16 +1,8 @@
 const mockAuthContent = jest.fn(() => null);
-const mockLoadingOverlay = jest.fn(() => null);
 
 jest.mock('../components/Auth/AuthContent', () => {
   return function MockAuthContent(props) {
     mockAuthContent(props);
-    return null;
-  };
-});
-
-jest.mock('../components/UI/LoadingOverlay', () => {
-  return function MockLoadingOverlay(props) {
-    mockLoadingOverlay(props);
     return null;
   };
 });
@@ -139,7 +131,7 @@ describe('SignupScreen', () => {
     );
   });
 
-  it('renders the loading overlay while the signup pipeline is still pending', async () => {
+  it('renders an in-form authenticating state while the signup pipeline is still pending', async () => {
     let resolveCreateUser;
 
     createUser.mockReturnValue(
@@ -160,11 +152,17 @@ describe('SignupScreen', () => {
       await Promise.resolve();
     });
 
-    expect(mockLoadingOverlay).toHaveBeenCalledWith({ message: 'Creating user...' });
+    expect(getAuthContentProps()).toEqual(
+      expect.objectContaining({ authenticating: true, isLogin: false })
+    );
 
     await act(async () => {
       resolveCreateUser({ status: 500 });
       await Promise.resolve();
     });
+
+    expect(getAuthContentProps()).toEqual(
+      expect.objectContaining({ authenticating: false, isLogin: false })
+    );
   });
 });

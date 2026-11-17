@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Saisie invalide",
-    "invalidInputMessage": "Veuillez vérifier vos informations de connexion.",
     "switchToSignupLabel": "Passer à l'inscription",
     "switchToLoginLabel": "Passer à la connexion",
     "createAccount": "Créer un nouvel utilisateur",
@@ -362,7 +360,18 @@
     "userCreationFailedEmail": "{{status}} : Veuillez choisir une autre adresse e-mail.",
     "userCreationFailedServer": "{{status}} : Désolé, c'est le serveur... ou votre nom d'utilisateur est déjà pris. Veuillez réessayer plus tard.",
     "userCreationFailedRetry": "Veuillez réessayer plus tard.",
-    "creatingUser": "Création de l'utilisateur..."
+    "creatingUser": "Création de l'utilisateur...",
+    "loginTitle": "Content de vous revoir",
+    "loginSubtitle": "Connectez-vous pour continuer à jouer",
+    "signupTitle": "Créez votre compte",
+    "signupSubtitle": "Rejoignez la partie en quelques secondes",
+    "errorEmail": "Entrez une adresse e-mail valide.",
+    "errorConfirmEmail": "Les adresses e-mail ne correspondent pas.",
+    "errorPassword": "Le mot de passe doit contenir au moins 6 caractères.",
+    "errorConfirmPassword": "Les mots de passe ne correspondent pas.",
+    "errorUsername": "Le nom d'utilisateur est requis.",
+    "showPassword": "Afficher le mot de passe",
+    "hidePassword": "Masquer le mot de passe"
   },
   "onboarding": {
     "title": "Choisissez votre langue préférée",

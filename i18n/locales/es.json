@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Entrada no válida",
-    "invalidInputMessage": "Comprueba las credenciales introducidas.",
     "switchToSignupLabel": "Cambiar a registro",
     "switchToLoginLabel": "Cambiar a inicio de sesión",
     "createAccount": "Crear un nuevo usuario",
@@ -362,7 +360,18 @@
     "userCreationFailedEmail": "{{status}}: Elige otro correo electrónico.",
     "userCreationFailedServer": "{{status}}: Lo sentimos, es el servidor... o tu nombre de usuario ya está tomado. Reinténtalo más tarde.",
     "userCreationFailedRetry": "Reinténtalo más tarde.",
-    "creatingUser": "Creando usuario..."
+    "creatingUser": "Creando usuario...",
+    "loginTitle": "Bienvenido de nuevo",
+    "loginSubtitle": "Inicia sesión para seguir jugando",
+    "signupTitle": "Crea tu cuenta",
+    "signupSubtitle": "Únete al juego en unos segundos",
+    "errorEmail": "Introduce un correo electrónico válido.",
+    "errorConfirmEmail": "Los correos electrónicos no coinciden.",
+    "errorPassword": "La contraseña debe tener al menos 6 caracteres.",
+    "errorConfirmPassword": "Las contraseñas no coinciden.",
+    "errorUsername": "El nombre de usuario es obligatorio.",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña"
   },
   "onboarding": {
     "title": "Elige tu idioma preferido",
