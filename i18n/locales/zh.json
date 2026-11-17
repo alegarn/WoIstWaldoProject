@@ -333,8 +333,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "无效输入",
-    "invalidInputMessage": "请检查你输入的凭据。",
     "switchToSignupLabel": "切换到注册",
     "switchToLoginLabel": "切换到登录",
     "createAccount": "创建新用户",

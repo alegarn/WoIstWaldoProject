@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Ungültige Eingabe",
-    "invalidInputMessage": "Bitte prüfe deine eingegebenen Zugangsdaten.",
     "switchToSignupLabel": "Zur Registrierung wechseln",
     "switchToLoginLabel": "Zur Anmeldung wechseln",
     "createAccount": "Neuen Benutzer erstellen",

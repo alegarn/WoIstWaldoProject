@@ -55,7 +55,9 @@ function SignupScreen({navigation}) {
       setIsAuthenticating(false);
 
     } catch (err) {
-      console.log(err);
+      Alert.alert(
+        t('auth.userCreationFailedTitle'),
+        t('auth.userCreationFailedRetry'));
       setIsAuthenticating(false);
     }
   };

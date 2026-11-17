@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Invalid input",
-    "invalidInputMessage": "Please check your entered credentials.",
     "switchToSignupLabel": "Switch to signup",
     "switchToLoginLabel": "Switch to login",
     "createAccount": "Create a new user",

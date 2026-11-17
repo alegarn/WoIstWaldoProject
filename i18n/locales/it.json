@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Input non valido",
-    "invalidInputMessage": "Controlla le credenziali inserite.",
     "switchToSignupLabel": "Passa alla registrazione",
     "switchToLoginLabel": "Passa all'accesso",
     "createAccount": "Crea un nuovo utente",

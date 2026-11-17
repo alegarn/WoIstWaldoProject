@@ -54,7 +54,6 @@ function LoginScreen() {
       };
       setIsAuthenticating(false);
     } catch (err) {
-      //console.log(err);
       Alert.alert(t('auth.caughtErrorTitle'), err);
       setIsAuthenticating(false);
     };

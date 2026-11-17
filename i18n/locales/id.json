@@ -333,8 +333,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Masukan tidak valid",
-    "invalidInputMessage": "Silakan periksa kredensial yang kamu masukkan.",
     "switchToSignupLabel": "Beralih ke pendaftaran",
     "switchToLoginLabel": "Beralih ke login",
     "createAccount": "Buat pengguna baru",

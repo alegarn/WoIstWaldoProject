@@ -334,8 +334,6 @@
     }
   },
   "auth": {
-    "invalidInputTitle": "Saisie invalide",
-    "invalidInputMessage": "Veuillez vérifier vos informations de connexion.",
     "switchToSignupLabel": "Passer à l'inscription",
     "switchToLoginLabel": "Passer à la connexion",
     "createAccount": "Créer un nouvel utilisateur",
