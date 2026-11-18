@@ -3,6 +3,7 @@ node_modules/
 dist/
 npm-debug.*
 *.jks
+*.apk
 *.p8
 *.p12
 *.key
@@ -17,6 +18,7 @@ web-build/
 .metro-health-check*
 
 .env
+.env.local
 
 assets/test_images/*
 

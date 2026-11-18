@@ -18,7 +18,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-1838983009101821/6431145621"
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-1838983009101821/6431145621",
+        "EXPO_PUBLIC_TESTER_TOOLS": "true"
       },
       "channel": "preview"
     },

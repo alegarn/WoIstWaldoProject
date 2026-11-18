@@ -76,6 +76,24 @@ describe('servingCycle (card-serving-cycle Task A1)', () => {
     expect(await getServingCycleEpoch('fr', null)).toBe(2);
   });
 
+  it('O7: logs cycle-restart with the new epoch and scope', async () => {
+    mockStore();
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      const epoch = await startNewServingCycle('fr', null);
+
+      expect(epoch).toBe(1);
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'cycle-restart',
+        expect.objectContaining({ epoch: 1, scope: 'public', language: 'fr' }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it('epoch keys are isolated public vs group and per language', async () => {
     expect(servingCycleKey('fr', null)).toBe('servingCycle:public:fr');
     expect(servingCycleKey(undefined, undefined)).toBe('servingCycle:public:any');

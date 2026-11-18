@@ -1,16 +1,20 @@
 import { useCallback, useContext, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { FC, ReactNode } from 'react';
 import {  StyleSheet, Text, View, Alert, Platform } from 'react-native';
+import type { StyleProp, ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { GestureHandlerRootView/* , GestureDetector, Gesture */ } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import BadgeDetailModal from './BadgeDetailModal';
-import SwipeableCard from './SwipeableCard';
+import ButtonDefault from './Button';
+import SwipeableCardDefault from './SwipeableCard';
 import LoadingOverlay from './LoadingOverlay';
-import useBadgeDetail from './useBadgeDetail';
+import useBadgeDetailDefault from './useBadgeDetail';
 
-import { getE2EHiddenGuessCard, getLocalImages, isCategoryExhausted, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
-import { addPlayedPictureId, filterPlayedCards } from '../../utils/playedPictureIds';
+import { getE2EHiddenGuessCard, getLastImageUuid, getLocalImages, isCategoryExhausted, normalizeListIds, removeImageFromList, deleteImageFromStorage, saveLastImageUuid, PUBLIC_FEED_END_CURSOR } from '../../utils/storageDatum';
+import { addPlayedPictureId, filterPlayedCards, getPlayedPictureIds } from '../../utils/playedPictureIds';
+import { logFeedEvent } from '../../utils/feedDiagnostics';
 import { isCycleExhausted, startNewServingCycle } from '../../utils/servingCycle';
 import { isAllPoolDrainedFresh, markAllPoolDrained } from '../../utils/allPoolDrained';
 import { AuthContext } from '../../store/auth-context';
@@ -19,6 +23,8 @@ import { GlobalStyle } from '../../constants/theme';
 import { readGroupFeedCache } from '../../services/groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from '../../services/groups/groupFeedApi';
 import { fetchCardBatch, persistCardBatch, appendCardBatch, probeAllPoolForUnplayed, removeCardFromGroupDeck } from '../../services/cardDeck';
+import type { CardImage } from '../../services/cardDeck';
+import type { GroupScope } from '../../types/groups';
 import { prefetchIfLow, warmAllDeckIfNeeded } from '../../services/cardPrefetcher';
 import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 /* https://snack.expo.dev/embedded/@aboutreact/tinder-like-swipeable-card-example?preview=true&platform=ios&iframeId=0kofaqg0vl&theme=dark */
@@ -27,7 +33,7 @@ import { RECENT_ALL_CATEGORY } from '../../constants/categories';
 // services/groups/groupFeedApi.js) as English title/message strings. Mapping
 // them here to i18n keys keeps the transports untouched; unknown strings fall
 // back to themselves via t(raw, { defaultValue: raw }).
-const FEED_ERROR_KEYS = {
+const FEED_ERROR_KEYS: Record<string, string> = {
   "There is an error downloading user's images.": 'guess.feedErrors.downloadTitle',
   'There is an authentication error.': 'guess.feedErrors.authTitle',
   'Failed to load private images.': 'guess.feedErrors.privateTitle',
@@ -35,36 +41,130 @@ const FEED_ERROR_KEYS = {
   'Please reconnect': 'guess.feedErrors.reconnectMessage',
 };
 
-export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, mode, onOpenFilter, onOpenModeFilter, scope }) {
+type SwipeCategory = {
+  key?: string | null;
+  id?: string | null;
+};
+
+type SwipeCard = CardImage & {
+  name?: string;
+};
+
+type FeedLoadResult = boolean | 'error' | void;
+
+type BadgeDetailState = {
+  detailImage: SwipeCard | null;
+  detailTags: Array<{ name?: string }> | undefined;
+  detailRating: number | undefined;
+  detailVisible: boolean;
+  openDetail: (item: SwipeCard) => void;
+  closeDetail: () => void;
+};
+
+type ButtonProps = {
+  children?: ReactNode;
+  mode?: string;
+  onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
+  testID?: string;
+  accessibilityLabel?: string;
+};
+
+type SwipeableCardProps = {
+  item: SwipeCard;
+  removeCard: (id: number) => Promise<null>;
+  screenWidth: number;
+  screenHeight: number;
+  onSwipe: (args: { item: SwipeCard }) => void;
+  onBadgePress: (item: SwipeCard) => void;
+};
+
+// Button.js/SwipeableCard.js are .js deps whose destructured (default-less)
+// props TS infers as all-required; cast to the optional-prop shapes this
+// component actually passes — behavior preserved.
+const Button = ButtonDefault as unknown as FC<ButtonProps>;
+const SwipeableCard = SwipeableCardDefault as unknown as FC<SwipeableCardProps>;
+
+export interface SwipeImageProps {
+  screenWidth: number;
+  screenHeight: number;
+  startGuessing: (args: { item: SwipeCard }) => void;
+  category?: SwipeCategory | null;
+  language?: string | null;
+  mode?: string | null;
+  onOpenFilter: () => void;
+  onOpenModeFilter: () => void;
+  scope?: GroupScope | null;
+}
+
+export default function SwipeImage({ screenWidth, screenHeight, startGuessing, category, language, mode, onOpenFilter, onOpenModeFilter, scope }: SwipeImageProps) {
   const { t } = useTranslation();
 
-  const translateFeedErrorText = (raw) => t(FEED_ERROR_KEYS[raw] ?? raw, { defaultValue: raw });
+  const translateFeedErrorText = (raw?: string) => t(FEED_ERROR_KEYS[raw ?? ''] ?? raw, { defaultValue: raw });
 
   const categoryKey = category?.key || 'all';
   const lang = language || 'any';
   const filterMode = mode || 'any';
   const privateGroupId = scope?.kind === 'private' ? scope.groupId : null;
   const isPrivateScope = !!privateGroupId;
+  // Scope-correct feed-end sentinel: the mount sentinel arm writes the PRIVATE
+  // sentinel under a private scope, so every degradation gate must compare the
+  // SAME sentinel — a public-only comparison never fires under private scope.
+  const feedEndSentinel = isPrivateScope ? PRIVATE_FEED_END_CURSOR : PUBLIC_FEED_END_CURSOR;
 
-  const [imageList, setImageList] = useState(null);
+  const [imageList, setImageList] = useState<SwipeCard[] | null>(null);
   const [asyncImagesAreLoading, setAsyncImagesAreLoading] = useState(false);
-  const [noMoreCard, setNoMoreCard] = useState(null);
+  const [noMoreCard, setNoMoreCard] = useState<'error' | 'exhausted' | null>(null);
   const [activeCategoryKey, setActiveCategoryKey] = useState(categoryKey);
-  const [activeCategory, setActiveCategory] = useState(category);
+  const [activeCategory, setActiveCategory] = useState<SwipeCategory | null>(category ?? null);
 
   const context = useContext(AuthContext);
-  const { detailImage, detailTags, detailRating, detailVisible, openDetail, closeDetail } = useBadgeDetail(context);
+  const { detailImage, detailTags, detailRating, detailVisible, openDetail, closeDetail } = useBadgeDetailDefault(context) as BadgeDetailState;
 
-  const imageListRef = useRef(null);
+  const imageListRef = useRef<SwipeCard[] | null>(null);
   imageListRef.current = imageList;
 
   const asyncImagesAreLoadingRef = useRef(false);
   asyncImagesAreLoadingRef.current = asyncImagesAreLoading;
 
+  // Commit 1 L2 queue-then-flush: feed-error Alerts from loadNewImages are
+  // QUEUED here instead of firing inline (the Alert site is shared by cursor
+  // rounds, refill loads, and the head probe). Only the post-probe
+  // exhaustion gate drops a queued alert; EVERY non-degrading exit flushes
+  // it, so an un-proven error's alert can never be silently lost.
+  const pendingProbeAlertRef = useRef<{ title: string; message: string } | null>(null);
+
+  const flushPendingAlert = useCallback(() => {
+    const pending = pendingProbeAlertRef.current;
+    pendingProbeAlertRef.current = null;
+    if (pending) {
+      Alert.alert(pending.title, pending.message);
+    }
+  }, []);
+
   const activeCategoryKeyRef = useRef(categoryKey);
   activeCategoryKeyRef.current = activeCategoryKey;
   const activeCategoryRef = useRef(category);
   activeCategoryRef.current = activeCategory;
+
+  // G5: the private/public deck-read ternary (group feed cache vs local deck
+  // storage) has ONE authoritative form. `readDeckRaw` returns the stored list
+  // as-is (null when unset); `readActiveDeck` adds normalizeListIds. Callers
+  // apply filterPlayedCards themselves — the exhaustion-count proofs need the
+  // UNfiltered deck length beside the servable count.
+  const readDeckRaw = useCallback(async (deckKey: string, deckCategory?: SwipeCategory | null): Promise<CardImage[] | null> => (
+    isPrivateScope
+      ? ((await readGroupFeedCache(privateGroupId, {
+        categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id,
+        language: lang,
+        mode: filterMode,
+      }))?.images ?? null) as CardImage[] | null
+      : await getLocalImages(deckKey, lang, filterMode)
+  ), [filterMode, isPrivateScope, lang, privateGroupId]);
+
+  const readActiveDeck = useCallback(async (deckKey: string, deckCategory?: SwipeCategory | null) => normalizeListIds(
+    await readDeckRaw(deckKey, deckCategory) ?? [],
+  ), [readDeckRaw]);
 
   // Functions __________________________________________________________________
 
@@ -74,7 +174,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    * @param {Array} data - The data to be handled.
    * @return {Promise<boolean>} A promise that resolves to true if the updated image list has elements, false otherwise.
    */
-  const handleData = useCallback(async (data) => {
+  const handleData = useCallback(async (data?: CardImage[] | null): Promise<boolean | void> => {
     console.log("handleData");
 
     const aKey = activeCategoryKeyRef.current;
@@ -108,7 +208,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     };
 
     if (currentImageList !== null) {
-      if (data?.length > 0) {
+      if (data !== null && data !== undefined && data.length > 0) {
         console.log("updatedImageList handleData imageList !== null");
         const merged = await appendCardBatch({
           cards: data,
@@ -144,7 +244,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    * @returns {Promise<boolean|'error'|void>} `true`/`false` from handleData,
    *   `'error'` when the fetch errored (alert already shown).
    */
-  const loadNewImages = useCallback(async (pictureIdOverride) => {
+  const loadNewImages = useCallback(async (pictureIdOverride?: string | null): Promise<FeedLoadResult> => {
     console.log("loadNewImages");
     const response = await fetchCardBatch({
       categoryKey: activeCategoryKeyRef.current,
@@ -157,7 +257,24 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     });
 
     if (response.isError === true) {
-      Alert.alert(translateFeedErrorText(response.title), translateFeedErrorText(response.message));
+      // Commit 1 L2, Alert gate at the emission site (pinned): an error over
+      // an ARMED feed-end sentinel is decidable PRE-probe — the alert is
+      // dropped here, before the probe's degradation gate runs. Any other
+      // error alert is QUEUED pending that gate (see pendingProbeAlertRef).
+      // The read is guarded (.catch → null) so a rejecting cursor read fails
+      // open (the alert stays honest, no unhandled rejection).
+      const sentinelArmed = (await getLastImageUuid(
+        activeCategoryKeyRef.current,
+        language,
+        scope,
+        filterMode,
+      ).catch(() => null)) === feedEndSentinel;
+      if (!sentinelArmed) {
+        pendingProbeAlertRef.current = {
+          title: translateFeedErrorText(response.title),
+          message: translateFeedErrorText(response.message),
+        };
+      }
       return 'error';
     };
     if (response.isError === false) {
@@ -165,7 +282,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       const isCardLeft = await handleData(response.images);
       return isCardLeft;
     };
-  }, [context, filterMode, handleData, language, scope]);
+  }, [context, feedEndSentinel, filterMode, handleData, language, scope]);
 
   /**
    * Centralized image-loading entry. Drives the `asyncImagesAreLoading` and
@@ -185,21 +302,54 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    * @returns {Promise<boolean|'error'|void>} The `loadNewImages` result.
    */
   /* centralized function for loading images / set when imgs are loading */
-  const handleImagesLoading = useCallback(async (pictureIdOverride) => {
+  const handleImagesLoading = useCallback(async (pictureIdOverride?: string | null): Promise<FeedLoadResult> => {
     console.log("handleImagesLoading");
 
     setAsyncImagesAreLoading(true);
-    const result = await loadNewImages(pictureIdOverride);
-    if (result === 'error') {
-      setNoMoreCard('error');
-    } else if (result === false) {
-      setNoMoreCard('exhausted');
-    } else if (result === true) {
-      setNoMoreCard(null);
+    try {
+      const result = await loadNewImages(pictureIdOverride);
+      if (result === 'error') {
+        setNoMoreCard('error');
+      } else if (result === false) {
+        setNoMoreCard('exhausted');
+      } else if (result === true) {
+        setNoMoreCard(null);
+      }
+      return result;
+    } catch (error) {
+      // Commit 1 L3: a rejection (storage or transport) must never pin the
+      // loading overlay or escape the mount chain as an unhandled rejection.
+      // Route by the same sentinel/end-proof rule as the probe-error arms
+      // (proven → 'exhausted'; else honest 'error'); every proof read is
+      // individually guarded — this path already had one storage failure.
+      console.warn('handleImagesLoading failed', error);
+      let feedEndProven = false;
+      try {
+        feedEndProven = (await getLastImageUuid(
+          activeCategoryKeyRef.current,
+          language,
+          scope,
+          filterMode,
+        )) === feedEndSentinel;
+      } catch {
+        feedEndProven = false;
+      }
+      if (!feedEndProven) {
+        try {
+          const headDeck = await readActiveDeck(activeCategoryKeyRef.current, activeCategoryRef.current);
+          const servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
+          feedEndProven = isCycleExhausted(headDeck.length, servableCount);
+        } catch {
+          feedEndProven = false;
+        }
+      }
+      setNoMoreCard(feedEndProven ? 'exhausted' : 'error');
+      setImageList([]);
+      return 'error';
+    } finally {
+      setAsyncImagesAreLoading(false);
     }
-    setAsyncImagesAreLoading(false);
-    return result;
-  }, [loadNewImages]);
+  }, [feedEndSentinel, filterMode, lang, language, loadNewImages, readActiveDeck, scope]);
 
   /**
    * Shared mount recovery tail (I4/I7), run by ALL THREE deck branches of
@@ -240,17 +390,31 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    *   may reset the serve state (empty/full-deck) or must append (partial).
    * @returns {Promise<void>}
    */
-  const runMountRecoveryFlow = useCallback(async (cursorResult, { resetServeStateForHead }) => {
+  const runMountRecoveryFlow = useCallback(async (cursorResult: FeedLoadResult, { resetServeStateForHead }: { resetServeStateForHead: boolean }): Promise<void> => {
     console.log("runMountRecoveryFlow");
 
     if (cursorResult === 'error') {
       // Restore the non-null empty serve state so the error panel can render
       // (a null list would pin the loading overlay forever). Only the
       // null-serve branches (empty / filtered-empty full deck) need it — the
-      // partial branch already holds a non-null serve.
+      // partial branch already holds a non-null serve. No probe, no cycle
+      // mutation.
+      // Commit 1 L2: the identical sentinel-armed check — an error over an
+      // ARMED feed-end sentinel is never honest, so degrade to exhaustion
+      // and drop the queued Alert (this arm performs no deck reads; one
+      // explicit cursor read arbitrates). Un-proven errors flush the queued
+      // Alert at this exit — the error stays honest.
+      if ((await getLastImageUuid(categoryKey, lang, scope, filterMode).catch(() => null)) === feedEndSentinel) {
+        pendingProbeAlertRef.current = null;
+        logFeedEvent('probe-error-degraded', { stage: 'cursor-round', gate: 'sentinel-armed', categoryKey });
+        setNoMoreCard('exhausted');
+        setImageList([]);
+        return;
+      }
       if (resetServeStateForHead) {
         setImageList([]);
       }
+      flushPendingAlert();
       return;
     }
     if (cursorResult !== false) {
@@ -262,30 +426,81 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       setImageList(null);
     }
     const headResult = await handleImagesLoading(null);
+
+    // Commit 1 L2 hoist (pinned placement): the deck/played reads run AFTER
+    // the probe resolves and BEFORE the 'error' check below — never above
+    // the probe call (a pre-probe snapshot would be stale and, on the
+    // probe-success path, spuriously trigger the cycle restart = release-user
+    // auto-replay + played-set wipe). Same O(deck) sweep, zero added work on
+    // the success path; the reads now also serve the error-path gate.
+    // Commit 2 guard (same pattern as the handleImagesLoading catch path): a
+    // storage rejection here must neither escape the mount chain as an
+    // unhandled rejection nor strand the probe's queued Alert. On rejection
+    // the proof stays un-proven (an empty deck never satisfies
+    // isCycleExhausted), so the cycle-exhausted degrade checks below skip to
+    // the honest error path; the sentinel gate keeps arbitrating on its own
+    // guarded read. No flush here: the 'error' gate below drops or flushes
+    // the queued Alert (queue-then-flush invariant — every queue→exit path is
+    // gated), and a flush before that gate would pre-empt its drop (the
+    // fail-open-emission + concurrent-arm race).
+    let headDeck: CardImage[] = [];
+    let servableCount = 0;
+    try {
+      headDeck = await readActiveDeck(categoryKey, category);
+      servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
+    } catch (error) {
+      console.warn('runMountRecoveryFlow deck reads failed', error);
+    }
+
     if (headResult === 'error') {
+      // Commit 1 L2 probe-error degradation: an error over an ARMED sentinel
+      // or a fully-played deck is never honest — degrade to the exhaustion
+      // panel and DROP the queued Alert. Un-proven errors flush it at the
+      // non-degrading exit (error panel + Alert stay honest).
+      const sentinelArmed = (await getLastImageUuid(categoryKey, lang, scope, filterMode).catch(() => null)) === feedEndSentinel;
+      if (sentinelArmed || isCycleExhausted(headDeck.length, servableCount)) {
+        pendingProbeAlertRef.current = null;
+        logFeedEvent('probe-error-degraded', {
+          stage: 'head-probe',
+          gate: sentinelArmed ? 'sentinel-armed' : 'cycle-exhausted',
+          categoryKey,
+        });
+        setNoMoreCard('exhausted');
+        setImageList([]);
+        return;
+      }
       // Restore the non-null empty serve state so the error panel can
       // render (a null list would pin the loading overlay forever).
       if (resetServeStateForHead) {
         setImageList([]);
       }
+      flushPendingAlert();
       return;
     }
     if (headResult === false) {
-      await saveLastImageUuid(
-        isPrivateScope ? PRIVATE_FEED_END_CURSOR : PUBLIC_FEED_END_CURSOR,
-        categoryKey,
-        lang,
-        scope,
-        filterMode,
-      );
+      // Commit 3 O2: the mount sentinel arm is sound only when the empty head
+      // result is explained by local play evidence. The 'all' pool NEVER arms
+      // here — it owns the epoch-stamped allPoolDrained proof (mirrors the
+      // 'all' exclusions in nextCardAdvancer/cardPrefetcher) — and a category
+      // scope arms only over a non-empty played set (an empty played set
+      // means the emptiness cannot be exclusion-driven). The played-set read
+      // lives on the head-probe-false path only; a failing read fail-opens to
+      // "no evidence" and skips the arm.
+      const playedIds = categoryKey === 'all'
+        ? []
+        : await getPlayedPictureIds(lang, scope).catch(() => []);
+      if (playedIds.length > 0) {
+        await saveLastImageUuid(
+          feedEndSentinel,
+          categoryKey,
+          lang,
+          scope,
+          filterMode,
+        ).catch(() => {});
+        logFeedEvent('mount-sentinel-arm', { categoryKey, language: lang });
+      }
     }
 
-    const headDeck = normalizeListIds(
-      isPrivateScope
-        ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang, mode: filterMode }))?.images ?? []
-        : await getLocalImages(categoryKey, lang, filterMode) ?? [],
-    );
-    const servableCount = (await filterPlayedCards(headDeck, lang, scope)).length;
     if (isCycleExhausted(headDeck.length, servableCount)) {
       // D4/A6 (Task 5c): consult-before-network — a drained-and-fresh stamp
       // (carrying the epoch the previous restart re-stamped, 4b) already
@@ -305,11 +520,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
         // Serve the 'all' deck (the probe appended ≥1 unplayed card to it)
         // and switch the active category the same way refillOrFallback
         // step 3 does, so win-removal namespaces stay consistent.
-        const allDeck = await filterPlayedCards(normalizeListIds(
-          isPrivateScope
-            ? (await readGroupFeedCache(privateGroupId, { categoryId: undefined, language: lang, mode: filterMode }))?.images ?? []
-            : await getLocalImages('all', lang, filterMode) ?? [],
-        ), lang, scope);
+        const allDeck = await filterPlayedCards(
+          await readActiveDeck('all', RECENT_ALL_CATEGORY),
+          lang,
+          scope,
+        );
         if (allDeck.length > 0) {
           setActiveCategoryKey('all');
           setActiveCategory(RECENT_ALL_CATEGORY);
@@ -327,7 +542,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       }
       // 'indeterminate' → NO transition (I7); the exhausted flow stands.
     }
-  }, [category?.id, categoryKey, context, filterMode, handleImagesLoading, isPrivateScope, lang, privateGroupId, scope]);
+  }, [category, categoryKey, context, feedEndSentinel, filterMode, flushPendingAlert, handleImagesLoading, lang, readActiveDeck, scope]);
 
   /**
    * Mount loader. Reads the local deck for the active (category, language) and
@@ -351,21 +566,21 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     if (isE2EMode()) {
       setNoMoreCard(null);
       const savedGuessPayload = await getE2EHiddenGuessCard();
-      const savedGuessCard = buildE2EGuessCardFromPayload(savedGuessPayload);
+      const savedGuessCard = buildE2EGuessCardFromPayload(savedGuessPayload as Record<string, unknown>);
 
       if (savedGuessCard) {
-        setImageList([savedGuessCard]);
+        setImageList([savedGuessCard] as unknown as SwipeCard[]);
         return;
       }
 
-      setImageList(buildE2EGuessCards());
+      setImageList(buildE2EGuessCards() as unknown as SwipeCard[]);
       return;
     }
 
     //await emptyImageList(categoryKey, lang);
-    const localImageList = isPrivateScope
-      ? (await readGroupFeedCache(privateGroupId, { categoryId: category?.id === 'all' ? undefined : category?.id, language: lang, mode: filterMode }))?.images ?? null
-      : await getLocalImages(categoryKey, lang, filterMode);
+    // Raw deck read (no normalize): the size branches below (>=4 / 0 / 1-3)
+    // classify the STORED deck, before any played filtering.
+    const localImageList = await readDeckRaw(categoryKey, category);
 
     // if localImageList [] or null, get Images() / show loadingOverlay
     if (localImageList !== null && (localImageList?.length >= 4)) {
@@ -397,10 +612,10 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       // shared recovery tail still applies (I4).
       await runMountRecoveryFlow(cursorResult, { resetServeStateForHead: false });
     };
-  }, [category?.id, categoryKey, context, filterMode, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, runMountRecoveryFlow, scope]);
+  }, [category, categoryKey, context, handleImagesLoading, language, lang, readDeckRaw, runMountRecoveryFlow, scope]);
 
 
-  const deleteImage = useCallback(async (id, imageFilePath) => {
+  const deleteImage = useCallback(async (id: number, imageFilePath: string | null | undefined) => {
     // delete image
     if (!isPrivateScope) {
       await removeImageFromList(id, activeCategoryKeyRef.current, lang, filterMode);
@@ -416,15 +631,15 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    * as a last resort. Avoids the "Load new images..." overlay whenever the
    * background prefetcher has done its job.
    */
-  const refillOrFallback = useCallback(async (categoryPrefetchPromise) => {
+  const refillOrFallback = useCallback(async (categoryPrefetchPromise: Promise<void>) => {
     const aKey = activeCategoryKeyRef.current;
     const aCat = activeCategoryRef.current;
 
-    const readDeck = async (deckKey, deckCategory) => filterPlayedCards(normalizeListIds(
-      isPrivateScope
-        ? (await readGroupFeedCache(privateGroupId, { categoryId: deckCategory?.id === 'all' ? undefined : deckCategory?.id, language: lang, mode: filterMode }))?.images ?? []
-        : await getLocalImages(deckKey, lang, filterMode) ?? [],
-    ), lang, scope);
+    const readDeck = async (deckKey: string, deckCategory?: SwipeCategory | null) => filterPlayedCards(
+      await readActiveDeck(deckKey, deckCategory),
+      lang,
+      scope,
+    );
 
     // 1. Re-read the active deck — the background prefetcher may have appended
     //    cards to AsyncStorage that local state hasn't picked up yet.
@@ -501,7 +716,11 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     if (lastLoad === false) {
       await handleImagesLoading(null);
     }
-  }, [context, filterMode, handleImagesLoading, isPrivateScope, lang, language, privateGroupId, scope]);
+    // Commit 1 L2: every non-degrading exit flushes a queued alert — the
+    // refill owns the alerts of its two final loads (cursor round + head
+    // fallback); only a recovery-flow degradation may drop one.
+    flushPendingAlert();
+  }, [context, filterMode, flushPendingAlert, handleImagesLoading, lang, language, readActiveDeck, scope]);
 
   /*
    * Asynchronously removes a card from the image list based on the provided id.
@@ -510,7 +729,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
    * @return {null}
    */
   const removeCard = useCallback(
-    async (id) => {
+    async (id: number) => {
       const currentList = imageListRef.current ?? [];
       const updatedImageList = currentList.filter((item) => item.listId !== id);
       const image = currentList.find((item) => item.listId === id);
@@ -571,6 +790,37 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   }, []);
 
   // Components functions ________________________________________________________
+  // Commit 2 tester gate: EXPO_PUBLIC_TESTER_TOOLS is set ONLY in the eas.json
+  // `preview` (internal APK) profile — production never sets it, so this reads
+  // as dead code there. Inline (not a module const) so it stays a per-build
+  // literal with no expo-constants dependency.
+  const testerToolsEnabled = process.env.EXPO_PUBLIC_TESTER_TOOLS === 'true';
+
+  // One press → one startNewServingCycle (epoch bump + played-set wipe +
+  // sentinel/marker/stamp clear; AsyncStorage-only, no network) + ONE fresh
+  // head fetch so the oldest cards re-serve immediately. Deck wipe is
+  // deliberately NOT part of this (wipePublicGuessStorage would nuke decks).
+  const confirmRestartServingCycle = useCallback(() => {
+    Alert.alert(
+      t('guess.emptyRestartConfirmTitle'),
+      t('guess.emptyRestartConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('common.confirm'),
+          onPress: async () => {
+            await startNewServingCycle(lang, scope).catch(() => {});
+            await handleImagesLoading(null).catch(() => {});
+            // Commit 1 L2 queue-then-flush: this load is the replay flow's
+            // LAST exit — no recovery gate runs after it, so a failed load
+            // would strand its queued Alert unless flushed here.
+            flushPendingAlert();
+          },
+        },
+      ],
+    );
+  }, [flushPendingAlert, handleImagesLoading, lang, scope, t]);
+
   const showIsLoading = () => {
     return <LoadingOverlay message={t('guess.loading')} />
   };
@@ -597,6 +847,17 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
           <Text style={styles.emptyStateText}>{t('guess.emptyUploadHint')}</Text>
           <Text style={styles.emptyStateText}>{t('guess.emptyWaitUploadsHint')}</Text>
         </View>
+        {testerToolsEnabled && (
+          <Button
+            mode="flat"
+            style={styles.emptyStateRestartButton}
+            testID="guess.empty.restart-cycle"
+            accessibilityLabel={t('guess.emptyRestartAction')}
+            onPress={confirmRestartServingCycle}
+          >
+            {t('guess.emptyRestartAction')}
+          </Button>
+        )}
       </View>
     );
   };
@@ -616,7 +877,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
       return detailImage;
     }
 
-    const merged = {
+    const merged: SwipeCard = {
       ...detailImage,
       tags: detailTags.map((tag) => tag?.name ?? tag),
     };
@@ -698,6 +959,10 @@ const styles = StyleSheet.create({
   },
   emptyStateActions: {
     paddingTop: 10,
+  },
+  emptyStateRestartButton: {
+    marginTop: 16,
+    minWidth: 220,
   },
   emptyStateText: {
     color: GlobalStyle.color.quaternaryColor,

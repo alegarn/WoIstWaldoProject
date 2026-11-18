@@ -361,6 +361,14 @@ function setE2EMode(enabled) {
   }
 }
 
+function setTesterTools(enabled) {
+  if (enabled) {
+    process.env.EXPO_PUBLIC_TESTER_TOOLS = 'true';
+  } else {
+    delete process.env.EXPO_PUBLIC_TESTER_TOOLS;
+  }
+}
+
 // Task 5e: fresh-stamp fixture built through the REAL re-stamp path — the
 // component's own mount recovery drives the probe to 'exhausted', restarts
 // the serving cycle, and applies the 4b post-restart re-stamp. Never a
@@ -396,6 +404,7 @@ describe('SwipeImage', () => {
     jest.clearAllMocks();
     __resetForTests();
     setE2EMode(false);
+    setTesterTools(false);
     fetchCardBatchMock.mockReset().mockResolvedValue(EMPTY_BATCH);
     probeAllPoolForUnplayedMock.mockReset().mockResolvedValue({ status: 'exhausted' });
     axiosGetMock.mockReset();
@@ -417,6 +426,7 @@ describe('SwipeImage', () => {
     jest.restoreAllMocks();
     jest.useRealTimers();
     setE2EMode(false);
+    setTesterTools(false);
   });
 
   describe('serving the deck', () => {
@@ -491,15 +501,17 @@ describe('SwipeImage', () => {
       await seedDeck(fourCardDeck('nat'), 'nature');
       await seedPlayedIds(['nat-1', 'nat-2', 'nat-3', 'nat-4']);
       // Cursor round comes back empty (cold handleData branch), then the head
-      // probe errors — gating recovery off so nothing else touches the deck.
+      // probe errors over the fully-played deck — the end is proven
+      // (isCycleExhausted), so recovery degrades to the exhaustion panel
+      // (commit 1 L2) with no Alert, no restart, and NO deck wipe on disk.
       fetchCardBatchMock
         .mockResolvedValueOnce(EMPTY_BATCH)
         .mockResolvedValueOnce(serverError('Server error', 'Please retry later'));
 
       const { renderer } = await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
 
-      expect(Alert.alert).toHaveBeenCalledWith('Server error', 'Please retry later');
-      expect(renderedText(renderer)).toContain('The list is not there');
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
       expect(await storedDeck('nature')).toHaveLength(4);
       expect(store.get(publicCycleKey())).toBeUndefined();
     });
@@ -853,6 +865,9 @@ describe('SwipeImage', () => {
     });
 
     it('a double-empty round parks the public feed-end cursor', async () => {
+      // O2 re-pin: category scopes still arm, but only with play evidence —
+      // the played set must be non-empty for the mount sentinel arm to run.
+      await seedPlayedIds(['arm-evidence-1']);
       fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
 
       const { renderer } = await renderSwipeImage({
@@ -914,6 +929,8 @@ describe('SwipeImage', () => {
         ]),
       );
       await AsyncStorage.setItem(groupGameCursorKey('group-7', 'nature', 'fr'), 'stored-cursor-9');
+      // O2 re-pin: group play evidence (group-scoped played set) arms the arm.
+      await AsyncStorage.setItem(groupPlayedKey('group-7', 'fr'), JSON.stringify(['priv-0']));
       fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
 
       await renderSwipeImage({
@@ -953,7 +970,11 @@ describe('SwipeImage', () => {
     });
 
     it('a failed head probe gates the cycle restart off and keeps the played set', async () => {
-      await seedDeck(fourCardDeck('cyc'), 'nature');
+      // Commit 1 L2 re-pin: NO local deck (empty-deck mount branch), played
+      // set optional, NO sentinel — the only seeding where the probe error is
+      // UN-proven (headDeck 0 → isCycleExhausted(0,0) false), so the honest
+      // error panel + Alert stay. Any non-empty deck either serves (no panel)
+      // or is fully played (isCycleExhausted degrades to exhaustion).
       await seedPlayedIds(['cyc-1', 'cyc-2', 'cyc-3', 'cyc-4']);
       fetchCardBatchMock
         .mockResolvedValueOnce(EMPTY_BATCH)
@@ -1071,6 +1092,249 @@ describe('SwipeImage', () => {
       const served = renderedCardImageUris(renderer);
       expect(served).toContain('file:///p1.jpg');
       expect(served).toContain('file:///p2.jpg');
+    });
+  });
+
+  describe('commit 1: honest exhaustion routing', () => {
+    it('an armed feed-end sentinel degrades a failing head probe to exhaustion with no alert', async () => {
+      await AsyncStorage.setItem(publicCursorKey('nature'), PUBLIC_FEED_END_CURSOR);
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce(serverError('Server error', 'Please retry later'));
+
+      const { renderer } = await renderSwipeImage({
+        category: { id: 'cat-nature', key: 'nature' },
+      });
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(renderedText(renderer)).not.toContain('The list is not there');
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(store.get(publicCycleKey())).toBeUndefined();
+    });
+
+    it('an ARMED PRIVATE feed-end sentinel degrades a failing head probe to exhaustion with no alert', async () => {
+      // Scope-correct sentinel gate: the mount arm writes the PRIVATE sentinel
+      // under a private scope, so the degradation gate must compare the same
+      // sentinel — the group deck here is empty, so the armed cursor is the
+      // ONLY exhaustion proof (isCycleExhausted(0, 0) is false).
+      const scope = { kind: 'private', groupId: 'group-7' };
+      await AsyncStorage.setItem(groupGameCursorKey('group-7', 'nature', 'fr'), PRIVATE_FEED_END_CURSOR);
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce(serverError('Server error', 'Please retry later'));
+
+      const { renderer } = await renderSwipeImage({
+        category: { id: 'cat-nature', key: 'nature' },
+        language: 'fr',
+        scope,
+      });
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(renderedText(renderer)).not.toContain('The list is not there');
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(groupGameCursorKey('group-7', 'nature', 'fr'))).toBe(PRIVATE_FEED_END_CURSOR);
+      expect(await AsyncStorage.getItem(publicCursorKey('nature', 'fr'))).toBeNull();
+    });
+
+    it('a storage rejection mid-mount never pins the spinner and routes the panel by proof (un-proven → error)', async () => {
+      // AsyncStorage here is already a stateful jest.fn (see the module mock
+      // at the top) — mock ONCE on it directly; spyOn would return that same
+      // mock and wipe the shared implementation.
+      AsyncStorage.setItem.mockRejectedValueOnce(new Error('storage boom'));
+      fetchCardBatchMock.mockResolvedValueOnce({
+        isError: false,
+        images: [card('rj-1', 'file:///rj1.jpg')],
+      });
+
+      const { renderer } = await renderSwipeImage({
+        category: { id: 'cat-nature', key: 'nature' },
+      });
+
+      expect(renderedText(renderer)).toContain('The list is not there');
+      expect(renderedText(renderer)).not.toContain('Loading new images...');
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+
+    it('a mid-play load rejection over an armed PRIVATE sentinel proves exhaustion through the catch path (scope-aware proof)', async () => {
+      // Proven arm of the catch-path proof rule under a private scope. The
+      // refill's final gated load result is FINAL — no recovery gate
+      // re-arbitrates it — so the catch path must compare the SCOPE-CORRECT
+      // sentinel: an armed PRIVATE cursor + a rejecting load + an empty
+      // group deck (isCycleExhausted(0, 0) is false) leaves the sentinel as
+      // the ONLY exhaustion proof. Serve from a full stored deck (no mount
+      // fetches), swipe it dry, then let every fetch reject — the
+      // prefetch/warm re-arms swallow their rejections, the final load's
+      // rejection lands in the handleImagesLoading catch path.
+      const scope = { kind: 'private', groupId: 'group-7' };
+      await AsyncStorage.setItem(
+        groupDeckKey('group-7', 'cat-nature', 'fr'),
+        JSON.stringify(fourCardDeck('priv')),
+      );
+      await AsyncStorage.setItem(groupGameCursorKey('group-7', 'nature', 'fr'), PRIVATE_FEED_END_CURSOR);
+
+      const { renderer } = await renderSwipeImage({
+        category: { id: 'cat-nature', key: 'nature' },
+        language: 'fr',
+        scope,
+      });
+
+      fetchCardBatchMock.mockRejectedValue(new Error('transport boom'));
+      for (const listId of [1, 2, 3, 4]) {
+        await swipeLeft(renderer, listId);
+      }
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(renderedText(renderer)).not.toContain('The list is not there');
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(groupGameCursorKey('group-7', 'nature', 'fr'))).toBe(PRIVATE_FEED_END_CURSOR);
+    });
+
+    it('a mid-play load rejection over an armed PUBLIC sentinel proves exhaustion through the catch path', async () => {
+      // Proven arm pinned for the public sentinel — the private arm above
+      // pins the scope-correct comparison (same reject-into-the-catch-path
+      // shape: full stored deck served, swiped dry, then every fetch rejects).
+      await seedDeck(fourCardDeck('pub'), 'all');
+      await AsyncStorage.setItem(publicCursorKey('all'), PUBLIC_FEED_END_CURSOR);
+
+      const { renderer } = await renderSwipeImage();
+
+      fetchCardBatchMock.mockRejectedValue(new Error('transport boom'));
+      for (const listId of [1, 2, 3, 4]) {
+        await swipeLeft(renderer, listId);
+      }
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(renderedText(renderer)).not.toContain('The list is not there');
+      expect(Alert.alert).not.toHaveBeenCalled();
+      expect(await AsyncStorage.getItem(publicCursorKey('all'))).toBe(PUBLIC_FEED_END_CURSOR);
+    });
+
+    it('a rejecting sentinel persistence still lets the recovery tail arbitrate exhaustion', async () => {
+      await seedDeck(fourCardDeck('cyc'), 'nature');
+      await seedPlayedIds(['cyc-1', 'cyc-2', 'cyc-3', 'cyc-4', 'hp-1', 'hp-2']);
+      // 1st render-time write (head-batch persist — an OVERWRITE) succeeds;
+      // 2nd (the mount sentinel save) rejects — the .catch must let the
+      // recovery tail run. AsyncStorage is already a stateful jest.fn: mock
+      // ONCE on it directly, never spyOn.
+      AsyncStorage.setItem
+        .mockImplementationOnce((key, value) => {
+          store.set(key, value);
+          return Promise.resolve();
+        })
+        .mockImplementationOnce(async () => {
+          throw new Error('storage boom');
+        });
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce({
+          isError: false,
+          images: [card('hp-1', 'file:///hp1.jpg'), card('hp-2', 'file:///hp2.jpg')],
+        });
+
+      const { renderer } = await renderSwipeImage({
+        category: { id: 'cat-nature', key: 'nature' },
+      });
+
+      expect(store.get(publicCycleKey())).toBe('1');
+      expect(await AsyncStorage.getItem(playedKey())).toBeNull();
+      // The head batch's persist replaced the fully-played stored deck, so
+      // the post-restart serve is the head batch itself.
+      const served = renderedCardImageUris(renderer);
+      expect(served).toContain('file:///hp1.jpg');
+      expect(served).toContain('file:///hp2.jpg');
+    });
+  });
+
+  describe('commit 2: tester replay affordance', () => {
+    it('the replay button restarts the serving cycle once and re-serves the oldest cards', async () => {
+      setTesterTools(true);
+      // The cycle key's presence is the post-restart regime: the server starts
+      // serving the old (previously played) rows again once the restart ran.
+      fetchCardBatchMock.mockImplementation(() => {
+        if (store.get(publicCycleKey()) !== undefined) {
+          return Promise.resolve({ isError: false, images: [card('replay-1', 'file:///replay1.jpg')] });
+        }
+        return Promise.resolve(EMPTY_BATCH);
+      });
+      await seedPlayedIds(['old-1', 'old-2']);
+      await AsyncStorage.setItem(publicCursorKey('all'), PUBLIC_FEED_END_CURSOR);
+
+      const { renderer } = await renderSwipeImage();
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      await act(async () => {
+        renderer.root.findByProps({ testID: 'guess.empty.restart-cycle' }).props.onPress();
+      });
+      await flush();
+
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Restart serving cycle?',
+        expect.any(String),
+        expect.any(Array),
+      );
+      const confirm = Alert.alert.mock.calls[0][2].find((button) => button?.onPress);
+      const callsBeforeRestart = fetchCardBatchMock.mock.calls.length;
+
+      await act(async () => {
+        await confirm.onPress();
+      });
+      await flush();
+
+      expect(store.get(publicCycleKey())).toBe('1');
+      expect(await AsyncStorage.getItem(playedKey())).toBeNull();
+      expect(await AsyncStorage.getItem(publicCursorKey('all'))).toBeNull();
+      const restartFetches = fetchCardBatchMock.mock.calls.slice(callsBeforeRestart);
+      expect(restartFetches).toHaveLength(1);
+      expect(restartFetches[0][0]).toEqual(expect.objectContaining({ pictureIdOverride: null }));
+      expect(renderedCardImageUris(renderer)).toContain('file:///replay1.jpg');
+      expect(renderedText(renderer)).not.toContain('No more images to guess right now!');
+    });
+
+    it('the replay button stays hidden when the tester-tools gate is off', async () => {
+      setTesterTools(false);
+      fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
+
+      const { renderer } = await renderSwipeImage();
+
+      expect(renderedText(renderer)).toContain('No more images to guess right now!');
+      expect(renderer.root.findAllByProps({ testID: 'guess.empty.restart-cycle' })).toHaveLength(0);
+      expect(Alert.alert).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('commit 3: mount sentinel arm hygiene (O2)', () => {
+    it('an "all" double-empty round does not run the mount sentinel arm (the all-pool owns the drained proof)', async () => {
+      fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
+
+      await renderSwipeImage();
+
+      expect(fetchCardBatchMock).toHaveBeenCalledTimes(2);
+      expect(await AsyncStorage.getItem(publicCursorKey('all'))).toBeNull();
+      expect(store.get(publicCycleKey())).toBeUndefined();
+    });
+
+    it('a category double-empty round with an empty played set does not run the mount sentinel arm', async () => {
+      fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
+
+      await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(fetchCardBatchMock).toHaveBeenCalledTimes(2);
+      expect(await AsyncStorage.getItem(publicCursorKey('nature'))).toBeNull();
+    });
+
+    it('O7: logs probe-error-degraded when a failing head probe degrades to exhaustion over an armed sentinel', async () => {
+      await AsyncStorage.setItem(publicCursorKey('nature'), PUBLIC_FEED_END_CURSOR);
+      fetchCardBatchMock
+        .mockResolvedValueOnce(EMPTY_BATCH)
+        .mockResolvedValueOnce(serverError('Server error', 'Please retry later'));
+
+      await renderSwipeImage({ category: { id: 'cat-nature', key: 'nature' } });
+
+      expect(console.log).toHaveBeenCalledWith(
+        '[feed]',
+        'probe-error-degraded',
+        expect.objectContaining({ stage: 'head-probe', gate: 'sentinel-armed' }),
+      );
     });
   });
 
@@ -1457,6 +1721,8 @@ describe('Task C6/D3: mode threading', () => {
   });
 
   it('the exhausted sentinel write lands in the mode-segmented cursor namespace', async () => {
+    // O2 re-pin: category arming requires play evidence (non-empty played set).
+    await seedPlayedIds(['mode-arm-1'], 'fr');
     fetchCardBatchMock.mockResolvedValue(EMPTY_BATCH);
 
     await renderSwipeImage({

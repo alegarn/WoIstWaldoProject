@@ -160,6 +160,40 @@ describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
     expect(store.has('imageList:all:fr:any')).toBe(false);
   });
 
+  it('O7: logs probe-verdict with the resolved status (and the discriminator reason when indeterminate)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const b2 = batch('played-', 2);
+      const store = mockStore({
+        'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+      });
+      const b1 = batch('old-', 5);
+      store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+      mockCursorServer([b1, b2]);
+
+      const exhausted = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+      expect(exhausted).toEqual({ status: 'exhausted' });
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'probe-verdict',
+        expect.objectContaining({ status: 'exhausted' }),
+      );
+
+      mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
+      const indeterminate = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+      expect(indeterminate).toEqual({ status: 'indeterminate', reason: 'network' });
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'probe-verdict',
+        expect.objectContaining({ status: 'indeterminate', reason: 'network' }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it('public sentinel: cleared before fetching, and the served batch persists a real cursor', async () => {
     const store = mockStore({
       'lastImageUuid:all:fr:any': '__public_feed_end__',

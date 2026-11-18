@@ -634,6 +634,39 @@ describe('imagesRequests utilities', () => {
     expect(saveLastImageUuid).toHaveBeenNthCalledWith(4, 'img-4', undefined, undefined, undefined, undefined);
   });
 
+  it('O7: logs broken-batch-skip per skipped broken batch (with cursor) and broken-batch-terminal at budget exhaustion', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+    downloadAsync.mockResolvedValue(downloadResult({ status: 404 }));
+    axios.post
+      .mockResolvedValueOnce(batchResponse(['img-2']))
+      .mockResolvedValueOnce(batchResponse(['img-3']))
+      .mockResolvedValueOnce(batchResponse(['img-4']));
+
+    try {
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual(SERVER_ERROR_RESULT);
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'broken-batch-skip',
+        expect.objectContaining({ cursor: 'img-1' }),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'broken-batch-skip',
+        expect.objectContaining({ cursor: 'img-4' }),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'broken-batch-terminal',
+        expect.objectContaining({ cursor: 'img-4', skippedBrokenBatches: 4 }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
   it('H1: returns partial successes without retrying when some downloads succeed and others fail network-class', async () => {
     axios.get.mockResolvedValueOnce(batchResponse(['img-1', 'img-2', 'img-3', 'img-4', 'img-5']));
     downloadAsync
@@ -878,7 +911,10 @@ describe('imagesRequests utilities', () => {
     };
 
     beforeEach(() => {
-      AsyncStorage.getItem.mockReset();
+      // Scoped base (never a bare mockReset on the shared setup mock): each
+      // test re-scopes via setPublicPlayed; reads it doesn't cover resolve
+      // null — the production "unset" value — instead of undefined.
+      AsyncStorage.getItem.mockImplementation(async () => null);
     });
 
     it('downloads only unplayed rows and advances the cursor with the FULL batch tail (2 unplayed / 3 played)', async () => {
@@ -1037,7 +1073,10 @@ describe('imagesRequests utilities', () => {
     };
 
     beforeEach(() => {
-      AsyncStorage.getItem.mockReset();
+      // Scoped base (never a bare mockReset on the shared setup mock): each
+      // test re-scopes via setPublicPlayed; reads it doesn't cover resolve
+      // null — the production "unset" value — instead of undefined.
+      AsyncStorage.getItem.mockImplementation(async () => null);
     });
 
     it('head GET: sends the played set as an exclude CSV query param when non-empty', async () => {
@@ -1105,7 +1144,10 @@ describe('imagesRequests utilities', () => {
     };
 
     beforeEach(() => {
-      AsyncStorage.getItem.mockReset();
+      // Scoped base (never a bare mockReset on the shared setup mock): each
+      // test re-scopes via setPublicPlayed; reads it doesn't cover resolve
+      // null — the production "unset" value — instead of undefined.
+      AsyncStorage.getItem.mockImplementation(async () => null);
     });
 
     it('a played tail followed by an empty batch writes the feed-end sentinel and returns poolExhausted (end-proved)', async () => {
@@ -1157,6 +1199,95 @@ describe('imagesRequests utilities', () => {
       expect(response.poolExhausted).toBeUndefined();
       // Per-batch cursor advances only — never the feed-end sentinel.
       expect(saveLastImageUuid.mock.calls.every((call) => call[0] !== '__public_feed_end__')).toBe(true);
+    });
+  });
+
+  describe('Commit 1 (L1/L3): honest exhaustion terminals + rejection-proof cursor', () => {
+    const setPublicPlayed = (ids) => {
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:public:any' ? JSON.stringify(ids) : null);
+    };
+
+    beforeEach(() => {
+      // Scoped base (never a bare mockReset on the shared setup mock): each
+      // test re-scopes via setPublicPlayed; reads it doesn't cover resolve
+      // null — the production "unset" value — instead of undefined.
+      AsyncStorage.getItem.mockImplementation(async () => null);
+    });
+
+    it('L1: reclassifies the broken-batch terminal to played-out after >=1 played skip', async () => {
+      setPublicPlayed(['p1']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1']));
+      axios.post.mockResolvedValue(batchResponse(['b1']));
+      downloadAsync.mockResolvedValue(downloadResult({ status: 404 }));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    });
+
+    it('O7: logs played-out-reclassified when the L1 reclassification fires', async () => {
+      setPublicPlayed(['p1']);
+      axios.get.mockResolvedValueOnce(batchResponse(['p1']));
+      axios.post.mockResolvedValue(batchResponse(['b1']));
+      downloadAsync.mockResolvedValue(downloadResult({ status: 404 }));
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      try {
+        const response = await getImages(null, { token: 'Bearer token' });
+
+        expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+        expect(logSpy).toHaveBeenCalledWith(
+          '[feed]',
+          'played-out-reclassified',
+          expect.objectContaining({ skips: expect.any(Number) }),
+        );
+        expect(logSpy).not.toHaveBeenCalledWith(
+          '[feed]',
+          'broken-batch-terminal',
+          expect.anything(),
+        );
+      } finally {
+        logSpy.mockRestore();
+      }
+    });
+
+    it('L1: a fresh played-set re-read proves the failed batch played when a concurrent play committed mid-loop (0 skips)', async () => {
+      let playedStore = [];
+      AsyncStorage.getItem.mockImplementation(async (key) =>
+        key === 'playedPictureIds:public:any' ? JSON.stringify(playedStore) : null);
+      axios.get.mockResolvedValue(batchResponse(['r1']));
+      axios.post.mockResolvedValue(batchResponse(['r2']));
+      downloadAsync.mockImplementation(async () => {
+        playedStore = ['r1', 'r2'];
+        return downloadResult({ status: 404 });
+      });
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual({ isError: false, reason: 'played-out', images: [] });
+    });
+
+    it('L1: with 0 skips and an un-proven failed batch the terminal stays an honest server error', async () => {
+      setPublicPlayed([]);
+      axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+      downloadAsync.mockResolvedValue(downloadResult({ status: 404 }));
+      axios.post.mockResolvedValue(batchResponse(['img-2']));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response).toEqual(SERVER_ERROR_RESULT);
+    });
+
+    it('L3: a rejecting saveLastImageUuid never rejects a successful batch', async () => {
+      saveLastImageUuid.mockRejectedValueOnce(new Error('disk full'));
+      axios.get.mockResolvedValueOnce(batchResponse(['img-1']));
+      downloadAsync.mockResolvedValueOnce(downloadResult({ contentType: 'image/png' }));
+
+      const response = await getImages(null, { token: 'Bearer token' });
+
+      expect(response.isError).toBe(false);
+      expect(response.images.map((image) => image.pictureId)).toEqual(['img-1']);
     });
   });
 
