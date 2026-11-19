@@ -5,6 +5,7 @@ import type { DeckWriteLockScope } from '../utils/storageDatum';
 import { filterPlayedCards } from '../utils/playedPictureIds';
 import { clearAllPoolDrained } from '../utils/allPoolDrained';
 import { withScopeLock } from '../utils/scopeMutex';
+import { logFeedEvent } from '../utils/feedDiagnostics';
 import { ANY_FILTER, normalizeLanguage, normalizeMode } from '../utils/sessionFilter';
 import { readGroupFeedCache, writeGroupFeedCache } from './groups/groupFeedCache';
 import { PRIVATE_FEED_END_CURSOR } from './groups/groupFeedApi';
@@ -219,6 +220,7 @@ export function fetchCardBatch({ categoryKey, categoryId, language, mode, scope,
       (pictureIdOverride === undefined || pictureIdOverride === PUBLIC_FEED_END_CURSOR) &&
       pictureId === PUBLIC_FEED_END_CURSOR
     ) {
+      logFeedEvent('sentinel-short-circuit', { categoryKey: categoryKey || 'all', language: lang });
       return { isError: false, images: [] };
     }
 
@@ -480,6 +482,7 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
     const result = await fetchCardBatch({ categoryKey: 'all', language: lang, mode: filterMode, scope, authContext });
 
     if (!result || result.isError === true) {
+      logFeedEvent('probe-verdict', { status: 'indeterminate', reason: result?.reason ?? 'server' });
       return { status: 'indeterminate', reason: result?.reason ?? 'server' };
     }
 
@@ -490,11 +493,14 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
       // (fires the cycle transition); a bound-hit played-out (no flag, cursor
       // mid-feed) proves nothing → stays indeterminate (ADR 0015 Tier-2).
       if (result.reason === 'played-out' && result.poolExhausted === true) {
+        logFeedEvent('probe-verdict', { status: 'exhausted', proof: 'played-out-flag' });
         return { status: 'exhausted' };
       }
       if (result.reason === 'played-out') {
+        logFeedEvent('probe-verdict', { status: 'indeterminate', reason: 'played-out' });
         return { status: 'indeterminate', reason: 'played-out' };
       }
+      logFeedEvent('probe-verdict', { status: 'exhausted', proof: 'empty-batch' });
       return { status: 'exhausted' };
     }
 
@@ -509,9 +515,11 @@ export async function probeAllPoolForUnplayed({ language, mode, scope, authConte
       // here: the post-restart re-stamp (nextCardAdvancer/SwipeImage) owns the
       // write; 'indeterminate' touches nothing (I7).
       await clearAllPoolDrained(lang, scope).catch(() => {});
+      logFeedEvent('probe-verdict', { status: 'unplayed' });
       return { status: 'unplayed' };
     }
   }
 
+  logFeedEvent('probe-verdict', { status: 'indeterminate', reason: 'probe-cap' });
   return { status: 'indeterminate', reason: 'probe-cap' };
 }

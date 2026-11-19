@@ -11,6 +11,7 @@ import {
 import { filterPlayedCards, getPlayedPictureIds, playedPictureIdsKey, PLAYED_PICTURE_IDS_PREFIX } from "./playedPictureIds";
 import { SERVING_CYCLE_PREFIX } from "./servingCycle";
 import { normalizeLanguage, normalizeMode } from "./sessionFilter";
+import { logFeedEvent } from "./feedDiagnostics";
 import type { CardImage } from "../services/cardDeck";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
@@ -190,6 +191,9 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
         }
 
         const latestViable = latestImages.filter((image) => localImageFileExists(image?.imageFile));
+        if (latestImages.length > 0 && latestViable.length === 0) {
+          logFeedEvent('deck-trim-to-zero', { listKey });
+        }
         if (latestViable.length !== latestImages.length) {
           await AsyncStorage.setItem(listKey, JSON.stringify(latestViable));
         }

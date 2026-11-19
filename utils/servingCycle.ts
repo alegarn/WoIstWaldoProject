@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { withScopeLock } from './scopeMutex';
 import { resetPlayedPictureIdsForScope } from './playedPictureIds';
+import { logFeedEvent } from './feedDiagnostics';
 
 export const SERVING_CYCLE_PREFIX = 'servingCycle';
 const LAST_IMAGE_UUID_KEY_PREFIX = 'lastImageUuid:';
@@ -41,6 +42,11 @@ export async function startNewServingCycle(
     // servingCycle → no inverse order, no deadlock.
     await resetPlayedPictureIdsForScope(language, scope);
     await clearStaleCycleCursorsAndMarkers(language, scope);
+    logFeedEvent('cycle-restart', {
+      epoch: next,
+      scope: isGroupScope(scope) ? `group:${scope.groupId}` : 'public',
+      language: language || 'any',
+    });
     return next;
   });
 }

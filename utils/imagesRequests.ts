@@ -9,6 +9,7 @@ import type { CachedFilesIndex } from './imageDownloader';
 export { getBackendHeaders };
 import { PUBLIC_FEED_END_CURSOR, saveLastImageUuid } from './storageDatum';
 import { getPlayedPictureIds, PLAYED_PICTURE_IDS_CAP } from './playedPictureIds';
+import { logFeedEvent } from './feedDiagnostics';
 import { fetchPrivateFeedPageForGame } from '../services/groups/groupFeedApi';
 
 export type GetImagesErrorReason = 'empty' | 'played-out' | 'network' | 'server';
@@ -192,6 +193,20 @@ function isNetworkClassFailure(error: unknown) {
     return error.networkFailure;
   }
   return true;
+};
+
+/**
+ * Advisory feed-cursor persistence (Commit 1 L3): a failed AsyncStorage write
+ * must never reject an otherwise successful batch — the cursor write is
+ * best-effort state, and the worst case (one duplicate fetch) is already
+ * deduped by fetchInFlight and dedupByPictureId in services/cardDeck.ts.
+ */
+async function persistCursorSafely(imageUuid: string, filters: GetImagesFilters | undefined): Promise<void> {
+  try {
+    await saveLastImageUuid(imageUuid, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+  } catch (error) {
+    console.warn('persistCursorSafely: cursor write failed (advisory)', error);
+  }
 };
 
 
@@ -473,7 +488,9 @@ async function downloadImageBatch(imagesInfosData: ImageMetadataRow[], token: st
  *        cursor never freezes on permanently missing files,
  *        `skippedBrokenBatches += 1`, loop continues (bounded: at most
  *        `MAX_EMPTY_DOWNLOAD_BATCHES` = 3 skips, then terminal
- *        `{ isError: true, reason: 'server' }`).
+ *        `{ isError: true, reason: 'server' }` — reclassified to
+ *        `played-out` when the round already proved the end, see L1 at the
+ *        post-loop terminal below).
  *
  * @param pictureId Cursor: `name` of the last image of the previous page, or
  *   `null` for the first page.
@@ -536,6 +553,7 @@ export async function getImages(
   let nextPictureId = pictureId;
   let skippedBrokenBatches = 0;
   let skippedPlayedBatches = 0;
+  let lastBrokenBatchRows: ImageMetadataRow[] = [];
 
   while (skippedBrokenBatches <= MAX_EMPTY_DOWNLOAD_BATCHES && skippedPlayedBatches <= MAX_PLAYED_SKIPS) {
     const imagesInfos: ImagesInfosResponse = nextPictureId === null
@@ -564,7 +582,8 @@ export async function getImages(
       // NOTHING here.
       if (skippedPlayedBatches > 0) {
         if (persistCursor) {
-          await saveLastImageUuid(PUBLIC_FEED_END_CURSOR, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+          await persistCursorSafely(PUBLIC_FEED_END_CURSOR, filters);
+          logFeedEvent('sentinel-armed', { cursor: PUBLIC_FEED_END_CURSOR });
         }
         return { isError: false, reason: 'played-out', images: [], poolExhausted: true };
       }
@@ -575,8 +594,9 @@ export async function getImages(
     const unplayedRows = imagesInfosData.filter((image) => !playedPictureIds.has(image.name));
 
     if (unplayedRows.length === 0) {
+      logFeedEvent('played-skip', { cursor: lastBatchPictureId, skippedPlayedBatches });
       if (persistCursor) {
-        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+        await persistCursorSafely(lastBatchPictureId, filters);
       }
       skippedPlayedBatches += 1;
       nextPictureId = lastBatchPictureId;
@@ -587,7 +607,7 @@ export async function getImages(
 
     if (images.length > 0) {
       if (persistCursor) {
-        await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+        await persistCursorSafely(lastBatchPictureId, filters);
       }
       return { isError: false, images: images };
     }
@@ -602,16 +622,44 @@ export async function getImages(
     }
 
     if (persistCursor) {
-      await saveLastImageUuid(lastBatchPictureId, filters?.category_key, filters?.language, filters?.scope, filters?.mode);
+      await persistCursorSafely(lastBatchPictureId, filters);
     }
+    lastBrokenBatchRows = unplayedRows;
+    logFeedEvent('broken-batch-skip', { cursor: lastBatchPictureId, skippedBrokenBatches });
     skippedBrokenBatches += 1;
     nextPictureId = lastBatchPictureId;
   }
 
-  if (skippedPlayedBatches > MAX_PLAYED_SKIPS) {
+  // Commit 1 L1: an error-class terminal is dishonest once the end is proven.
+  // >=1 all-played batch consumed earlier in this round proves the feed end
+  // (D2) — reclassify to 'played-out'. This also covers the MAX_PLAYED_SKIPS
+  // bound-hit (same shape: no poolExhausted flag, no sentinel — the cursor is
+  // persisted per skip, so the next call resumes past the played pages).
+  if (skippedPlayedBatches > 0) {
+    const boundHit = skippedPlayedBatches > MAX_PLAYED_SKIPS;
+    logFeedEvent(
+      boundHit ? 'played-out-bound' : 'played-out-reclassified',
+      { skips: skippedPlayedBatches, cursor: nextPictureId },
+    );
     return { isError: false, reason: 'played-out', images: [] };
   }
 
+  // 0 skips: the loop's rows were filtered against the played snapshot read
+  // ONCE before the loop, so re-checking that snapshot can never prove them
+  // played. FRESH re-read covers the concurrent addPlayedPictureId race
+  // (a swipe committing after the snapshot). One AsyncStorage read, terminal
+  // path only; an unreadable re-read keeps the honest 'server' terminal.
+  try {
+    const freshlyPlayed = new Set(await getPlayedPictureIds(filters?.language, filters?.scope));
+    if (lastBrokenBatchRows.every((row) => freshlyPlayed.has(row.name))) {
+      logFeedEvent('played-out-reclassified', { proof: 'fresh-reread', cursor: nextPictureId });
+      return { isError: false, reason: 'played-out', images: [] };
+    }
+  } catch {
+    // Fail open to the error terminal (same stance as the pre-loop read).
+  }
+
+  logFeedEvent('broken-batch-terminal', { cursor: nextPictureId, skippedBrokenBatches });
   return {
     isError: true,
     reason: 'server',
