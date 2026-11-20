@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, setItem, removeItem } from './localStore';
 import { submitScoreBatch } from './scoreRequests';
 import { isE2EMode } from './e2eMode';
 
@@ -67,7 +67,7 @@ export function mintGuessId() {
 }
 
 async function readList() {
-  const stored = await AsyncStorage.getItem(PENDING_SCORE_EVENTS_KEY);
+  const stored = await getItem(PENDING_SCORE_EVENTS_KEY);
   if (!stored) {
     return [];
   }
@@ -81,7 +81,7 @@ async function readList() {
 }
 
 async function writeList(items) {
-  await AsyncStorage.setItem(PENDING_SCORE_EVENTS_KEY, JSON.stringify(items));
+  await setItem(PENDING_SCORE_EVENTS_KEY, JSON.stringify(items));
 }
 
 function mutateList(fn) {
@@ -110,7 +110,7 @@ export async function getPending() {
 }
 
 export async function clearPending() {
-  await AsyncStorage.removeItem(PENDING_SCORE_EVENTS_KEY);
+  await removeItem(PENDING_SCORE_EVENTS_KEY);
 }
 
 export async function flush({ authContext }) {

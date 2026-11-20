@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, removeItem, setItem } from './localStore';
 import { getServingCycleEpoch, type ServingScope } from './servingCycle';
 
 export const ALL_POOL_DRAINED_PREFIX = 'allPoolDrained';
@@ -31,17 +31,17 @@ export function allPoolDrainedKey(language: string | null | undefined, scope: un
  *   stamp can never equal an unset cycle epoch (0) and read as fresh.
  */
 export async function getAllPoolDrainedEpoch(language: string | null | undefined, scope: unknown): Promise<number | null> {
-  const stored = await AsyncStorage.getItem(allPoolDrainedKey(language, scope));
+  const stored = await getItem(allPoolDrainedKey(language, scope));
   const parsed = parseInt(stored ?? '', 10);
   return Number.isNaN(parsed) ? null : parsed;
 }
 
 export async function markAllPoolDrained(language: string | null | undefined, scope: unknown, epoch: number): Promise<void> {
-  await AsyncStorage.setItem(allPoolDrainedKey(language, scope), String(epoch));
+  await setItem(allPoolDrainedKey(language, scope), String(epoch));
 }
 
 export async function clearAllPoolDrained(language: string | null | undefined, scope: unknown): Promise<void> {
-  await AsyncStorage.removeItem(allPoolDrainedKey(language, scope));
+  await removeItem(allPoolDrainedKey(language, scope));
 }
 
 /**

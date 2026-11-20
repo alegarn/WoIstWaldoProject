@@ -1,4 +1,4 @@
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getItem, setItem, removeItem, getAllKeys, multiRemove } from "./localStore";
 import { File, Paths } from "expo-file-system";
 import { withScopeLock } from "./scopeMutex";
 import {
@@ -104,7 +104,7 @@ export async function markCategoryExhausted(categoryKey: string | null | undefin
     await markGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
     return;
   }
-  await AsyncStorage.setItem(exhaustedCategoryKey(categoryKey, language, mode), '1');
+  await setItem(exhaustedCategoryKey(categoryKey, language, mode), '1');
 };
 
 /**
@@ -115,7 +115,7 @@ export async function isCategoryExhausted(categoryKey: string | null | undefined
   if (isPrivateScope(scope)) {
     return isGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
   }
-  return (await AsyncStorage.getItem(exhaustedCategoryKey(categoryKey, language, mode))) === '1';
+  return (await getItem(exhaustedCategoryKey(categoryKey, language, mode))) === '1';
 };
 
 /**
@@ -127,7 +127,7 @@ export async function clearExhaustedCategory(categoryKey: string | null | undefi
     await clearGroupCategoryExhausted(scope.groupId, categoryKey, language, mode);
     return;
   }
-  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language, mode));
+  await removeItem(exhaustedCategoryKey(categoryKey, language, mode));
 };
 
 /**
@@ -139,7 +139,7 @@ export async function clearExhaustedCategory(categoryKey: string | null | undefi
  */
 export async function getLocalImages(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<CardImage[] | null> {
   const listKey = imageListKey(categoryKey, language, mode);
-  const stored = await AsyncStorage.getItem(listKey);
+  const stored = await getItem(listKey);
   if (!stored) {
     return null;
   }
@@ -158,7 +158,7 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
   // Cache (Paths.cache) is not durable across restarts/updates, but this list is.
   // Drop entries whose image file is gone and persist the trimmed list so dead
   // uris don't linger and render as blank cards.
-  const viable = images.filter((image) => localImageFileExists(image?.imageFile));
+  const viable = await filterViableImages(images);
 
   if (viable.length !== images.length) {
     // Task 6c: when EVERY entry is dead the trim lands on zero — a known
@@ -174,7 +174,7 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
     return withScopeLock(
       deckWriteLockKey({ categoryKey, language, scope: null }),
       async () => {
-        const latestStored = await AsyncStorage.getItem(listKey);
+        const latestStored = await getItem(listKey);
         if (!latestStored) {
           return [];
         }
@@ -190,12 +190,12 @@ export async function getLocalImages(categoryKey: string | null | undefined, lan
           return [];
         }
 
-        const latestViable = latestImages.filter((image) => localImageFileExists(image?.imageFile));
+        const latestViable = await filterViableImages(latestImages);
         if (latestImages.length > 0 && latestViable.length === 0) {
           logFeedEvent('deck-trim-to-zero', { listKey });
         }
         if (latestViable.length !== latestImages.length) {
-          await AsyncStorage.setItem(listKey, JSON.stringify(latestViable));
+          await setItem(listKey, JSON.stringify(latestViable));
         }
         return latestViable;
       },
@@ -407,7 +407,7 @@ export async function getRemainingDeckCount({ category, language, mode, currentL
 
   let images;
   if (!isPrivateScope(scope)) {
-    const stored = await AsyncStorage.getItem(imageListKey(category?.key || 'all', language, mode));
+    const stored = await getItem(imageListKey(category?.key || 'all', language, mode));
     if (!stored) return 0;
     try {
       images = JSON.parse(stored);
@@ -434,7 +434,7 @@ function getLastListId(list: CardImage[]): number {
 
 export async function getLastImageId(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<number> {
   console.log("getLastImageId");
-  const localImageList = await AsyncStorage.getItem(imageListKey(categoryKey, language, mode));
+  const localImageList = await getItem(imageListKey(categoryKey, language, mode));
   //console.log("getLastImageId localImageList", localImageList);
 
   if ((localImageList !== null) && (localImageList !== "[]")) {
@@ -483,7 +483,7 @@ function lastImageUuidKeyForScope(categoryKey: string | null | undefined, langua
  * @param scope - Private scope object.
  */
 export async function saveLastImageUuid(imageUuid: string, categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<null> {
-  await AsyncStorage.setItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode), imageUuid);
+  await setItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode), imageUuid);
   return null;
 };
 
@@ -500,7 +500,7 @@ export async function saveLastImageUuid(imageUuid: string, categoryKey?: string 
  * @returns Stored cursor, sentinel, or null when unset.
  */
 export async function getLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<string | null> {
-  const lastImageUuid = await AsyncStorage.getItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
+  const lastImageUuid = await getItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
   return lastImageUuid;
 };
 
@@ -516,11 +516,11 @@ export async function getLastImageUuid(categoryKey?: string | null, language?: s
  * @returns {Promise<void>}
  */
 export async function clearLastImageUuid(categoryKey?: string | null, language?: string | null, scope?: unknown, mode?: string | null): Promise<void> {
-  await AsyncStorage.removeItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
+  await removeItem(lastImageUuidKeyForScope(categoryKey, language, scope, mode));
 };
 
 export async function getSessionLanguageFilter(): Promise<string | null> {
-  const stored = await AsyncStorage.getItem(SESSION_LANGUAGE_FILTER_KEY);
+  const stored = await getItem(SESSION_LANGUAGE_FILTER_KEY);
 
   // Keep "unset" distinct from an explicit language choice.
   // GuessPath/GuessFeed use this to send "any" (no server filter) while still
@@ -529,12 +529,12 @@ export async function getSessionLanguageFilter(): Promise<string | null> {
 };
 
 export async function saveSessionLanguageFilter(code: string | null): Promise<null> {
-  await AsyncStorage.setItem(SESSION_LANGUAGE_FILTER_KEY, code as string);
+  await setItem(SESSION_LANGUAGE_FILTER_KEY, code as string);
   return null;
 };
 
 export async function getSessionModeFilter(): Promise<string | null> {
-  const stored = await AsyncStorage.getItem(SESSION_MODE_FILTER_KEY);
+  const stored = await getItem(SESSION_MODE_FILTER_KEY);
 
   // Keep "unset" distinct from an explicit mode pick ('any' included), mirroring
   // the session language filter contract.
@@ -542,94 +542,94 @@ export async function getSessionModeFilter(): Promise<string | null> {
 };
 
 export async function saveSessionModeFilter(mode: string | null): Promise<null> {
-  await AsyncStorage.setItem(SESSION_MODE_FILTER_KEY, mode as string);
+  await setItem(SESSION_MODE_FILTER_KEY, mode as string);
   return null;
 };
 
 export async function getPreferredLanguage(): Promise<string | null> {
-  const stored = await AsyncStorage.getItem(PREFERRED_LANGUAGE_KEY);
+  const stored = await getItem(PREFERRED_LANGUAGE_KEY);
   return stored || null;
 };
 
 export async function savePreferredLanguage(code: string | null): Promise<null> {
-  await AsyncStorage.setItem(PREFERRED_LANGUAGE_KEY, code as string);
+  await setItem(PREFERRED_LANGUAGE_KEY, code as string);
   return null;
 };
 
 export async function getUiLocale(): Promise<string | null> {
-  const stored = await AsyncStorage.getItem(UI_LOCALE_KEY);
+  const stored = await getItem(UI_LOCALE_KEY);
   return stored || null;
 };
 
 export async function saveUiLocale(code: string | null): Promise<null> {
-  await AsyncStorage.setItem(UI_LOCALE_KEY, code as string);
+  await setItem(UI_LOCALE_KEY, code as string);
   return null;
 };
 
 export async function getOnboardingCompleted(): Promise<boolean> {
-  const stored = await AsyncStorage.getItem(ONBOARDING_COMPLETED_KEY);
+  const stored = await getItem(ONBOARDING_COMPLETED_KEY);
   return stored === 'true';
 }
 
 export async function setOnboardingCompleted(value: boolean): Promise<null> {
-  await AsyncStorage.setItem(ONBOARDING_COMPLETED_KEY, value ? 'true' : 'false');
+  await setItem(ONBOARDING_COMPLETED_KEY, value ? 'true' : 'false');
   return null;
 }
 
 export async function getGuessPathWalkthroughSeen(): Promise<boolean> {
-  const stored = await AsyncStorage.getItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY);
+  const stored = await getItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY);
   return stored === 'true';
 }
 
 export async function setGuessPathWalkthroughSeen(value: boolean): Promise<null> {
-  await AsyncStorage.setItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY, value ? 'true' : 'false');
+  await setItem(GUESS_PATH_WALKTHROUGH_SEEN_KEY, value ? 'true' : 'false');
   return null;
 }
 
 export async function getQuickTutorialSeen(): Promise<boolean> {
-  const stored = await AsyncStorage.getItem(QUICK_TUTORIAL_SEEN_KEY);
+  const stored = await getItem(QUICK_TUTORIAL_SEEN_KEY);
   return stored === 'true';
 }
 
 export async function setQuickTutorialSeen(value: boolean): Promise<null> {
-  await AsyncStorage.setItem(QUICK_TUTORIAL_SEEN_KEY, value ? 'true' : 'false');
+  await setItem(QUICK_TUTORIAL_SEEN_KEY, value ? 'true' : 'false');
   return null;
 }
 
 export async function getGroupsIntroSeen(): Promise<boolean> {
-  const stored = await AsyncStorage.getItem(GROUPS_INTRO_SEEN_KEY);
+  const stored = await getItem(GROUPS_INTRO_SEEN_KEY);
   return stored === 'true';
 }
 
 export async function setGroupsIntroSeen(value: boolean): Promise<null> {
-  await AsyncStorage.setItem(GROUPS_INTRO_SEEN_KEY, value ? 'true' : 'false');
+  await setItem(GROUPS_INTRO_SEEN_KEY, value ? 'true' : 'false');
   return null;
 }
 
 export async function getGroupsDetailSeen(): Promise<boolean> {
-  const stored = await AsyncStorage.getItem(GROUPS_DETAIL_SEEN_KEY);
+  const stored = await getItem(GROUPS_DETAIL_SEEN_KEY);
   return stored === 'true';
 }
 
 export async function setGroupsDetailSeen(value: boolean): Promise<null> {
-  await AsyncStorage.setItem(GROUPS_DETAIL_SEEN_KEY, value ? 'true' : 'false');
+  await setItem(GROUPS_DETAIL_SEEN_KEY, value ? 'true' : 'false');
   return null;
 }
 
 export async function getAppOpenCount(): Promise<number> {
-  const stored = await AsyncStorage.getItem(APP_OPEN_COUNT_KEY);
+  const stored = await getItem(APP_OPEN_COUNT_KEY);
   const parsed = Number.parseInt(stored ?? '', 10);
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
 export async function incrementAppOpenCount(): Promise<null> {
   const current = await getAppOpenCount();
-  await AsyncStorage.setItem(APP_OPEN_COUNT_KEY, String(current + 1));
+  await setItem(APP_OPEN_COUNT_KEY, String(current + 1));
   return null;
 }
 
 export async function setAppOpenCount(value: number): Promise<null> {
-  await AsyncStorage.setItem(APP_OPEN_COUNT_KEY, String(value));
+  await setItem(APP_OPEN_COUNT_KEY, String(value));
   return null;
 }
 
@@ -658,7 +658,7 @@ function normalizeStoredTags(value: unknown): string[] {
 }
 
 export async function getUserTags(): Promise<string[]> {
-  const storedTags = await AsyncStorage.getItem(USER_TAGS_KEY);
+  const storedTags = await getItem(USER_TAGS_KEY);
   return normalizeStoredTags(parseStoredValue(storedTags));
 }
 
@@ -674,22 +674,22 @@ export async function saveUserTag(name: string | null | undefined): Promise<stri
     ? currentTags
     : [...currentTags, normalizedName];
 
-  await AsyncStorage.setItem(USER_TAGS_KEY, JSON.stringify(nextTags));
+  await setItem(USER_TAGS_KEY, JSON.stringify(nextTags));
   return nextTags;
 }
 
 export async function saveE2EHiddenGuessCard(payload: unknown): Promise<null> {
-  await AsyncStorage.setItem(E2E_HIDDEN_GUESS_CARD_KEY, JSON.stringify(payload));
+  await setItem(E2E_HIDDEN_GUESS_CARD_KEY, JSON.stringify(payload));
   return null;
 }
 
 export async function getE2EHiddenGuessCard(): Promise<unknown> {
-  const storedPayload = await AsyncStorage.getItem(E2E_HIDDEN_GUESS_CARD_KEY);
+  const storedPayload = await getItem(E2E_HIDDEN_GUESS_CARD_KEY);
   return parseStoredValue(storedPayload);
 }
 
 export async function clearE2EHiddenGuessCard(): Promise<null> {
-  await AsyncStorage.removeItem(E2E_HIDDEN_GUESS_CARD_KEY);
+  await removeItem(E2E_HIDDEN_GUESS_CARD_KEY);
   return null;
 }
 
@@ -705,6 +705,27 @@ function localImageFileExists(uri: unknown): boolean {
   } catch {
     return false;
   }
+}
+
+const VIABILITY_FILTER_CHUNK_SIZE = 200;
+
+function yieldToThread(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+async function filterViableImages(images: CardImage[]): Promise<CardImage[]> {
+  const viable: CardImage[] = [];
+  for (let start = 0; start < images.length; start += VIABILITY_FILTER_CHUNK_SIZE) {
+    for (const image of images.slice(start, start + VIABILITY_FILTER_CHUNK_SIZE)) {
+      if (localImageFileExists(image?.imageFile)) {
+        viable.push(image);
+      }
+    }
+    if (start + VIABILITY_FILTER_CHUNK_SIZE < images.length) {
+      await yieldToThread();
+    }
+  }
+  return viable;
 }
 
 async function removeFromCache(localUri: string | null | undefined): Promise<void> {
@@ -724,7 +745,7 @@ async function removeFromCache(localUri: string | null | undefined): Promise<voi
  */
 export async function emptyImageList(categoryKey: string | null | undefined, language: string | null | undefined, mode?: string | null): Promise<void> {
   const listKey = imageListKey(categoryKey, language, mode);
-  const localList = await AsyncStorage.getItem(listKey)
+  const localList = await getItem(listKey)
   //console.log("emptyImageList imageList", localList);
   //console.log("if (localList !== null) && (localList !== '[]')", (localList !== null) && (localList !== "[]"));
 
@@ -734,10 +755,10 @@ export async function emptyImageList(categoryKey: string | null | undefined, lan
     });
   };
 
-  await AsyncStorage.removeItem(listKey);
-  await AsyncStorage.removeItem(lastImageUuidKey(categoryKey, language, mode));
-  await AsyncStorage.removeItem(exhaustedCategoryKey(categoryKey, language, mode));
-  await AsyncStorage.removeItem(playedPictureIdsKey(language, null));
+  await removeItem(listKey);
+  await removeItem(lastImageUuidKey(categoryKey, language, mode));
+  await removeItem(exhaustedCategoryKey(categoryKey, language, mode));
+  await removeItem(playedPictureIdsKey(language, null));
 };
 
 /**
@@ -748,7 +769,7 @@ export async function emptyImageList(categoryKey: string | null | undefined, lan
  */
 async function deleteDeckCacheFiles(imageListKeys: readonly string[]): Promise<void> {
   for (const listKey of imageListKeys) {
-    const localList = await AsyncStorage.getItem(listKey);
+    const localList = await getItem(listKey);
     if (localList === null || localList === '[]') {
       continue;
     }
@@ -777,7 +798,7 @@ async function deleteDeckCacheFiles(imageListKeys: readonly string[]): Promise<v
  * @returns {Promise<void>}
  */
 export async function wipePublicGuessStorage(): Promise<void> {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   await deleteDeckCacheFiles(keys.filter((key) => typeof key === 'string' && key.startsWith(IMAGE_LIST_KEY_PREFIX)));
 
   const removalPrefixes = [
@@ -792,12 +813,12 @@ export async function wipePublicGuessStorage(): Promise<void> {
   );
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }
 
 export async function storeImageList(imageList: CardImage[], categoryKey?: string | null, language?: string | null, mode?: string | null): Promise<void> {
-  await AsyncStorage.setItem(imageListKey(categoryKey, language, mode), JSON.stringify(imageList));
+  await setItem(imageListKey(categoryKey, language, mode), JSON.stringify(imageList));
 };
 
 function removeObjectById(imageListObject: CardImage[], listId: number): CardImage[] {
@@ -876,11 +897,11 @@ function dedupByPictureId(prior: unknown, incoming: CardImage[]): CardImage[] {
  */
 export async function updateImageList(updatedImageList: CardImage[], categoryKey?: string | null, language?: string | null, mode?: string | null): Promise<CardImage[]> {
   const listKey = imageListKey(categoryKey, language, mode);
-  const imageList = await AsyncStorage.getItem(listKey);
+  const imageList = await getItem(listKey);
   const jsonImageList = imageList ? JSON.parse(imageList) : [];
   const deduped = dedupByPictureId(jsonImageList, updatedImageList);
   const newImageList = normalizeListIds([...jsonImageList, ...deduped]);
-  await AsyncStorage.setItem(listKey, JSON.stringify(newImageList));
+  await setItem(listKey, JSON.stringify(newImageList));
   return newImageList;
 };
 
@@ -900,13 +921,13 @@ export async function removeImageFromList(listId: number, categoryKey?: string |
     deckWriteLockKey({ categoryKey, language, scope: null }),
     async () => {
       const listKey = imageListKey(categoryKey, language, mode);
-      const imageList = await AsyncStorage.getItem(listKey);
+      const imageList = await getItem(listKey);
       if (imageList === null || imageList === undefined) {
         return null;
       };
       const jsonImageList = JSON.parse(imageList);
       const updatedImageList = removeObjectById(jsonImageList, listId);
-      await AsyncStorage.setItem(listKey, JSON.stringify(updatedImageList));
+      await setItem(listKey, JSON.stringify(updatedImageList));
       return null;
     },
   );
@@ -939,11 +960,15 @@ function baseNameFromFileName(fileName: string): string | null {
 };
 
 async function collectDeckedPictureIds(): Promise<Set<string>> {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const deckKeys = keys.filter((key) => typeof key === 'string' && key.startsWith(IMAGE_LIST_KEY_PREFIX));
   const deckedNames = new Set<string>();
-  for (const listKey of deckKeys) {
-    const stored = await AsyncStorage.getItem(listKey);
+  for (let i = 0; i < deckKeys.length; i++) {
+    if (i > 0) {
+      await yieldToThread();
+    }
+    const listKey = deckKeys[i];
+    const stored = await getItem(listKey);
     if (!stored) {
       continue;
     }

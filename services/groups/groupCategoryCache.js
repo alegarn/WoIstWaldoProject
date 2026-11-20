@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getAllKeys, getItem, multiRemove, removeItem, setItem } from '../../utils/localStore';
 
 const PREFIX = 'groupCategories';
 
@@ -9,7 +9,7 @@ function groupCategoryKey(groupId) {
 export { groupCategoryKey };
 
 export async function readGroupCategoryCache(groupId) {
-  const stored = await AsyncStorage.getItem(groupCategoryKey(groupId));
+  const stored = await getItem(groupCategoryKey(groupId));
   if (!stored) {
     return null;
   }
@@ -29,21 +29,21 @@ export async function readGroupCategoryCache(groupId) {
 }
 
 export async function writeGroupCategoryCache(groupId, categories) {
-  await AsyncStorage.setItem(
+  await setItem(
     groupCategoryKey(groupId),
     JSON.stringify(Array.isArray(categories) ? categories : []),
   );
 }
 
 export async function clearGroupCategoryCache(groupId) {
-  await AsyncStorage.removeItem(groupCategoryKey(groupId));
+  await removeItem(groupCategoryKey(groupId));
 }
 
 export async function clearAllGroupCategoryCaches() {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:`));
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }

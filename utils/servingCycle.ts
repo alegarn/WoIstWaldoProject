@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, setItem, getAllKeys, multiRemove } from './localStore';
 import { withScopeLock } from './scopeMutex';
 import { resetPlayedPictureIdsForScope } from './playedPictureIds';
 import { logFeedEvent } from './feedDiagnostics';
@@ -24,7 +24,7 @@ export async function getServingCycleEpoch(
   language: string | null | undefined,
   scope: ServingScope,
 ): Promise<number> {
-  const stored = await AsyncStorage.getItem(servingCycleKey(language, scope));
+  const stored = await getItem(servingCycleKey(language, scope));
   const parsed = parseInt(stored ?? '', 10);
   return Number.isNaN(parsed) ? 0 : parsed;
 }
@@ -37,7 +37,7 @@ export async function startNewServingCycle(
   return withScopeLock(key, async () => {
     const current = await getServingCycleEpoch(language, scope);
     const next = current + 1;
-    await AsyncStorage.setItem(key, String(next));
+    await setItem(key, String(next));
     // Lock order: servingCycle→played only; playedPictureIds.ts never imports
     // servingCycle → no inverse order, no deadlock.
     await resetPlayedPictureIdsForScope(language, scope);
@@ -82,7 +82,7 @@ async function clearStaleCycleCursorsAndMarkers(
 ): Promise<void> {
   const lang = language || 'any';
   const langSegment = `:${lang}:`;
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
 
   const matches = (key: unknown, prefix: string, suffix?: string): key is string =>
     typeof key === 'string' && key.startsWith(prefix) && key.includes(langSegment) &&
@@ -108,15 +108,15 @@ async function clearStaleCycleCursorsAndMarkers(
       );
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }
 
 async function removeKeysByPrefix(prefix: string): Promise<void> {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(prefix));
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }
 
