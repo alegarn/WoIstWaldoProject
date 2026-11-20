@@ -244,6 +244,12 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const [isManageModalVisible, setIsManageModalVisible] = useState(false);
   const [walkthroughVisible, setWalkthroughVisible] = useState(false);
   const lateAttachRef = useRef<LateAttachState>({ createdCategoryId: null, pendingImageId: null });
+  const walkthroughFocusAttemptedRef = useRef(false);
+  const walkthroughParamsRef = useRef<{ showWalkthrough?: boolean; isTutorial?: boolean }>({});
+  walkthroughParamsRef.current = {
+    showWalkthrough: route?.params?.showWalkthrough,
+    isTutorial: route?.params?.isTutorial,
+  };
 
   const isTutorial = route?.params?.isTutorial;
   const routeScope = route?.params?.scope;
@@ -340,29 +346,54 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
     };
   }, []);
 
-  useEffect(() => {
-    if (route?.params?.showWalkthrough === true) {
-      navigation.setParams({ showWalkthrough: undefined });
-      setWalkthroughVisible(true);
-      return;
-    }
-    if (route?.params?.isTutorial || isE2EMode()) {
-      return;
-    }
-    let cancelled = false;
-    getGuessPathWalkthroughSeen()
-      .then((seen) => {
+  useFocusEffect(
+    useCallback(() => {
+      let cancelled = false;
+
+      const maybeAutoShowWalkthrough = async () => {
+        const params = walkthroughParamsRef.current;
+        if (params.showWalkthrough === true) {
+          walkthroughFocusAttemptedRef.current = true;
+          navigation.setParams({ showWalkthrough: undefined });
+          setWalkthroughVisible(true);
+          return;
+        }
+        if (params.isTutorial || isE2EMode()) {
+          return;
+        }
+        if (walkthroughFocusAttemptedRef.current) {
+          return;
+        }
+        walkthroughFocusAttemptedRef.current = true;
+
+        let seen = false;
+        try {
+          seen = await getGuessPathWalkthroughSeen();
+        } catch {
+          return;
+        }
         if (cancelled || seen) {
           return;
         }
-        setGuessPathWalkthroughSeen(true).catch(() => {});
-        setWalkthroughVisible(true);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+
+        try {
+          await setGuessPathWalkthroughSeen(true);
+        } catch {
+          return;
+        }
+        if (!cancelled) {
+          setWalkthroughVisible(true);
+        }
+      };
+
+      maybeAutoShowWalkthrough().catch(() => {});
+
+      return () => {
+        cancelled = true;
+        walkthroughFocusAttemptedRef.current = false;
+      };
+    }, [navigation, setWalkthroughVisible])
+  );
 
   useEffect(() => {
     if (!theme) {

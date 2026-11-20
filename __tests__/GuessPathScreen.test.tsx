@@ -3,6 +3,7 @@ import React from 'react';
 import { Alert, Dimensions } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import type { ReactTestRenderer } from 'react-test-renderer';
+import { waitFor } from '@testing-library/react-native';
 
 type MockCardProps = {
   category: { id?: string; key?: string; name?: string };
@@ -50,6 +51,7 @@ const mockCategoryWalkthrough = jest.fn((_props: MockCategoryWalkthroughProps) =
 const mockIconButton = jest.fn((_props: MockIconButtonProps) => null);
 const mockUseGroupsHub = jest.fn();
 const mockFocusEffects = new Set<FocusEffectCallback>();
+const mockFocusCleanups = new Map<FocusEffectCallback, () => void>();
 
 jest.mock('@react-navigation/native', () => {
   const React = require('react');
@@ -58,11 +60,11 @@ jest.mock('@react-navigation/native', () => {
     useFocusEffect: (callback: FocusEffectCallback) => {
       React.useEffect(() => {
         mockFocusEffects.add(callback);
-        const cleanup = callback();
 
         return () => {
           mockFocusEffects.delete(callback);
-          cleanup?.();
+          mockFocusCleanups.get(callback)?.();
+          mockFocusCleanups.delete(callback);
         };
       }, [callback]);
     },
@@ -234,6 +236,7 @@ describe('GuessPathScreen', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockFocusEffects.clear();
+    mockFocusCleanups.clear();
     alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
     dimensionsGetSpy = jest.spyOn(Dimensions, 'get').mockReturnValue({
       width: 320,
@@ -279,7 +282,13 @@ describe('GuessPathScreen', () => {
 
   async function triggerFocusEffects() {
     await act(async () => {
-      [...mockFocusEffects].forEach((callback) => callback());
+      [...mockFocusEffects].forEach((callback) => {
+        const cleanup = callback();
+
+        if (typeof cleanup === 'function') {
+          mockFocusCleanups.set(callback, cleanup);
+        }
+      });
       await flushEffects();
     });
   }
@@ -388,6 +397,8 @@ describe('GuessPathScreen', () => {
   it('renders the bundled default categories on mount without any network call', async () => {
     await renderScreen();
 
+    await triggerFocusEffects();
+
     expect(mockGetCategories).not.toHaveBeenCalled();
     expect(mockLoadGroupCategoriesOptimistic).not.toHaveBeenCalled();
 
@@ -407,6 +418,8 @@ describe('GuessPathScreen', () => {
   it('renders the synthetic Recent/All card as the first grid item', async () => {
     await renderScreen();
 
+    await triggerFocusEffects();
+
     const renderedKeys = mockGuessCategoryCard.mock.calls.map(
       ([props]) => props.category.id
     );
@@ -420,6 +433,8 @@ describe('GuessPathScreen', () => {
   it('passes the grid testID and slug-based card testIDs to the flat list', async () => {
     const renderer = await renderScreen();
 
+    await triggerFocusEffects();
+
     expect(renderer.root.findByProps({ testID: 'guess-path.category.grid' })).toBeTruthy();
     expect(getCardPropsByKey('nature')).toEqual(
       expect.objectContaining({
@@ -431,6 +446,8 @@ describe('GuessPathScreen', () => {
 
   it('navigates to GuessFeedScreen with the selected category and resolved language', async () => {
     await renderScreen();
+
+    await triggerFocusEffects();
 
     const natureCard = getCardPropsByKey('nature')!;
 
@@ -449,6 +466,8 @@ describe('GuessPathScreen', () => {
     mockGetPreferredLanguage.mockResolvedValue('fr');
 
     const renderer = await renderScreen();
+
+    await triggerFocusEffects();
 
     expect(
       renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
@@ -480,6 +499,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
@@ -506,6 +527,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     const privateCard = getCardPropsByKey('c-1')!;
 
@@ -539,6 +562,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
@@ -568,6 +593,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore([{ id: 'c-1', key: 'c-1', name: 'Cats' }]);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     const privateCard = getCardPropsByKey('c-1')!;
 
@@ -601,6 +628,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
@@ -626,6 +655,8 @@ describe('GuessPathScreen', () => {
     });
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     const privateCard = getCardPropsByKey('c-1')!;
 
@@ -656,6 +687,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     const privateCard = getCardPropsByKey('c-1')!;
 
     await act(async () => {
@@ -677,6 +710,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore(cachedCategories);
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledWith(expect.objectContaining({
       context: contextValue,
@@ -703,6 +738,8 @@ describe('GuessPathScreen', () => {
     });
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(mockGuessCategoryCard.mock.calls.some(
       ([props]) => props.category.id === 'c-cached'
@@ -831,6 +868,8 @@ describe('GuessPathScreen', () => {
   it('persists the selected mode, updates the probe, and threads mode into navigation', async () => {
     const renderer = await renderScreen();
 
+    await triggerFocusEffects();
+
     await act(async () => {
       getModeButtonProps()!.onPress();
     });
@@ -957,6 +996,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     const addButtonProps = getAddCategoryButtonProps();
     expect(addButtonProps).toBeDefined();
 
@@ -1011,6 +1052,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     expect(mockResolveCategoryThumbnail).toHaveBeenCalledTimes(2);
     expect(mockResolveCategoryThumbnail).toHaveBeenNthCalledWith(1, contextValue, {
       groupId: 'g-1',
@@ -1056,6 +1099,8 @@ describe('GuessPathScreen', () => {
     });
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(mockLoadGroupCategoriesOptimistic).toHaveBeenCalledTimes(1);
     expect(getCardPropsByKey('c-2')).toBeUndefined();
@@ -1221,6 +1266,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     await act(async () => {
       getAddCategoryButtonProps()!.onPress();
       await flushEffects();
@@ -1281,6 +1328,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     await act(async () => {
       getManageButtonProps()!.onPress();
       await flushEffects();
@@ -1327,6 +1376,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     expect(getPencilEditButtonProps('c-1')).toBeUndefined();
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.category.edit.c-1' })
@@ -1342,6 +1393,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(getManageButtonProps()).toBeDefined();
     expect(getPencilEditButtonProps('c-1')).toBeUndefined();
@@ -1363,6 +1416,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.manage' })
@@ -1402,6 +1457,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     await act(async () => {
       getManageButtonProps()!.onPress();
       await flushEffects();
@@ -1437,6 +1494,8 @@ describe('GuessPathScreen', () => {
     mockDeleteGroupCategory.mockResolvedValue({ status: 204, data: {} });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     await act(async () => {
       getManageButtonProps()!.onPress();
@@ -1477,6 +1536,8 @@ describe('GuessPathScreen', () => {
     mockDeleteGroupCategory.mockResolvedValue({ status: 500, data: {} });
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     const initialCalls = mockLoadGroupCategoriesOptimistic.mock.calls.length;
 
@@ -1525,6 +1586,8 @@ describe('GuessPathScreen', () => {
 
     await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     expect(getManageButtonProps()).toBeUndefined();
     expect(getPencilEditButtonProps('c-1')).toBeUndefined();
     expect(getDeleteButtonProps('c-1')).toBeUndefined();
@@ -1539,6 +1602,8 @@ describe('GuessPathScreen', () => {
     emitCategoriesViaStore([category]);
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     expect(() =>
       renderer.root.findByProps({ testID: 'guess-path.button.manage-done' })
@@ -1582,6 +1647,8 @@ describe('GuessPathScreen', () => {
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
 
+    await triggerFocusEffects();
+
     await act(async () => {
       getManageButtonProps()!.onPress();
       await flushEffects();
@@ -1615,6 +1682,8 @@ describe('GuessPathScreen', () => {
     );
 
     const renderer = await renderScreen({ params: { scope: { kind: 'private', groupId: 'g-1' } } });
+
+    await triggerFocusEffects();
 
     await act(async () => {
       getManageButtonProps()!.onPress();
@@ -1669,6 +1738,8 @@ describe('GuessPathScreen', () => {
     it('auto-shows the walkthrough once and persists the seen flag when unseen', async () => {
       const renderer = await renderScreen();
 
+      await triggerFocusEffects();
+
       expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
       expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
       expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledWith(true);
@@ -1687,12 +1758,16 @@ describe('GuessPathScreen', () => {
 
       await renderScreen();
 
+      await triggerFocusEffects();
+
       expect(wasWalkthroughEverVisible()).toBe(false);
       expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
     });
 
     it('never auto-shows the walkthrough during an active tutorial and keeps the overlays from co-rendering', async () => {
       await renderScreen({ params: { isTutorial: true } });
+
+      await triggerFocusEffects();
 
       expect(mockTutorialOverlay).toHaveBeenCalledWith(
         expect.objectContaining({ screen: 'GuessPathScreen' })
@@ -1706,6 +1781,8 @@ describe('GuessPathScreen', () => {
 
       await renderScreen();
 
+      await triggerFocusEffects();
+
       expect(wasWalkthroughEverVisible()).toBe(false);
       expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
       expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
@@ -1715,6 +1792,8 @@ describe('GuessPathScreen', () => {
       mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
 
       await renderScreen({ params: { showWalkthrough: true } });
+
+      await triggerFocusEffects();
 
       expect(wasWalkthroughEverVisible()).toBe(true);
       expect(getWalkthroughProps()?.visible).toBe(true);
@@ -1740,8 +1819,108 @@ describe('GuessPathScreen', () => {
       expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
     });
 
-    it('does not write the seen flag when unmounted before the getter resolves', async () => {
+    it('never shows the walkthrough when the screen mounts without a focus run', async () => {
+      await renderScreen();
+
+      expect(wasWalkthroughEverVisible()).toBe(false);
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('shows the walkthrough only after the seen-flag write resolves', async () => {
+      let resolveWrite!: (value: null) => void;
+      mockSetGuessPathWalkthroughSeen.mockImplementation(
+        () => new Promise<null>((resolve) => { resolveWrite = resolve; })
+      );
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+
+      expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(getWalkthroughProps()?.visible ?? false).toBe(false);
+
+      await act(async () => {
+        resolveWrite(null);
+        await flushEffects();
+      });
+
+      await waitFor(() => expect(getWalkthroughProps()?.visible).toBe(true));
+
+      const writeCallOrder = mockSetGuessPathWalkthroughSeen.mock.invocationCallOrder[0];
+      const firstVisibleCallIndex = mockCategoryWalkthrough.mock.calls.findIndex(
+        ([props]) => props.visible === true
+      );
+
+      expect(firstVisibleCallIndex).toBeGreaterThan(-1);
+      expect(mockCategoryWalkthrough.mock.invocationCallOrder[firstVisibleCallIndex]).toBeGreaterThan(
+        writeCallOrder
+      );
+    });
+
+    it('never shows the walkthrough when the seen-flag write rejects', async () => {
+      mockSetGuessPathWalkthroughSeen.mockRejectedValue(new Error('write failed'));
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+
+      await flushEffects();
+
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(wasWalkthroughEverVisible()).toBe(false);
+    });
+
+    it('does not re-attempt the seen-flag write within the same focus run after a failure', async () => {
+      mockSetGuessPathWalkthroughSeen.mockRejectedValue(new Error('write failed'));
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+      await triggerFocusEffects();
+
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(wasWalkthroughEverVisible()).toBe(false);
+    });
+
+    it('does not consult the seen flag before focus when it is already seen', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
+
+      await renderScreen();
+
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+
+      await triggerFocusEffects();
+
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(wasWalkthroughEverVisible()).toBe(false);
+    });
+
+    it('re-checks the seen flag on a later focus after a failed write without showing', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValueOnce(false).mockResolvedValue(true);
+      mockSetGuessPathWalkthroughSeen.mockRejectedValueOnce(new Error('write failed'));
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+
+      await act(async () => {
+        mockFocusCleanups.forEach((cleanup) => cleanup());
+      });
+
+      await triggerFocusEffects();
+
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(wasWalkthroughEverVisible()).toBe(false);
+      expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(2);
+    });
+
+    it('does not show the walkthrough when the seen-flag write resolves after unmount', async () => {
       const errorSpy = jest.spyOn(console, 'error').mockImplementation(jest.fn());
+      let resolveWrite!: (value: null) => void;
+      mockSetGuessPathWalkthroughSeen.mockImplementation(
+        () => new Promise<null>((resolve) => { resolveWrite = resolve; })
+      );
       let renderer!: ReactTestRenderer;
 
       try {
@@ -1751,12 +1930,23 @@ describe('GuessPathScreen', () => {
               <GuessPathScreen navigation={navigation} route={{ params: {} }} />
             </AuthContext.Provider>
           );
+          await flushEffects();
+        });
+
+        await triggerFocusEffects();
+
+        await act(async () => {
           renderer.unmount();
         });
 
-        await flushEffects();
+        await act(async () => {
+          resolveWrite(null);
+          await flushEffects();
+        });
 
-        expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+        expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+        expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+        expect(wasWalkthroughEverVisible()).toBe(false);
         expect(
           errorSpy.mock.calls.some((args) =>
             args.some((arg) => String(arg).includes('state update'))
@@ -1765,6 +1955,173 @@ describe('GuessPathScreen', () => {
       } finally {
         errorSpy.mockRestore();
       }
+    });
+
+    it('keeps the help button replay working after a focus run without writing the seen flag', async () => {
+      mockGetGuessPathWalkthroughSeen.mockResolvedValue(true);
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+
+      const helpButton = getHelpButtonProps();
+
+      expect(helpButton).toBeDefined();
+
+      await act(async () => {
+        helpButton?.onPress();
+        await flushEffects();
+      });
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+    });
+
+    it('shows the walkthrough immediately via the showWalkthrough param without consulting the flag', async () => {
+      await renderScreen({ params: { showWalkthrough: true } });
+
+      await triggerFocusEffects();
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(navigation.setParams).toHaveBeenCalledWith({ showWalkthrough: undefined });
+    });
+
+    it('does not consult the seen flag during an active tutorial even on focus', async () => {
+      await renderScreen({ params: { isTutorial: true } });
+
+      await triggerFocusEffects();
+
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(wasWalkthroughEverVisible()).toBe(false);
+    });
+
+    it('does not consult the seen flag in e2e mode even on focus', async () => {
+      mockIsE2EMode.mockReturnValue(true);
+
+      await renderScreen();
+
+      await triggerFocusEffects();
+
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(wasWalkthroughEverVisible()).toBe(false);
+    });
+
+    it('does not re-run the flag path when the showWalkthrough param is cleared after the forced show', async () => {
+      const route: { params: { showWalkthrough?: boolean } } = { params: { showWalkthrough: true } };
+      navigation.setParams.mockImplementation((next: Record<string, unknown>) => {
+        Object.assign(route.params, next);
+      });
+
+      const renderer = await renderScreen(route);
+
+      await triggerFocusEffects();
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+
+      await act(async () => {
+        navigation.setParams({ showWalkthrough: undefined });
+        renderer.update(
+          <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
+            <GuessPathScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await flushEffects();
+      });
+
+      await triggerFocusEffects();
+
+      expect(mockGetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(getWalkthroughProps()?.visible).toBe(true);
+
+      const visibleSequence = mockCategoryWalkthrough.mock.calls.map(
+        ([props]) => props.visible === true
+      );
+      const visibilityFlips = visibleSequence.filter(
+        (visible, index) => visible && visibleSequence[index - 1] !== true
+      ).length;
+
+      expect(visibilityFlips).toBe(1);
+    });
+
+    it('shows immediately via the showWalkthrough param after the guard was consumed by a completed flag-path auto-show', async () => {
+      const route: { params: { showWalkthrough?: boolean } } = { params: {} };
+      const renderer = await renderScreen(route);
+
+      await triggerFocusEffects();
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        getWalkthroughProps()?.onDone?.();
+      });
+
+      expect(getWalkthroughProps()?.visible).toBe(false);
+
+      route.params.showWalkthrough = true;
+
+      await act(async () => {
+        renderer.update(
+          <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
+            <GuessPathScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await flushEffects();
+      });
+
+      await triggerFocusEffects();
+
+      expect(getWalkthroughProps()?.visible).toBe(true);
+      expect(mockGetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+      expect(mockSetGuessPathWalkthroughSeen).toHaveBeenCalledTimes(1);
+    });
+
+    it('stays hidden after the user dismisses a param-forced walkthrough even when flag-path work is in flight', async () => {
+      const route: { params: { showWalkthrough?: boolean } } = { params: { showWalkthrough: true } };
+      navigation.setParams.mockImplementation((next: Record<string, unknown>) => {
+        Object.assign(route.params, next);
+      });
+
+      let resolveSeen!: (value: boolean) => void;
+      mockGetGuessPathWalkthroughSeen.mockImplementation(
+        () => new Promise<boolean>((resolve) => { resolveSeen = resolve; })
+      );
+
+      const renderer = await renderScreen(route);
+
+      await triggerFocusEffects();
+
+      await act(async () => {
+        renderer.update(
+          <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
+            <GuessPathScreen navigation={navigation} route={route} />
+          </AuthContext.Provider>
+        );
+        await flushEffects();
+      });
+
+      await triggerFocusEffects();
+
+      await act(async () => {
+        getWalkthroughProps()?.onDone?.();
+      });
+
+      expect(getWalkthroughProps()?.visible).toBe(false);
+
+      await act(async () => {
+        resolveSeen?.(false);
+        await flushEffects();
+      });
+
+      expect(mockSetGuessPathWalkthroughSeen).not.toHaveBeenCalled();
+      expect(getWalkthroughProps()?.visible).toBe(false);
     });
   });
 });
