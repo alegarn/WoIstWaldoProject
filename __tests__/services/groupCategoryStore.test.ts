@@ -1,13 +1,10 @@
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('../helpers/statefulAsyncStorageMock')()
-);
+jest.mock('../../utils/localStore', () => require('../helpers/localStoreMock'));
 
 jest.mock('../../services/groups/groupCategoriesApi', () => ({
   __esModule: true,
   listGroupCategories: jest.fn(),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { listGroupCategories } from '../../services/groups/groupCategoriesApi';
 import {
   normalizePrivateCategory,
@@ -15,6 +12,19 @@ import {
   loadGroupCategoriesOptimistic,
   refreshGroupCategories,
 } from '../../services/groups/groupCategoriesStore';
+
+const localStoreMock = jest.requireMock('../../utils/localStore') as {
+  default: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+    getAllKeys: jest.Mock;
+    multiRemove: jest.Mock;
+  };
+  __store: Map<string, string>;
+};
+
+const AsyncStorage = localStoreMock.default;
 
 function resetStore() {
   return AsyncStorage.getAllKeys().then((keys) =>

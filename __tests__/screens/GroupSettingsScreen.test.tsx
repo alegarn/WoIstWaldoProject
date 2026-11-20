@@ -12,8 +12,9 @@
 // - expo-image-picker / expo-image-manipulator (native pick/resize)
 // - expo-file-system (native; File records deletes + binary uploads and
 //   reports the resized image size)
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake; the private-group category cache stays real against it)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map; the private-group category
+//   cache stays real against it)
 // - @react-native-vector-icons/ionicons (native font component)
 // - axios (the transport seam; every backend request is asserted here)
 //
@@ -90,7 +91,7 @@ jest.mock('expo-file-system', () => ({
   UploadType: { BINARY_CONTENT: 'binary' },
 }));
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../../utils/localStore', () =>
   require('../helpers/statefulAsyncStorageMock')({ autoReset: true }),
 );
 

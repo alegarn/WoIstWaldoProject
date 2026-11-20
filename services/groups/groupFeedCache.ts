@@ -2,6 +2,7 @@ import { File, Paths } from 'expo-file-system';
 import { getAllKeys, getItem, multiRemove, removeItem, setItem } from '../../utils/localStore';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
 import { normalizeLanguage, normalizeMode } from '../../utils/sessionFilter';
+import { VIABILITY_FILTER_CHUNK_SIZE, yieldToThread } from '../../utils/yield';
 import { clearAllGroupHubCaches } from './groupHubCache';
 
 export type CachedFeedImage = {
@@ -56,12 +57,6 @@ function deleteFileIfPresent(uri: string) {
   } catch {
     // best-effort
   }
-}
-
-const VIABILITY_FILTER_CHUNK_SIZE = 200;
-
-function yieldToThread(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 async function filterViableImages(images: CachedFeedImage[]): Promise<CachedFeedImage[]> {

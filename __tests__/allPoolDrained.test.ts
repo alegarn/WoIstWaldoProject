@@ -8,11 +8,10 @@
 // re-stamp path (startNewServingCycle → markAllPoolDrained(returnedEpoch)),
 // never by hand-writing a stamp with a made-up epoch.
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
 );
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   clearAllPoolDrained,
   getAllPoolDrainedEpoch,
@@ -20,6 +19,15 @@ import {
   markAllPoolDrained,
 } from '../utils/allPoolDrained';
 import { getServingCycleEpoch, startNewServingCycle } from '../utils/servingCycle';
+
+const AsyncStorage = (
+  jest.requireMock('../utils/localStore') as {
+    default: {
+      getItem: (key: string) => Promise<string | null>;
+      getAllKeys: () => Promise<string[]>;
+    };
+  }
+).default;
 
 const PUBLIC_SCOPE = { kind: 'public' };
 const GROUP_SCOPE = { kind: 'private', groupId: 'g-1' };

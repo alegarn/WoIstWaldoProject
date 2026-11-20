@@ -8,9 +8,10 @@
 //
 // Only system boundaries are mocked:
 // - react-native-gesture-handler (native root view; a plain View passthrough)
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake — decks, cursors, played sets, exhaustion markers, cycles
-//   and the e2e card payload are seeded/asserted through the store map)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map — decks, cursors, played sets,
+//   exhaustion markers, cycles and the e2e card payload are seeded/asserted
+//   through the store map)
 // - expo-file-system (native FS; card files "exist", deletes are recorded)
 // - @react-native-vector-icons/ionicons (native font component)
 // - axios (the network seam for badge-detail tags/ratings)
@@ -36,7 +37,7 @@ jest.mock('react-native-gesture-handler', () => {
   };
 });
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true }),
 );
 
@@ -115,7 +116,7 @@ import SwipeImage from '../components/UI/SwipeImage';
 import { AuthContext } from '../store/auth-context';
 import * as FileSystem from 'expo-file-system';
 import axios from 'axios';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import { fetchCardBatch, probeAllPoolForUnplayed } from '../services/cardDeck';
 import * as cardPrefetcherModule from '../services/cardPrefetcher';
 import { __resetForTests } from '../services/cardPrefetcher';
@@ -127,7 +128,7 @@ const fetchCardBatchMock = fetchCardBatch;
 const probeAllPoolForUnplayedMock = probeAllPoolForUnplayed;
 const axiosGetMock = axios.get;
 
-const store = require('@react-native-async-storage/async-storage').__store;
+const store = require('../utils/localStore').__store;
 
 const contextValue = {
   token: 'token',

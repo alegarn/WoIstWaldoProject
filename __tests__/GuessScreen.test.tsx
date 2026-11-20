@@ -14,8 +14,9 @@
 // - react-native-google-mobile-ads (native SDK; the internal pro fallback panel,
 //   the cadence, the billing policy and the ad-source chain all stay real)
 // - expo-screen-orientation (native)
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake — deck seeding and exhaustion markers are asserted through it)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map — deck seeding and exhaustion
+//   markers are asserted through it)
 // - services/cardDeck (the server deck boundary; fetchCardBatch is the "server",
 //   appendCardBatch stays real so top-ups write observable decks)
 // - utils/handleGuessOutcome (persistence side-effect boundary: score buffer,
@@ -157,15 +158,15 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-// In-memory AsyncStorage: deck lists, exhaustion markers and cursors are
+// In-memory localStore: deck lists, exhaustion markers and cursors are
 // seeded/asserted through the store map.
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true }),
 );
 
 // Server deck boundary: fetchCardBatch IS the server in this suite. Default =
 // server has no cards. appendCardBatch stays REAL so a stubbed server batch
-// lands in the observable AsyncStorage deck.
+// lands in the observable localStore deck.
 jest.mock('../services/cardDeck', () => {
   const actual = jest.requireActual('../services/cardDeck');
   return {
@@ -229,11 +230,14 @@ const resolveNextCardWithServerFallbackMock = resolveNextCardWithServerFallback 
 const fetchCardBatchMock = fetchCardBatch as jest.MockedFunction<typeof fetchCardBatch>;
 
 const actualAdvancer = jest.requireActual('../utils/nextCardAdvancer') as typeof import('../utils/nextCardAdvancer');
-const AsyncStorage = require('@react-native-async-storage/async-storage').default as {
-  getItem: (key: string) => Promise<string | null>;
-  setItem: (key: string, value: string) => Promise<void>;
-  __store: Map<string, string>;
-};
+const AsyncStorage = (
+  jest.requireMock('../utils/localStore') as {
+    default: {
+      getItem: (key: string) => Promise<string | null>;
+      setItem: (key: string, value: string) => Promise<void>;
+    };
+  }
+).default;
 
 type LooseGuessScreenProps = { navigation: unknown; route: { params: Record<string, unknown> } };
 const GuessScreen = GuessScreenBase as unknown as React.FC<LooseGuessScreenProps>;

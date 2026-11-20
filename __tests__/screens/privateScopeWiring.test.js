@@ -16,9 +16,9 @@
 // - expo-screen-orientation (native)
 // - expo-file-system (native file system; cached deck files "exist", deletes
 //   are recorded no-ops)
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake; the private deck and the buffered score are seeded/asserted
-//   through it)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map; the private deck and the
+//   buffered score are seeded/asserted through it)
 // - services/cardDeck (the server deck boundary; fetchCardBatch answers empty
 //   so top-ups/prefetch hit no network)
 // - axios (HTTP boundary for the leaderboard)
@@ -101,7 +101,7 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../../utils/localStore', () =>
   require('../helpers/statefulAsyncStorageMock')({ autoReset: true }),
 );
 
@@ -132,7 +132,7 @@ jest.mock('../../services/cardDeck', () => {
 import React from 'react';
 import { AppState, StyleSheet } from 'react-native';
 import { act, cleanup, fireEvent, render } from '@testing-library/react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../../utils/localStore';
 import axios from 'axios';
 
 import GuessScreen from '../../screens/GuessScreens/GuessScreen';

@@ -68,7 +68,7 @@ export async function startNewServingCycle(
  * cross-wipe group stamps on public restarts, and group epochs are
  * independent. Key shapes mirror utils/storageDatum.ts and
  * services/groups/groupFeedCache.ts (no import — module stays
- * AsyncStorage + scopeMutex + playedPictureIds).
+ * localStore (MMKV-backed) + scopeMutex + playedPictureIds).
  *
  * Mode-agnostic by design (D7): since feed-cache keys gained the trailing
  * `:<mode>` segment, the language segment is matched BY POSITION (contains

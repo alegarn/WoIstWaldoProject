@@ -37,6 +37,8 @@ jest.mock('../store/auth-context', () => {
   };
 });
 
+jest.mock('../utils/localStore', () => require('./helpers/localStoreMock'));
+
 import React from 'react';
 import { existsSync, readFileSync } from 'fs';
 import { resolve } from 'path';
@@ -44,7 +46,7 @@ import { Text } from 'react-native';
 import { act, create } from 'react-test-renderer';
 import i18next from 'i18next';
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import { LANGUAGES } from '../constants/languages';
 import i18n from '../i18n';
 import I18nProvider, { useUiLocale } from '../store/i18n-context';
@@ -303,8 +305,15 @@ describe('storageDatum uiLocale', () => {
 
 describe('I18nProvider', () => {
   const originalE2eMode = process.env.EXPO_PUBLIC_E2E_MODE;
+  let renderer;
 
   afterEach(async () => {
+    if (renderer) {
+      await act(async () => {
+        renderer.unmount();
+      });
+      renderer = null;
+    }
     process.env.EXPO_PUBLIC_E2E_MODE = originalE2eMode;
     await i18n.changeLanguage('en');
     AsyncStorage.getItem.mockReset();
@@ -316,7 +325,6 @@ describe('I18nProvider', () => {
       Promise.resolve(key === 'uiLocale' ? 'fr' : null),
     );
 
-    let renderer;
     await act(async () => {
       renderer = create(
         <I18nProvider>
@@ -345,7 +353,6 @@ describe('I18nProvider', () => {
       Promise.resolve(key === 'uiLocale' ? 'fr' : null),
     );
 
-    let renderer;
     await act(async () => {
       renderer = create(
         <I18nProvider>
@@ -371,8 +378,15 @@ describe('I18nProvider', () => {
 
 describe('Settings App Language section', () => {
   const originalE2eMode = process.env.EXPO_PUBLIC_E2E_MODE;
+  let renderer;
 
   afterEach(async () => {
+    if (renderer) {
+      await act(async () => {
+        renderer.unmount();
+      });
+      renderer = null;
+    }
     process.env.EXPO_PUBLIC_E2E_MODE = originalE2eMode;
     await i18n.changeLanguage('en');
     AsyncStorage.getItem.mockReset();
@@ -385,7 +399,6 @@ describe('Settings App Language section', () => {
     );
 
     const navigation = { setOptions: jest.fn(), navigate: jest.fn() };
-    let renderer;
 
     await act(async () => {
       renderer = create(

@@ -6,7 +6,7 @@
 // and markers in AsyncStorage, and the requests the transport received — never
 // through internal collaborator pins.
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
 );
 
@@ -42,8 +42,18 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(() => false),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getImages } from '../utils/imagesRequests';
+
+// jest.mock factory above is untyped; cast the mock handle to a typed view so
+// TS sees Promise-shaped reads/writes (same pattern as servingCycle.test.ts).
+const AsyncStorage = jest.requireMock('../utils/localStore') as unknown as {
+  getItem: (key: string) => Promise<string | null>;
+  setItem: (key: string, value: string) => Promise<void>;
+  removeItem: (key: string) => Promise<void>;
+  getAllKeys: () => Promise<string[]>;
+  multiRemove: (keys: readonly string[]) => Promise<void>;
+};
+
 import { saveLastImageUuid } from '../utils/storageDatum';
 import { isE2EMode } from '../utils/e2eMode';
 import { prefetchIfLow, __resetForTests } from '../services/cardPrefetcher';

@@ -12,6 +12,7 @@ import { filterPlayedCards, getPlayedPictureIds, playedPictureIdsKey, PLAYED_PIC
 import { SERVING_CYCLE_PREFIX } from "./servingCycle";
 import { normalizeLanguage, normalizeMode } from "./sessionFilter";
 import { logFeedEvent } from "./feedDiagnostics";
+import { VIABILITY_FILTER_CHUNK_SIZE, yieldToThread } from "./yield";
 import type { CardImage } from "../services/cardDeck";
 
 const E2E_HIDDEN_GUESS_CARD_KEY = 'e2eHiddenGuessCard';
@@ -93,7 +94,8 @@ export function deckWriteLockKey({ categoryKey, categoryId, language, scope }: D
 
 /**
  * Mark (categoryKey, language) as server-exhausted for `scope`. PUBLIC scope
- * writes AsyncStorage; PRIVATE scope writes a per-group marker (isolation:
+ * writes the local storage seam (`utils/localStore`, MMKV-backed); PRIVATE
+ * scope writes a per-group marker (isolation:
  * group A exhausting category X MUST NOT mark X for group B).
  * @param categoryKey - Category key ('all' is intentionally NEVER cached by callers).
  * @param language - Language code ('any' when unset).
@@ -367,7 +369,8 @@ export interface ScopeDeckCountArgs {
  *             callers. Migrate existing callers to `getRemainingDeckCount`.
  *
  *             Returns the total deck size for the (category, language, scope)
- *             tuple by reading AsyncStorage JSON only (no per-file probe).
+ *             tuple by reading the local storage seam (`utils/localStore`,
+ *             MMKV-backed) JSON only (no per-file probe).
  *             - Public scope: count getLocalImages(category?.key || 'all', language).
  *             - Private scope: count readGroupFeedCache(scope.groupId, {categoryId, language}).images.
  *             Returns 0 for missing/empty decks. Never throws.
@@ -390,8 +393,9 @@ export async function getDeckCountForScope({ category, language, mode, scope }: 
  * (category, language, scope) tuple whose `listId` is strictly greater
  * than `currentListId` — i.e. the cards the cursor can still advance to.
  *
- * PERF (PT4): unlike `getLocalImages`, this function reads the AsyncStorage
- * JSON ONLY and does NOT perform a per-card `File.exists` probe. The
+ * PERF (PT4): unlike `getLocalImages`, this function reads the local storage
+ * seam (`utils/localStore`, MMKV-backed) JSON ONLY and does NOT perform a
+ * per-card `File.exists` probe. The
  * file-exists filter stays at `getLocalImages` call sites for actual card
  * resolution. This divergence is intentional: `getRemainingDeckCount` is
  * called per-win (via prefetchIfLow / warmAllDeckIfNeeded) and the O(N) sync
@@ -707,12 +711,6 @@ function localImageFileExists(uri: unknown): boolean {
   }
 }
 
-const VIABILITY_FILTER_CHUNK_SIZE = 200;
-
-function yieldToThread(): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, 0));
-}
-
 async function filterViableImages(images: CardImage[]): Promise<CardImage[]> {
   const viable: CardImage[] = [];
   for (let start = 0; start < images.length; start += VIABILITY_FILTER_CHUNK_SIZE) {
@@ -764,7 +762,7 @@ export async function emptyImageList(categoryKey: string | null | undefined, lan
 /**
  * Delete the local cache files referenced by persisted image-list decks.
  * Silent on unset/empty/corrupt decks — a bad deck must not abort the wipe.
- * @param imageListKeys - AsyncStorage keys of persisted decks.
+ * @param imageListKeys - local storage seam (`utils/localStore`, MMKV-backed) keys of persisted decks.
  * @returns {Promise<void>}
  */
 async function deleteDeckCacheFiles(imageListKeys: readonly string[]): Promise<void> {

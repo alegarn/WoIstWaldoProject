@@ -81,7 +81,8 @@ function isPrivateScope(scope: unknown): scope is PrivateScope {
 }
 
 /**
- * Server-side language filter. AsyncStorage uses 'any' as the canonical
+ * Server-side language filter. The local storage seam (`utils/localStore`,
+ * MMKV-backed) uses 'any' as the canonical
  * "no language filter" namespace (see normalizeLanguage), but the backend's
  * Image.batch_with_existing_storage applies WHERE language = params[:language]
  * verbatim — and no image row has language='any'. So 'any' must be stripped at
@@ -93,7 +94,8 @@ function resolveServerLanguage(language?: string | null): string | undefined {
 }
 
 /**
- * Server-side mode filter, mirroring resolveServerLanguage: AsyncStorage uses
+ * Server-side mode filter, mirroring resolveServerLanguage: the local storage
+ * seam (`utils/localStore`, MMKV-backed) uses
  * 'any' as the canonical "no mode filter" namespace, but no image row has
  * mode='any' and the backend's ModeFilter treats 'any' as no-filter anyway —
  * so the sentinel is stripped at the server boundary and the wire never sees
@@ -453,7 +455,7 @@ export const PROBE_MAX_BATCHES = 20;
  *
  * Writes ONLY the feed cursor (the transport's own batch-tail persist plus
  * one sentinel clear) and the allPoolDrained stamp clear on the 'unplayed'
- * verdict (utils/allPoolDrained.ts — AsyncStorage only, no servingCycle
+ * verdict (utils/allPoolDrained.ts — localStore only (MMKV-backed), no servingCycle
  * import; cycle policy stays storage-only in utils/servingCycle.ts). The
  * 'exhausted' verdict writes NO stamp: the post-restart re-stamp by the
  * callers (nextCardAdvancer / SwipeImage) is the write site. Transient

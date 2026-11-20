@@ -1,4 +1,4 @@
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
 );
 
@@ -35,7 +35,7 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import {
   __deletedFiles as deletedFiles,
   __cacheFiles as cacheFiles,

@@ -1,3 +1,6 @@
+jest.unmock('../utils/localStore');
+jest.unmock('../utils/storageMigration');
+
 jest.mock('../utils/mmkvStore', () => {
   let map: Map<string, string> | null = null;
   let engine: Record<string, unknown> | null = null;
@@ -71,8 +74,15 @@ jest.mock('@react-native-async-storage/async-storage', () => {
   };
 });
 
+type MmkvEngineMock = {
+  getString: (key: string) => string | undefined;
+  set: (key: string, value: string) => void;
+  remove: (key: string) => void;
+  getAllKeys: () => string[];
+};
+
 type MmkvStoreMock = {
-  getMmkv: () => any;
+  getMmkv: () => MmkvEngineMock;
   __seed: (entries: Record<string, string>) => void;
   __map: () => Map<string, string> | null;
   __engine: () => Record<string, unknown> | null;

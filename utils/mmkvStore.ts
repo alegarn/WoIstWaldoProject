@@ -10,6 +10,9 @@ export function getMmkv(): MMKV {
 }
 
 function createInstance(): MMKV {
+  // NOTE: these two deep imports reach `react-native-mmkv/src/...` internals
+  // (private API) so the test env can use the library's own mock engine.
+  // Verified against react-native-mmkv@^4.3.2 — re-check both paths on bump.
   const { isTest } = require('react-native-mmkv/src/isTest');
   if (isTest()) {
     const { createMockMMKV } = require('react-native-mmkv/src/createMMKV/createMockMMKV');

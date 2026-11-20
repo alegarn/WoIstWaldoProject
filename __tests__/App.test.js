@@ -8,8 +8,9 @@
 // - the language-onboarding gate (including fail-closed paths and e2e bypass)
 //
 // Only system boundaries are mocked:
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake, READ-ONLY: seeded/read through its own API)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map, READ-ONLY: seeded/read
+//   through its own API)
 // - expo-secure-store (native keychain)
 // - expo-file-system (native FS)
 // - axios (the network seam)
@@ -23,7 +24,7 @@
 // HomeHeaderRight.test.js, the logout provider flow in flushLifecycle.test.js,
 // and press-through routing in the Maestro e2e flows.
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
 );
 
@@ -185,13 +186,13 @@ jest.mock('../screens/Billing/SubscriptionManagementScreen', () => () => null);
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import * as SecureStore from 'expo-secure-store';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import axios from 'axios';
 
 import { Root, resetAppOpenLaunchGuardForTests } from '../App';
 import { AuthContext } from '../store/auth-context';
 
-const asyncStorageMock = jest.requireMock('@react-native-async-storage/async-storage');
+const asyncStorageMock = jest.requireMock('../utils/localStore');
 
 const mountedRenderers = [];
 

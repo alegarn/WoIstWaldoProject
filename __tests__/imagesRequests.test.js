@@ -55,7 +55,9 @@ jest.mock('expo-file-system/legacy', () => ({
   downloadAsync: jest.fn(),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+jest.mock('../utils/localStore', () => require('./helpers/localStoreMock'));
+
+import AsyncStorage from '../utils/localStore';
 import axios from 'axios';
 import { File, Paths, UploadType } from 'expo-file-system';
 import { downloadAsync } from 'expo-file-system/legacy';

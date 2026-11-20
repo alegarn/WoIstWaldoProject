@@ -1,3 +1,5 @@
+jest.mock('../utils/localStore', () => require('./helpers/localStoreMock'));
+
 jest.mock('../utils/storageDatum', () => {
   const actual = jest.requireActual('../utils/storageDatum');
   return {
@@ -21,7 +23,7 @@ jest.mock('../services/groups/groupFeedCache', () => ({
   clearGroupCategoryExhausted: jest.fn(),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import { PUBLIC_FEED_END_CURSOR, clearExhaustedCategory, getLastImageUuid, storeImageList, updateImageList } from '../utils/storageDatum';
 import { getImages } from '../utils/imagesRequests';
 import { clearGroupCategoryExhausted, readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';

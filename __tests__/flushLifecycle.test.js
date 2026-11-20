@@ -9,9 +9,9 @@
 // and the pending buffer read back through the real store.
 //
 // Only system boundaries are mocked:
-// - AsyncStorage via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
-//   stateful fake; the pending buffer is seeded with the real bufferScore and
-//   read back with the real getPending)
+// - utils/localStore via __tests__/helpers/statefulAsyncStorageMock.ts (in-memory
+//   adapter mock backed by the shared store map; the pending buffer is seeded
+//   with the real bufferScore and read back with the real getPending)
 // - expo-file-system (native FS; files "exist", deletes are recorded)
 // - expo-secure-store (native keychain; token writes/deletes are observable)
 // - axios (the network seam; a POST to the score-batch endpoint IS "a send")
@@ -24,7 +24,7 @@
 // keeps module state (writeChain/flushing) across tests, so every test drains
 // its in-flight send before finishing.
 
-jest.mock('@react-native-async-storage/async-storage', () =>
+jest.mock('../utils/localStore', () =>
   require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
 );
 

@@ -8,7 +8,7 @@
 // and absence of serving-cycle writes. Call shapes into the seam are not
 // asserted — paging behavior is proven by the cursor/deck states it produces.
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
+jest.mock('../utils/localStore', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
@@ -33,7 +33,6 @@ jest.mock('../services/groups/groupFeedCache', () => {
   };
 });
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getImages } from '../utils/imagesRequests';
 import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
 import { saveLastImageUuid } from '../utils/storageDatum';
@@ -44,7 +43,7 @@ const mockWriteGroupFeedCache = writeGroupFeedCache as unknown as jest.Mock;
 
 const STAMP_KEY = 'allPoolDrained:public:fr:drained';
 
-const mockAsyncStorage = AsyncStorage as unknown as {
+const mockAsyncStorage = jest.requireMock('../utils/localStore') as unknown as {
   getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
   setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
   removeItem: jest.MockedFunction<(key: string) => Promise<void>>;

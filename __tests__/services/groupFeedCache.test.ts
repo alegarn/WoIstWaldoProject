@@ -1,6 +1,4 @@
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('../helpers/statefulAsyncStorageMock')()
-);
+jest.mock('../../utils/localStore', () => require('../helpers/localStoreMock'));
 
 jest.mock('expo-file-system', () => {
   const cacheStore = {
@@ -23,7 +21,6 @@ jest.mock('expo-file-system', () => {
   };
 });
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import {
   readGroupFeedCache,
@@ -33,22 +30,29 @@ import {
   purgeAllPrivateCaches,
 } from '../../services/groups/groupFeedCache';
 
-const mockAsyncStorage = AsyncStorage as unknown as {
-  getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
-  setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
-  removeItem: jest.MockedFunction<(key: string) => Promise<void>>;
-  getAllKeys: jest.MockedFunction<() => Promise<string[]>>;
-  multiRemove: jest.MockedFunction<(keys: string[]) => Promise<void>>;
+const localStoreMock = jest.requireMock('../../utils/localStore') as {
+  default: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+    getAllKeys: jest.Mock;
+    multiRemove: jest.Mock;
+  };
+  __store: Map<string, string>;
 };
+
+const AsyncStorage = localStoreMock.default;
+const asyncStorageStore = localStoreMock.__store;
 const mockFile = File as unknown as jest.Mock;
 
 describe('services/groups/groupFeedCache — purge behavior', () => {
   beforeEach(() => {
-    mockAsyncStorage.setItem.mockClear();
-    mockAsyncStorage.removeItem.mockClear();
-    mockAsyncStorage.multiRemove.mockClear();
-    mockAsyncStorage.getItem.mockClear();
-    mockAsyncStorage.getAllKeys.mockClear();
+    asyncStorageStore.clear();
+    jest.mocked(AsyncStorage.setItem).mockClear();
+    jest.mocked(AsyncStorage.removeItem).mockClear();
+    jest.mocked(AsyncStorage.multiRemove).mockClear();
+    jest.mocked(AsyncStorage.getItem).mockClear();
+    jest.mocked(AsyncStorage.getAllKeys).mockClear();
   });
 
   it('writeGroupFeedCache round-trips list+cursor so readGroupFeedCache returns the same payload', async () => {
