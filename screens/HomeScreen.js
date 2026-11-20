@@ -1,0 +1,286 @@
+import { useContext, useEffect, useRef, useState } from 'react';
+import { View, StyleSheet, Alert} from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
+
+import HomeCard from '../components/UI/HomeCard';
+import { GlobalStyle } from '../constants/theme';
+import { handleOrientation } from '../utils/orientation';
+import { AuthContext } from '../store/auth-context';
+import { getScoreId } from '../utils/auth';
+import { isTutorialFinished } from '../utils/tutorialHandler';
+import { getQuickTutorialSeen, setQuickTutorialSeen } from '../utils/storageDatum';
+
+import * as SecureStore from 'expo-secure-store';
+import CenteredModal from '../components/UI/CenteredModal';
+import TutorialOverlay from '../components/UI/TutorialOverlay';
+import QuickTutorial from '../components/UI/QuickTutorial';
+import GroupsIntroGate from '../components/Groups/GroupsIntroGate';
+
+const HideImage = require('../assets/home/WoIstWaldo-character-hide.webp');
+const MainImage = require('../assets/home/WoIstWaldo-character-guess-4-3.webp');
+const RankingImage = require('../assets/home/WoIstWaldo-character-stats.webp');
+
+export default function HomeScreen({ navigation, route }) {
+  // States __________________________________________________________________
+  const { t } = useTranslation();
+  const [showModal, setShowModal] = useState(false);
+  const [isTutorial, setIsTutorial] = useState(false);
+  const [showQuickTutorial, setShowQuickTutorial] = useState(false);
+  const [quickTutorialFromWelcome, setQuickTutorialFromWelcome] = useState(false);
+  const quickTutorialShownRef = useRef(false);
+
+  // Variables __________________________________________________________________
+  const context = useContext(AuthContext);
+
+  /* functions ___________________________________________________________________ */
+  const verifyTokenIsValid = async () => {
+    const response = await getScoreId(context);
+    
+    if (response?.status !== 200 && response?.status !== 401) {
+      Alert.alert(t('home.serverProblemTitle'), t('home.serverProblemMessage'));
+      return false;
+    };
+
+    if (response?.status === 401) {
+      context.logout();
+      return false;
+    };
+
+    return true;
+  };
+
+  const verifyLoginInfos = async () => {
+    const isToken = await context.verifyIsLoggedIn();
+    if (!isToken) {
+      const response = await verifyTokenIsValid(context.token);
+      response ? 
+        null : 
+        Alert.alert(
+          t('home.sessionExpiredTitle'), 
+          t('home.sessionExpiredMessage'));
+    };
+    return null;
+  };
+
+/*   const checkSecureStoreOk = async () => {
+    const isSecureStoreOk = await SecureStore.isAvailableAsync()
+      .then((promiseResult) => {
+        if (promiseResult) {
+          return true;
+        } else {
+          return false;
+        };
+      });
+    Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${isSecureStoreOk}`);
+    return null;
+  };
+ */
+  const handleTutorialModalToShow = async (isTutorial, guessPathDone, hidePathDone) => {
+
+    // Not doing the tutorial yet
+    if ((isTutorial === true) && (route?.params?.isTutorial === undefined)) {
+      // First connect: quick tutorial once per device, welcome modal follows via handleQuickTutorialDone
+      let quickTutorialSeen = false;
+      try {
+        quickTutorialSeen = (await getQuickTutorialSeen()) === true;
+      } catch {
+        quickTutorialSeen = false;
+      };
+      if (quickTutorialShownRef.current !== true && quickTutorialSeen !== true) {
+        quickTutorialShownRef.current = true;
+        setQuickTutorialSeen(true).catch(() => {});
+        setQuickTutorialFromWelcome(true);
+        setShowQuickTutorial(true);
+        return;
+      };
+      setShowModal(true);
+      return;
+    };
+
+    // Already in the tutorial ?
+    if ((isTutorial === true) && (route?.params?.isTutorial === true)) {
+      setIsTutorial(true)
+    };
+
+    // Is tutorial completed ?
+    if ((isTutorial === true) && (guessPathDone === true) && (hidePathDone === true)) {
+      setIsTutorial(false);
+      setShowModal(false);
+    };
+
+  };
+
+  const isTutorialNeeded = async () => {
+    const isTutorial = context.isTutorialFinished?.isTutorial;
+    const guessPathDone = context.isTutorialFinished?.guessPathDone;
+    const hidePathDone = context.isTutorialFinished?.hidePathDone;
+    isTutorial && await handleTutorialModalToShow(isTutorial, guessPathDone, hidePathDone);
+  };
+
+  /* Functions _______________________________ */
+
+  const toHidingPathScreen = () => {
+    navigation.navigate('HidingPathScreen');
+  };
+
+  const toGuessPathScreen = () => {
+    navigation.navigate('GuessPathScreen');
+  };
+
+  const toRankingScreen = () => {
+    navigation.navigate('RankingScreen');
+  };
+
+  const cancelTutorial = async () => {
+    await context.turnTutorialOn(false);
+    await isTutorialFinished({ 
+      context, 
+      data: {
+        user: {
+          is_tutorial_finished: true
+        }
+      } 
+    });
+  
+    setIsTutorial(false);
+    setShowModal(false);
+    return false;
+  };
+
+  const startTutorial = async () => {
+    await context.turnTutorialOn(true);
+    setIsTutorial(true);
+  };
+
+  const handleQuickTutorialDone = () => {
+    setShowQuickTutorial(false);
+    if (quickTutorialFromWelcome === true) {
+      setQuickTutorialFromWelcome(false);
+      setShowModal(true);
+    };
+  };
+
+  const openQuickTutorialFromOverlay = () => {
+    setIsTutorial(false);
+    setQuickTutorialFromWelcome(false);
+    setShowQuickTutorial(true);
+  };
+
+  const toGuessTutorial = () => {
+    navigation.replace('GuessPathScreen', {
+      isTutorial: true,
+    });
+  };
+
+  const toHideTutorial = () => {
+    navigation.replace('HidingPathScreen', {
+      isTutorial: true,
+    });
+  };
+
+  /* useEffect _______________________________ */
+
+  useEffect(() => {
+    /* To delete - home debug message */
+    /* Alert.alert("Welcome to WoIstWaldo Mode Debug", `Sorry for the inconvienience, actually i'm unable to replicate your bugs here (with android 13 / 14...), so do to that i need your help. \n\n
+    Please choose an action to start, i put some programs to try gathering some data for you to help me debug \n\n
+    When you have debug messages, copy them to the clipboard and would you please then send me the data? \n\n`); */
+    /*  */
+
+    // checkSecureStoreOk();
+
+    //Alert.alert("Welcome to WoIstWaldo !", `No debug mode this time, \n Can you use SecureStore ? : ${checkSecureStoreOk()}`);
+  }, []);
+
+  useEffect(() => {
+    isTutorialNeeded(); 
+    }, [context.isTutorialFinished]
+  );
+
+  useEffect(() => {
+    if (route?.params?.tutorialToken) {
+      setIsTutorial(true);
+    }
+  }, [route?.params?.tutorialToken]);
+
+
+  useFocusEffect(() => {
+    handleOrientation("portrait");
+    // when leaving the app 
+    void verifyLoginInfos();
+  });
+
+  useFocusEffect(() => {
+    context.setPrivateMode?.(false);
+  });
+
+  return (
+    <>
+      <View style={styles.homeContainer}>
+        <HomeCard
+          text={t('home.hideWaldo')}
+          onPress={toHidingPathScreen}
+          backgroundImage={HideImage}
+          heightPercent={40}
+          testID="home.button.hide"
+        />
+        <HomeCard
+          text={t('home.findWaldo')}
+          onPress={toGuessPathScreen}
+          backgroundImage={MainImage}
+          heightPercent={40}
+          testID="home.button.guess"
+        />
+        <HomeCard
+          text={t('home.ranking')}
+          onPress={toRankingScreen}
+          backgroundImage={RankingImage}
+          heightPercent={20}
+          testID="home.button.ranking"
+        />
+        {
+          showModal &&
+          <CenteredModal
+            isModalVisible={showModal}
+            children={t('home.tutorialModal')}
+            onCancel={() => cancelTutorial()}
+            onPress={() => startTutorial()}
+            testIDPrefix="home.tutorial-modal"
+            />
+        }
+        {
+          isTutorial &&
+          <TutorialOverlay
+            screen="HomeScreen"
+            onPress={{
+              Guess: () => toGuessTutorial(), 
+              Hide: () => toHideTutorial(),
+              finish: () => cancelTutorial()
+            }}
+            onShowQuickTutorial={openQuickTutorialFromOverlay}
+            />
+        }
+        <QuickTutorial
+          visible={showQuickTutorial}
+          onDone={handleQuickTutorialDone}
+          />
+
+        <GroupsIntroGate
+          chainQuiet={!showModal && !showQuickTutorial && !isTutorial}
+          />
+
+      </View>
+  </>
+
+  );
+}
+
+const styles = StyleSheet.create({
+  homeContainer: {
+    flex: 1,
+    backgroundColor: GlobalStyle.color.primaryColor900,
+    padding: 10,
+    gap: 10, // Use gap for spacing between cards
+  },
+})

@@ -1,0 +1,294 @@
+jest.mock('@react-native-async-storage/async-storage', () =>
+  require('./helpers/statefulAsyncStorageMock')({ autoReset: true })
+);
+
+jest.mock('expo-file-system', () => {
+  const deletedFiles = [];
+  const cacheFiles = new Set();
+
+  class MockFile {
+    constructor(base, child) {
+      this.uri = typeof base === 'string' ? base : `${base?.uri ?? ''}${child ?? ''}`;
+      this.exists = true;
+      this.delete = jest.fn(() => {
+        deletedFiles.push(this.uri);
+      });
+    }
+  }
+
+  const cacheDir = {
+    uri: 'file:///cache/',
+    list: jest.fn(() => Array.from(cacheFiles)),
+  };
+
+  return {
+    __esModule: true,
+    File: MockFile,
+    Paths: {
+      get cache() {
+        return cacheDir;
+      },
+    },
+    __deletedFiles: deletedFiles,
+    __cacheFiles: cacheFiles,
+    __cacheList: cacheDir.list,
+  };
+});
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import {
+  __deletedFiles as deletedFiles,
+  __cacheFiles as cacheFiles,
+  __cacheList as cacheList,
+} from 'expo-file-system';
+
+import { applySuccessSideEffects, bufferWinScore, resolveNextGuessParams } from '../utils/handleGuessOutcome';
+import { getPending } from '../utils/sessionScoreStore';
+import { getPlayedPictureIds } from '../utils/playedPictureIds';
+
+const DECK_KEY = 'imageList:animals:en:any';
+const PLAYED_PUBLIC_KEY = 'playedPictureIds:public:en';
+const PLAYED_GROUP_KEY = 'playedPictureIds:group:g-3:en';
+
+const baseArgs = {
+  listId: 1,
+  categoryKey: 'animals',
+  language: 'en',
+  imageFile: 'file:///img.png',
+  pictureId: 'pic-1',
+  scope: { kind: 'public' },
+  userId: 'user-1',
+};
+
+function seedDeck() {
+  return AsyncStorage.setItem(DECK_KEY, JSON.stringify([
+    { listId: 1, pictureId: 'pic-1', imageFile: 'file:///img.png' },
+    { listId: 2, pictureId: 'pic-2', imageFile: 'file:///cache/pic-2.jpg' },
+  ]));
+}
+
+async function storedDeck() {
+  return JSON.parse(await AsyncStorage.getItem(DECK_KEY));
+}
+
+async function bankWin(overrides = {}) {
+  await bufferWinScore({ pictureId: 'pic-1', scope: { kind: 'public' }, userId: 'user-1', ...overrides });
+}
+
+describe('bufferWinScore', () => {
+  async function bufferedScores() {
+    return getPending();
+  }
+
+  it('a plain win buffers a single score event with defaults: 1 point, streak 0, no multipliers', async () => {
+    await bankWin();
+
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 1,
+      streak: 0,
+      pictureId: 'pic-1',
+      userId: 'user-1',
+      scope: { kind: 'public' },
+      ts: expect.any(Number),
+      guessId: expect.stringMatching(/^[\da-f]{8}-[\da-f]{4}-[\da-f]{4}-[\da-f]{4}-[\da-f]{12}$/),
+    }));
+    expect('multiplier' in scores[0]).toBe(false);
+    expect('streakMultiplier' in scores[0]).toBe(false);
+  });
+
+  it('a streaked, multiplied win buffers those bonuses on the score event', async () => {
+    await bankWin({ points: 2, multiplier: 2, streak: 5, streakMultiplier: 1.5 });
+
+    const scores = await bufferedScores();
+    expect(scores).toHaveLength(1);
+    expect(scores[0]).toEqual(expect.objectContaining({
+      points: 2,
+      multiplier: 2,
+      streak: 5,
+      streakMultiplier: 1.5,
+      pictureId: 'pic-1',
+      userId: 'user-1',
+    }));
+  });
+
+  it('a win with streak but no streak multiplier omits the streak multiplier', async () => {
+    await bankWin({ streak: 5 });
+
+    const [score] = await bufferedScores();
+    expect(score).toEqual(expect.objectContaining({ streak: 5 }));
+    expect('streakMultiplier' in score).toBe(false);
+  });
+
+  it('a private-group win buffers the imageId for group attribution', async () => {
+    await bankWin({ scope: { kind: 'private', groupId: 'g-3' } });
+
+    const [score] = await bufferedScores();
+    expect(score.imageId).toBe('pic-1');
+  });
+});
+
+describe('applySuccessSideEffects', () => {
+  let consoleWarnSpy;
+
+  beforeEach(() => {
+    cacheFiles.clear();
+    deletedFiles.length = 0;
+    cacheList.mockClear();
+    consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    consoleWarnSpy.mockRestore();
+  });
+
+  async function bufferedScores() {
+    return getPending();
+  }
+
+  it('cleans up without touching the score buffer', async () => {
+    await seedDeck();
+    await applySuccessSideEffects(baseArgs);
+
+    expect(await bufferedScores()).toHaveLength(0);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+  });
+
+  it('a failed deck cleanup keeps the already-banked win and stops the remaining cleanup', async () => {
+    await seedDeck();
+    await bankWin();
+    const baseGetItem = AsyncStorage.getItem.getMockImplementation();
+    AsyncStorage.getItem.mockImplementation(async (key) => {
+      if (key === DECK_KEY) {
+        throw new Error('deck read boom');
+      }
+      return baseGetItem(key);
+    });
+
+    try {
+      await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+    } finally {
+      AsyncStorage.getItem.mockImplementation(baseGetItem);
+    }
+
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await storedDeck()).toHaveLength(2);
+    expect(deletedFiles).toEqual([]);
+    expect(cacheList).not.toHaveBeenCalled();
+  });
+
+  it('a failed played-set write stays silent and the rest of the cleanup still applies', async () => {
+    await seedDeck();
+    await bankWin();
+    const baseSetItem = AsyncStorage.setItem.getMockImplementation();
+    AsyncStorage.setItem.mockImplementation(async (key, value) => {
+      if (String(key).startsWith('playedPictureIds')) {
+        throw new Error('played write failed');
+      }
+      return baseSetItem(key, value);
+    });
+
+    try {
+      await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+    } finally {
+      AsyncStorage.setItem.mockImplementation(baseSetItem);
+    }
+
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual([]);
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+  });
+
+  it('a public win records the played picture, drops the card from its deck, deletes the winner file, and sweeps orphaned cache files', async () => {
+    await seedDeck();
+    cacheFiles.add('file:///cache/pic-1.jpg');
+    cacheFiles.add('file:///cache/pic-2.jpg');
+    cacheFiles.add('file:///cache/private-x.jpg');
+    cacheFiles.add('file:///cache/other.jpg');
+
+    await applySuccessSideEffects(baseArgs);
+
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual(['pic-1']);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png', 'file:///cache/pic-1.jpg']));
+    expect(deletedFiles).not.toEqual(expect.arrayContaining([
+      expect.stringContaining('pic-2.jpg'),
+      expect.stringContaining('private-x.jpg'),
+      expect.stringContaining('other.jpg'),
+    ]));
+  });
+
+  it('a private-group win records the picture group-scoped and skips the public orphan sweep', async () => {
+    await seedDeck();
+
+    await applySuccessSideEffects({ ...baseArgs, scope: { kind: 'private', groupId: 'g-3' } });
+
+    expect(await getPlayedPictureIds('en', { kind: 'private', groupId: 'g-3' })).toEqual(['pic-1']);
+    expect(await getPlayedPictureIds('en', { kind: 'public' })).toEqual([]);
+    expect(await storedDeck()).toEqual([expect.objectContaining({ pictureId: 'pic-2' })]);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+    expect(cacheList).not.toHaveBeenCalled();
+  });
+
+  it('a failed orphan sweep keeps the already-banked win intact', async () => {
+    await seedDeck();
+    await bankWin();
+    cacheList.mockImplementationOnce(() => {
+      throw new Error('cache list boom');
+    });
+
+    await expect(applySuccessSideEffects(baseArgs)).resolves.toBeUndefined();
+
+    expect(await bufferedScores()).toHaveLength(1);
+    expect(await getPlayedPictureIds('en', baseArgs.scope)).toEqual(['pic-1']);
+    expect(deletedFiles).toEqual(expect.arrayContaining(['file:///img.png']));
+    expect(deletedFiles).not.toEqual(expect.arrayContaining([expect.stringContaining('pic-1.jpg')]));
+  });
+});
+
+describe('Task C6/D3: filter-mode threading', () => {
+  const ANY_DECK_KEY = 'imageList:animals:en:any';
+  const SHAPE_DECK_KEY = 'imageList:animals:en:shape';
+
+  beforeEach(() => {
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('a win under an active filter removes the card from the MODE-segmented deck only', async () => {
+    const deck = [
+      { listId: 1, pictureId: 'pic-1', imageFile: 'file:///img.png' },
+      { listId: 2, pictureId: 'pic-2', imageFile: 'file:///cache/pic-2.jpg' },
+    ];
+    await AsyncStorage.setItem(ANY_DECK_KEY, JSON.stringify(deck));
+    await AsyncStorage.setItem(SHAPE_DECK_KEY, JSON.stringify(deck));
+
+    await applySuccessSideEffects({ ...baseArgs, mode: 'shape' });
+
+    expect(JSON.parse(await AsyncStorage.getItem(SHAPE_DECK_KEY))).toEqual([
+      expect.objectContaining({ pictureId: 'pic-2' }),
+    ]);
+    expect(JSON.parse(await AsyncStorage.getItem(ANY_DECK_KEY))).toHaveLength(2);
+  });
+
+  it('resolveNextGuessParams reads the mode-segmented deck beside language', async () => {
+    await AsyncStorage.setItem(SHAPE_DECK_KEY, JSON.stringify([
+      { listId: 1, pictureId: 'shape-1', imageFile: 'file:///cache/shape-1.jpg' },
+    ]));
+
+    const result = await resolveNextGuessParams({
+      category: { key: 'animals' },
+      language: 'en',
+      mode: 'shape',
+      scope: { kind: 'public' },
+    });
+
+    expect(result?.params?.pictureId).toBe('shape-1');
+  });
+});

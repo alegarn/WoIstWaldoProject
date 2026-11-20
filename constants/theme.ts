@@ -1,0 +1,136 @@
+export const spacing = {
+  xs: 4,
+  sm: 8,
+  md: 16,
+  lg: 24,
+  xl: 32,
+} as const;
+
+export const radius = {
+  sm: 8,
+  md: 12,
+  lg: 20,
+  pill: 999,
+} as const;
+
+export const typography = {
+  title: { fontSize: 28, fontWeight: '700' as const },
+  subtitle: { fontSize: 15, fontWeight: '400' as const },
+  body: { fontSize: 16 as const },
+  label: { fontSize: 13, fontWeight: '600' as const },
+};
+
+export const touchTarget = {
+  minHeight: 48,
+} as const;
+
+export const shadow = {
+  card: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+} as const;
+
+export const adPanel = {
+  padding: 24,
+  titleFontSize: 20,
+  titleFontWeight: '600',
+  titleMarginBottom: 12,
+  bodyFontSize: 16,
+  bodyColor: '#555',
+  bodyMarginBottom: 24,
+} as const;
+
+export const GlobalStyle = {
+  color: {
+    primaryColor: "#6528F7",
+    primaryColor100: "#5C27E0",
+    primaryColor200: "#5324C9",
+    primaryColor300: "#4A21B2",
+    primaryColor400: "#411E9B",
+    primaryColor500: "#381C84",
+    primaryColor600: "#2F196D",
+    primaryColor700: "#261654",
+    primaryColor800: "#1D133D",
+    primaryColor900: "#140F26",
+    secondaryColor: "#A076F9",
+    secondaryColor100: "#9170E9",
+    secondaryColor200: "#8269D9",
+    secondaryColor300: "#7362C9",
+    secondaryColor400: "#645BB9",
+    secondaryColor500: "#5564A9",
+    secondaryColor600: "#466D99",
+    secondaryColor700: "#377688",
+    secondaryColor800: "#287F78",
+    secondaryColor900: "#198868",
+    tertiaryColor: "#4A55A2",
+    tertiaryColor100: "#43509C",
+    tertiaryColor200: "#3C4B96",
+    tertiaryColor300: "#35468F",
+    tertiaryColor400: "#2E4189",
+    tertiaryColor500: "#273C83",
+    tertiaryColor600: "#20377D",
+    tertiaryColor700: "#193277",
+    tertiaryColor800: "#122D71",
+    tertiaryColor900: "#0B286B",
+    quaternaryColor:"#7895CB",
+    quaternaryColor100: "#6F8AC2",
+    quaternaryColor200: "#6480B9",
+    quaternaryColor300: "#5976B0",
+    quaternaryColor400: "#4E6CA7",
+    quaternaryColor500: "#43629E",
+    quaternaryColor600: "#385894",
+    quaternaryColor700: "#2D4E8B",
+    quaternaryColor800: "#224482",
+    quaternaryColor900: "#173A79",
+    error100: '#fcdcbf',
+    error500: '#f37c13',
+    success: '#4BB543',
+    warning: '#FFCC00',
+    info: '#17a2b8',
+    win: '#FFD700',
+    medalGold: '#FFD700',
+    medalSilver: '#C8C8C8',
+    medalBronze: '#CD7F32',
+    medalGoldTint: 'rgba(255, 215, 0, 0.07)',
+    medalSilverTint: 'rgba(200, 200, 200, 0.06)',
+    medalBronzeTint: 'rgba(205, 127, 50, 0.06)',
+    danger: '#FF3B30',
+    onSurface: '#FFFFFF',
+    scrim: 'rgba(0, 0, 0, 0.6)',
+    // streak hex values mirror sibling tokens above (DIP fallback: GlobalStyle is in TDZ while its initializer evaluates).
+    streak: {
+      neutral: '#7895CB',
+      blue:    '#17a2b8',
+      orange:  '#f37c13',
+      red:     '#FF3B30',
+      purple:  '#6528F7',
+      white:   '#FFFFFF',
+    },
+  },
+};
+
+/* https://colorhunt.co/palette/6528f7a076f9d7bbf5ede4ff */
+/* #6528F7
+#A076F9 */
+
+/* https://colorhunt.co/palette/4a55a27895cba0bfe0c5dff8 */
+/* #4A55A2
+#7895CB */
+
+/* primaryColor: '#40128B',
+    primaryColor100: '#5D2AA6',
+    primaryColor200: '#7842C2',
+    primaryColor300: '#935BD9',
+    primaryColor400: '#AE75EF',
+    primaryColor500: '#C98FFF',
+    primaryColor600: '#E2AAFF',
+    primaryColor700: '#F4C2FF',
+    primaryColor800: '#FFD9FF',
+    primaryColor900: '#FFEFFF',
+    secondaryColor: '#9336B4',
+    tertiaryColor: '#DD58D6',
+    quaternaryColor: '#FFE79B', */

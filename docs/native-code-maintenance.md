@@ -1,0 +1,87 @@
+# Play Console "deprecated edge-to-edge APIs (Android 15)" — status & maintenance
+
+Runbook for native-layer workarounds that must be re-checked on dependency upgrades. Each entry states the problem, what was changed, why, and the exact re-check triggers/commands.
+
+## Status date / app state
+
+- Re-verified 2026-11-10 on Expo SDK 58 / RN 0.88.1 (regenerated `android/`, `:app:dependencies --configuration releaseRuntimeClasspath` exit 0, Material resolves `1.13.0 -> 1.14.0`, versionCode 8 synced, force line plugin-inserted exactly once, `styles.xml` clean).
+- Stack: Expo SDK 58, RN 0.88.1, compileSdk 37 / targetSdk 36 / minSdk 24 (Expo defaults, no version-catalog override), `edgeToEdgeEnabled=true` (`android/gradle.properties`). Kotlin: `kotlinVersion` pin removed from `expo-build-properties` 2026-11-10 — RN 0.88.1 ships Kotlin 2.2.0 (`react-native/gradle/libs.versions.toml`); let Expo defaults rule.
+- The warning is **ADVISORY** — it does not block publishing. Play derives it from a static bytecode scan of the uploaded artifact.
+
+## How the fixes persist (CNG)
+
+`android/` and `ios/` are gitignored — EAS builds (production profile → Play internal track) regenerate natives via `expo prebuild`, so manual edits to the local `android/` folder never reach the store artifact. The fixes persist across prebuilds ONLY via the local config plugin [`plugins/edge-to-edge-play-warning.js`](../plugins/edge-to-edge-play-warning.js), registered in `app.json` → `plugins`:
+
+- `withAppBuildGradle`: injects the `implementation("com.google.android.material:material:1.14.0")` force line into `dependencies {` (idempotent — skips if a material dependency ≥ 1.14.0 is already present).
+- Styles strip (finalized mod): removes `android:statusBarColor` / `android:navigationBarColor` items from the `AppTheme` style AFTER all other mods. Since SDK 58, the built-in `AndroidConfig.SystemBars.withSystemBars` default plugin (dangerous/reverse-order section of `withAndroidExpoPlugins`) re-adds them (transparent) after out-of-tree `withAndroidStyles` mods run, so the strip must run in `withFinalizedMod`. It reads/writes `android/app/src/main/res/values/styles.xml` via `XML.readXMLAsync`/`writeXMLAsync`, and filters `style.item` (singular — Expo's resource XML shape; `style.items` was always an empty match and a silent no-op in the pre-SDK-58 version).
+
+The same edits were also applied manually to the local `android/` folder (2026-11-10); those keep local `expo run:android` builds consistent but are disposable.
+
+## Flagged entries → source mapping
+
+| Play-flagged location | Source | Status |
+|---|---|---|
+| material `BottomSheetDialog.onCreate`, sidesheet `SheetDialog.onCreate`, `EdgeToEdgeUtils.applyEdgeToEdge` | `com.google.android.material:material` 1.13.0, pulled transitively by react-native-screens 4.30.1 (`node_modules/react-native-screens/android/build.gradle:231`) — the sole contributor on SDK 58 (`@expo/log-box@58.0.15` no longer declares material) | FIXED 2026-11-10: forced 1.14.0 in `android/app/build.gradle` (guards calls behind `SDK_INT < 35`; material-components commit c2051db2, releases 1.14.0 (2026-05-13)). Gradle resolves `1.13.0 -> 1.14.0`. |
+| `android:statusBarColor` / `android:navigationBarColor` theme items (app-owned) | `android/app/src/main/res/values/styles.xml` | FIXED 2026-11-10: items removed (no-op under enforced edge-to-edge) |
+| `StatusBarModule$setColor$1.runGuarded` | RN core react-android (`StatusBarModule.kt` `setColor`) | GONE on RN 0.88.1 (removed upstream in RN 0.87, PR facebook/react-native#57392; verified absent in `node_modules/react-native/.../StatusBarModule.kt` 2026-11-10). Cleared by the 56→58 upgrade. |
+| `WindowUtilKt.enableEdgeToEdge` / `statusBarHide` / `statusBarShow` | RN core react-android 0.88.1 (`WindowUtil.kt`) | UNFIXABLE at app level. Still present on RN main (0.89 era); runtime-safe (no-op branches when `edgeToEdgeEnabled=true`). Track facebook/react-native#48256. |
+
+Note: react-native-purchases-ui 10.4.0 and react-native-google-mobile-ads 16.4.0 are NOT contributors (RevenueCat paywalls are Compose-only — no material dep; GMA ships no material). R8/minification does NOT clear the scan (RN keep-rules retain native module entry points).
+
+## Re-check runbook
+
+Trigger: every RN / Expo SDK / react-native-screens upgrade, or a new Play Console upload.
+
+1. Resolve actual Material version:
+   ```bash
+   cd android && ./gradlew :app:dependencies --configuration releaseRuntimeClasspath
+   ```
+   grep `com.google.android.material:material`. If ≥ 1.14.0 comes transitively, the force line in `android/app/build.gradle` can be dropped; keep it otherwise.
+2. grep `android/app/src/main/res/` for `statusBarColor|navigationBarColor|windowLayoutInDisplayCutoutMode|windowTranslucent` — must stay absent.
+3. `StatusBarModule$setColor` confirmed gone on RN 0.88.1 (2026-11-10) — no further action. Remaining Play-flagged lines are the 3 `WindowUtilKt` entries only; after a Meta fix lands (watch facebook/react-native#48256), re-upload and confirm those 3 warning lines disappear from Play Console.
+4. Natives are regenerated by `expo prebuild` (EAS builds and local sync) — `android/` and `ios/` are gitignored, so all native changes must go through the config plugin [`plugins/edge-to-edge-play-warning.js`](../plugins/edge-to-edge-play-warning.js). After any local `expo prebuild` / `npx expo run:android` sync, verify the force line landed in `android/app/build.gradle` and that `statusBarColor` / `navigationBarColor` are absent from `android/app/src/main/res/values/styles.xml`.
+5. Bump the Material floor when material-components releases a fix for remaining guarded references (e.g. the RN-core entries stay unfixable at app level regardless).
+6. On any change to `plugins/edge-to-edge-play-warning.js`, verify the plugin loads without touching natives: `npx expo config --type prebuild --platform android`.
+7. The warning is advisory; treat as hygiene, not a release blocker.
+
+## R8 minify + obfuscation (Play vitals DEX warning)
+
+Play vitals flagged DEX obfuscation at 1% (threshold: 25%). Root cause: R8 never ran — `android/app/build.gradle` wires `minifyEnabled` to `android.enableMinifyInReleaseBuilds`, a property defined nowhere, so release builds shipped unminified, unobfuscated bytecode.
+
+### What changed
+
+`app.json` → `plugins` → `expo-build-properties` → `android` now sets:
+
+```json
+"enableMinifyInReleaseBuilds": true,
+"enableShrinkResourcesInReleaseBuilds": true
+```
+
+At prebuild these land in `android/gradle.properties`, so release builds run R8 (shrink + obfuscate + optimize) plus resource shrinking. **Durable:** `app.json` is committed, so prebuild regeneration preserves the flags — NO manual re-modification of `android/` after new builds (contrast with the `styles.xml` entries above, which need the config plugin because the template regenerates them).
+
+The remaining `expo-build-properties` key (`extraProguardRules` consent_sdk keep) is untouched. The `kotlinVersion` pin was removed 2026-11-10 (RN 0.88.1 default 2.2.0 applies; see status block above).
+
+### Local `android/` staleness
+
+Local `android/` stays stale until regenerated: run `npx expo prebuild -p android` to see the flags locally. The next EAS build picks them up automatically — no manual step in the release flow.
+
+### Keep-rule posture
+
+Consumer ProGuard rules ship with the libraries that need them (RN core, expo-updates, expo-modules-core, purchases-android, play-services-ads). The existing `extraProguardRules` consent_sdk keep is preserved and stays necessary. The existing local `android/app/proguard-rules.pro` keeps (reanimated, turbomodule) become ACTIVE once R8 runs.
+
+**If an obfuscated release build crashes at runtime** (stack frames like `a.b.c`), a library is missing a keep rule: add the missing keep via `app.json` → `expo-build-properties` → `android` → `extraProguardRules` (durable across prebuilds). NEVER hand-edit `proguard-rules.pro` — it is wiped by prebuild.
+
+### Release obligations this creates
+
+1. **mapping.txt per versionCode** — deobfuscation file at `android/app/build/outputs/mapping/release/mapping.txt` inside the EAS build artifact. Upload to Play Console → release → Deobfuscation files, EVERY release. EAS does not auto-upload; with `autoIncrement=true`, one missed mapping means permanently obfuscated stacks for that versionCode.
+2. **Fingerprint impact** — this `app.json` change bumps the expo-updates runtimeVersion (policy `fingerprint`), so OTA updates stop reaching existing installs until they take the new binary. Publish any pending OTA BEFORE this release.
+3. **Obfuscated-build regression pass required before promote**, on a preview-profile build (production profile sets `EXPO_PUBLIC_ADS_DISABLED=true` — ads cannot be tested there): ads + UMP consent flow, RevenueCat paywall + purchase + restore, expo-updates OTA fetch/apply, ionicons rendering, full smoke test.
+4. **Rollback** — set both flags `false` (or just `enableShrinkResourcesInReleaseBuilds` first if only resource-related issues appear).
+
+### Verify after build
+
+```bash
+android analyze <app.aab>
+```
+
+Obfuscation must be ≥ 25% (Play threshold; expect far higher). Local fallback: `apkanalyzer` / Android Studio APK Analyzer (DEX sizes + class names) / `bundletool`.

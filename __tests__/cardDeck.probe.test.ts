@@ -1,0 +1,449 @@
+// Behavior tests for services/cardDeck#probeAllPoolForUnplayed.
+//
+// Seam policy: getImages is the de-facto server/transport seam for cardDeck —
+// it owns the axios metadata calls, the byte downloads and the cursor
+// persistence behind one batch-result contract, so the suite mocks IT (a
+// cursor-mode server simulation) and asserts SERVED-DECK OUTCOMES at the
+// storage boundary: probe result statuses, persisted cursors, persisted decks
+// and absence of serving-cycle writes. Call shapes into the seam are not
+// asserted — paging behavior is proven by the cursor/deck states it produces.
+
+jest.mock('@react-native-async-storage/async-storage', () => ({
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  getAllKeys: jest.fn(),
+  multiRemove: jest.fn(),
+}));
+
+jest.mock('../utils/imagesRequests', () => ({
+  getImages: jest.fn(),
+}));
+
+jest.mock('../services/groups/groupFeedApi', () => ({
+  PRIVATE_FEED_END_CURSOR: '__private_feed_end__',
+}));
+
+jest.mock('../services/groups/groupFeedCache', () => {
+  const actual = jest.requireActual('../services/groups/groupFeedCache');
+  return {
+    ...actual,
+    readGroupFeedCache: jest.fn(),
+    writeGroupFeedCache: jest.fn(),
+  };
+});
+
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getImages } from '../utils/imagesRequests';
+import { readGroupFeedCache, writeGroupFeedCache } from '../services/groups/groupFeedCache';
+import { saveLastImageUuid } from '../utils/storageDatum';
+import { probeAllPoolForUnplayed } from '../services/cardDeck';
+
+const mockReadGroupFeedCache = readGroupFeedCache as unknown as jest.Mock;
+const mockWriteGroupFeedCache = writeGroupFeedCache as unknown as jest.Mock;
+
+const STAMP_KEY = 'allPoolDrained:public:fr:drained';
+
+const mockAsyncStorage = AsyncStorage as unknown as {
+  getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
+  setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
+  removeItem: jest.MockedFunction<(key: string) => Promise<void>>;
+  getAllKeys: jest.MockedFunction<() => Promise<readonly string[]>>;
+  multiRemove: jest.MockedFunction<(keys: readonly string[]) => Promise<void>>;
+};
+
+const mockGetImages = getImages as unknown as jest.Mock;
+
+type Store = Map<string, string>;
+
+function mockStore(initial: Record<string, string> = {}): Store {
+  const store: Store = new Map(Object.entries(initial));
+  mockAsyncStorage.getItem.mockImplementation(async (key: string) => store.get(key) ?? null);
+  mockAsyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+    store.set(key, value);
+  });
+  mockAsyncStorage.removeItem.mockImplementation(async (key: string) => {
+    store.delete(key);
+  });
+  mockAsyncStorage.getAllKeys.mockImplementation(async () => Array.from(store.keys()));
+  mockAsyncStorage.multiRemove.mockImplementation(async (keys: readonly string[]) => {
+    keys.forEach((key) => store.delete(key));
+  });
+  return store;
+}
+
+type Card = { pictureId: string; imageFile: string };
+
+function batch(prefix: string, count: number): Card[] {
+  return Array.from({ length: count }, (_, i) => ({
+    pictureId: `${prefix}${i + 1}`,
+    imageFile: `file:///cache/${prefix}${i + 1}.jpg`,
+  }));
+}
+
+function pictureIds(cards: Array<{ pictureId?: string }>): string[] {
+  return cards.map((c) => c.pictureId) as string[];
+}
+
+/**
+ * Cursor-mode server + transport-persistence simulation: serves the batch
+ * AFTER the cursor's tail (head batch when pictureId is null), and persists
+ * the served batch's tail through the REAL saveLastImageUuid (same contract
+ * as utils/imagesRequests.getImages — non-empty batch → cursor advance;
+ * opts.persistCursor === false → head replay, no write).
+ */
+function mockCursorServer(batches: Card[][]) {
+  mockGetImages.mockImplementation(async (pictureId: string | null, _ctx: unknown, filters: { language?: string; scope?: unknown }, ...rest: unknown[]) => {
+    const opts = rest[0] as { persistCursor?: boolean } | undefined;
+    const index = pictureId === null
+      ? 0
+      : batches.findIndex((b) => b.length > 0 && b[b.length - 1].pictureId === pictureId) + 1;
+    const served = batches[index];
+    if (!served || served.length === 0) {
+      return { isError: false, reason: 'empty', images: [] };
+    }
+    if (opts?.persistCursor !== false) {
+      await saveLastImageUuid(served[served.length - 1].pictureId, 'all', filters?.language, filters?.scope ?? null, (filters as { mode?: string }).mode);
+    }
+    return { isError: false, images: served };
+  });
+}
+
+const PUBLIC_ARGS = { language: 'fr', scope: { kind: 'public' }, authContext: { token: 't' } };
+
+describe('probeAllPoolForUnplayed (sound exhaustion proof, Steps 1+2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStore();
+    mockGetImages.mockReset();
+    mockReadGroupFeedCache.mockResolvedValue(null);
+    mockWriteGroupFeedCache.mockResolvedValue(undefined);
+  });
+
+  it('all-played batch pages forward, later unplayed batch appends to the "all" deck, cursor advances, no servingCycle writes', async () => {
+    const b2 = batch('played-', 2);
+    const b3 = batch('fresh-', 3);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': 'row-5-cursor',
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    mockCursorServer([batch('old-', 5), b2, b3]);
+    // The stored cursor must be the tail of batch 1 for the server mock.
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b3[2].pictureId);
+    const deck = JSON.parse(store.get('imageList:all:fr:any') ?? '[]');
+    expect(pictureIds(deck)).toEqual(pictureIds(b3));
+    expect(Array.from(store.keys()).every((key) => !key.startsWith('servingCycle:'))).toBe(true);
+    expect(
+      mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:')),
+    ).toHaveLength(0);
+  });
+
+  it('drains to an empty batch → exhausted (server-proven pool drain)', async () => {
+    const b2 = batch('played-', 2);
+    const store = mockStore({
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, b2]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b2[1].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('O7: logs probe-verdict with the resolved status (and the discriminator reason when indeterminate)', async () => {
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      const b2 = batch('played-', 2);
+      const store = mockStore({
+        'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+      });
+      const b1 = batch('old-', 5);
+      store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+      mockCursorServer([b1, b2]);
+
+      const exhausted = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+      expect(exhausted).toEqual({ status: 'exhausted' });
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'probe-verdict',
+        expect.objectContaining({ status: 'exhausted' }),
+      );
+
+      mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
+      const indeterminate = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+      expect(indeterminate).toEqual({ status: 'indeterminate', reason: 'network' });
+      expect(logSpy).toHaveBeenCalledWith(
+        '[feed]',
+        'probe-verdict',
+        expect.objectContaining({ status: 'indeterminate', reason: 'network' }),
+      );
+    } finally {
+      logSpy.mockRestore();
+    }
+  });
+
+  it('public sentinel: cleared before fetching, and the served batch persists a real cursor', async () => {
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': '__public_feed_end__',
+    });
+    const b1 = batch('head-', 3);
+    mockCursorServer([b1]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('lastImageUuid:all:fr:any');
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[2].pictureId);
+  });
+
+  it('private sentinel: cleared under the group-scoped key, and the served batch persists a real group cursor', async () => {
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const store = mockStore({
+      'groupFeed:g-1:game:all:fr:any:cursor': '__private_feed_end__',
+    });
+    const b1 = batch('priv-', 3);
+    mockCursorServer([b1]);
+
+    const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith('groupFeed:g-1:game:all:fr:any:cursor');
+    expect(store.get('groupFeed:g-1:game:all:fr:any:cursor')).toBe(b1[2].pictureId);
+  });
+
+  it('fetch error → indeterminate, cursor untouched, no deck write', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+    });
+    mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'network' });
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[4].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('PROBE_MAX_BATCHES all-played batches → indeterminate probe-cap (fail open)', async () => {
+    const played = batch('p', 1);
+    const batches = Array.from({ length: 20 }, (_, i) => [{ ...played[0], pictureId: `cap-${i}` }]);
+    const store = mockStore({
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(batches.flat())),
+    });
+    mockCursorServer(batches);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'probe-cap' });
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('Task 1b: a played-out terminal batch maps to indeterminate (never exhausted → no cycle reset, no played-set wipe)', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(batch('played-', 5))),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(store.get('lastImageUuid:all:fr:any')).toBe(b1[4].pictureId);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('Task 3a: an end-proved played-out batch (poolExhausted flag) maps to exhausted', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('Task 6d: private scope played-out maps to indeterminate too (no startNewServingCycle, played set kept)', async () => {
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const playedGroup = batch('gplayed-', 5);
+    const store = mockStore({
+      'groupFeed:g-1:game:all:fr:any:cursor': 'g-cursor-5',
+      'playedPictureIds:group:g-1:fr': JSON.stringify(pictureIds(playedGroup)),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(store.get('playedPictureIds:group:g-1:fr')).toBe(JSON.stringify(pictureIds(playedGroup)));
+    expect(
+      mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:')),
+    ).toHaveLength(0);
+    expect(writeGroupFeedCache).not.toHaveBeenCalled();
+  });
+
+  it('excludePictureId is excluded from the unplayed check (probe keeps draining past it)', async () => {
+    const justPlayed = { pictureId: 'just-played', imageFile: 'file:///cache/just.jpg' };
+    const store = mockStore({
+      'playedPictureIds:public:fr': JSON.stringify(['other-played']),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, [justPlayed, { pictureId: 'other-played', imageFile: 'file:///cache/other.jpg' }]]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS, excludePictureId: 'just-played' });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+
+  it('private scope: group "all" namespace deck write + group-scoped cursor, no public bleed', async () => {
+    const scope = { kind: 'private', groupId: 'g-1' };
+    const b2 = batch('gplayed-', 2);
+    const b3 = batch('gfresh-', 3);
+    const store = mockStore({
+      'playedPictureIds:group:g-1:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('gold-', 5);
+    store.set('groupFeed:g-1:game:all:fr:any:cursor', b1[4].pictureId);
+    mockCursorServer([b1, b2, b3]);
+
+    const result = await probeAllPoolForUnplayed({ language: 'fr', scope, authContext: { token: 't' } });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(writeGroupFeedCache).toHaveBeenCalledWith(
+      'g-1',
+      { categoryId: undefined, language: 'fr', mode: 'any' },
+      {
+        images: b3.map((card, i) => ({ ...card, listId: i + 1 })),
+        nextCursor: null,
+      },
+    );
+    expect(store.get('groupFeed:g-1:game:all:fr:any:cursor')).toBe(b3[2].pictureId);
+    expect(store.has('lastImageUuid:all:fr:any')).toBe(false);
+    expect(store.has('imageList:all:fr:any')).toBe(false);
+  });
+});
+
+describe('probeAllPoolForUnplayed (allPoolDrained wiring, Task 4b)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStore();
+    mockGetImages.mockReset();
+    mockReadGroupFeedCache.mockResolvedValue(null);
+    mockWriteGroupFeedCache.mockResolvedValue(undefined);
+  });
+
+  function storedDrainedKeys(store: Store): string[] {
+    return Array.from(store.keys()).filter((key) => key.startsWith('allPoolDrained:'));
+  }
+
+  it('an exhausted verdict via a plain empty batch writes NO stamp (the re-stamp is the caller duty)', async () => {
+    const b2 = batch('played-', 2);
+    const store = mockStore({
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, b2]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('allPoolDrained:'))).toHaveLength(0);
+  });
+
+  it('an exhausted verdict via a flag-bearing played-out batch writes NO stamp either', async () => {
+    const store = mockStore();
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'exhausted' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('allPoolDrained:'))).toHaveLength(0);
+  });
+
+  it('an unplayed verdict clears a pre-existing stamp', async () => {
+    const b2 = batch('played-', 2);
+    const b3 = batch('fresh-', 3);
+    const store = mockStore({
+      'allPoolDrained:public:fr:drained': '1',
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(b2)),
+    });
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    mockCursorServer([b1, b2, b3]);
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'unplayed' });
+    expect(store.has(STAMP_KEY)).toBe(false);
+    expect(mockAsyncStorage.removeItem).toHaveBeenCalledWith(STAMP_KEY);
+  });
+
+  it('an indeterminate verdict (network error) leaves a pre-existing stamp untouched', async () => {
+    const store = mockStore({ 'allPoolDrained:public:fr:drained': '3' });
+    mockGetImages.mockResolvedValue({ isError: true, reason: 'network' });
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'network' });
+    expect(store.get(STAMP_KEY)).toBe('3');
+  });
+
+  it('an indeterminate verdict (bound-hit played-out, no flag) leaves a pre-existing stamp untouched', async () => {
+    const b1 = batch('old-', 5);
+    const store = mockStore({
+      'allPoolDrained:public:fr:drained': '3',
+      'lastImageUuid:all:fr:any': b1[4].pictureId,
+      'playedPictureIds:public:fr': JSON.stringify(pictureIds(batch('played-', 5))),
+    });
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const result = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(result).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(store.get(STAMP_KEY)).toBe('3');
+  });
+
+  it('contrast pair: end-proved (flag) → exhausted with NO stamp, bound-hit (no flag) → indeterminate with NO stamp and NO cycle restart', async () => {
+    mockStore();
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [], poolExhausted: true }));
+
+    const endProved = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(endProved).toEqual({ status: 'exhausted' });
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:') || key.startsWith('allPoolDrained:'))).toHaveLength(0);
+
+    jest.clearAllMocks();
+    const store = mockStore();
+    const b1 = batch('old-', 5);
+    store.set('lastImageUuid:all:fr:any', b1[4].pictureId);
+    store.set('playedPictureIds:public:fr', JSON.stringify(pictureIds(batch('played-', 5))));
+    mockGetImages.mockImplementation(async () => ({ isError: false, reason: 'played-out', images: [] }));
+
+    const boundHit = await probeAllPoolForUnplayed({ ...PUBLIC_ARGS });
+
+    expect(boundHit).toEqual({ status: 'indeterminate', reason: 'played-out' });
+    expect(storedDrainedKeys(store)).toEqual([]);
+    expect(mockAsyncStorage.setItem.mock.calls.filter(([key]) => key.startsWith('servingCycle:') || key.startsWith('allPoolDrained:'))).toHaveLength(0);
+  });
+});

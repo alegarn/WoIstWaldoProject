@@ -1,0 +1,138 @@
+{
+  "expo": {
+    "name": "WoIstWaldoProject",
+    "slug": "WoIstWaldoProject",
+    "version": "1.0.0",
+    "orientation": "default",
+    "icon": "./assets/logo.png",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "requireFullScreen": true,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos.",
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos."
+      },
+      "bundleIdentifier": "com.AlG.HiddenInPlainSight",
+      "config": {
+        "usesNonExemptEncryption": false
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/logo.png",
+        "backgroundColor": "#ffffff"
+      },
+      "permissions": [
+        "android.permission.ACCESS_MEDIA_LOCATION"
+      ],
+      "package": "com.AlG.HiddenInPlainSight",
+      "versionCode": 10
+    },
+    "web": {
+      "favicon": "./assets/logo.png"
+    },
+    "plugins": [
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "most-recent",
+          "android": {
+            "launchMode": "most-recent"
+          }
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1D133D",
+          "image": "./assets/logo-no-background.png",
+          "dark": {
+            "backgroundColor": "#1D133D",
+            "image": "./assets/logo-no-background.png"
+          },
+          "imageWidth": 220
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends."
+        }
+      ],
+      [
+        "expo-screen-orientation",
+        {
+          "initialOrientation": "DEFAULT"
+        }
+      ],
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow $(PRODUCT_NAME) to access your photos.",
+          "savePhotosPermission": "Allow $(PRODUCT_NAME) to save photos.",
+          "isAccessMediaLocationEnabled": true,
+          "granularPermissions": [
+            "photo"
+          ]
+        }
+      ],
+      [
+        "expo-navigation-bar",
+        {
+          "position": "relative",
+          "behavior": "inset-swipe"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "extraProguardRules": "-keep class com.google.android.gms.internal.consent_sdk.** { *; }",
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true
+          }
+        }
+      ],
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-1838983009101821~6524275274",
+          "iosAppId": "ca-app-pub-xxxxxxxx~xxxxxxxx",
+          "delayAppMeasurementInit": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-status-bar",
+        {
+          "statusBarHidden": true
+        }
+      ],
+      "@react-native-vector-icons/ionicons",
+      [
+        "expo-updates",
+        {
+          "enabled": true,
+          "checkAutomatically": "ON_LOAD",
+          "fallbackToCacheTimeout": 0
+        }
+      ],
+      "./plugins/edge-to-edge-play-warning"
+    ],
+    "runtimeVersion": {
+      "policy": "fingerprint"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "bae9f76d-70c6-43e3-a288-094a4b9daf9a"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/bae9f76d-70c6-43e3-a288-094a4b9daf9a"
+    }
+  }
+}

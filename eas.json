@@ -1,0 +1,43 @@
+{
+  "cli": {
+    "version": ">= 5.6.0",
+    "appVersionSource": "local"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_BACKEND_URL": "https://winning-bear-up.ngrok-free.app/"
+      },
+      "channel": "development"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_ADMOB_INTERSTITIAL_ID": "ca-app-pub-1838983009101821/6431145621",
+        "EXPO_PUBLIC_TESTER_TOOLS": "true"
+      },
+      "channel": "preview"
+    },
+    "production": {
+      "environment": "production",
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_BACKEND_URL": "https://woistwaldo-api.onrender.com/",
+        "EXPO_PUBLIC_ADS_DISABLED": "true"
+      },
+      "channel": "production"
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "track": "internal"
+      }
+    }
+  }
+}

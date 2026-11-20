@@ -1,0 +1,290 @@
+jest.mock('@react-navigation/native', () => {
+  const React = require('react');
+  return {
+    useFocusEffect: (callback) => {
+      React.useEffect(() => callback(), [callback]);
+    },
+  };
+});
+
+jest.mock('../../components/UI/IconButton', () => {
+  function MockIconButton(props) {
+    return null;
+  }
+  return {
+    __esModule: true,
+    default: MockIconButton,
+  };
+});
+
+jest.mock('../../hooks/useActiveGroup', () => ({
+  useActiveGroup: jest.fn(),
+}));
+
+jest.mock('../../hooks/useGroupsHub', () => ({
+  useGroupsHub: jest.fn(),
+}));
+
+jest.mock('../../store/auth-context', () => {
+  const React = require('react');
+  return {
+    AuthContext: React.createContext({}),
+  };
+});
+
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+import { Alert } from 'react-native';
+
+import { HomeHeaderRight } from '../../screens/Groups/HomeHeaderRight';
+import IconButton from '../../components/UI/IconButton';
+import { useActiveGroup } from '../../hooks/useActiveGroup';
+import { useGroupsHub } from '../../hooks/useGroupsHub';
+import { AuthContext } from '../../store/auth-context';
+
+describe('HomeHeaderRight', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  function renderHeader({ activeGroup, groupsHubData, navigation = { navigate: jest.fn() }, authContext = {}, onOpenGuessWalkthrough } = {}) {
+    useActiveGroup.mockReturnValue(activeGroup);
+    const refresh = jest.fn();
+    useGroupsHub.mockReturnValue({ data: groupsHubData, refresh });
+    let renderer;
+    act(() => {
+      renderer = create(
+        <AuthContext.Provider value={authContext}>
+          <HomeHeaderRight navigation={navigation} tintColor="#fff" onOpenGuessWalkthrough={onOpenGuessWalkthrough} />
+        </AuthContext.Provider>
+      );
+    });
+    return { renderer, navigation, refresh };
+  }
+
+  function getToggle(renderer) {
+    return renderer.root.findByProps({ testID: 'home.menu.scope-toggle' });
+  }
+
+  function openMenu(renderer) {
+    const overflow = renderer.root.findByProps({ testID: 'home.header.other-options' });
+    act(() => {
+      overflow.props.onPress();
+    });
+  }
+
+  it('invokes setActive with the active group id when toggling from public to private scope', async () => {
+    const setActive = jest.fn().mockResolvedValue({ status: 200 });
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: 'g-9',
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [{ id: 'g-9', role: 'owner' }],
+        joined: [],
+      },
+    });
+
+    openMenu(renderer);
+
+    await act(async () => {
+      await getToggle(renderer).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-9');
+    expect(navigation.navigate).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-9' },
+    });
+  });
+
+  it('surfaces an Alert when setActive rejects on scope toggle', async () => {
+    const setActive = jest.fn().mockRejectedValue(new Error('server boom'));
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: 'g-9',
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [{ id: 'g-9', role: 'owner' }],
+        joined: [],
+      },
+    });
+
+    openMenu(renderer);
+
+    await act(async () => {
+      await getToggle(renderer).props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-9');
+    expect(Alert.alert).toHaveBeenCalled();
+    expect(navigation.navigate).not.toHaveBeenCalled();
+  });
+
+  it('keeps the toggle enabled when the user has a membership but no active group', () => {
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [],
+        joined: [{ id: 'g-2', role: 'member' }],
+      },
+    });
+
+    openMenu(renderer);
+
+    const toggle = getToggle(renderer);
+    expect(toggle.props.disabled).toBe(false);
+  });
+
+  it('navigates to the paywall with intent=store from the menu', () => {
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    openMenu(renderer);
+
+    const storeRow = renderer.root.findByProps({ testID: 'home.menu.store' });
+    expect(storeRow).toBeTruthy();
+    act(() => {
+      storeRow.props.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });
+  });
+
+  it('keeps the scope toggle enabled for a group owner even when the hub fetch failed, and switches to private', async () => {
+    const setActive = jest.fn().mockResolvedValue({ status: 200 });
+    const { renderer, navigation } = renderHeader({
+      authContext: { isGroupOwner: true },
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: 'g-1',
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: null,
+    });
+
+    openMenu(renderer);
+
+    const toggle = getToggle(renderer);
+    expect(toggle.props.disabled).toBe(false);
+
+    await act(async () => {
+      await toggle.props.onPress();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(setActive).toHaveBeenCalledWith('g-1');
+    expect(navigation.navigate).toHaveBeenCalledWith('PrivateHomeScreen', {
+      scope: { kind: 'private', groupId: 'g-1' },
+    });
+  });
+
+  it('refreshes the groups hub when the screen comes into focus', () => {
+    const { refresh } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    expect(refresh).toHaveBeenCalled();
+  });
+
+  it('navigates to GroupsListScreen when toggling from public to private without an active group', async () => {
+    const setActive = jest.fn();
+    const { renderer, navigation } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive,
+        clear: jest.fn(),
+      },
+      groupsHubData: {
+        owned: [],
+        joined: [{ id: 'g-2', role: 'member' }],
+      },
+    });
+
+    openMenu(renderer);
+
+    await act(async () => {
+      await getToggle(renderer).props.onPress();
+      await Promise.resolve();
+    });
+
+    expect(setActive).not.toHaveBeenCalled();
+    expect(navigation.navigate).toHaveBeenCalledWith('GroupsListScreen');
+    expect(navigation.navigate).not.toHaveBeenCalledWith('PrivateHomeScreen', expect.anything());
+  });
+
+  it('invokes onOpenGuessWalkthrough when pressing the guess walkthrough menu item', () => {
+    const onOpenGuessWalkthrough = jest.fn();
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+      onOpenGuessWalkthrough,
+    });
+
+    openMenu(renderer);
+
+    const row = renderer.root.findByProps({ testID: 'home.menu.guess-walkthrough' });
+    expect(row).toBeTruthy();
+    act(() => {
+      row.props.onPress();
+    });
+
+    expect(onOpenGuessWalkthrough).toHaveBeenCalledTimes(1);
+  });
+
+  it('no longer offers the groups row in the overflow menu', () => {
+    const { renderer } = renderHeader({
+      activeGroup: {
+        scope: { kind: 'public' },
+        activeGroupId: null,
+        setActive: jest.fn(),
+        clear: jest.fn(),
+      },
+      groupsHubData: { owned: [], joined: [] },
+    });
+
+    openMenu(renderer);
+
+    expect(renderer.root.findAllByProps({ testID: 'home.menu.groups' })).toHaveLength(0);
+  });
+});

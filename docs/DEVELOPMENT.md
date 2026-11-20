@@ -1,0 +1,84 @@
+# Development Guide - WoIstWaldo Mobile
+
+## Prerequisites
+- **Node.js**: RN 0.88 `engines` require `^22.13 || ^24.3 || >=26`. Node 24 LTS is recommended (a repo-root `.nvmrc` pins `24` for nvm users). Node 25.x installs work but emits `EBADENGINE` warnings.
+- **Dev build on a physical device (NOT Expo Go compatible)**: the app uses custom native
+  code (react-native-google-mobile-ads, etc.) that requires a development build — install a
+  dev build APK on your phone via `npx expo run:android` or an EAS development build, then
+  use the dev-server URL / QR code for live reload while testing. Ads in dev builds
+  automatically use Google Test IDs on Android.
+
+## Setup
+1. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Environment Variables:
+   Create a `.env` file in `WoIstWaldoProject/` with the following variables:
+   - `EXPO_PUBLIC_APP_BACKEND_URL`: The URL of your running Rails API (e.g., `http://localhost:3000/`). **Ensure it ends with a trailing slash.**
+   - `EXPO_PUBLIC_E2E_MODE`: Set to `true` to enable mock data/E2E mode, or `false` to use the real backend.
+
+3. Run the application:
+   ```bash
+   npx expo start
+   ```
+
+## Dev environment gotchas
+- **Dev backend URL comes from the local `.env`, not `eas.json`**: dev clients embed no JS bundle —
+  JS is served by Metro at runtime, and `EXPO_PUBLIC_*` values are inlined from the machine running
+  `npx expo start` (local `.env` wins). `eas.json` profiles only apply to embedded-bundle EAS builds.
+  Keep `.env` pointing at the active ngrok tunnel **with a trailing slash** (see Setup step 2). When
+  the app "points at prod" in dev, check `.env` first. After editing `.env`, restart Metro with
+  `npx expo start --clear`; ngrok URLs are ephemeral — each rotation = edit `.env` + restart, no rebuild.
+- **Dev AdMob `[googleMobileAds/app-id-missing] Not supported`**: if a dev build logs
+  `WARN [AdMobInterstitial] interstitial load failed: [Error: [googleMobileAds/app-id-missing] Not supported]`,
+  the config is fine (app ID verified in the Android manifest, `app.json`, and the built APK) — it is a
+  **device-side** Google Play services AdError (stale/missing GMS ads module), Android-only. Update
+  Google Play services on the emulator/device or test on a physical device; verify with
+  `adb shell dumpsys package com.google.android.gms`. If it persists, suspect the `play-services-ads`
+  `24.0.0` pin in the checked-in patch vs the `react-native-google-mobile-ads` default (`25.4.0`) —
+  a client↔device GMS mismatch; unpinning = patch rework = native change, which must be recorded in
+  `docs/native-code-maintenance.md`. Dev builds always use Google **test** ad unit IDs (`__DEV__` →
+  `TestIds.INTERSTITIAL`, `services/ads/AdMobInterstitialBridge.tsx:31-34`); real IDs are release-only.
+
+## Development Client
+This project uses `expo-dev-client`. To run on a physical device or emulator with native modules:
+```bash
+npm run android # For Android
+npm run ios     # For iOS
+```
+
+## Testing
+We use [Jest](https://jestjs.io/) for unit and component testing.
+- Run all tests:
+  ```bash
+  npm test
+  ```
+- Run a specific test:
+  ```bash
+  npx jest __tests__/some.test.js
+  ```
+
+## Guess feed cards
+The guess feed renders one card per image. Two interaction contracts are owned by dedicated components.
+
+- **Enigma preview**: Each card shows the enigma text directly, clamped to at most 2 lines. A chevron button and a vertical swipe expand the full enigma. Implemented in `components/Picture/Descriptions/GuessDescription.js`.
+- **Star/? badge detail modal**: The badge in the top-left of a card shows a star (rated) or a "?" (unrated). Tapping it opens a detail modal, hoisted once in `SwipeImage` (`components/UI/SwipeImage.js`) and rendered by `components/UI/BadgeDetailModal.js`. When available, the modal shows the enigma (full description), language, category, tags, creator, created date, the global rating (average), and the detailed ratings (Image Quality, Enigma Quality, Fun, Difficulty). Tags are fetched on open via `getImageTags` and the detailed ratings via `getImageRating`, both from `utils/ratingRequests.js`. Fetching is owned by the `useBadgeDetail` hook (`components/UI/useBadgeDetail.js`).
+- **Fullscreen layout**: The app runs fullscreen so the bottom of the screen (and with it the card enigma band) is not clipped by system bars. The status bar is hidden via `app.json` (`expo-status-bar` plugin configuration `statusBarHidden`). On Android the navigation bar is hidden at runtime in `App.js` via the declarative `expo-navigation-bar` component `<NavigationBar hidden />` rendered at the app root (the idiomatic API for `expo-navigation-bar@58`; `setPositionAsync`/`setBehaviorAsync` were removed). iOS is fullscreen via `app.json` (`ios.requireFullScreen`).
+- **Swipe-feedback overlay does not block the badge**: The swipe-feedback overlay (`Animated.Image` in `components/UI/SwipeableCard.js`) is rendered with `pointerEvents="none"`, so it never intercepts taps on the star/? badge even though it overlays the card.
+
+## Guess play screen
+The play screen (where the user taps/drags to find the hidden spot) renders through `screens/GuessScreens/GuessScreen.js` → `components/Picture/GuessPicture.js` → `components/Picture/ShowPicture.js`. The enigma hint is owned by a bottom-sheet overlay component, replacing the former draggable `MovableTextBox`.
+
+- **Enigma overlay**: The hint text is rendered by `EnigmaOverlay` (`components/Picture/Descriptions/EnigmaOverlay.js`), replacing the old click-to-toggle draggable `MovableTextBox`.
+- **Closed state**: A grabber handle is pinned to the bottom edge; the overlay starts closed on the first card.
+- **Open**: An UP swipe (bottom→top) on the handle expands the panel.
+- **Close**: Via the down-arrow icon button (`IconButton` with `chevron-down`), a DOWN swipe on the panel, or a tap on the scrim.
+- **Auto-open on second card onward**: After a correct guess, `skipInstructions: true` is set in `utils/handleGuessOutcome.ts` / `utils/guessNavigation.js`. `GuessPicture` passes it through as `defaultOpen={skipInstructions === true}` to `ShowPicture` → `EnigmaOverlay`, so the enigma auto-opens on the next card for direct reading.
+- **Gesture isolation**: The overlay's swipe responders are scoped to its own handle/panel/scrim; they do not steal the draggable target marker (its own `PanResponder` on the target wrap) or the left-edge `GuessExitSwipeMenu` swipe.
+- **Test/e2e hooks**: `testIDs` — `guess.enigma.handle`, `guess.enigma.panel`, `guess.enigma.text`, `guess.enigma.close`, `guess.enigma.scrim`. Close button accessibility label: "Close enigma".
+
+## Guess path screen
+- **Test/e2e hooks**: `testIDs` — `guess-path.button.details` (opens language filter), `guess-path.filter.language.chip` (visible current-language chip, children = uppercase code), `guess-path.filter.language.current` (hidden probe), `guess-path.button.help` (opens the walkthrough manually, both scopes).
+- **Walkthrough modal**: first-visit paged walkthrough rendered by `components/UI/CategoryWalkthrough.tsx` (also replayable via the help button and the home menu). `testIDs` — `tutorial.guessWalkthrough.backdrop`, `tutorial.guessWalkthrough.card`, `tutorial.guessWalkthrough.skip`, `tutorial.guessWalkthrough.next` / `tutorial.guessWalkthrough.done` (single action button, swapped on the last page), `tutorial.guessWalkthrough.panel.goal|panel.language|panel.mode`, `tutorial.guessWalkthrough.dot.goal|dot.language|dot.mode`, plus `home.menu.guess-walkthrough` (home overflow-menu replay entry).

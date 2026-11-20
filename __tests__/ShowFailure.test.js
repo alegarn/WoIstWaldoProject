@@ -1,0 +1,197 @@
+const mockResultChoices = jest.fn(() => null);
+const mockTutorialOverlay = jest.fn(() => null);
+
+jest.mock('../utils/guessNavigation', () => ({
+  navigateToNextGuess: jest.fn(),
+}));
+
+jest.mock('../utils/sessionScoreStore', () => ({
+  flush: jest.fn().mockResolvedValue({ ok: true, sent: 0, retained: 0 }),
+}));
+
+jest.mock('../store/auth-context', () => {
+  const React = require('react');
+  const authContext = { token: 'Bearer token-1', userId: 'user-1', scoreId: 'score-1' };
+
+  return {
+    __esModule: true,
+    AuthContext: React.createContext(authContext),
+    useAuthContext: () => authContext,
+  };
+});
+
+jest.mock('../components/Results/ResultChoices', () => {
+  return function MockResultChoices(props) {
+    mockResultChoices(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/TutorialOverlay', () => {
+  return function MockTutorialOverlay(props) {
+    mockTutorialOverlay(props);
+    return null;
+  };
+});
+
+import React from 'react';
+import { act, create } from 'react-test-renderer';
+
+import ShowFailure from '../components/Results/ShowFailure';
+import { navigateToNextGuess as mockedNavigateToNextGuess } from '../utils/guessNavigation';
+import { flush as mockedFlush } from '../utils/sessionScoreStore';
+
+function buildRoute(overrides = {}) {
+  return {
+    params: {
+      imageFile: 'file:///waldo.jpg',
+      pictureId: 'image-1',
+      description: 'Find Waldo behind the tree.',
+      imageHeight: 240,
+      imageWidth: 320,
+      isPortrait: false,
+      hiddenLocation: { x: 0.58, y: 0.46 },
+      screenHeight: 640,
+      screenWidth: 320,
+      isTutorial: true,
+      listId: 42,
+      category: { key: 'cities', name: 'Cities' },
+      language: 'en',
+      ...overrides,
+    },
+  };
+}
+
+async function renderShowFailure({ navigation, route }) {
+  let renderer;
+  await act(async () => {
+    renderer = create(<ShowFailure navigation={navigation} route={route} />);
+  });
+  return renderer;
+}
+
+describe('ShowFailure', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedNavigateToNextGuess.mockReset();
+    mockedFlush.mockReset();
+    mockedFlush.mockResolvedValue({ ok: true, sent: 0, retained: 0 });
+  });
+
+  it('flushes the buffered score streak on mount because failure ends the session', async () => {
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute();
+
+    await renderShowFailure({ navigation, route });
+
+    expect(mockedFlush).toHaveBeenCalledTimes(1);
+    expect(mockedFlush).toHaveBeenCalledWith({
+      authContext: expect.objectContaining({
+        token: 'Bearer token-1',
+        userId: 'user-1',
+      }),
+    });
+  });
+
+  it('shows the failure result state immediately with retry choices (no pre-animation)', async () => {
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute();
+
+    const renderer = await renderShowFailure({ navigation, route });
+
+    expect(renderer.root.findByProps({ testID: 'result.screen.failure' })).toBeTruthy();
+
+    const title = renderer.root.findByProps({ testID: 'result.screen.failure.title' });
+    expect(title.props.children).toContain('😢');
+
+    expect(mockResultChoices).toHaveBeenCalledWith(
+      expect.objectContaining({
+        navigation,
+        success: false,
+        isTutorial: true,
+        retryGuess: expect.any(Function),
+        onNextCard: expect.any(Function),
+        route,
+      })
+    );
+    expect(mockTutorialOverlay).toHaveBeenCalledWith(
+      expect.objectContaining({ screen: 'ShowFailure' })
+    );
+  });
+
+  it('retries the failed card via navigation.replace when Retry is pressed', async () => {
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute();
+
+    await renderShowFailure({ navigation, route });
+
+    const props = mockResultChoices.mock.calls.at(-1)[0];
+    props.retryGuess();
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'GuessScreen',
+      expect.objectContaining({
+        pictureId: 'image-1',
+        isTutorial: true,
+        category: route.params.category,
+        language: 'en',
+        listId: 42,
+      })
+    );
+    expect(navigation.reset).not.toHaveBeenCalled();
+  });
+
+  it('wires onNextCard to navigateToNextGuess skipping the failed card (currentListId: listId)', async () => {
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute({ listId: 42 });
+
+    await renderShowFailure({ navigation, route });
+
+    const props = mockResultChoices.mock.calls.at(-1)[0];
+    await act(async () => {
+      await props.onNextCard();
+    });
+
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category: route.params.category,
+      language: 'en',
+      currentListId: 42,
+      isTutorial: true,
+    });
+  });
+
+  it('preserves private scope when retrying and advancing to the next card', async () => {
+    const scope = { kind: 'private', groupId: 'group-1' };
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute({ listId: 42, isTutorial: false, scope });
+
+    await renderShowFailure({ navigation, route });
+
+    const props = mockResultChoices.mock.calls.at(-1)[0];
+    props.retryGuess();
+
+    expect(navigation.replace).toHaveBeenCalledWith(
+      'GuessScreen',
+      expect.objectContaining({
+        pictureId: 'image-1',
+        isTutorial: false,
+        scope,
+        category: route.params.category,
+        language: 'en',
+        listId: 42,
+      })
+    );
+
+    await act(async () => {
+      await props.onNextCard();
+    });
+
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(navigation, {
+      category: route.params.category,
+      language: 'en',
+      currentListId: 42,
+      isTutorial: false,
+      scope,
+    });
+  });
+});

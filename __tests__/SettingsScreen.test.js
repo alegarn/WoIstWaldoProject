@@ -1,0 +1,350 @@
+const mockButton = jest.fn(() => null);
+const mockCenteredModal = jest.fn(() => null);
+const mockLoadingOverlay = jest.fn(() => null);
+const mockLanguageSelector = jest.fn(() => null);
+
+jest.mock('../components/UI/Button', () => {
+  return function MockButton(props) {
+    mockButton(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/CenteredModal', () => {
+  return function MockCenteredModal(props) {
+    mockCenteredModal(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/LoadingOverlay', () => {
+  return function MockLoadingOverlay(props) {
+    mockLoadingOverlay(props);
+    return null;
+  };
+});
+
+jest.mock('../components/UI/LanguageSelector', () => {
+  return function MockLanguageSelector(props) {
+    mockLanguageSelector(props);
+    return null;
+  };
+});
+
+jest.mock('../utils/auth', () => ({
+  updateUser: jest.fn(),
+  deleteAccount: jest.fn(),
+  checkSecureStoreItem: jest.fn(),
+}));
+
+jest.mock('../utils/storageDatum', () => ({
+  getPreferredLanguage: jest.fn(),
+  savePreferredLanguage: jest.fn(),
+  wipePublicGuessStorage: jest.fn(),
+}));
+
+jest.mock('../utils/servingCycle', () => ({
+  resetServingCycles: jest.fn(),
+}));
+
+jest.mock('../store/auth-context', () => {
+  const React = require('react');
+
+  return {
+    AuthContext: React.createContext({}),
+  };
+});
+
+import React from 'react';
+import { Alert } from 'react-native';
+import { act, create } from 'react-test-renderer';
+
+import SettingsScreen from '../screens/SettingsScreen';
+import { AuthContext } from '../store/auth-context';
+import { checkSecureStoreItem, deleteAccount, updateUser } from '../utils/auth';
+import { getPreferredLanguage, savePreferredLanguage, wipePublicGuessStorage } from '../utils/storageDatum';
+import { resetServingCycles } from '../utils/servingCycle';
+
+describe('SettingsScreen', () => {
+  const contextValue = {
+    changeUserEmail: jest.fn(),
+    changeUsername: jest.fn(),
+    logout: jest.fn(),
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    checkSecureStoreItem.mockImplementation(({ secureStoreValue }) => {
+      if (secureStoreValue === 'email') {
+        return Promise.resolve('stored@example.com');
+      }
+
+      if (secureStoreValue === 'username') {
+        return Promise.resolve('stored-user');
+      }
+
+      return Promise.resolve(null);
+    });
+    getPreferredLanguage.mockResolvedValue('en');
+    savePreferredLanguage.mockResolvedValue(undefined);
+    wipePublicGuessStorage.mockResolvedValue(undefined);
+    resetServingCycles.mockResolvedValue(undefined);
+  });
+
+  afterEach(() => {
+    Alert.alert.mockRestore();
+  });
+
+  async function flushEffects() {
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  async function renderScreen({ contextOverride = {}, navigationOverride = {} } = {}) {
+    let renderer;
+    const navigation = {
+      navigate: jest.fn(),
+      setOptions: jest.fn(),
+      ...navigationOverride,
+    };
+
+    await act(async () => {
+      renderer = create(
+        <AuthContext.Provider value={{ ...contextValue, ...contextOverride }}>
+          <SettingsScreen navigation={navigation} />
+        </AuthContext.Provider>
+      );
+
+      await flushEffects();
+    });
+
+    return { renderer, navigation };
+  }
+
+  function getButtonProps(testID) {
+    const matchingCalls = mockButton.mock.calls.filter(([props]) => props.testID === testID);
+    return matchingCalls[matchingCalls.length - 1][0];
+  }
+
+  function getModalProps() {
+    return mockCenteredModal.mock.calls[mockCenteredModal.mock.calls.length - 1][0];
+  }
+
+  function getPreferredLanguageSelectorProps() {
+    const matchingCalls = mockLanguageSelector.mock.calls.filter(
+      ([props]) => props.testIDPrefix === 'settings.input.preferred-language.selector'
+    );
+    return matchingCalls[matchingCalls.length - 1][0];
+  }
+
+  it('preloads the stored email and username into the form fields', async () => {
+    const { renderer } = await renderScreen();
+
+    expect(renderer.root.findByProps({ testID: 'settings.input.email' }).props.value).toBe('stored@example.com');
+    expect(renderer.root.findByProps({ testID: 'settings.input.username' }).props.value).toBe('stored-user');
+  });
+
+  it('confirms and submits an email change through the modal flow', async () => {
+    updateUser.mockResolvedValue({
+      status: 200,
+      data: {
+        email: 'fresh@example.com',
+      },
+    });
+
+    const { renderer } = await renderScreen();
+
+    await act(async () => {
+      renderer.root.findByProps({ testID: 'settings.input.email' }).props.onUpdateValue('new@example.com');
+    });
+
+    await act(async () => {
+      getButtonProps('settings.button.save-email').onPress();
+    });
+
+    expect(getModalProps()).toEqual(
+      expect.objectContaining({
+        isModalVisible: true,
+        children: 'Are you sure you want to change your email to new@example.com ?',
+      })
+    );
+
+    await act(async () => {
+      getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(updateUser).toHaveBeenCalledWith({
+      context: contextValue,
+      data: { email: 'new@example.com' },
+    });
+    expect(contextValue.changeUserEmail).toHaveBeenCalledWith('fresh@example.com');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Email changed successfully!',
+      'Your new email is: fresh@example.com'
+    );
+  });
+
+  it('confirms account deletion, logs the user out, and shows the success alert', async () => {
+    deleteAccount.mockResolvedValue({
+      status: 200,
+      data: {
+        message: 'Account removed.',
+      },
+    });
+
+    await renderScreen();
+
+    await act(async () => {
+      getButtonProps('settings.button.delete-account').onPress();
+    });
+
+    expect(getModalProps().children).toContain('PERMANENT DELETION');
+
+    await act(async () => {
+      getModalProps().onPress();
+      await flushEffects();
+    });
+
+    expect(deleteAccount).toHaveBeenCalledWith({ context: contextValue });
+    expect(contextValue.logout).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Account deleted successfully!',
+      'Account removed.\nWe are sorry to see you go!'
+    );
+  });
+
+  it('renders the preferred language row with the expected testID and label', async () => {
+    const { renderer } = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'settings.input.preferred-language' })
+    ).toBeTruthy();
+    expect(
+      renderer.root.findByProps({ children: 'Preferred language (for new enigmas):' })
+    ).toBeTruthy();
+  });
+
+  it('loads the stored preferred language on mount and forwards it to the selector', async () => {
+    getPreferredLanguage.mockResolvedValue('fr');
+
+    await renderScreen();
+
+    expect(getPreferredLanguage).toHaveBeenCalledTimes(1);
+    expect(getPreferredLanguageSelectorProps()).toEqual(
+      expect.objectContaining({
+        value: 'fr',
+        testIDPrefix: 'settings.input.preferred-language.selector',
+      })
+    );
+  });
+
+  it('persists the selected preferred language, updates the row, and shows a success alert', async () => {
+    await renderScreen();
+
+    const onChange = getPreferredLanguageSelectorProps().onChange;
+
+    await act(async () => {
+      onChange('de');
+      await flushEffects();
+    });
+
+    expect(savePreferredLanguage).toHaveBeenCalledWith('de');
+    expect(getPreferredLanguageSelectorProps().value).toBe('de');
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Preferred language saved!',
+      'Your preferred language for new enigmas is now: de'
+    );
+  });
+
+  it('shows the View plans CTA for tier 2 users and routes to the paywall', async () => {
+    const { navigation } = await renderScreen({ contextOverride: { paidTier: 2 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+
+    await act(async () => {
+      buttonProps.onPress();
+    });
+
+    expect(navigation.navigate).toHaveBeenCalledWith('PaywallScreen', { intent: 'store' });
+  });
+
+  it('shows the View plans CTA for free users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 0 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+  });
+
+  it('shows the View plans CTA for tier 1 users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 1 } });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+    expect(buttonProps.accessibilityLabel).toBe('View plans');
+  });
+
+  it('hides the View plans CTA for tier 3 users', async () => {
+    await renderScreen({ contextOverride: { paidTier: 3 } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
+  });
+
+  it('hides the View plans CTA for a free user who earned premium via group rewards', async () => {
+    await renderScreen({ contextOverride: { paidTier: 0, earnedPremium: true } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
+    expect(testIDs).toContain('settings.button.subscription');
+  });
+
+  it('hides the View plans CTA for a tier 2 user who earned premium via group rewards', async () => {
+    await renderScreen({ contextOverride: { paidTier: 2, earnedPremium: true } });
+
+    const testIDs = mockButton.mock.calls.map(([props]) => props.testID);
+    expect(testIDs).not.toContain('settings.button.view-plans');
+  });
+
+  it('shows the View plans CTA in the earned-creator band (9–18 qualifying)', async () => {
+    await renderScreen({
+      contextOverride: { paidTier: 0, earnedGroupCreator: true, earnedPremium: false },
+    });
+
+    const buttonProps = getButtonProps('settings.button.view-plans');
+    expect(buttonProps.children).toBe('View plans');
+  });
+
+  it('dev reset action calls wipePublicGuessStorage and resetServingCycles and shows success alert', async () => {
+    await renderScreen();
+
+    await act(async () => {
+      getButtonProps('settings.button.reset-guess-serving').onPress();
+      await flushEffects();
+    });
+
+    expect(wipePublicGuessStorage).toHaveBeenCalledTimes(1);
+    expect(resetServingCycles).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Guess serving reset',
+      'Serving state cleared. Return to the category list and start fresh.'
+    );
+  });
+
+  it('action failure shows error alert, no crash', async () => {
+    wipePublicGuessStorage.mockRejectedValue(new Error('storage exploded'));
+
+    await renderScreen();
+
+    await act(async () => {
+      getButtonProps('settings.button.reset-guess-serving').onPress();
+      await flushEffects();
+    });
+
+    expect(Alert.alert).toHaveBeenCalledWith('Reset failed', 'storage exploded');
+  });
+});

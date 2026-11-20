@@ -1,0 +1,244 @@
+// Behavior tests for hooks/useAdCadence.
+//
+// These tests exist specifically to lock in the platform-gate removal: before
+// the fix, `isSourceReady` was `IS_ANDROID && adSource.isReady()`, which made
+// iOS always false and suppressed every free-tier ad. We mock consumeAdSlot to
+// capture the `isSourceReady` argument and assert it follows `adSource.isReady()`
+// on every platform. The default jest Platform.OS is 'ios' (jest.setup.js sets
+// EXPO_OS='ios'), so the iOS case is the regression guard.
+
+import { renderHook } from '@testing-library/react-native';
+import { Platform } from 'react-native';
+
+import { useAdCadence } from '../hooks/useAdCadence';
+import type { AdSource } from '../services/ads/AdSource';
+import type { ConsumeAdSlotResult } from '../utils/adCadence';
+
+const mockConsumeAdSlot = jest.fn((..._args: unknown[]): ConsumeAdSlotResult => ({ showAd: false, nextCount: 0 }));
+const mockShouldSuppressAds = jest.fn((..._args: unknown[]) => false);
+const mockIsE2EMode = jest.fn((..._args: unknown[]) => false);
+
+jest.mock('../utils/adCadence', () => ({
+  __esModule: true,
+  ...jest.requireActual('../utils/adCadence'),
+  consumeAdSlot: (...args: unknown[]) => mockConsumeAdSlot(...(args as [unknown])),
+}));
+
+jest.mock('../services/billing/adPolicy', () => ({
+  __esModule: true,
+  shouldSuppressAds: (...args: unknown[]) => mockShouldSuppressAds(...(args as [unknown])),
+}));
+
+jest.mock('../utils/e2eMode', () => ({
+  __esModule: true,
+  isE2EMode: (...args: unknown[]) => mockIsE2EMode(...(args as [])),
+}));
+
+function makeSource(isReady: boolean): AdSource {
+  return {
+    isReady: () => isReady,
+    show: jest.fn().mockResolvedValue(undefined),
+    renderSurface: () => null,
+  };
+}
+
+function lastConsumeCallArg(): Record<string, unknown> {
+  const calls = mockConsumeAdSlot.mock.calls;
+  return calls[calls.length - 1][0] as Record<string, unknown>;
+}
+
+describe('useAdCadence', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockConsumeAdSlot.mockReturnValue({ showAd: false, nextCount: 0 });
+    mockShouldSuppressAds.mockReturnValue(false);
+    mockIsE2EMode.mockReturnValue(false);
+  });
+
+  it('iOS, free tier: passes isSourceReady === true to consumeAdSlot (regression: was false under the old IS_ANDROID gate)', async () => {
+    // Default jest Platform.OS is 'ios' — assert explicitly to document intent.
+    expect(Platform.OS).toBe('ios');
+
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().isSourceReady).toBe(true);
+  });
+
+  it('Android, free tier: passes isSourceReady === true to consumeAdSlot', async () => {
+    const original = Platform.OS;
+    Object.defineProperty(Platform, 'OS', { value: 'android', configurable: true });
+    try {
+      const { result } = await renderHook(() =>
+        useAdCadence({
+          scope: { kind: 'public' },
+          authContext: { paidTier: 0 },
+          adSource: makeSource(true),
+        }),
+      );
+
+      result.current.consumeAdSlot();
+
+      expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+      expect(lastConsumeCallArg().isSourceReady).toBe(true);
+    } finally {
+      Object.defineProperty(Platform, 'OS', { value: original, configurable: true });
+    }
+  });
+
+  it('paid tier (shouldSuppressAds → isAdFree): forwards isAdFree === true to consumeAdSlot (paid suppression unchanged)', async () => {
+    mockShouldSuppressAds.mockReturnValue(true);
+
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        authContext: { paidTier: 1 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().isAdFree).toBe(true);
+  });
+
+  it('earned creator flag: never feeds shouldSuppressAds and does not stop the ad slot (tier 0, public scope)', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        authContext: { paidTier: 0, earnedGroupCreator: true },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    const policyInput = mockShouldSuppressAds.mock.calls[0][0] as Record<string, unknown>;
+    expect(policyInput.paidTier).toBe(0);
+    expect(policyInput).not.toHaveProperty('earnedGroupCreator');
+    expect(policyInput.earnedPremium).toBe(false);
+    expect(lastConsumeCallArg().isAdFree).toBe(false);
+  });
+
+  it('earned premium flag: passes earnedPremium into shouldSuppressAds input (private scope, no owned group needed)', async () => {
+    mockShouldSuppressAds.mockReturnValue(true);
+
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        authContext: { paidTier: 0, earnedPremium: true },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    const policyInput = mockShouldSuppressAds.mock.calls[0][0] as Record<string, unknown>;
+    expect(policyInput.earnedPremium).toBe(true);
+    expect(lastConsumeCallArg().isAdFree).toBe(true);
+  });
+
+  it('earned flags false/absent: shouldSuppressAds input carries no earned suppression and cadence stays on the free-tier path', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    const policyInput = mockShouldSuppressAds.mock.calls[0][0] as Record<string, unknown>;
+    expect(policyInput.earnedGroupCreator).toBeUndefined();
+    expect(policyInput.earnedPremium).toBe(false);
+    expect(lastConsumeCallArg().isAdFree).toBe(false);
+  });
+
+  it('isSourceReady tracks adSource.isReady() (false when the source reports not ready)', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(false),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(lastConsumeCallArg().isSourceReady).toBe(false);
+  });
+
+  it('private scope with a positive adCadenceEveryNWins: passes the override to consumeAdSlot', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4, adCadenceEveryNWins: 4 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(4);
+  });
+
+  it('public scope: passes the default cadence (3) even when an active group carries an override', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'public' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4, adCadenceEveryNWins: 6 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
+
+  it('private scope without the cadence field: passes the default cadence (3)', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: { isOwnedByViewer: false, memberCount: 4 },
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
+
+  it('private scope with no active group at all (member viewer): passes the default cadence (3)', async () => {
+    const { result } = await renderHook(() =>
+      useAdCadence({
+        scope: { kind: 'private' },
+        activeGroup: null,
+        authContext: { paidTier: 0 },
+        adSource: makeSource(true),
+      }),
+    );
+
+    result.current.consumeAdSlot();
+
+    expect(mockConsumeAdSlot).toHaveBeenCalledTimes(1);
+    expect(lastConsumeCallArg().everyNWins).toBe(3);
+  });
+});

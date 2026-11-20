@@ -1,0 +1,201 @@
+import { useContext, useEffect, useState } from 'react';
+import { View, Text, TextInput, Pressable, StyleSheet, Alert } from 'react-native';
+import { Ionicons } from '@react-native-vector-icons/ionicons';
+import { useTranslation } from 'react-i18next';
+
+import _ColorPalettePicker from '../../UI/ColorPalettePicker';
+import _SettingsSection from './SettingsSection';
+import { getSettingsTokens as _getSettingsTokens, settingsTokens } from './settingsTokens';
+import { GlobalStyle } from '../../../constants/theme';
+import { AuthContext } from '../../../store/auth-context';
+import { updateGroupSettings } from '../../../services/groups/groupApi';
+import { showPersonalizationUpsellAlert } from '../../../services/billing/personalizationUpsell';
+
+// SettingsSection.js and ColorPalettePicker.js are unmigrated; their
+// destructured props (headerRight / accessibilityLabel / themeColors) are
+// inferred as required by TS. settingsTokens.js infers `options = 'dark'` as a
+// string parameter. Permissive casts mirror the App.tsx convention.
+const ColorPalettePicker = _ColorPalettePicker as React.ComponentType<any>;
+const SettingsSection = _SettingsSection as React.ComponentType<any>;
+const getSettingsTokens = _getSettingsTokens as (options?: unknown) => any;
+
+type GroupIdentitySectionProps = {
+  groupId?: string | null;
+  initialName?: string | null;
+  initialPrimaryColor?: string | null;
+  initialSecondaryColor?: string | null;
+  onRefresh?: () => void | Promise<void>;
+  onSaved?: () => void;
+  onUpsell?: () => void;
+  testIDPrefix?: string;
+  appearance?: 'dark' | 'light';
+};
+
+/**
+ * Group identity editor — name + primary/secondary colors + save.
+ *
+ * Single Responsibility: editing the group's identity fields and persisting
+ * them. Owns its own draft + saving state; receives the initial values and an
+ * onRefresh callback to re-sync the group hub after a successful save.
+ */
+export default function GroupIdentitySection({
+  groupId,
+  initialName,
+  initialPrimaryColor,
+  initialSecondaryColor,
+  onRefresh,
+  onSaved,
+  onUpsell,
+  testIDPrefix = 'group-settings',
+  appearance = 'dark',
+}: GroupIdentitySectionProps) {
+  const { t } = useTranslation();
+  const authContext = useContext(AuthContext);
+  const [name, setName] = useState(initialName ?? '');
+  const [selectedPrimaryColor, setSelectedPrimaryColor] = useState(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
+  const [selectedSecondaryColor, setSelectedSecondaryColor] = useState(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
+  const [isSaving, setIsSaving] = useState(false);
+  const tokens = getSettingsTokens({
+    appearance,
+    primaryColor: selectedPrimaryColor,
+    secondaryColor: selectedSecondaryColor,
+  });
+  const pickerThemeColors = {
+    label: tokens.text,
+    expandedBorder: tokens.hairlineStrong,
+    shadeGrid: tokens.accentWash,
+    selectedBorder: tokens.text,
+  };
+
+  // Re-sync from upstream when the group is refreshed after a save.
+  useEffect(() => {
+    setName(initialName ?? '');
+    setSelectedPrimaryColor(initialPrimaryColor ?? GlobalStyle.color.primaryColor);
+    setSelectedSecondaryColor(initialSecondaryColor ?? GlobalStyle.color.secondaryColor);
+  }, [initialName, initialPrimaryColor, initialSecondaryColor]);
+
+  const saveSettings = async () => {
+    setIsSaving(true);
+    try {
+      const response = await updateGroupSettings(authContext, groupId, {
+        name: name.trim(),
+        primaryColor: selectedPrimaryColor,
+        secondaryColor: selectedSecondaryColor,
+      });
+      if (response?.status === 200 || response?.status === 204) {
+        Alert.alert(t('groups.settings.savedTitle'), t('groups.settings.savedMessage'));
+        onRefresh?.();
+        onSaved?.();
+      } else if (response?.status === 403) {
+        showPersonalizationUpsellAlert(t, onUpsell);
+      } else {
+        Alert.alert(`${t('common.error')} ${response?.status ?? ''}`, t('groups.settings.saveFailed'));
+      }
+    } catch (err: any) {
+      if (err?.response?.status === 403 || err?.status === 403) {
+        showPersonalizationUpsellAlert(t, onUpsell);
+      } else {
+        Alert.alert(t('common.error'), err?.message ?? t('groups.settings.saveFailed'));
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const label = isSaving ? t('groups.settings.saving') : t('groups.settings.saveChanges');
+
+  return (
+    <SettingsSection
+      appearance={appearance}
+      primaryColor={selectedPrimaryColor}
+      secondaryColor={selectedSecondaryColor}
+      testID={`${testIDPrefix}.section.identity`}
+      title={t('groups.settings.identityTitle')}
+      caption={t('groups.settings.identityCaption')}
+    >
+      <Text style={[styles.fieldLabel, { color: tokens.muted }]}>{t('groups.settings.nameLabel')}</Text>
+      <TextInput
+        accessibilityLabel={t('groups.settings.namePlaceholder')}
+        value={name}
+        onChangeText={setName}
+        style={[
+          styles.input,
+          {
+            color: tokens.text,
+            backgroundColor: tokens.inputSurface,
+            borderColor: tokens.hairlineInput,
+          },
+        ]}
+        testID={`${testIDPrefix}.input.name`}
+        placeholder={t('groups.settings.namePlaceholder')}
+        placeholderTextColor={tokens.mutedSoft}
+      />
+      <ColorPalettePicker
+        appearance={appearance}
+        label={t('groups.create.primaryColor')}
+        value={selectedPrimaryColor}
+        onValueChange={setSelectedPrimaryColor}
+        themeColors={pickerThemeColors}
+        testIDPrefix={`${testIDPrefix}.color-primary`}
+      />
+      <ColorPalettePicker
+        appearance={appearance}
+        label={t('groups.create.secondaryColor')}
+        value={selectedSecondaryColor}
+        onValueChange={setSelectedSecondaryColor}
+        themeColors={pickerThemeColors}
+        testIDPrefix={`${testIDPrefix}.color-secondary`}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        onPress={saveSettings}
+        disabled={isSaving}
+        testID={`${testIDPrefix}.button.save-colors`}
+        style={({ pressed }) => [
+          styles.saveAction,
+          { backgroundColor: tokens.accent },
+          pressed && styles.pressed,
+          isSaving && styles.saveActionBusy,
+        ]}
+      >
+        <Ionicons name="save-outline" size={17} color={tokens.accentText} />
+        <Text style={[styles.saveActionText, { color: tokens.accentText }]}>{label}</Text>
+      </Pressable>
+    </SettingsSection>
+  );
+}
+
+const styles = StyleSheet.create({
+  pressed: { opacity: 0.7 },
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    marginTop: 12,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  input: {
+    fontSize: 16,
+    fontWeight: '600',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: settingsTokens.radiusInput,
+    borderWidth: 1,
+  },
+  saveAction: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 10,
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+  saveActionBusy: { opacity: 0.6 },
+  saveActionText: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});
