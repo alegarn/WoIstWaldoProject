@@ -19,12 +19,13 @@
  * Mirror of plugins/edge-to-edge-play-warning.js (same prebuild-mod pattern).
  */
 
-const { withAppDelegate } = require('@expo/config-plugins');
+import type { ExpoConfig } from '@expo/config-types';
+import { withAppDelegate, type ConfigPlugin } from 'expo/config-plugins';
 
 const MARKER = 'mmkv-backup-exclusion';
 const MMKV_DIR_NAME = 'mmkv';
 
-function backupExclusionSnippet() {
+function backupExclusionSnippet(): string {
   return [
     `// ${MARKER}: keep MMKV out of iCloud/iTunes backups, matching`,
     '// AsyncStorage\'s no-backup semantics (see plugins/mmkv-backup-exclusion.js).',
@@ -36,8 +37,8 @@ function backupExclusionSnippet() {
   ].join('\n');
 }
 
-function withMmkvBackupExclusion(config) {
-  return withAppDelegate(config, (modConfig) => {
+const withMmkvBackupExclusion: ConfigPlugin = (config) =>
+  withAppDelegate(config, (modConfig) => {
     if (modConfig.modResults.language !== 'swift') {
       throw new Error(
         'mmkv-backup-exclusion: expected the iOS AppDelegate to be Swift.'
@@ -71,8 +72,9 @@ function withMmkvBackupExclusion(config) {
 
     return modConfig;
   });
-}
 
-module.exports = function mmkvBackupExclusionPlugin(config) {
+export default function mmkvBackupExclusionPlugin(
+  config: ExpoConfig
+): ExpoConfig {
   return withMmkvBackupExclusion(config);
-};
+}
