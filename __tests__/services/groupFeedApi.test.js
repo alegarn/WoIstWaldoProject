@@ -2,6 +2,8 @@ jest.mock('axios', () => ({
   get: jest.fn(),
 }));
 
+jest.mock('../../utils/localStore', () => require('../helpers/localStoreMock'));
+
 jest.mock('expo-file-system', () => {
   const File = jest.fn().mockImplementation(function MockFile(firstArg, secondArg) {
     const base = typeof firstArg === 'string' ? firstArg : firstArg?.uri;
@@ -53,7 +55,7 @@ jest.mock('../../utils/auth', () => ({
   })),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../../utils/localStore';
 import axios from 'axios';
 import { downloadAsync } from 'expo-file-system/legacy';
 import { getBackendHeaders, setHeaders } from '../../utils/auth';

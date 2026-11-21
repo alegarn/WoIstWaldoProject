@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, setItem, removeItem, getAllKeys, multiRemove } from '../../utils/localStore';
 
 import type { Group, GroupsHubData } from '../../types/groups';
 
@@ -21,7 +21,7 @@ export async function readGroupHubCache(userId: string | null | undefined): Prom
     return null;
   }
 
-  const stored = await AsyncStorage.getItem(groupHubKey(userId));
+  const stored = await getItem(groupHubKey(userId));
   if (!stored) {
     return null;
   }
@@ -55,18 +55,18 @@ export async function writeGroupHubCache(userId: string | null | undefined, hub:
     return;
   }
 
-  await AsyncStorage.setItem(groupHubKey(userId), JSON.stringify(hub));
+  await setItem(groupHubKey(userId), JSON.stringify(hub));
 }
 
 export async function clearGroupHubCache(userId: string | null | undefined): Promise<void> {
-  await AsyncStorage.removeItem(groupHubKey(userId));
+  await removeItem(groupHubKey(userId));
 }
 
 export async function clearAllGroupHubCaches(): Promise<void> {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:`));
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }

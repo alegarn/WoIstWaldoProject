@@ -1,4 +1,4 @@
-jest.mock('@react-native-async-storage/async-storage', () => ({
+jest.mock('../utils/localStore', () => ({
   getItem: jest.fn(),
   setItem: jest.fn(),
   removeItem: jest.fn(),
@@ -6,7 +6,6 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   multiRemove: jest.fn(),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   SERVING_CYCLE_PREFIX,
   getServingCycleEpoch,
@@ -21,7 +20,7 @@ import { _debugLocksSize } from '../utils/scopeMutex';
 // jest.mock factory above is untyped; cast to a typed mock view so
 // .mockImplementation / .mockResolvedValue are visible to TypeScript
 // (same pattern as __tests__/nextCardAdvancer.test.ts).
-const mockAsyncStorage = AsyncStorage as unknown as {
+const mockAsyncStorage = jest.requireMock('../utils/localStore') as unknown as {
   getItem: jest.MockedFunction<(key: string) => Promise<string | null>>;
   setItem: jest.MockedFunction<(key: string, value: string) => Promise<void>>;
   removeItem: jest.MockedFunction<(key: string) => Promise<void>>;

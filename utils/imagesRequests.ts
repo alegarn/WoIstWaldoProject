@@ -196,8 +196,9 @@ function isNetworkClassFailure(error: unknown) {
 };
 
 /**
- * Advisory feed-cursor persistence (Commit 1 L3): a failed AsyncStorage write
- * must never reject an otherwise successful batch — the cursor write is
+ * Advisory feed-cursor persistence (Commit 1 L3): a failed local storage
+ * (`utils/localStore`, MMKV-backed) write must never reject an otherwise
+ * successful batch — the cursor write is
  * best-effort state, and the worst case (one duplicate fetch) is already
  * deduped by fetchInFlight and dedupByPictureId in services/cardDeck.ts.
  */
@@ -647,7 +648,8 @@ export async function getImages(
   // 0 skips: the loop's rows were filtered against the played snapshot read
   // ONCE before the loop, so re-checking that snapshot can never prove them
   // played. FRESH re-read covers the concurrent addPlayedPictureId race
-  // (a swipe committing after the snapshot). One AsyncStorage read, terminal
+  // (a swipe committing after the snapshot). One local storage
+  // (`utils/localStore`, MMKV-backed) read, terminal
   // path only; an unreadable re-read keeps the honest 'server' terminal.
   try {
     const freshlyPlayed = new Set(await getPlayedPictureIds(filters?.language, filters?.scope));

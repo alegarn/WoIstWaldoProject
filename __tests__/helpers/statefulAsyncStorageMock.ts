@@ -10,40 +10,20 @@ type StatefulAsyncStorageMock = {
   };
 };
 
-function createStatefulAsyncStorageMock({ autoReset = false }: { autoReset?: boolean } = {}): StatefulAsyncStorageMock {
-  const store: Map<string, string> = new Map();
+declare const require: (moduleId: string) => unknown;
+declare const module: { exports: unknown };
 
-  const asyncStorage = {
-    getItem: jest.fn((key: string): Promise<string | null> => Promise.resolve(store.has(key) ? store.get(key) ?? null : null)),
-    setItem: jest.fn((key: string, value: string): Promise<void> => {
-      store.set(key, value);
-      return Promise.resolve();
-    }),
-    removeItem: jest.fn((key: string): Promise<void> => {
-      store.delete(key);
-      return Promise.resolve();
-    }),
-    getAllKeys: jest.fn((): Promise<string[]> => Promise.resolve(Array.from(store.keys()))),
-    multiRemove: jest.fn((keys: string[]): Promise<void> => {
-      for (const key of keys) store.delete(key);
-      return Promise.resolve();
-    }),
-  };
+function createStatefulAsyncStorageMock({ autoReset = false }: { autoReset?: boolean } = {}): StatefulAsyncStorageMock {
+  const adapterMock = require('./localStoreMock') as StatefulAsyncStorageMock & { __reset: () => void };
 
   if (autoReset) {
     beforeEach(() => {
-      store.clear();
+      adapterMock.__reset();
     });
   }
 
-  return {
-    __esModule: true,
-    __store: store,
-    default: asyncStorage,
-  };
+  return adapterMock;
 }
-
-declare const module: { exports: unknown };
 
 export type { StatefulAsyncStorageMock };
 

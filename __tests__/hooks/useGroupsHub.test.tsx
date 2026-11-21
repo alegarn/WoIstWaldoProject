@@ -1,13 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 import React, { ContextType } from 'react';
 
-declare module '@react-native-async-storage/async-storage' {
-  export const __store: Map<string, string>;
-}
-
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('../helpers/statefulAsyncStorageMock')()
-);
+jest.mock('../../utils/localStore', () => require('../helpers/localStoreMock'));
 
 jest.mock('axios', () => ({
   __esModule: true,
@@ -26,7 +20,19 @@ jest.mock('expo-secure-store', () => ({
   deleteItemAsync: jest.fn(),
 }));
 
-import AsyncStorage, { __store as asyncStorageStore } from '@react-native-async-storage/async-storage';
+const localStoreMock = jest.requireMock('../../utils/localStore') as {
+  default: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+    getAllKeys: jest.Mock;
+    multiRemove: jest.Mock;
+  };
+  __store: Map<string, string>;
+};
+
+const AsyncStorage = localStoreMock.default;
+const asyncStorageStore = localStoreMock.__store;
 import axios from 'axios';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { getSnapshot, publish, resetGroupHubStore } from '../../services/groups/groupHubStore';

@@ -10,7 +10,8 @@ import { resolveNextCard } from './nextCardResolver';
  *             Navigates the player to the next guess card by bouncing through GuessFeedScreen.
  *             This is a bounce — it breaks the streak. Prefer the in-screen advance path.
  *
- * Resolve the next playable card (read-only resolver: AsyncStorage + private
+ * Resolve the next playable card (read-only resolver: local storage
+ * (`utils/localStore`, MMKV-backed) + private
  * cache only, no network) and reset to a clean navigation stack so Back from
  * GuessScreen lands on the feed (decision D3). Mirrors the GuessScreen param
  * contract of GuessFeedScreen.startGuessing (spread item, hiddenLocation alias,

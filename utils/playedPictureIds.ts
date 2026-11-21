@@ -1,4 +1,4 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getItem, setItem, removeItem, getAllKeys, multiRemove } from './localStore';
 import { withScopeLock } from './scopeMutex';
 import type { CardImage } from '../services/cardDeck';
 
@@ -18,7 +18,7 @@ export function playedPictureIdsKey(language: string | null | undefined, scope: 
 };
 
 export async function getPlayedPictureIds(language: string | null | undefined, scope: unknown): Promise<string[]> {
-  const stored = await AsyncStorage.getItem(playedPictureIdsKey(language, scope));
+  const stored = await getItem(playedPictureIdsKey(language, scope));
   if (!stored) {
     return [];
   }
@@ -42,7 +42,7 @@ export async function addPlayedPictureId(pictureId: string | null | undefined, l
       return;
     }
     const next = [...played, pictureId].slice(-PLAYED_PICTURE_IDS_CAP);
-    await AsyncStorage.setItem(key, JSON.stringify(next));
+    await setItem(key, JSON.stringify(next));
   });
 };
 
@@ -64,10 +64,10 @@ export async function filterPlayedCards(cards: CardImage[], language: string | n
 };
 
 async function removeKeysByPrefix(prefix: string): Promise<void> {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(prefix));
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 };
 
@@ -86,6 +86,6 @@ export async function resetPlayedPictureIdsForScope(language: string | null | un
   const key = playedPictureIdsKey(language, scope);
 
   await withScopeLock(key, async () => {
-    await AsyncStorage.removeItem(key);
+    await removeItem(key);
   });
 };

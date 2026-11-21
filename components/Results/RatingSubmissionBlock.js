@@ -241,7 +241,7 @@ export default function RatingSubmissionBlock({
 
   const normalizedTagInput = normalizeTagName(tagInput);
   const canAddTag = normalizedTagInput.length > 0 && !addingTag;
-  // Suggestions are local AsyncStorage strings and expected to stay small in v1,
+  // Suggestions are local storage (`utils/localStore`, MMKV-backed) strings and expected to stay small in v1,
   // so synchronous filtering is intentional. Add debouncing only if the list grows.
   const filteredSuggestions = normalizedTagInput
     ? userTags.filter(

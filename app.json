@@ -121,7 +121,8 @@
           "fallbackToCacheTimeout": 0
         }
       ],
-      "./plugins/edge-to-edge-play-warning"
+      "./plugins/edge-to-edge-play-warning",
+      "./plugins/mmkv-backup-exclusion"
     ],
     "runtimeVersion": {
       "policy": "fingerprint"

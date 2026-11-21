@@ -626,7 +626,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
 
   /*
    * Deck-empty fallback. Prefers background-prefetched cards (re-read the active
-   * deck — the prefetcher may have appended to AsyncStorage since mount), then
+   * deck — the prefetcher may have appended to the local storage seam
+   * (`utils/localStore`, MMKV-backed) since mount), then
    * the warmed 'all' deck (awaiting any in-flight warm), then a foreground load
    * as a last resort. Avoids the "Load new images..." overlay whenever the
    * background prefetcher has done its job.
@@ -642,7 +643,8 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
     );
 
     // 1. Re-read the active deck — the background prefetcher may have appended
-    //    cards to AsyncStorage that local state hasn't picked up yet.
+    //    cards to the local storage seam (`utils/localStore`, MMKV-backed) that
+    //    local state hasn't picked up yet.
     let catDeck = await readDeck(aKey, aCat);
     if (catDeck.length > 0) {
       setImageList(catDeck);
@@ -797,7 +799,7 @@ export default function SwipeImage({ screenWidth, screenHeight, startGuessing, c
   const testerToolsEnabled = process.env.EXPO_PUBLIC_TESTER_TOOLS === 'true';
 
   // One press → one startNewServingCycle (epoch bump + played-set wipe +
-  // sentinel/marker/stamp clear; AsyncStorage-only, no network) + ONE fresh
+  // sentinel/marker/stamp clear; localStore-only (MMKV-backed), no network) + ONE fresh
   // head fetch so the oldest cards re-serve immediately. Deck wipe is
   // deliberately NOT part of this (wipePublicGuessStorage would nuke decks).
   const confirmRestartServingCycle = useCallback(() => {

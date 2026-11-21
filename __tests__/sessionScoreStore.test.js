@@ -1,6 +1,6 @@
 const mockStorage = {};
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
+jest.mock('../utils/localStore', () => ({
   getItem: jest.fn((key) => Promise.resolve(
     Object.prototype.hasOwnProperty.call(mockStorage, key) ? mockStorage[key] : null
   )),
@@ -22,7 +22,7 @@ jest.mock('../utils/e2eMode', () => ({
   isE2EMode: jest.fn(),
 }));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import AsyncStorage from '../utils/localStore';
 import { submitScoreBatch } from '../utils/scoreRequests';
 import { isE2EMode } from '../utils/e2eMode';
 import {

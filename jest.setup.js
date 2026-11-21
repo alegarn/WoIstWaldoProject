@@ -7,16 +7,9 @@ require('./i18n');
 
 globalThis.fetch;
 
-jest.mock('@react-native-async-storage/async-storage', () => ({
-  __esModule: true,
-  default: {
-    getItem: jest.fn(),
-    setItem: jest.fn(),
-    removeItem: jest.fn(),
-    getAllKeys: jest.fn().mockResolvedValue([]),
-    multiRemove: jest.fn(),
-  },
-}));
+jest.mock('./utils/localStore', () => require('./__tests__/helpers/localStoreMock'));
+
+jest.mock('./utils/storageMigration', () => require('./__tests__/helpers/localStoreMock').storageMigration);
 
 jest.mock('react-native-purchases', () => ({
   __esModule: true,

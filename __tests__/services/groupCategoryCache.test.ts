@@ -1,8 +1,5 @@
-jest.mock('@react-native-async-storage/async-storage', () =>
-  require('../helpers/statefulAsyncStorageMock')()
-);
+jest.mock('../../utils/localStore', () => require('../helpers/localStoreMock'));
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   readGroupCategoryCache,
   writeGroupCategoryCache,
@@ -10,8 +7,23 @@ import {
   clearAllGroupCategoryCaches,
 } from '../../services/groups/groupCategoryCache';
 
+const localStoreMock = jest.requireMock('../../utils/localStore') as {
+  default: {
+    getItem: jest.Mock;
+    setItem: jest.Mock;
+    removeItem: jest.Mock;
+    getAllKeys: jest.Mock;
+    multiRemove: jest.Mock;
+  };
+  __store: Map<string, string>;
+};
+
+const AsyncStorage = localStoreMock.default;
+const asyncStorageStore = localStoreMock.__store;
+
 describe('services/groups/groupCategoryCache', () => {
   beforeEach(() => {
+    asyncStorageStore.clear();
     jest.mocked(AsyncStorage.setItem).mockClear();
     jest.mocked(AsyncStorage.removeItem).mockClear();
     jest.mocked(AsyncStorage.multiRemove).mockClear();

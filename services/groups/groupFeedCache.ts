@@ -1,7 +1,8 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
+import { getAllKeys, getItem, multiRemove, removeItem, setItem } from '../../utils/localStore';
 import { clearAllPrivatePlayedPictureIds, clearPlayedPictureIdsForGroup } from '../../utils/playedPictureIds';
 import { normalizeLanguage, normalizeMode } from '../../utils/sessionFilter';
+import { VIABILITY_FILTER_CHUNK_SIZE, yieldToThread } from '../../utils/yield';
 import { clearAllGroupHubCaches } from './groupHubCache';
 
 export type CachedFeedImage = {
@@ -58,6 +59,21 @@ function deleteFileIfPresent(uri: string) {
   }
 }
 
+async function filterViableImages(images: CachedFeedImage[]): Promise<CachedFeedImage[]> {
+  const viable: CachedFeedImage[] = [];
+  for (let start = 0; start < images.length; start += VIABILITY_FILTER_CHUNK_SIZE) {
+    for (const image of images.slice(start, start + VIABILITY_FILTER_CHUNK_SIZE)) {
+      if (localFileExists(image?.imageFile)) {
+        viable.push(image);
+      }
+    }
+    if (start + VIABILITY_FILTER_CHUNK_SIZE < images.length) {
+      await yieldToThread();
+    }
+  }
+  return viable;
+}
+
 export async function readGroupFeedCache(
   groupId: string | number,
   { categoryId, language, mode }: { categoryId?: string | null; language?: string | null; mode?: string | null } = {}
@@ -68,7 +84,7 @@ export async function readGroupFeedCache(
   const listKey = groupFeedListKey(groupId, categoryKey, languageKey, modeKey);
   const cursorKey = groupFeedCursorKey(groupId, categoryKey, languageKey, modeKey);
 
-  const stored = await AsyncStorage.getItem(listKey);
+  const stored = await getItem(listKey);
   if (!stored) {
     return null;
   }
@@ -84,13 +100,13 @@ export async function readGroupFeedCache(
     return null;
   }
 
-  const viable = images.filter((image) => localFileExists(image?.imageFile));
+  const viable = await filterViableImages(images);
 
   if (viable.length !== images.length) {
-    await AsyncStorage.setItem(listKey, JSON.stringify(viable));
+    await setItem(listKey, JSON.stringify(viable));
   }
 
-  const cursorStored = await AsyncStorage.getItem(cursorKey);
+  const cursorStored = await getItem(cursorKey);
   let nextCursor = null;
   try {
     nextCursor = JSON.parse(cursorStored ?? 'null')?.nextCursor ?? null;
@@ -110,54 +126,54 @@ export async function writeGroupFeedCache(
   const languageKey = normalizeLanguage(language);
   const modeKey = normalizeMode(mode);
 
-  await AsyncStorage.setItem(
+  await setItem(
     groupFeedListKey(groupId, categoryKey, languageKey, modeKey),
     JSON.stringify(Array.isArray(images) ? images : []),
   );
-  await AsyncStorage.setItem(
+  await setItem(
     groupFeedCursorKey(groupId, categoryKey, languageKey, modeKey),
     JSON.stringify({ nextCursor: nextCursor ?? null }),
   );
 }
 
 export async function clearGroupFeedCache(groupId: string | number) {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:${groupId}:`));
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 
   await clearPlayedPictureIdsForGroup(groupId as string);
 }
 
 export async function clearAllGroupFeedCaches() {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${PREFIX}:`));
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }
 
 export async function markGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  await AsyncStorage.setItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode), '1');
+  await setItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode), '1');
 }
 
 export async function isGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  return (await AsyncStorage.getItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode))) === '1';
+  return (await getItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode))) === '1';
 }
 
 export async function clearGroupCategoryExhausted(groupId: string | number, categoryKey?: string | null, language?: string | null, mode?: string | null) {
-  await AsyncStorage.removeItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode));
+  await removeItem(groupFeedExhaustedKey(groupId, categoryKey, language, mode));
 }
 
 export async function clearAllGroupFeedExhaustedMarkers() {
-  const keys = await AsyncStorage.getAllKeys();
+  const keys = await getAllKeys();
   const target = keys.filter((key) => typeof key === 'string' && key.startsWith(`${EXHAUSTED_PREFIX}:`));
 
   if (target.length > 0) {
-    await AsyncStorage.multiRemove(target);
+    await multiRemove(target);
   }
 }
 
