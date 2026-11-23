@@ -5,15 +5,19 @@
  * - the module itself: `jest.mock('../utils/localStore', () => require('<this file>'))`
  *   exports jest.fn spies `getItem`/`setItem`/`removeItem`/`getAllKeys`/`multiRemove`
  *   (async, in-memory-Map backed, spy-compatible: mockResolvedValue/mockRejectedValueOnce/
- *   mockImplementationOnce/mockReset all work), the `__store` Map (named export, hard
- *   contract — suites import it directly), a `default` export with the same five spies
- *   for legacy `import x from '<module>'` bindings, and `__reset()`.
+ *   mockImplementationOnce/mockReset all work) plus their sync twins
+ *   `getItemSync`/`setItemSync` reading/writing the same Map, the `__store` Map (named
+ *   export, hard contract — suites import it directly), a `default` export with the same
+ *   five async spies for legacy `import x from '<module>'` bindings, and `__reset()`.
  * - `.storageMigration`: `jest.mock('../utils/storageMigration', () => require('<this file>').storageMigration)`
  *   — no-op `ensureMigrated` spy so suites never run real migration against a mocked
- *   engine. `__reset()` clears `__store` AND resets this spy (history + no-op impl),
- *   which is what `statefulAsyncStorageMock({ autoReset: true })` calls.
+ *   engine, plus the real module's `MIGRATION_FLAG_KEY`/`MIGRATION_FLAG_VALUE` exports.
+ *   `__reset()` clears
+ *   `__store` (then re-seeds the migration flag — post-migration default) AND resets
+ *   this spy (history + no-op impl), which is what `statefulAsyncStorageMock({ autoReset: true })` calls.
  *
- * LSP invariant: `getItem` on an unset key resolves `null`, never `undefined`.
+ * LSP invariant: `getItem` on an unset key resolves `null`, never `undefined`
+ * (`getItemSync` mirrors it).
  */
 
 type LocalStoreSpy = jest.Mock;
@@ -25,6 +29,8 @@ type LocalStoreMockModule = {
   removeItem: LocalStoreSpy;
   getAllKeys: LocalStoreSpy;
   multiRemove: LocalStoreSpy;
+  getItemSync: LocalStoreSpy;
+  setItemSync: LocalStoreSpy;
   __store: Map<string, string>;
   __reset: () => void;
   default: {
@@ -37,10 +43,16 @@ type LocalStoreMockModule = {
   storageMigration: {
     __esModule: boolean;
     ensureMigrated: LocalStoreSpy;
+    MIGRATION_FLAG_KEY: string;
+    MIGRATION_FLAG_VALUE: string;
   };
 };
 
+const MIGRATION_FLAG_KEY = 'mmkv_migrated';
+const MIGRATION_FLAG_VALUE = 'true';
+
 const store = new Map<string, string>();
+store.set(MIGRATION_FLAG_KEY, 'true');
 
 const getItem = jest.fn((key: string): Promise<string | null> =>
   Promise.resolve(store.has(key) ? (store.get(key) as string) : null)
@@ -56,7 +68,11 @@ const removeItem = jest.fn((key: string): Promise<void> => {
   return Promise.resolve();
 });
 
-const getAllKeys = jest.fn((): Promise<string[]> => Promise.resolve(Array.from(store.keys())));
+const getAllKeys = jest.fn((): Promise<string[]> =>
+  Promise.resolve(
+    Array.from(store.keys()).filter((key) => key !== MIGRATION_FLAG_KEY)
+  )
+);
 
 const multiRemove = jest.fn((keys: readonly string[]): Promise<void> => {
   for (const key of keys) {
@@ -65,9 +81,24 @@ const multiRemove = jest.fn((keys: readonly string[]): Promise<void> => {
   return Promise.resolve();
 });
 
+const getItemSync = jest.fn((key: string): string | null =>
+  store.has(key) ? (store.get(key) as string) : null
+);
+
+const setItemSync = jest.fn((key: string, value: string): void => {
+  if (typeof value !== 'string') {
+    throw new TypeError(
+      `localStore.setItemSync only accepts string values, received ${typeof value}`
+    );
+  }
+  store.set(key, value);
+});
+
 const storageMigration = {
   __esModule: true,
   ensureMigrated: jest.fn((): Promise<void> => Promise.resolve()),
+  MIGRATION_FLAG_KEY,
+  MIGRATION_FLAG_VALUE,
 };
 
 const localStoreMockModule: LocalStoreMockModule = {
@@ -77,9 +108,12 @@ const localStoreMockModule: LocalStoreMockModule = {
   removeItem,
   getAllKeys,
   multiRemove,
+  getItemSync,
+  setItemSync,
   __store: store,
   __reset: () => {
     store.clear();
+    store.set(MIGRATION_FLAG_KEY, 'true');
     storageMigration.ensureMigrated.mockReset();
     storageMigration.ensureMigrated.mockImplementation(() => Promise.resolve());
   },

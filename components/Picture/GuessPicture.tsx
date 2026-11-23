@@ -72,9 +72,10 @@ export type GuessPictureProps = {
   // the F drawing surface; `shape` is the hidden normalized outline.
   mode?: ImageMode;
   shape?: ShapeOutline | null;
-  // Session MODE filter (raw route value, unnormalized): gates the Mode Cue —
-  // shown only for shape cards in a feed that normalizes to 'any'.
-  filterMode?: string;
+  // Session MODE filter (raw context value, unnormalized; null = never set):
+  // gates the Mode Cue — shown only for shape cards in a feed that normalizes
+  // to 'any'.
+  filterMode?: string | null;
   screenDimensions: { width: number; height: number };
   toAdScreen?: (args: ToAdScreenArgs) => void | Promise<void>;
   skipInstructions?: boolean;

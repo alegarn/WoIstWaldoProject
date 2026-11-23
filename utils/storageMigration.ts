@@ -1,7 +1,7 @@
 import { getMmkv } from './mmkvStore';
 
 export const MIGRATION_FLAG_KEY = 'mmkv_migrated';
-const MIGRATION_FLAG_VALUE = 'true';
+export const MIGRATION_FLAG_VALUE = 'true';
 
 let migrated = false;
 let migrating: Promise<void> | null = null;

@@ -114,6 +114,7 @@ jest.mock('../utils/categoryRequests', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  ...jest.requireActual('../utils/storageDatum'),
   getPreferredLanguage: (...args: unknown[]) => mockGetPreferredLanguage(...args),
   getSessionLanguageFilter: (...args: unknown[]) => mockGetSessionLanguageFilter(...args),
   saveSessionLanguageFilter: (...args: unknown[]) => mockSaveSessionLanguageFilter(...args),
@@ -176,7 +177,31 @@ const mockDeleteCategoryThumbnailFile = jest.fn();
 const mockUploadCategoryThumbnail = jest.fn();
 const mockFetchGroups = jest.fn();
 
+const localStoreMock = jest.requireMock('../utils/localStore') as {
+  __store: Map<string, string>;
+};
+
+function seedSessionFilters({ language, mode, preferredLanguage }: {
+  language?: string;
+  mode?: string;
+  preferredLanguage?: string;
+}) {
+  localStoreMock.__store.delete('preferredLanguage');
+  localStoreMock.__store.delete('sessionLanguageFilter');
+  localStoreMock.__store.delete('sessionModeFilter');
+  if (language !== undefined) {
+    localStoreMock.__store.set('sessionLanguageFilter', language);
+  }
+  if (mode !== undefined) {
+    localStoreMock.__store.set('sessionModeFilter', mode);
+  }
+  if (preferredLanguage !== undefined) {
+    localStoreMock.__store.set('preferredLanguage', preferredLanguage);
+  }
+}
+
 import GuessPathScreen from '../screens/GuessScreens/GuessPathScreen';
+import SessionFilterProvider from '../store/sessionFilter-context';
 import { AuthContext } from '../store/auth-context';
 
 const BUNDLED_CATEGORY_KEYS = [
@@ -253,6 +278,7 @@ describe('GuessPathScreen', () => {
     mockDeleteCategoryThumbnailFile.mockReturnValue(undefined);
     mockUploadCategoryThumbnail.mockResolvedValue(null);
     mockFetchGroups.mockResolvedValue({ status: 200, data: { owned: [], joined: [] } });
+    seedSessionFilters({});
     mockGetPreferredLanguage.mockResolvedValue(null);
     mockGetSessionLanguageFilter.mockResolvedValue(null);
     mockSaveSessionLanguageFilter.mockResolvedValue(undefined);
@@ -307,7 +333,9 @@ describe('GuessPathScreen', () => {
     await act(async () => {
       renderer = create(
         <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
-          <GuessPathScreen navigation={navigation} route={route} />
+          <SessionFilterProvider>
+            <GuessPathScreen navigation={navigation} route={route} />
+          </SessionFilterProvider>
         </AuthContext.Provider>
       );
 
@@ -409,10 +437,15 @@ describe('GuessPathScreen', () => {
     expect(renderedKeys).toEqual(['all', ...BUNDLED_CATEGORY_KEYS]);
   });
 
-  it('reads the persisted session language filter on mount', async () => {
-    await renderScreen();
+  it('renders the persisted session language filter probe from context on first mount', async () => {
+    seedSessionFilters({ language: 'fr' });
 
-    expect(mockGetSessionLanguageFilter).toHaveBeenCalledTimes(1);
+    const renderer = await renderScreen();
+
+    expect(
+      renderer.root.findByProps({ testID: 'guess-path.filter.language.current' }).props
+        .children
+    ).toBe('fr');
   });
 
   it('renders the synthetic Recent/All card as the first grid item', async () => {
@@ -444,7 +477,7 @@ describe('GuessPathScreen', () => {
     );
   });
 
-  it('navigates to GuessFeedScreen with the selected category and resolved language', async () => {
+  it('navigates to GuessFeedScreen with the selected category and no filter params', async () => {
     await renderScreen();
 
     await triggerFocusEffects();
@@ -457,13 +490,11 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
-      language: 'any',
-      mode: 'any',
     });
   });
 
   it('falls back to the preferred language when the session filter is unset', async () => {
-    mockGetPreferredLanguage.mockResolvedValue('fr');
+    seedSessionFilters({ preferredLanguage: 'fr' });
 
     const renderer = await renderScreen();
 
@@ -482,8 +513,6 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
-      language: 'fr',
-      mode: 'any',
     });
   });
 
@@ -509,8 +538,6 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
-      language: 'any',
-      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 6, locked: false },
     });
@@ -538,8 +565,6 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
-      language: 'any',
-      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: {
         isOwnedByViewer: true,
@@ -604,8 +629,6 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
-      language: 'any',
-      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: {
         isOwnedByViewer: false,
@@ -667,8 +690,6 @@ describe('GuessPathScreen', () => {
     expect(mockFetchGroups).toHaveBeenCalledWith(contextValue);
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'c-1', name: 'Cats' }),
-      language: 'any',
-      mode: 'any',
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 7, locked: false },
     });
@@ -855,7 +876,7 @@ describe('GuessPathScreen', () => {
   });
 
   it('reflects the persisted session mode filter in the hidden probe', async () => {
-    mockGetSessionModeFilter.mockResolvedValue('shape');
+    seedSessionFilters({ mode: 'shape' });
 
     const renderer = await renderScreen();
 
@@ -865,7 +886,7 @@ describe('GuessPathScreen', () => {
     ).toBe('shape');
   });
 
-  it('persists the selected mode, updates the probe, and threads mode into navigation', async () => {
+  it('persists the selected mode and updates the probe (navigation carries no filter params)', async () => {
     const renderer = await renderScreen();
 
     await triggerFocusEffects();
@@ -893,8 +914,6 @@ describe('GuessPathScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessFeedScreen', {
       category: expect.objectContaining({ key: 'nature', name: 'Nature' }),
-      language: 'any',
-      mode: 'shape',
     });
   });
 
@@ -964,10 +983,12 @@ describe('GuessPathScreen', () => {
     await act(async () => {
       renderer.update(
         <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
-          <GuessPathScreen
-            navigation={navigation}
-            route={{ params: { scope: { kind: 'private', groupId: 'g-1' } } }}
-          />
+          <SessionFilterProvider>
+            <GuessPathScreen
+              navigation={navigation}
+              route={{ params: { scope: { kind: 'private', groupId: 'g-1' } } }}
+            />
+          </SessionFilterProvider>
         </AuthContext.Provider>
       );
       await flushEffects();
@@ -2028,7 +2049,9 @@ describe('GuessPathScreen', () => {
         navigation.setParams({ showWalkthrough: undefined });
         renderer.update(
           <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
-            <GuessPathScreen navigation={navigation} route={route} />
+            <SessionFilterProvider>
+              <GuessPathScreen navigation={navigation} route={route} />
+            </SessionFilterProvider>
           </AuthContext.Provider>
         );
         await flushEffects();
@@ -2070,7 +2093,9 @@ describe('GuessPathScreen', () => {
       await act(async () => {
         renderer.update(
           <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
-            <GuessPathScreen navigation={navigation} route={route} />
+            <SessionFilterProvider>
+              <GuessPathScreen navigation={navigation} route={route} />
+            </SessionFilterProvider>
           </AuthContext.Provider>
         );
         await flushEffects();
@@ -2101,7 +2126,9 @@ describe('GuessPathScreen', () => {
       await act(async () => {
         renderer.update(
           <AuthContext.Provider value={contextValue as ContextType<typeof AuthContext>}>
-            <GuessPathScreen navigation={navigation} route={route} />
+            <SessionFilterProvider>
+              <GuessPathScreen navigation={navigation} route={route} />
+            </SessionFilterProvider>
           </AuthContext.Provider>
         );
         await flushEffects();

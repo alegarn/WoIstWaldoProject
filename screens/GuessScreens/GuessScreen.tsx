@@ -13,6 +13,7 @@ import TutorialOverlayDefault from '../../components/UI/TutorialOverlay';
 import GuessExhaustedPanel from '../../components/Guess/GuessExhaustedPanel';
 import GuessAdvanceLoader from '../../components/Guess/GuessAdvanceLoader';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
+import { useSessionLanguageFilter, useSessionModeFilter } from '../../store/sessionFilter-context';
 import { AuthContext } from '../../store/auth-context';
 import { isOnTarget } from "../../utils/targetLocation";
 import { isWinningTrace } from '../../utils/shapeMatch';
@@ -54,10 +55,6 @@ type GuessRouteParams = {
   listId?: number;
   isTutorial?: boolean;
   category?: GuessCategory;
-  language?: string;
-  // Session filter mode (D8) — travels as filterMode, NEVER `mode`, which is
-  // the CARD's mode. Absent → 'any' = today's unfiltered behavior.
-  filterMode?: string;
   scope?: AdScope;
   activeGroup?: ActiveGroupAdContext | null;
   skipInstructions?: boolean;
@@ -89,7 +86,7 @@ type SharedParams = {
   listId?: number;
   isTutorial?: boolean;
   category?: GuessCategory;
-  language?: string;
+  language?: string | null;
   scope?: AdScope;
 };
 
@@ -111,8 +108,9 @@ const TutorialOverlay = TutorialOverlayDefault as unknown as TutorialOverlayComp
 
 export default function GuessScreen({ navigation, route }: GuessScreenProps) {
 
-  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, language, filterMode, scope, activeGroup, skipInstructions } = route.params;
-  const sessionFilterMode = normalizeMode(filterMode);
+  const { imageFile, pictureId, description, imageHeight, imageWidth, isPortrait, hiddenLocation, mode, shape, listId, isTutorial, category, scope, activeGroup, skipInstructions } = route.params;
+  const { mode: sessionMode } = useSessionModeFilter();
+  const { language: sessionLanguage } = useSessionLanguageFilter();
   const isPrivate = scope?.kind === 'private';
 
   const [showSuccess, setShowSuccess] = useState(false);
@@ -179,8 +177,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     overlayVisibleRef,
     resolveArgs: {
       category,
-      language,
-      filterMode: sessionFilterMode,
+      language: sessionLanguage ?? undefined,
+      filterMode: normalizeMode(sessionMode),
       currentListId: listId,
       currentPictureId: pictureId,
       isTutorial,
@@ -190,8 +188,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     sideEffectArgs: {
       listId,
       categoryKey: category?.key,
-      language,
-      filterMode: sessionFilterMode,
+      language: sessionLanguage ?? undefined,
+      filterMode: normalizeMode(sessionMode),
       imageFile,
       pictureId,
       scope,
@@ -235,8 +233,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
   useEffect(() => {
     if (category?.key === 'all') return;
     warmAllDeckIfNeeded({
-      language,
-      mode: sessionFilterMode,
+      language: sessionLanguage,
+      mode: sessionMode,
       scope,
       authContext,
     }).catch(() => {});
@@ -284,8 +282,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     let cancelled = false;
     getNextImagesForScope({
       category,
-      language,
-      mode: sessionFilterMode,
+      language: sessionLanguage,
+      mode: sessionMode,
       currentListId: listId,
       scope,
       limit: 7,
@@ -301,7 +299,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       .catch(() => {});
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- deck-ahead window only depends on cursor + deck identity
-  }, [listId, category?.key, category?.id, language, scope]);
+  }, [listId, category?.key, category?.id, sessionLanguage, scope]);
 
   async function applySuccessPath(multiplier: number) {
     // PB2: exactly one win per advancing cycle. advanceStateRef is flipped
@@ -314,8 +312,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     prefetchIfLow({
       categoryKey: category?.key || 'all',
       ...(isPrivate ? { categoryId: category?.id } : {}),
-      language,
-      mode: sessionFilterMode,
+      language: sessionLanguage,
+      mode: sessionMode,
       scope,
       authContext,
       currentListId: listId,
@@ -380,7 +378,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       onTarget, imageFile: uri, pictureId, description,
       imageHeight, imageWidth, isPortrait, hiddenLocation,
       screenHeight, screenWidth, listId, isTutorial,
-      category, language, scope,
+      category, language: sessionLanguage, scope,
       ...(isShapeMode ? { mode, shape } : {}),
     };
     if (!onTarget) {
@@ -453,7 +451,7 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
     // category+scope so re-entering re-queries the server (handles newly
     // uploaded images since the category was marked empty). Fire-and-forget —
     // navigation proceeds without waiting; the next mount re-queries fresh.
-    clearExhaustedCategory(category?.key, language, scope, sessionFilterMode).catch(() => {});
+    clearExhaustedCategory(category?.key, sessionLanguage, scope, sessionMode).catch(() => {});
     navigation.navigate('GuessPathScreen', isPrivate ? { scope } : {});
   }
 
@@ -497,8 +495,8 @@ export default function GuessScreen({ navigation, route }: GuessScreenProps) {
       hiddenLocation={hiddenLocation}
       mode={mode}
       shape={shape}
-      // Raw route value — GuessPicture owns normalization (cue gating).
-      filterMode={filterMode}
+      // Raw session-filter value — GuessPicture owns normalization (cue gating).
+      filterMode={sessionMode}
       screenDimensions={screenDimensions}
       toAdScreen={toAdScreen}
       skipInstructions={skipInstructions}

@@ -199,12 +199,12 @@ describe('ShowSuccess', () => {
       await onNextCard();
     });
 
-    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, expect.objectContaining({
       category,
       language: 'fr',
       currentListId: 7,
       isTutorial: false,
-    });
+    }));
   });
 
   it('forwards private scope to score updates and next-card navigation', async () => {
@@ -241,12 +241,12 @@ describe('ShowSuccess', () => {
       await choicesCall[0].onNextCard();
     });
 
-    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, {
+    expect(navigateToNextGuess).toHaveBeenCalledWith(navigation, expect.objectContaining({
       category,
       language: 'fr',
       currentListId: 7,
       isTutorial: false,
       scope,
-    });
+    }));
   });
 });

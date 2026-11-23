@@ -28,20 +28,20 @@ import ModeSelector from '../../components/UI/ModeSelector';
 import { getDefaultCategories } from '../../constants/defaultCategories';
 import { getCategories } from '../../utils/categoryRequests';
 import {
-  getPreferredLanguage,
-  getSessionLanguageFilter,
-  saveSessionLanguageFilter,
-  getSessionModeFilter,
-  saveSessionModeFilter,
   getGuessPathWalkthroughSeen,
   setGuessPathWalkthroughSeen,
 } from '../../utils/storageDatum';
 import { isE2EMode } from '../../utils/e2eMode';
-import { ANY_FILTER, loadSessionFilter } from '../../utils/sessionFilter';
+import { ANY_FILTER } from '../../utils/sessionFilter';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useGroupsHub } from '../../hooks/useGroupsHub';
 import { AuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
+import {
+  useSessionFilterHints,
+  useSessionLanguageFilter,
+  useSessionModeFilter,
+} from '../../store/sessionFilter-context';
 import {
   createGroupCategory,
   deleteGroupCategory,
@@ -230,8 +230,9 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
   const { t } = useTranslation();
   const context = useContext(AuthContext);
   const [categories, setCategories] = useState<GuessPathCategory[]>([]);
-  const [sessionLanguage, setSessionLanguage] = useState<string | null>(null);
-  const [sessionMode, setSessionMode] = useState<string | null>(null);
+  const { language: sessionLanguage, setLanguageFilter } = useSessionLanguageFilter();
+  const { mode: sessionMode, setModeFilter } = useSessionModeFilter();
+  const { applyHints } = useSessionFilterHints();
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [isModeFilterModalVisible, setIsModeFilterModalVisible] = useState(false);
   const [isAddCategoryVisible, setIsAddCategoryVisible] = useState(false);
@@ -319,33 +320,6 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
     }, [reloadCategories, refreshGroupsHub])
   );
 
-  useEffect(() => {
-    let cancelled = false;
-
-    loadSessionFilter({
-      getter: async () => {
-        const [stored, preferred] = await Promise.all([
-          getSessionLanguageFilter(),
-          getPreferredLanguage(),
-        ]);
-        return stored ?? preferred ?? null;
-      },
-      setter: setSessionLanguage,
-      fallback: null,
-      isCancelled: () => cancelled,
-    });
-    loadSessionFilter({
-      getter: getSessionModeFilter,
-      setter: setSessionMode,
-      fallback: null,
-      isCancelled: () => cancelled,
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   useFocusEffect(
     useCallback(() => {
       let cancelled = false;
@@ -420,14 +394,10 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
 
     const params: {
       category: GuessPathCategory;
-      language: string;
-      mode: string;
       scope?: GuessPathScope;
       activeGroup?: ActiveGroupSnapshot | null;
     } = {
       category,
-      language: navigationLanguage,
-      mode: resolvedMode,
     };
 
     if (isPrivateScope) {
@@ -447,18 +417,18 @@ export default function GuessPathScreen({ navigation, route }: GuessPathScreenPr
       params.activeGroup = resolvedActiveGroup;
     }
 
+    applyHints({ mode: resolvedMode, language: navigationLanguage });
+
     navigation.navigate('GuessFeedScreen', params);
   };
 
-  const handleSelectLanguage = async (code: string) => {
-    await saveSessionLanguageFilter(code);
-    setSessionLanguage(code);
+  const handleSelectLanguage = (code: string) => {
+    setLanguageFilter(code);
     setIsFilterModalVisible(false);
   };
 
-  const handleSelectMode = async (mode: string) => {
-    await saveSessionModeFilter(mode);
-    setSessionMode(mode);
+  const handleSelectMode = (mode: string) => {
+    setModeFilter(mode);
     setIsModeFilterModalVisible(false);
   };
 

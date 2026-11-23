@@ -1,4 +1,5 @@
-import { getItem, setItem, removeItem, getAllKeys, multiRemove } from "./localStore";
+import { getItem, setItem, removeItem, getAllKeys, multiRemove, getItemSync } from "./localStore";
+import { MIGRATION_FLAG_KEY, MIGRATION_FLAG_VALUE } from "./storageMigration";
 import { File, Paths } from "expo-file-system";
 import { withScopeLock } from "./scopeMutex";
 import {
@@ -533,7 +534,11 @@ export async function getSessionLanguageFilter(): Promise<string | null> {
 };
 
 export async function saveSessionLanguageFilter(code: string | null): Promise<null> {
-  await setItem(SESSION_LANGUAGE_FILTER_KEY, code as string);
+  if (code === null) {
+    await removeItem(SESSION_LANGUAGE_FILTER_KEY);
+    return null;
+  }
+  await setItem(SESSION_LANGUAGE_FILTER_KEY, code);
   return null;
 };
 
@@ -546,7 +551,11 @@ export async function getSessionModeFilter(): Promise<string | null> {
 };
 
 export async function saveSessionModeFilter(mode: string | null): Promise<null> {
-  await setItem(SESSION_MODE_FILTER_KEY, mode as string);
+  if (mode === null) {
+    await removeItem(SESSION_MODE_FILTER_KEY);
+    return null;
+  }
+  await setItem(SESSION_MODE_FILTER_KEY, mode);
   return null;
 };
 
@@ -558,6 +567,25 @@ export async function getPreferredLanguage(): Promise<string | null> {
 export async function savePreferredLanguage(code: string | null): Promise<null> {
   await setItem(PREFERRED_LANGUAGE_KEY, code as string);
   return null;
+};
+
+export function getSessionLanguageFilterSync(): string | null {
+  const stored = getItemSync(SESSION_LANGUAGE_FILTER_KEY);
+  return stored || null;
+};
+
+export function getSessionModeFilterSync(): string | null {
+  const stored = getItemSync(SESSION_MODE_FILTER_KEY);
+  return stored || null;
+};
+
+export function getPreferredLanguageSync(): string | null {
+  const stored = getItemSync(PREFERRED_LANGUAGE_KEY);
+  return stored || null;
+};
+
+export function isStorageMigratedSync(): boolean {
+  return getItemSync(MIGRATION_FLAG_KEY) === MIGRATION_FLAG_VALUE;
 };
 
 export async function getUiLocale(): Promise<string | null> {
