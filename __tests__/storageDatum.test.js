@@ -255,6 +255,16 @@ describe('storageDatum utilities', () => {
     expect(await getSessionModeFilter()).toBe('any');
   });
 
+  it('saving null removes the session filter keys — never-set semantics restored', async () => {
+    await saveSessionLanguageFilter(null);
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('sessionLanguageFilter');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('sessionLanguageFilter', null);
+
+    await saveSessionModeFilter(null);
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('sessionModeFilter');
+    expect(AsyncStorage.setItem).not.toHaveBeenCalledWith('sessionModeFilter', null);
+  });
+
   it('sessionModeFilter survives wipePublicGuessStorage (session filter is never wiped, D3)', async () => {
     AsyncStorage.getAllKeys.mockResolvedValue(['sessionModeFilter', 'imageList:city:fr:any']);
     AsyncStorage.getItem.mockResolvedValue(null);

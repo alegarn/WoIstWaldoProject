@@ -7,6 +7,7 @@ import RatingSubmissionBlock from './RatingSubmissionBlock';
 import ScoreCelebration from './ScoreCelebration';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { AuthContext } from '../../store/auth-context';
+import { useSessionModeFilter } from '../../store/sessionFilter-context';
 import TutorialOverlay from '../UI/TutorialOverlay';
 
 export default function ShowSuccess({ navigation, route }) {
@@ -24,6 +25,7 @@ export default function ShowSuccess({ navigation, route }) {
   const language = route.params?.language;
 
   const context = useContext(AuthContext);
+  const { mode } = useSessionModeFilter();
 
   /* Functions ________________________________________________ */
 
@@ -33,6 +35,7 @@ export default function ShowSuccess({ navigation, route }) {
     currentListId: listId,
     isTutorial,
     scope: isPrivateScope ? scope : undefined,
+    mode,
   });
 
   return (

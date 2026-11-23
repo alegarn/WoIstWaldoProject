@@ -16,6 +16,19 @@ export async function setItem(key: string, value: string): Promise<void> {
   getMmkv().set(key, value);
 }
 
+export function getItemSync(key: string): string | null {
+  return getMmkv().getString(key) ?? null;
+}
+
+export function setItemSync(key: string, value: string): void {
+  if (typeof value !== 'string') {
+    throw new TypeError(
+      `localStore.setItemSync only accepts string values, received ${typeof value}`
+    );
+  }
+  getMmkv().set(key, value);
+}
+
 export async function removeItem(key: string): Promise<void> {
   await ensureMigrated();
   getMmkv().remove(key);

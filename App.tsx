@@ -64,6 +64,7 @@ import SubscriptionManagementScreen from './screens/Billing/SubscriptionManageme
 import AuthContextProvider from './store/auth-context';
 import { AuthContext } from './store/auth-context';
 import I18nProvider from './store/i18n-context';
+import SessionFilterProvider from './store/sessionFilter-context';
 
 import LoadingOverlay from './components/UI/LoadingOverlay';
 
@@ -687,10 +688,12 @@ export default function App() {
   return (
     <AuthContextProvider>
       <I18nProvider>
-        {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
-        {!ADS_DISABLED && <AdMobInterstitialBridge />}
-        <NavigationBar hidden />
-        <Root />
+        <SessionFilterProvider>
+          {/* Long-lived AdMob host: hoisted per N9 fix (one bridge for app lifetime). */}
+          {!ADS_DISABLED && <AdMobInterstitialBridge />}
+          <NavigationBar hidden />
+          <Root />
+        </SessionFilterProvider>
       </I18nProvider>
     </AuthContextProvider>
   );

@@ -8,19 +8,18 @@ import SwipeInstructions from '../../components/Instructions/SwipeInstructions';
 import SwipeImage from '../../components/UI/SwipeImage';
 import LanguageSelector from '../../components/UI/LanguageSelector';
 import ModeSelector from '../../components/UI/ModeSelector';
-import {
-  getOnboardingCompleted,
-  getSessionLanguageFilter,
-  saveSessionLanguageFilter,
-  getSessionModeFilter,
-  saveSessionModeFilter,
-} from '../../utils/storageDatum';
+import { getOnboardingCompleted } from '../../utils/storageDatum';
 import { useActiveGroup } from '../../hooks/useActiveGroup';
 import { useFlushOnLeave } from '../../hooks/useFlushOnLeave';
 import { useAuthContext } from '../../store/auth-context';
 import { PrivateGroupThemeProvider, useScopedPrivateGroupTheme } from '../../store/privateGroupTheme-context';
+import {
+  useSessionLanguageFilter,
+  useSessionModeFilter,
+} from '../../store/sessionFilter-context';
 import { handleOrientation } from '../../utils/orientation';
-import { loadSessionFilter, ANY_FILTER } from '../../utils/sessionFilter';
+import { ANY_FILTER } from '../../utils/sessionFilter';
+import type { ActiveGroupAdContext } from '../../services/billing/adPolicy';
 
 // Language namespace contract (I6): an unset filter means NO server filter.
 // GuessPathScreen navigates with NAVIGATION_ANY_LANGUAGE ('any') when no stored
@@ -44,10 +43,9 @@ type SwipeItem = {
 
 type GuessFeedRouteParams = {
   category?: { key?: string; id?: string };
-  language?: string | null;
-  mode?: string | null;
   skipInstructions?: boolean;
   scope?: { kind: 'private'; groupId: string } | { kind: 'public' };
+  activeGroup?: ActiveGroupAdContext | null;
   [key: string]: unknown;
 };
 
@@ -67,8 +65,7 @@ type GuessFeedScreenProps = {
 export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenProps) {
   const authContext = useAuthContext();
   useFlushOnLeave({ navigation, authContext });
-  const { category, language: routeLanguage, mode: routeMode, skipInstructions } = route.params || {};
-  const routeScope = route?.params?.scope;
+  const { category, skipInstructions, scope: routeScope, activeGroup } = route.params || {};
   const { scope: activeScope } = useActiveGroup();
   const scope = routeScope ?? activeScope;
   // useScopedPrivateGroupTheme is a JS module with no exported types; narrow to local Theme.
@@ -76,8 +73,8 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
     group: unknown;
     theme: Theme | null;
   };
-  const [language, setLanguage] = useState<string | null>(routeLanguage || null);
-  const [mode, setMode] = useState<string | null>(routeMode || null);
+  const { language, setLanguageFilter } = useSessionLanguageFilter();
+  const { mode, setModeFilter } = useSessionModeFilter();
   const [showOverlay, setShowOverlay] = useState(!skipInstructions);
   const [isFilterModalVisible, setIsFilterModalVisible] = useState(false);
   const [isModeFilterModalVisible, setIsModeFilterModalVisible] = useState(false);
@@ -90,29 +87,6 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
       handleOrientation('portrait');
     }, [])
   );
-
-  useEffect(() => {
-    let cancelled = false;
-
-    loadSessionFilter({
-      routeValue: routeLanguage,
-      getter: getSessionLanguageFilter,
-      setter: setLanguage,
-      fallback: DEFAULT_LANGUAGE,
-      isCancelled: () => cancelled,
-    });
-    loadSessionFilter({
-      routeValue: routeMode,
-      getter: getSessionModeFilter,
-      setter: setMode,
-      fallback: DEFAULT_MODE,
-      isCancelled: () => cancelled,
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     if (!theme) {
@@ -140,41 +114,26 @@ export default function GuessFeedScreen({ navigation, route }: GuessFeedScreenPr
     setIsModeFilterModalVisible(false);
   };
 
-  const handleSelectLanguage = async (code: string) => {
-    await saveSessionLanguageFilter(code);
-    setLanguage(code);
+  const handleSelectLanguage = (code: string) => {
+    setLanguageFilter(code);
     setIsFilterModalVisible(false);
   };
 
-  const handleSelectMode = async (filterMode: string) => {
-    await saveSessionModeFilter(filterMode);
-    setMode(filterMode);
+  const handleSelectMode = (filterMode: string) => {
+    setModeFilter(filterMode);
     setIsModeFilterModalVisible(false);
   };
 
   const startGuessing = ({ item }: { item: SwipeItem }) => {
     navigation.navigate('GuessScreen', {
-      ...route.params,
       ...item,
       hiddenLocation: item?.hiddenLocation ?? item?.touchLocation,
       category,
-      language: language || DEFAULT_LANGUAGE,
-      filterMode: mode || DEFAULT_MODE,
+      skipInstructions,
+      scope,
+      activeGroup,
     });
   };
-
-  if (!routeLanguage && language === null) {
-    return (
-      <>
-        <Text style={styles.hiddenCurrent} testID="guess-feed.filter.language.current">
-          {DEFAULT_LANGUAGE}
-        </Text>
-        <Text style={styles.hiddenCurrent} testID="guess-feed.filter.mode.current">
-          {DEFAULT_MODE}
-        </Text>
-      </>
-    );
-  }
 
   return (
     <PrivateGroupThemeProvider group={group}>

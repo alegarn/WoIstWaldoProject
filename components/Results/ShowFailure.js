@@ -6,6 +6,7 @@ import ResultChoices from './ResultChoices';
 import TutorialOverlay from '../UI/TutorialOverlay';
 import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { useAuthContext } from '../../store/auth-context';
+import { useSessionModeFilter } from '../../store/sessionFilter-context';
 import { flush } from '../../utils/sessionScoreStore';
 
 
@@ -35,6 +36,10 @@ export default function ShowFailure({ navigation, route }) {
   } = route?.params;
 
   const isPrivateScope = scope?.kind === 'private';
+
+  // Session mode filter (context), NOT the card's own `mode` route param above —
+  // distinct concerns: `mode` = card's stored shape mode (retry path), `sessionMode` = filter.
+  const { mode: sessionMode } = useSessionModeFilter();
 
   const pulse = useRef(new Animated.Value(0)).current;
 
@@ -94,6 +99,7 @@ export default function ShowFailure({ navigation, route }) {
     currentListId: listId,
     isTutorial,
     scope: isPrivateScope ? scope : undefined,
+    mode: sessionMode,
   });
 
   return (

@@ -38,8 +38,11 @@ import React from 'react';
 import { act, create } from 'react-test-renderer';
 
 import ShowFailure from '../components/Results/ShowFailure';
+import SessionFilterProvider from '../store/sessionFilter-context';
 import { navigateToNextGuess as mockedNavigateToNextGuess } from '../utils/guessNavigation';
 import { flush as mockedFlush } from '../utils/sessionScoreStore';
+
+const localStoreMock = jest.requireMock('../utils/localStore');
 
 function buildRoute(overrides = {}) {
   return {
@@ -152,12 +155,15 @@ describe('ShowFailure', () => {
       await props.onNextCard();
     });
 
-    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(navigation, {
-      category: route.params.category,
-      language: 'en',
-      currentListId: 42,
-      isTutorial: true,
-    });
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(
+      navigation,
+      expect.objectContaining({
+        category: route.params.category,
+        language: 'en',
+        currentListId: 42,
+        isTutorial: true,
+      })
+    );
   });
 
   it('preserves private scope when retrying and advancing to the next card', async () => {
@@ -186,12 +192,41 @@ describe('ShowFailure', () => {
       await props.onNextCard();
     });
 
-    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(navigation, {
-      category: route.params.category,
-      language: 'en',
-      currentListId: 42,
-      isTutorial: false,
-      scope,
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(
+      navigation,
+      expect.objectContaining({
+        category: route.params.category,
+        language: 'en',
+        currentListId: 42,
+        isTutorial: false,
+        scope,
+      })
+    );
+  });
+
+  it('keeps the session mode filter alive on lose→next: the payload carries the stored mode', async () => {
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
+
+    const navigation = { replace: jest.fn(), reset: jest.fn() };
+    const route = buildRoute({ listId: 42 });
+
+    let renderer;
+    await act(async () => {
+      renderer = create(
+        <SessionFilterProvider>
+          <ShowFailure navigation={navigation} route={route} />
+        </SessionFilterProvider>
+      );
     });
+
+    const props = mockResultChoices.mock.calls.at(-1)[0];
+    await act(async () => {
+      await props.onNextCard();
+    });
+
+    expect(mockedNavigateToNextGuess).toHaveBeenCalledWith(
+      navigation,
+      expect.objectContaining({ mode: 'shape' })
+    );
   });
 });

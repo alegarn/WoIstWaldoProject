@@ -213,6 +213,7 @@ import GuessScreenBase from '../screens/GuessScreens/GuessScreen';
 import GuessPictureBase from '../components/Picture/GuessPicture';
 import ShowFailure from '../components/Results/ShowFailure';
 import { AuthContext } from '../store/auth-context';
+import SessionFilterProvider from '../store/sessionFilter-context';
 import { applySuccessSideEffects, bufferWinScore, resolveNextGuessParams } from '../utils/handleGuessOutcome';
 import { resolveNextCardWithServerFallback } from '../utils/nextCardAdvancer';
 import { fetchCardBatch } from '../services/cardDeck';
@@ -238,6 +239,7 @@ const AsyncStorage = (
     };
   }
 ).default;
+const localStoreMock = jest.requireMock('../utils/localStore') as { __store: Map<string, string> };
 
 type LooseGuessScreenProps = { navigation: unknown; route: { params: Record<string, unknown> } };
 const GuessScreen = GuessScreenBase as unknown as React.FC<LooseGuessScreenProps>;
@@ -279,7 +281,6 @@ function baseParams(overrides: Record<string, unknown> = {}) {
     isTutorial: false,
     skipInstructions: true,
     category: { id: 'cat-1', key: 'nature' },
-    language: 'fr',
     ...overrides,
   };
 }
@@ -380,8 +381,17 @@ async function renderGuessScreen(
 ): Promise<ScreenHandle> {
   const routeRef = { current: { params: { ...params } } };
   const providerValue = authValue as React.ComponentProps<typeof AuthContext.Provider>['value'];
+  // Session language filter is seeded FILE-WIDE ('fr' deck namespace pins); the
+  // session MODE filter stays unseeded unless a test seeds it explicitly.
+  localStoreMock.__store.set('sessionLanguageFilter', 'fr');
   const wrap = (ui: React.ReactElement) =>
-    authValue ? <AuthContext.Provider value={providerValue}>{ui}</AuthContext.Provider> : ui;
+    authValue ? (
+      <AuthContext.Provider value={providerValue}>
+        <SessionFilterProvider>{ui}</SessionFilterProvider>
+      </AuthContext.Provider>
+    ) : (
+      <SessionFilterProvider>{ui}</SessionFilterProvider>
+    );
 
   const screen = await render(wrap(<GuessScreen navigation={navigation} route={routeRef.current} />));
   const rerenderWithParams = async (next: Record<string, unknown>) => {
@@ -1756,7 +1766,8 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the win-advance resolve carries filterMode as mode — NEVER the card route mode', async () => {
     serveSuccessiveNextCards();
-    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
+    const handle = await renderGuessScreen(baseParams({ mode: 'point' }));
 
     await playWinCycle(handle);
 
@@ -1770,7 +1781,8 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the played-card side effects key on filterMode, not the card mode', async () => {
     serveSuccessiveNextCards();
-    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
+    const handle = await renderGuessScreen(baseParams({ mode: 'point' }));
 
     await playWinCycle(handle);
 
@@ -1784,11 +1796,12 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the deck-ahead warmer reads the filter-mode deck namespace', async () => {
     serveSuccessiveNextCards();
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
     await seedDeck('nature', 'fr', [
       { listId: 4, pictureId: 'ahead-1', imageFile: 'file:///ahead-1.jpg' },
       { listId: 5, pictureId: 'ahead-2', imageFile: 'file:///ahead-2.jpg' },
     ], 'shape');
-    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    const handle = await renderGuessScreen(baseParams({ mode: 'point' }));
 
     await flush();
 
@@ -1797,7 +1810,8 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('the win prefetch runs against the filter-mode namespace', async () => {
     serveSuccessiveNextCards();
-    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }));
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
+    const handle = await renderGuessScreen(baseParams({ mode: 'point' }));
 
     await playWinCycle(handle);
 
@@ -1810,10 +1824,11 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
 
   it('"Switch category" clears only the filter-mode exhausted marker', async () => {
     resolveNextGuessParamsMock.mockResolvedValue(null);
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
     await AsyncStorage.setItem('exhaustedCategory:nature:fr:shape', '1');
     await AsyncStorage.setItem('exhaustedCategory:nature:fr:any', '1');
     const navigation = makeNav();
-    const handle = await renderGuessScreen(baseParams({ mode: 'point', filterMode: 'shape' }), navigation);
+    const handle = await renderGuessScreen(baseParams({ mode: 'point' }), navigation);
 
     await confirmGuess(handle);
     await dismissWinOverlay(handle);
@@ -1828,7 +1843,7 @@ describe('GuessScreen session filter threading (D8 filterMode)', () => {
   });
 });
 
-describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan 3a)', () => {
+describe('GuessScreen filterMode forwarding to GuessPicture (context-fed filterMode)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     resolveNextGuessParamsMock.mockReset().mockResolvedValue({ params: { listId: 4 } });
@@ -1867,16 +1882,18 @@ describe('GuessScreen filterMode forwarding to GuessPicture (shape-mode-cue plan
   }
 
   it('forwards the raw route filterMode to GuessPicture, unnormalized', async () => {
+    localStoreMock.__store.set('sessionModeFilter', 'shape');
     const handle = await renderGuessScreen(baseParams({ filterMode: 'shape' }));
     await flush();
 
     expect(renderedGuessPictureProps(handle).filterMode).toBe('shape');
   });
 
-  it('forwards the route filterMode raw: absent stays absent (GuessPicture owns normalization)', async () => {
+  it('forwards the filterMode raw: never-set stays null (GuessPicture owns normalization)', async () => {
+    localStoreMock.__store.delete('sessionModeFilter');
     const handle = await renderGuessScreen(baseParams());
     await flush();
 
-    expect(renderedGuessPictureProps(handle).filterMode).toBeUndefined();
+    expect(renderedGuessPictureProps(handle).filterMode).toBeNull();
   });
 });

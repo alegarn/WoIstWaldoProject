@@ -116,6 +116,7 @@ jest.mock('../utils/auth', () => ({
 }));
 
 jest.mock('../utils/storageDatum', () => ({
+  ...jest.requireActual('../utils/storageDatum'),
   getOnboardingCompleted: jest.fn(),
   getSessionLanguageFilter: jest.fn(),
   saveSessionLanguageFilter: jest.fn(),
@@ -138,6 +139,7 @@ import { act, create } from 'react-test-renderer';
 
 import GuessFeedScreen from '../screens/GuessScreens/GuessFeedScreen';
 import { Root } from '../App';
+import SessionFilterProvider from '../store/sessionFilter-context';
 import { AuthContext } from '../store/auth-context';
 import { bootstrapStoredAuthSession } from '../utils/auth';
 import {
@@ -148,12 +150,27 @@ import {
   saveSessionModeFilter,
 } from '../utils/storageDatum';
 
+const localStoreMock = jest.requireMock('../utils/localStore');
+
+function seedSessionFilters({ language, mode }) {
+  localStoreMock.__store.delete('preferredLanguage');
+  localStoreMock.__store.delete('sessionLanguageFilter');
+  localStoreMock.__store.delete('sessionModeFilter');
+  if (language !== undefined) {
+    localStoreMock.__store.set('sessionLanguageFilter', language);
+  }
+  if (mode !== undefined) {
+    localStoreMock.__store.set('sessionModeFilter', mode);
+  }
+}
+
 describe('GuessFeedScreen', () => {
   const mountedRenderers = [];
 
   beforeEach(() => {
     jest.clearAllMocks();
     mockSwipeImageMounts.length = 0;
+    seedSessionFilters({ language: 'fr' });
     getOnboardingCompleted.mockResolvedValue(true);
     getSessionLanguageFilter.mockResolvedValue('fr');
     saveSessionLanguageFilter.mockResolvedValue(undefined);
@@ -180,15 +197,6 @@ describe('GuessFeedScreen', () => {
     await Promise.resolve();
   }
 
-  function createDeferred() {
-    let resolve;
-    const promise = new Promise((promiseResolve) => {
-      resolve = promiseResolve;
-    });
-
-    return { promise, resolve };
-  }
-
   function makeRoute(overrides = {}) {
     return {
       params: {
@@ -209,7 +217,11 @@ describe('GuessFeedScreen', () => {
     let renderer;
 
     await act(async () => {
-      renderer = create(<GuessFeedScreen navigation={navigation} route={route} />);
+      renderer = create(
+        <SessionFilterProvider>
+          <GuessFeedScreen navigation={navigation} route={route} />
+        </SessionFilterProvider>
+      );
       await flushEffects();
     });
 
@@ -218,7 +230,7 @@ describe('GuessFeedScreen', () => {
     return renderer;
   }
 
-  it('prefers explicit route language over stored session filter on mount', async () => {
+  it('renders the stored session filter at first render even when route params carry language (context wins)', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: 'de' });
     const renderer = await renderScreen(navigation, route);
@@ -226,14 +238,15 @@ describe('GuessFeedScreen', () => {
     expect(mockSwipeInstructions).toHaveBeenCalled();
     expect(mockSwipeInstructions.mock.calls[0][0].screenWidth).toBe(320);
     expect(mockSwipeImage).not.toHaveBeenCalled();
-    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
+    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('fr');
+    expect(getSessionLanguageFilter).not.toHaveBeenCalled();
 
     dismissSwipeInstructions(renderer);
 
     expect(mockSwipeImage).toHaveBeenCalledTimes(1);
     const props = mockSwipeImage.mock.calls[0][0];
     expect(props.category).toEqual({ id: 'cat-1', key: 'nature' });
-    expect(props.language).toBe('de');
+    expect(props.language).toBe('fr');
     expect(props.screenWidth).toBe(320);
     expect(props.screenHeight).toBe(640);
     expect(typeof props.startGuessing).toBe('function');
@@ -241,38 +254,26 @@ describe('GuessFeedScreen', () => {
     expect(getSessionLanguageFilter).not.toHaveBeenCalled();
   });
 
-  it('falls back to stored session filter when route does not provide language', async () => {
+  it('renders the stored session language filter without an async restore pass (mount race dead)', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
-    const deferredLanguage = createDeferred();
-
-    getSessionLanguageFilter.mockReturnValue(deferredLanguage.promise);
-
     const renderer = await renderScreen(navigation, route);
 
-    expect(mockSwipeImage).not.toHaveBeenCalled();
-    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('any');
-
-    await act(async () => {
-      deferredLanguage.resolve('fr');
-      await flushEffects();
-    });
-
-    expect(getSessionLanguageFilter).toHaveBeenCalledTimes(1);
+    expect(getSessionLanguageFilter).not.toHaveBeenCalled();
     expect(mockSwipeInstructions).toHaveBeenCalledTimes(1);
     expect(mockSwipeImage).not.toHaveBeenCalled();
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('fr');
 
     dismissSwipeInstructions(renderer);
 
-    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].language).toBe('fr');
+    expect(mockSwipeImage.mock.calls[0][0].language).toBe('fr');
   });
 
   it("no route language and no stored filter → SwipeImage receives language 'any' (matches GuessPathScreen navigation fallback, I6)", async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
 
-    getSessionLanguageFilter.mockResolvedValue(null);
+    seedSessionFilters({});
 
     const renderer = await renderScreen(navigation, route);
 
@@ -284,11 +285,11 @@ describe('GuessFeedScreen', () => {
     expect(mockSwipeImage.mock.calls[0][0].language).toBe('any');
   });
 
-  it("startGuessing forwards 'any' — never 'en' — when unset", async () => {
+  it('startGuessing injects no language override — GuessScreen reads the context', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
 
-    getSessionLanguageFilter.mockResolvedValue(null);
+    seedSessionFilters({});
 
     const renderer = await renderScreen(navigation, route);
 
@@ -306,17 +307,13 @@ describe('GuessFeedScreen', () => {
     });
 
     expect(navigation.navigate).toHaveBeenCalledTimes(1);
-    expect(navigation.navigate).toHaveBeenCalledWith(
-      'GuessScreen',
-      expect.objectContaining({ language: 'any' })
-    );
+    expect(navigation.navigate.mock.calls[0][1].language).toBeUndefined();
     expect(navigation.navigate.mock.calls[0][1].language).not.toBe('en');
   });
 
-  it('routes startGuessing to GuessScreen carrying the swiped item, route params, category, and language', async () => {
+  it('routes startGuessing to GuessScreen carrying the swiped item and the used route params (category, scope, activeGroup)', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({
-      isTutorial: true,
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 6 },
     });
@@ -341,8 +338,6 @@ describe('GuessFeedScreen', () => {
 
     expect(navigation.navigate).toHaveBeenCalledWith('GuessScreen', {
       category: { id: 'cat-1', key: 'nature' },
-      language: 'fr',
-      isTutorial: true,
       scope: { kind: 'private', groupId: 'g-1' },
       activeGroup: { isOwnedByViewer: true, memberCount: 6 },
       pictureId: 'img-1',
@@ -351,7 +346,6 @@ describe('GuessFeedScreen', () => {
       description: 'Find Waldo',
       touchLocation: { x: 0.5, y: 0.5 },
       hiddenLocation: { x: 0.5, y: 0.5 },
-      filterMode: 'any',
     });
   });
 
@@ -450,9 +444,11 @@ describe('GuessFeedScreen', () => {
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.language.current' }).props.children).toBe('de');
   });
 
-  it('seeds the mode filter from the route mode param without reading storage', async () => {
+  it('feeds the mode filter from context on first render (route mode param no longer seeds state)', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
-    const route = makeRoute({ mode: 'point' });
+    const route = makeRoute({ mode: 'any' });
+
+    seedSessionFilters({ language: 'fr', mode: 'point' });
     const renderer = await renderScreen(navigation, route);
 
     expect(getSessionModeFilter).not.toHaveBeenCalled();
@@ -464,28 +460,19 @@ describe('GuessFeedScreen', () => {
     expect(mockSwipeImage.mock.calls[0][0].mode).toBe('point');
   });
 
-  it('falls back to the stored session mode filter, then to the any sentinel', async () => {
+  it("defaults the mode filter to the any sentinel when nothing is stored", async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
-    const deferredMode = createDeferred();
 
-    getSessionModeFilter.mockReturnValue(deferredMode.promise);
+    seedSessionFilters({});
 
     const renderer = await renderScreen(navigation, route);
 
     expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('any');
 
-    await act(async () => {
-      deferredMode.resolve('shape');
-      await flushEffects();
-    });
-
-    expect(getSessionModeFilter).toHaveBeenCalledTimes(1);
-    expect(renderer.root.findByProps({ testID: 'guess-feed.filter.mode.current' }).props.children).toBe('shape');
-
     dismissSwipeInstructions(renderer);
 
-    expect(mockSwipeImage.mock.calls[mockSwipeImage.mock.calls.length - 1][0].mode).toBe('shape');
+    expect(mockSwipeImage.mock.calls[0][0].mode).toBe('any');
   });
 
   it('opens the mode filter modal when the badge detail mode button requests it', async () => {
@@ -531,12 +518,11 @@ describe('GuessFeedScreen', () => {
     expect(mockSwipeImageMounts).toEqual(['nature:fr:any', 'nature:fr:shape']);
   });
 
-  it('startGuessing threads filterMode beside the card mode without shadowing it (D8)', async () => {
+  it('startGuessing threads no filterMode — the card mode stays unshadowed (D8, context-fed)', async () => {
     const navigation = { navigate: jest.fn(), goBack: jest.fn() };
     const route = makeRoute({ language: undefined });
 
-    getSessionLanguageFilter.mockResolvedValue('fr');
-    getSessionModeFilter.mockResolvedValue('point');
+    seedSessionFilters({ language: 'fr', mode: 'point' });
 
     const renderer = await renderScreen(navigation, route);
 
@@ -557,7 +543,7 @@ describe('GuessFeedScreen', () => {
 
     const params = navigation.navigate.mock.calls[0][1];
     expect(params.mode).toBe('shape');
-    expect(params.filterMode).toBe('point');
+    expect(params.filterMode).toBeUndefined();
   });
 });
 
@@ -565,6 +551,7 @@ describe('GuessFeedScreen App header wiring', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     recordedScreens.length = 0;
+    seedSessionFilters({});
     bootstrapStoredAuthSession.mockResolvedValue(true);
   });
 

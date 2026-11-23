@@ -4,8 +4,11 @@ import { resolveNextCard } from './nextCardResolver';
  * @deprecated As of the streak-continuity refactor (planning/features/streak-continuity-guess-path.md T1.10),
  *             this function is NOT called from the GuessScreen advance path. The advance path now uses
  *             `useReducer(advanceReducer, …)` (utils/advanceState.ts) and never bounces to the feed.
- *             Retained for external callers (ShowSuccess.js, ShowFailure.js). Do NOT add new callers —
- *             new advance logic should go through the state machine in GuessScreen.
+ * Retained for external callers (ShowSuccess.js, ShowFailure.js). Do NOT add new callers —
+ * new advance logic should go through the state machine in GuessScreen.
+ *
+ *             Callers source `mode` from `useSessionModeFilter()` (session filter context) —
+ *             the session mode filter must survive lose/win → next-card navigation.
  *
  *             Navigates the player to the next guess card by bouncing through GuessFeedScreen.
  *             This is a bounce — it breaks the streak. Prefer the in-screen advance path.
@@ -15,16 +18,16 @@ import { resolveNextCard } from './nextCardResolver';
  * cache only, no network) and reset to a clean navigation stack so Back from
  * GuessScreen lands on the feed (decision D3). Mirrors the GuessScreen param
  * contract of GuessFeedScreen.startGuessing (spread item, hiddenLocation alias,
- * category, language) so it lives in one place. Always navigates: when a next
+ * category) so it lives in one place. Always navigates: when a next
  * card is resolved it resets to a 4-route stack ending on GuessScreen; when the
  * deck is exhausted it resets to a 3-route feed stack ending on GuessFeedScreen.
  * The resolved category is carried in BOTH GuessScreen and the back-stack
  * GuessFeedScreen so Back from an "All" card lands on an "All" feed.
  */
-export async function navigateToNextGuess(navigation, { category, language, currentListId, isTutorial, scope }) {
+export async function navigateToNextGuess(navigation, { category, language, currentListId, isTutorial, scope, mode }) {
   const isPrivateScope = scope?.kind === 'private';
 
-  const result = await resolveNextCard({ category, language, currentListId, scope });
+  const result = await resolveNextCard({ category, language, currentListId, scope, mode });
 
   if (!result) {
     const homeRoute = isPrivateScope
@@ -34,8 +37,8 @@ export async function navigateToNextGuess(navigation, { category, language, curr
       ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
       : { name: 'GuessPathScreen', params: { isTutorial } };
     const feedRoute = isPrivateScope
-      ? { name: 'GuessFeedScreen', params: { category, language, scope, skipInstructions: true } }
-      : { name: 'GuessFeedScreen', params: { category, language, skipInstructions: true } };
+      ? { name: 'GuessFeedScreen', params: { category, scope, skipInstructions: true } }
+      : { name: 'GuessFeedScreen', params: { category, skipInstructions: true } };
 
     navigation.reset({
       index: isPrivateScope ? 3 : 2,
@@ -54,13 +57,12 @@ export async function navigateToNextGuess(navigation, { category, language, curr
     ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
     : { name: 'GuessPathScreen', params: { isTutorial } };
   const feedRoute = isPrivateScope
-    ? { name: 'GuessFeedScreen', params: { category: feedCategory, language, scope } }
-    : { name: 'GuessFeedScreen', params: { category: feedCategory, language } };
+    ? { name: 'GuessFeedScreen', params: { category: feedCategory, scope } }
+    : { name: 'GuessFeedScreen', params: { category: feedCategory } };
   const guessParams = {
     ...result.card,
     hiddenLocation: result.card?.hiddenLocation ?? result.card?.touchLocation,
     category: result.category,
-    language,
     isTutorial,
     skipInstructions: true,
   };
