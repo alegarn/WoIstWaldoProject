@@ -458,6 +458,8 @@
       "hideImageLabel": "Imagen para esconder",
       "shapeSurfaceLabel": "Dibuja un contorno alrededor del escondite",
       "modeCueLabel": "Modo forma: dibuja el contorno",
+      "hideCueLabel": "Demo de forma: traza el contorno exacto",
+      "hideCueFailLabel": "Demasiado suelto — el contorno no cubrió el lugar",
       "shapeClearLabel": "Borrar el contorno",
       "shapeRedrawLabel": "Volver a dibujar el contorno",
       "shapeTooSimple": "Contorno demasiado simple — dibuja una forma cerrada alrededor del lugar",

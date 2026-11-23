@@ -28,6 +28,8 @@ jest.mock('react-native', () => {
       }
       callback?.();
     },
+    stop: () => {},
+    reset: () => {},
   });
   actualRN.Animated.delay = () => ({
     start: () => {},
@@ -368,6 +370,43 @@ describe('HidePicture', () => {
       await firePrecisionPan();
       expect(screen.queryByTestId('game.picture.hide-target-wrap')).not.toBeNull();
       expect(screen.queryByTestId('game.picture.clear-hide')).not.toBeNull();
+    });
+  });
+
+  describe('hide shape cue (one-shot)', () => {
+    it('renders the shape cue when the shape chip is selected', async () => {
+      const screen = await renderToPicture();
+
+      expect(screen.queryByTestId('game.picture.hide-cue')).toBeNull();
+
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(screen.queryByTestId('game.picture.hide-cue')).not.toBeNull();
+    });
+
+    it('removes the cue on point chip press and does not re-render it when shape is re-selected (one-shot latch)', async () => {
+      const screen = await renderToPicture();
+
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      expect(screen.queryByTestId('game.picture.hide-cue')).not.toBeNull();
+
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-point'));
+      expect(screen.queryByTestId('game.picture.hide-cue')).toBeNull();
+
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+      expect(screen.queryByTestId('game.picture.hide-cue')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-surface')).not.toBeNull();
+    });
+
+    it('in e2e mode, the shape cue is suppressed while the outline auto-seed and confirm modal stay intact', async () => {
+      setE2EMode(true);
+      const screen = await renderToPicture();
+
+      await fireEvent.press(screen.getByTestId('game.picture.mode-chip-shape'));
+
+      expect(screen.queryByTestId('game.picture.hide-cue')).toBeNull();
+      expect(screen.queryByTestId('game.picture.shape-outline')).not.toBeNull();
+      expect(confirmModalQuery(screen)).not.toBeNull();
     });
   });
 

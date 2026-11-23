@@ -6,6 +6,7 @@ import { handleImageOrientation } from "../../utils/orientation";
 import { handlePicturePress, buildSelectionFromPixels } from '../../utils/targetLocation';
 
 import ShowPicture from './ShowPicture';
+import HideShapeDemo from './HideShapeDemo';
 import GameInstructions from '../Instructions/GameInstructions';
 import RetractableSidebar from '../UI/RetractableSidebar';
 
@@ -37,6 +38,7 @@ export default function HidePicture({
   const [touchLocation, setTouchLocation] = useState(null);
   const [target, setTarget] = useState(null);
   const [showModal, setShowModal] = useState(false);
+  const [hasShownShapeCue, setHasShownShapeCue] = useState(false);
 
   const isShapeMode = mode === 'shape';
 
@@ -60,6 +62,9 @@ export default function HidePicture({
     setMode(nextMode);
     if (nextMode !== 'shape') {
       setOutline(null);
+      if (isShapeMode) {
+        setHasShownShapeCue(true);
+      }
       return;
     }
     // Mode-switch reset contract, both directions: entering point mode drops
@@ -238,6 +243,9 @@ export default function HidePicture({
     return(
       <>
         {renderPicture()}
+        {isShapeMode && !hasShownShapeCue && !isE2EMode() && (
+          <HideShapeDemo imageDimensionStyle={imageDimensionStyle} />
+        )}
         {renderModePicker()}
       </>
     );

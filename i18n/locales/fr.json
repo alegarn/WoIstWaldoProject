@@ -458,6 +458,8 @@
       "hideImageLabel": "Image à cacher",
       "shapeSurfaceLabel": "Dessinez un contour autour de la cachette",
       "modeCueLabel": "Mode forme : dessinez le contour",
+      "hideCueLabel": "Démo forme : suivez le contour exact",
+      "hideCueFailLabel": "Trop large — le contour a raté la cachette",
       "shapeClearLabel": "Effacer le contour",
       "shapeRedrawLabel": "Redessiner le contour",
       "shapeTooSimple": "Contour trop simple — dessinez une forme fermée autour de la cachette",

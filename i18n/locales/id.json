@@ -457,6 +457,8 @@
       "hideImageLabel": "Gambar penyembunyian",
       "shapeSurfaceLabel": "Gambar garis tepi di sekitar tempat persembunyian",
       "modeCueLabel": "Mode bentuk: gambar garis tepi",
+      "hideCueLabel": "Demo bentuk: gambar garis tepi dengan tepat",
+      "hideCueFailLabel": "Terlalu longgar — garis tepi meleset dari lokasinya",
       "shapeClearLabel": "Hapus garis tepi",
       "shapeRedrawLabel": "Gambar ulang garis tepi",
       "shapeTooSimple": "Garis tepi terlalu sederhana — gambar bentuk tertutup di sekitar lokasinya",

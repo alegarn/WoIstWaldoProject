@@ -458,6 +458,8 @@
       "hideImageLabel": "Versteckbild",
       "shapeSurfaceLabel": "Zeichne einen Umriss um das Versteck",
       "modeCueLabel": "Formmodus: Zeichne den Umriss",
+      "hideCueLabel": "Form-Demo: Zeichne den genauen Umriss",
+      "hideCueFailLabel": "Zu grob — der Umriss hat die Stelle verfehlt",
       "shapeClearLabel": "Umriss löschen",
       "shapeRedrawLabel": "Umriss neu zeichnen",
       "shapeTooSimple": "Umriss zu einfach — zeichne eine geschlossene Form um die Stelle",
