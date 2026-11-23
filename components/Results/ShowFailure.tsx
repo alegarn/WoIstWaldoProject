@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import type { FC } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
@@ -8,10 +9,54 @@ import { navigateToNextGuess } from '../../utils/guessNavigation';
 import { useAuthContext } from '../../store/auth-context';
 import { useSessionModeFilter } from '../../store/sessionFilter-context';
 import { flush } from '../../utils/sessionScoreStore';
+import type { AdScope } from '../../utils/adCadence';
+import type { Point } from '../../utils/shapeGeometry';
+import type { GuessNavigationProp } from '../../utils/guessNavigation';
 
+type HiddenLocation = { x: number; y: number };
+type GuessCategory = { id?: string; key?: string; [key: string]: unknown };
+type ImageMode = 'point' | 'shape';
+type ShapeOutline = Point[];
 
+type ShowFailureRouteParams = {
+  imageFile?: string;
+  pictureId?: string;
+  description?: string;
+  imageHeight?: number;
+  imageWidth?: number;
+  isPortrait?: boolean;
+  hiddenLocation?: HiddenLocation;
+  screenHeight?: number;
+  screenWidth?: number;
+  isTutorial?: boolean;
+  listId?: number;
+  category?: GuessCategory;
+  language?: string | null;
+  scope?: AdScope;
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
+};
 
-export default function ShowFailure({ navigation, route }) {
+type RetryParams = Omit<ShowFailureRouteParams, 'mode' | 'shape'> & {
+  mode?: ImageMode;
+  shape?: ShapeOutline | null;
+};
+
+// The navigation object crosses untyped .js boundaries (ResultChoices,
+// guessNavigation) and tests pass `Record<string, jest.Mock>`-style mocks, so
+// required members can't be enforced at this boundary — every member stays
+// optional and call sites cast to the shape they need.
+type ShowFailureNavigation = {
+  replace?(name: string, params?: Record<string, unknown>): void;
+  reset?(state: { index: number; routes: Array<{ name: string; params?: Record<string, unknown> }> }): void;
+};
+
+type ShowFailureProps = {
+  navigation: ShowFailureNavigation;
+  route: { params: ShowFailureRouteParams };
+};
+
+const ShowFailure: FC<ShowFailureProps> = ({ navigation, route }) => {
 
   const { t } = useTranslation();
   const authContext = useAuthContext();
@@ -65,7 +110,7 @@ export default function ShowFailure({ navigation, route }) {
 
 /* functions________________________________________________ */
   function retryGuess() {
-    const params = {
+    const params: RetryParams = {
       imageFile: imageFile,
       pictureId: pictureId,
       description: description,
@@ -90,10 +135,10 @@ export default function ShowFailure({ navigation, route }) {
       params.scope = scope;
     }
 
-    navigation.replace('GuessScreen', params);
+    (navigation as GuessNavigationProp & { replace(name: string, params?: Record<string, unknown>): void }).replace('GuessScreen', params);
   };
 
-  const handleNextCard = () => navigateToNextGuess(navigation, {
+  const handleNextCard = () => navigateToNextGuess(navigation as GuessNavigationProp, {
     category,
     language,
     currentListId: listId,
@@ -131,6 +176,8 @@ export default function ShowFailure({ navigation, route }) {
     </>
   );
 };
+
+export default ShowFailure;
 
 const styles = StyleSheet.create({
   container: {

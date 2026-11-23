@@ -1,10 +1,41 @@
 import { resolveNextCard } from './nextCardResolver';
+import type { ResolverCategory } from './nextCardResolver';
+
+type GuessRouteName =
+  | 'HomeScreen'
+  | 'PrivateHomeScreen'
+  | 'GuessPathScreen'
+  | 'GuessFeedScreen'
+  | 'GuessScreen';
+
+type GuessRoute = {
+  name: GuessRouteName;
+  params?: Record<string, unknown>;
+};
+
+/**
+ * Structural navigation contract for `navigateToNextGuess` (subset of the
+ * react-navigation navigation prop: only `reset`). Mirrors the
+ * `ResultNavigation` shape used by the result screens.
+ */
+export type GuessNavigationProp = {
+  reset: (state: { index: number; routes: GuessRoute[] }) => void;
+};
+
+export interface NavigateToNextGuessArgs {
+  category?: ResolverCategory | null;
+  language?: string | null;
+  currentListId?: number;
+  isTutorial?: boolean;
+  scope?: unknown;
+  mode?: string | null;
+}
 
 /**
  * @deprecated As of the streak-continuity refactor (planning/features/streak-continuity-guess-path.md T1.10),
  *             this function is NOT called from the GuessScreen advance path. The advance path now uses
  *             `useReducer(advanceReducer, …)` (utils/advanceState.ts) and never bounces to the feed.
- * Retained for external callers (ShowSuccess.js, ShowFailure.js). Do NOT add new callers —
+ * Retained for external callers (ShowSuccess.tsx, ShowFailure.tsx). Do NOT add new callers —
  * new advance logic should go through the state machine in GuessScreen.
  *
  *             Callers source `mode` from `useSessionModeFilter()` (session filter context) —
@@ -24,42 +55,40 @@ import { resolveNextCard } from './nextCardResolver';
  * The resolved category is carried in BOTH GuessScreen and the back-stack
  * GuessFeedScreen so Back from an "All" card lands on an "All" feed.
  */
-export async function navigateToNextGuess(navigation, { category, language, currentListId, isTutorial, scope, mode }) {
-  const isPrivateScope = scope?.kind === 'private';
+export async function navigateToNextGuess(navigation: GuessNavigationProp, { category, language, currentListId, isTutorial, scope, mode }: NavigateToNextGuessArgs): Promise<void> {
+  const isPrivateScope = !!scope && typeof scope === 'object' &&
+    (scope as { kind?: unknown }).kind === 'private';
 
   const result = await resolveNextCard({ category, language, currentListId, scope, mode });
 
+  const homeRoute: GuessRoute = isPrivateScope
+    ? { name: 'PrivateHomeScreen', params: { scope } }
+    : { name: 'HomeScreen' };
+  const guessPathRoute: GuessRoute = isPrivateScope
+    ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
+    : { name: 'GuessPathScreen', params: { isTutorial } };
+  const stackRoot: GuessRoute[] = isPrivateScope
+    ? [{ name: 'HomeScreen' }, homeRoute, guessPathRoute]
+    : [homeRoute, guessPathRoute];
+
   if (!result) {
-    const homeRoute = isPrivateScope
-      ? { name: 'PrivateHomeScreen', params: { scope } }
-      : { name: 'HomeScreen' };
-    const guessPathRoute = isPrivateScope
-      ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
-      : { name: 'GuessPathScreen', params: { isTutorial } };
-    const feedRoute = isPrivateScope
+    const feedRoute: GuessRoute = isPrivateScope
       ? { name: 'GuessFeedScreen', params: { category, scope, skipInstructions: true } }
       : { name: 'GuessFeedScreen', params: { category, skipInstructions: true } };
+    const routes: GuessRoute[] = [...stackRoot, feedRoute];
 
     navigation.reset({
-      index: isPrivateScope ? 3 : 2,
-      routes: isPrivateScope
-        ? [{ name: 'HomeScreen' }, homeRoute, guessPathRoute, feedRoute]
-        : [homeRoute, guessPathRoute, feedRoute],
+      index: routes.length - 1,
+      routes,
     });
     return;
   }
 
   const feedCategory = result.category;
-  const homeRoute = isPrivateScope
-    ? { name: 'PrivateHomeScreen', params: { scope } }
-    : { name: 'HomeScreen' };
-  const guessPathRoute = isPrivateScope
-    ? { name: 'GuessPathScreen', params: { isTutorial, scope } }
-    : { name: 'GuessPathScreen', params: { isTutorial } };
-  const feedRoute = isPrivateScope
+  const feedRoute: GuessRoute = isPrivateScope
     ? { name: 'GuessFeedScreen', params: { category: feedCategory, scope } }
     : { name: 'GuessFeedScreen', params: { category: feedCategory } };
-  const guessParams = {
+  const guessParams: Record<string, unknown> = {
     ...result.card,
     hiddenLocation: result.card?.hiddenLocation ?? result.card?.touchLocation,
     category: result.category,
@@ -71,18 +100,10 @@ export async function navigateToNextGuess(navigation, { category, language, curr
     guessParams.scope = scope;
   }
 
+  const routes: GuessRoute[] = [...stackRoot, feedRoute, { name: 'GuessScreen', params: guessParams }];
+
   navigation.reset({
-    index: isPrivateScope ? 4 : 3,
-    routes: isPrivateScope
-      ? [{ name: 'HomeScreen' }, homeRoute, guessPathRoute, feedRoute, { name: 'GuessScreen', params: guessParams }]
-      : [
-        homeRoute,
-        guessPathRoute,
-        feedRoute,
-        {
-          name: 'GuessScreen',
-          params: guessParams,
-        },
-      ],
+    index: routes.length - 1,
+    routes,
   });
 }
