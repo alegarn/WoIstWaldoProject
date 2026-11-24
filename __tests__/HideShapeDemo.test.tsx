@@ -1,4 +1,4 @@
-// HideShapeDemo RED suite (hide-shape-cue-tutorial-plan Task 2a).
+// HideShapeDemo GREEN contract suite (hide-shape-cue-tutorial-plan).
 //
 // Pins the Hide Shape Cue wiring contract: a `pointerEvents="none"` root
 // (`game.picture.hide-cue`) a11y-labeled via `game.picture.hideCueLabel`;
@@ -21,7 +21,7 @@
 import React from 'react';
 import { Animated, StyleSheet } from 'react-native';
 import type { TestInstance, TestNode } from 'test-renderer';
-import { act, render, RenderResult } from '@testing-library/react-native';
+import { act, render, type RenderResult } from '@testing-library/react-native';
 
 import HideShapeDemo from '../components/Picture/HideShapeDemo';
 import { demoFailScore } from '../utils/shapeDemoData';
@@ -30,7 +30,7 @@ import i18n from '../i18n';
 
 type DemoProps = { imageDimensionStyle: { width: number; height: number } };
 
-const Demo = HideShapeDemo as unknown as React.FC<DemoProps>;
+const Demo: React.FC<DemoProps> = HideShapeDemo;
 
 const IMAGE_DIMS = { width: 320, height: 240 };
 const MIN_DIM = Math.min(IMAGE_DIMS.width, IMAGE_DIMS.height);
@@ -42,6 +42,10 @@ const BAND_TEST_ID = 'game.picture.trace-band';
 const LABEL = i18n.t('game.picture.hideCueLabel');
 const FAIL_COPY = i18n.t('game.picture.hideCueFailLabel');
 const FAIL_PERCENT = `${Math.round(demoFailScore() * 100)}%`;
+// Explicitly off-center normalized fixture (traced barn element centroid,
+// planning/hide-shape-cue-element-trace-plan Decision): centered placeholder
+// data must not satisfy the mapping pin vacuously.
+const BARN_NORMALIZED_CENTER = { x: 0.583, y: 0.654 };
 
 // --- timing harness ----------------------------------------------------------
 
@@ -75,8 +79,10 @@ const advance = async (ms: number) => {
 
 type Style = Record<string, any>;
 
-async function renderDemo(): Promise<RenderResult> {
-  return render(<Demo imageDimensionStyle={IMAGE_DIMS} />);
+async function renderDemo(
+  dims: { width: number; height: number } = IMAGE_DIMS
+): Promise<RenderResult> {
+  return render(<Demo imageDimensionStyle={dims} />);
 }
 
 function styleOf(node: TestInstance): Style {
@@ -229,28 +235,44 @@ describe('HideShapeDemo', () => {
     expect(labeled!.props.pointerEvents).toBe('none');
   });
 
-  it('draws the ~18-segment tight contour in primaryColor, centred on the image within the min-dim demo box', async () => {
-    const view = await renderDemo();
-    await advance(1500);
+  it.each([
+    { name: 'portrait', dims: { width: 240, height: 320 } },
+    { name: 'landscape', dims: { width: 320, height: 240 } },
+    { name: 'square', dims: { width: 320, height: 320 } },
+  ])(
+    'draws the ~18-segment tight contour in primaryColor, mapped box-local from normalized demo space ($name)',
+    async ({ dims }: { name: string; dims: { width: number; height: number } }) => {
+      const minDim = Math.min(dims.width, dims.height);
+      const view = await renderDemo(dims);
+      await advance(1500);
 
-    const contourBars = findStrokeBars(view, GlobalStyle.color.primaryColor);
-    expect(contourBars.length).toBeGreaterThanOrEqual(CONTOUR_MIN_SEGMENTS);
-    expect(contourBars.length).toBeLessThanOrEqual(CONTOUR_MAX_SEGMENTS);
-    for (const bar of contourBars) {
-      const style = styleOf(bar);
-      expect(style.backgroundColor).toBe(GlobalStyle.color.primaryColor);
-      expect(style.transform[0].rotate).toMatch(/-?\d+(\.\d+)?deg$/);
+      const contourBars = findStrokeBars(view, GlobalStyle.color.primaryColor);
+      expect(contourBars.length).toBeGreaterThanOrEqual(CONTOUR_MIN_SEGMENTS);
+      expect(contourBars.length).toBeLessThanOrEqual(CONTOUR_MAX_SEGMENTS);
+      for (const bar of contourBars) {
+        const style = styleOf(bar);
+        expect(style.backgroundColor).toBe(GlobalStyle.color.primaryColor);
+        expect(style.transform[0].rotate).toMatch(/-?\d+(\.\d+)?deg$/);
+      }
+
+      const box = unionBox(contourBars.map((bar) => barBox(styleOf(bar))));
+      const extent = Math.max(box.maxX - box.minX, box.maxY - box.minY);
+      // Traced barn max normalized dim is 0.301 of the min side (plan Decision);
+      // floor pins the contour near full size, guarding only against a
+      // degenerate contour.
+      expect(extent).toBeGreaterThanOrEqual(0.295 * minDim);
+      expect(extent).toBeLessThanOrEqual(1.05 * minDim);
+      // demoBox is flex-centered inside the overlay, so contour px are
+      // box-local: expected center is norm × min side with no photo-rect
+      // offset terms.
+      const expectedCx = BARN_NORMALIZED_CENTER.x * minDim;
+      const expectedCy = BARN_NORMALIZED_CENTER.y * minDim;
+      const cx = (box.minX + box.maxX) / 2;
+      const cy = (box.minY + box.maxY) / 2;
+      expect(Math.abs(cx - expectedCx)).toBeLessThanOrEqual(0.02 * minDim);
+      expect(Math.abs(cy - expectedCy)).toBeLessThanOrEqual(0.02 * minDim);
     }
-
-    const box = unionBox(contourBars.map((bar) => barBox(styleOf(bar))));
-    const extent = Math.max(box.maxX - box.minX, box.maxY - box.minY);
-    expect(extent).toBeGreaterThanOrEqual(0.35 * MIN_DIM);
-    expect(extent).toBeLessThanOrEqual(1.05 * MIN_DIM);
-    const cx = (box.minX + box.maxX) / 2;
-    const cy = (box.minY + box.maxY) / 2;
-    expect(Math.abs(cx - IMAGE_DIMS.width / 2)).toBeLessThanOrEqual(0.12 * MIN_DIM);
-    expect(Math.abs(cy - IMAGE_DIMS.height / 2)).toBeLessThanOrEqual(0.12 * MIN_DIM);
-  });
+  );
 
   it('reveals contour segments staggered ~70ms apart: 1 after one frame, 2 by ≈86ms, all by ≈1.5s', async () => {
     const view = await renderDemo();

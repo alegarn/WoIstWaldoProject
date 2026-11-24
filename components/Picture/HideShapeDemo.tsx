@@ -9,6 +9,7 @@ import { corridorBandWidthPx } from '../../utils/shapeGeometry';
 import { SHAPE_TOLERANCE_RATIO } from '../../utils/shapeMatch';
 import {
   demoFailScore,
+  DEMO_IMAGE_SIZE_PX,
   resamplePolyline,
   TIGHT_CONTOUR_POINTS,
   LOOSE_CIRCLE_POINTS,
@@ -18,7 +19,6 @@ import TraceCorridor from './TraceCorridor';
 import { traceSegmentStyle } from './TraceInk';
 import type { TraceSegmentStyle } from './TraceInk';
 
-const DEMO_IMAGE_SIZE_PX = 320;
 const CONTOUR_SEGMENT_COUNT = 18;
 const CIRCLE_SEGMENT_COUNT = 10;
 const LINE_SEGMENT_COUNT = 18;
@@ -118,25 +118,30 @@ const HideShapeDemo: FC<HideShapeDemoProps> = ({ imageDimensionStyle }) => {
     imageDimensionStyle.width,
     imageDimensionStyle.height
   );
-  const demoOffsetX = (imageDimensionStyle.width - demoSide) / 2;
-  const demoOffsetY = (imageDimensionStyle.height - demoSide) / 2;
-
-  const toDemoPx = (point: Point): Point => ({
-    x: demoOffsetX + point.x * demoSide,
-    y: demoOffsetY + point.y * demoSide,
-  });
 
   const contourPointsPx = useMemo<Point[]>(
-    () => CONTOUR_POINTS.map(toDemoPx),
-    [demoOffsetX, demoOffsetY, demoSide]
+    () =>
+      CONTOUR_POINTS.map((point) => ({
+        x: point.x * demoSide,
+        y: point.y * demoSide,
+      })),
+    [demoSide]
   );
   const circlePointsPx = useMemo<Point[]>(
-    () => CIRCLE_POINTS.map(toDemoPx),
-    [demoOffsetX, demoOffsetY, demoSide]
+    () =>
+      CIRCLE_POINTS.map((point) => ({
+        x: point.x * demoSide,
+        y: point.y * demoSide,
+      })),
+    [demoSide]
   );
   const linePointsPx = useMemo<Point[]>(
-    () => LINE_POINTS.map(toDemoPx),
-    [demoOffsetX, demoOffsetY, demoSide]
+    () =>
+      LINE_POINTS.map((point) => ({
+        x: point.x * demoSide,
+        y: point.y * demoSide,
+      })),
+    [demoSide]
   );
 
   const bandWidthPx = corridorBandWidthPx(
