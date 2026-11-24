@@ -1,6 +1,8 @@
 // Demo data traces the barn element (red gambrel roof, center-right) of
-// assets/tutorial/farm_pict_hide_320.jpg; bad lines are sloppy user rings
-// around the same barn.
+// assets/tutorial/farm_pict_hide_320.jpg. The hide→guess teaching loop pairs a
+// loose hiding ring with three guesser attempts: two sloppy rings (both fail),
+// the exact barn trace (still fails — loose hides are unfair to guess), and an
+// almost-perfect follower that wins once the barn is hidden tightly.
 import type { Point } from './shapeGeometry';
 import { outlineMatchScore } from './shapeMatch';
 
@@ -60,26 +62,69 @@ export const LOOSE_CIRCLE_POINTS: Point[] = [
   { x: 0.566, y: 0.408 },
 ];
 
-export const FAILING_LINE_POINTS: Point[] = [
-  { x: 0.8, y: 0.656 },
-  { x: 0.777, y: 0.733 },
-  { x: 0.718, y: 0.788 },
-  { x: 0.65, y: 0.824 },
-  { x: 0.574, y: 0.811 },
-  { x: 0.501, y: 0.825 },
-  { x: 0.425, y: 0.805 },
-  { x: 0.37, y: 0.747 },
-  { x: 0.331, y: 0.676 },
-  { x: 0.364, y: 0.599 },
-  { x: 0.386, y: 0.534 },
-  { x: 0.419, y: 0.47 },
-  { x: 0.48, y: 0.426 },
-  { x: 0.553, y: 0.381 },
-  { x: 0.632, y: 0.415 },
-  { x: 0.691, y: 0.464 },
-  { x: 0.74, y: 0.516 },
-  { x: 0.76, y: 0.583 },
-  { x: 0.8, y: 0.656 },
+// Sloppy guess rings: wobbly circles that only partially follow the loose
+// hiding ring, so both fail honestly (A ≈ 0.38, B ≈ 0.2 over 320×320).
+export const SLOPPY_GUESS_A_POINTS: Point[] = [
+  { x: 0.859, y: 0.56 },
+  { x: 0.835, y: 0.698 },
+  { x: 0.713, y: 0.763 },
+  { x: 0.589, y: 0.774 },
+  { x: 0.47, y: 0.733 },
+  { x: 0.424, y: 0.617 },
+  { x: 0.436, y: 0.506 },
+  { x: 0.488, y: 0.407 },
+  { x: 0.589, y: 0.346 },
+  { x: 0.713, y: 0.356 },
+  { x: 0.804, y: 0.442 },
+  { x: 0.859, y: 0.56 },
+];
+
+export const SLOPPY_GUESS_B_POINTS: Point[] = [
+  { x: 0.852, y: 0.51 },
+  { x: 0.774, y: 0.606 },
+  { x: 0.688, y: 0.67 },
+  { x: 0.586, y: 0.639 },
+  { x: 0.511, y: 0.564 },
+  { x: 0.49, y: 0.448 },
+  { x: 0.573, y: 0.359 },
+  { x: 0.696, y: 0.307 },
+  { x: 0.791, y: 0.4 },
+  { x: 0.852, y: 0.51 },
+];
+
+// The follower's almost-barn trace: every TIGHT vertex nudged by a smooth
+// deterministic wobble (≤0.012 normalized, precomputed literal for stable
+// pins) — close enough to win (score ≈ 1.0, within the length cap).
+export const ALMOST_BARN_GUESS_POINTS: Point[] = [
+  { x: 0.546, y: 0.505 },
+  { x: 0.555, y: 0.499 },
+  { x: 0.566, y: 0.496 },
+  { x: 0.579, y: 0.496 },
+  { x: 0.592, y: 0.501 },
+  { x: 0.654, y: 0.555 },
+  { x: 0.694, y: 0.585 },
+  { x: 0.715, y: 0.604 },
+  { x: 0.726, y: 0.61 },
+  { x: 0.731, y: 0.618 },
+  { x: 0.726, y: 0.68 },
+  { x: 0.721, y: 0.738 },
+  { x: 0.713, y: 0.754 },
+  { x: 0.701, y: 0.767 },
+  { x: 0.685, y: 0.776 },
+  { x: 0.669, y: 0.78 },
+  { x: 0.628, y: 0.781 },
+  { x: 0.577, y: 0.783 },
+  { x: 0.526, y: 0.784 },
+  { x: 0.491, y: 0.785 },
+  { x: 0.473, y: 0.783 },
+  { x: 0.455, y: 0.776 },
+  { x: 0.441, y: 0.763 },
+  { x: 0.433, y: 0.747 },
+  { x: 0.429, y: 0.687 },
+  { x: 0.428, y: 0.622 },
+  { x: 0.426, y: 0.612 },
+  { x: 0.503, y: 0.554 },
+  { x: 0.546, y: 0.505 },
 ];
 
 function cumulativeSegmentLengths(points: Point[]): number[] {
@@ -142,10 +187,36 @@ export function resamplePolyline(
   return resampled;
 }
 
-export function demoFailScore(): number {
+export function looseHideVsSloppyGuessScores(): { a: number; b: number } {
+  return {
+    a: outlineMatchScore({
+      hiddenShape: LOOSE_CIRCLE_POINTS,
+      guessShape: SLOPPY_GUESS_A_POINTS,
+      imageWidth: DEMO_IMAGE_SIZE_PX,
+      imageHeight: DEMO_IMAGE_SIZE_PX,
+    }),
+    b: outlineMatchScore({
+      hiddenShape: LOOSE_CIRCLE_POINTS,
+      guessShape: SLOPPY_GUESS_B_POINTS,
+      imageWidth: DEMO_IMAGE_SIZE_PX,
+      imageHeight: DEMO_IMAGE_SIZE_PX,
+    }),
+  };
+}
+
+export function looseHideVsExactGuessScore(): number {
+  return outlineMatchScore({
+    hiddenShape: LOOSE_CIRCLE_POINTS,
+    guessShape: TIGHT_CONTOUR_POINTS,
+    imageWidth: DEMO_IMAGE_SIZE_PX,
+    imageHeight: DEMO_IMAGE_SIZE_PX,
+  });
+}
+
+export function goodHideVsAlmostGuessScore(): number {
   return outlineMatchScore({
     hiddenShape: TIGHT_CONTOUR_POINTS,
-    guessShape: FAILING_LINE_POINTS,
+    guessShape: ALMOST_BARN_GUESS_POINTS,
     imageWidth: DEMO_IMAGE_SIZE_PX,
     imageHeight: DEMO_IMAGE_SIZE_PX,
   });

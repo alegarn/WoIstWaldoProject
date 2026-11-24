@@ -113,7 +113,16 @@ describe('locale files', () => {
       const file = resolve(__dirname, '..', 'i18n', 'locales', `${code}.json`);
       const parsed = JSON.parse(readFileSync(file, 'utf8'));
 
-      for (const key of ['hideCueLabel', 'hideCueFailLabel']) {
+      for (const key of [
+        'hideCueLabel',
+        'hideCueFailLabel',
+        'hideCueExactFailsLabel',
+        'hideCueBadHideCaption',
+        'hideCueGuessCaption',
+        'hideCueExactFailsCaption',
+        'hideCueGoodHideCaption',
+        'hideCueFollowCaption',
+      ]) {
         expect(typeof parsed.game?.picture?.[key]).toBe('string');
         expect(parsed.game.picture[key].length).toBeGreaterThan(0);
       }

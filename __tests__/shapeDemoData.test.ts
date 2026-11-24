@@ -1,19 +1,29 @@
 import type { Point } from '../utils/shapeGeometry';
-import { outlineMatchScore, isWinningTrace } from '../utils/shapeMatch';
+import {
+  outlineMatchScore,
+  isWinningTrace,
+} from '../utils/shapeMatch';
 import {
   TIGHT_CONTOUR_POINTS,
   LOOSE_CIRCLE_POINTS,
-  FAILING_LINE_POINTS,
+  SLOPPY_GUESS_A_POINTS,
+  SLOPPY_GUESS_B_POINTS,
+  ALMOST_BARN_GUESS_POINTS,
   resamplePolyline,
-  demoFailScore,
+  looseHideVsSloppyGuessScores,
+  looseHideVsExactGuessScore,
+  goodHideVsAlmostGuessScore,
+  DEMO_IMAGE_SIZE_PX,
 } from '../utils/shapeDemoData';
 
-const DEMO_IMAGE_SIZE = 320;
+const DEMO_IMAGE_SIZE = DEMO_IMAGE_SIZE_PX;
 
 const POLYLINE_CASES: [string, Point[]][] = [
   ['TIGHT_CONTOUR_POINTS', TIGHT_CONTOUR_POINTS],
   ['LOOSE_CIRCLE_POINTS', LOOSE_CIRCLE_POINTS],
-  ['FAILING_LINE_POINTS', FAILING_LINE_POINTS],
+  ['SLOPPY_GUESS_A_POINTS', SLOPPY_GUESS_A_POINTS],
+  ['SLOPPY_GUESS_B_POINTS', SLOPPY_GUESS_B_POINTS],
+  ['ALMOST_BARN_GUESS_POINTS', ALMOST_BARN_GUESS_POINTS],
 ];
 
 function boundingBox(points: Point[]): { minX: number; minY: number; maxX: number; maxY: number } {
@@ -46,6 +56,17 @@ function totalArcLength(points: Point[]): number {
   return total;
 }
 
+function nearestVertexDistance(point: Point, vertices: Point[]): number {
+  let min = Infinity;
+  for (const vertex of vertices) {
+    const distance = Math.hypot(point.x - vertex.x, point.y - vertex.y);
+    if (distance < min) {
+      min = distance;
+    }
+  }
+  return min;
+}
+
 describe('shapeDemoData polylines', () => {
   it.each(POLYLINE_CASES)('%s is a closed loop of ≥8 points inside [0,1]', (_name, points) => {
     expect(points.length).toBeGreaterThanOrEqual(8);
@@ -58,16 +79,16 @@ describe('shapeDemoData polylines', () => {
     }
   });
 
-  it('tight and loose have distinct bounding boxes', () => {
-    const tight = boundingBox(TIGHT_CONTOUR_POINTS);
-    const loose = boundingBox(LOOSE_CIRCLE_POINTS);
-    expect(tight).not.toEqual(loose);
-  });
-
-  it('failing line is distinct from loose circle', () => {
-    const failing = boundingBox(FAILING_LINE_POINTS);
-    const loose = boundingBox(LOOSE_CIRCLE_POINTS);
-    expect(failing).not.toEqual(loose);
+  it('every polyline pair has a distinct bounding box', () => {
+    for (let i = 0; i < POLYLINE_CASES.length; i++) {
+      for (let j = i + 1; j < POLYLINE_CASES.length; j++) {
+        const [nameA, pointsA] = POLYLINE_CASES[i];
+        const [nameB, pointsB] = POLYLINE_CASES[j];
+        expect(`${nameA}|${nameB}: ${JSON.stringify(boundingBox(pointsA))}`).not.toBe(
+          `${nameA}|${nameB}: ${JSON.stringify(boundingBox(pointsB))}`
+        );
+      }
+    }
   });
 });
 
@@ -101,21 +122,16 @@ describe('barn element trace', () => {
     expect(extent).toBeLessThanOrEqual(0.45);
   });
 
-  it('LOOSE and FAILING centroids sit within 0.12 per axis of the TIGHT centroid (0.583, 0.654)', () => {
+  it('LOOSE centroid sits within 0.12 per axis of the TIGHT centroid (0.583, 0.654)', () => {
     const tight = centroid(TIGHT_CONTOUR_POINTS);
-    for (const points of [LOOSE_CIRCLE_POINTS, FAILING_LINE_POINTS]) {
-      const center = centroid(points);
-      expect(Math.abs(center.x - tight.x)).toBeLessThanOrEqual(CENTROID_TOLERANCE);
-      expect(Math.abs(center.y - tight.y)).toBeLessThanOrEqual(CENTROID_TOLERANCE);
-    }
+    const center = centroid(LOOSE_CIRCLE_POINTS);
+    expect(Math.abs(center.x - tight.x)).toBeLessThanOrEqual(CENTROID_TOLERANCE);
+    expect(Math.abs(center.y - tight.y)).toBeLessThanOrEqual(CENTROID_TOLERANCE);
   });
 
-  it.each([
-    ['LOOSE_CIRCLE_POINTS', LOOSE_CIRCLE_POINTS],
-    ['FAILING_LINE_POINTS', FAILING_LINE_POINTS],
-  ])('%s bbox strictly contains the TIGHT bbox on ≥3 of 4 edges', (_name, points) => {
+  it('LOOSE bbox strictly contains the TIGHT bbox on ≥3 of 4 edges', () => {
     const tight = boundingBox(TIGHT_CONTOUR_POINTS);
-    const outer = boundingBox(points);
+    const outer = boundingBox(LOOSE_CIRCLE_POINTS);
     const containedEdges = [
       outer.minX < tight.minX,
       outer.minY < tight.minY,
@@ -123,6 +139,101 @@ describe('barn element trace', () => {
       outer.maxY > tight.maxY,
     ].filter(Boolean).length;
     expect(containedEdges).toBeGreaterThanOrEqual(3);
+  });
+
+  it('ALMOST_BARN vertices stay within 0.015 normalized of the nearest TIGHT vertex', () => {
+    for (const point of ALMOST_BARN_GUESS_POINTS) {
+      expect(nearestVertexDistance(point, TIGHT_CONTOUR_POINTS)).toBeLessThanOrEqual(0.015);
+    }
+  });
+});
+
+describe('demo pair matrix (outlineMatchScore over the 320×320 demo space)', () => {
+  const SCORE_PARAMS = {
+    imageWidth: DEMO_IMAGE_SIZE,
+    imageHeight: DEMO_IMAGE_SIZE,
+  };
+
+  it('loose hide vs sloppy guesses: both honest fails in their bands', () => {
+    const { a, b } = looseHideVsSloppyGuessScores();
+    expect(Number.isFinite(a)).toBe(true);
+    expect(Number.isFinite(b)).toBe(true);
+    expect(a).toBeGreaterThanOrEqual(0.15);
+    expect(a).toBeLessThanOrEqual(0.55);
+    expect(b).toBeGreaterThanOrEqual(0.05);
+    expect(b).toBeLessThanOrEqual(0.40);
+    expect(
+      isWinningTrace({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: SLOPPY_GUESS_A_POINTS,
+        ...SCORE_PARAMS,
+      })
+    ).toBe(false);
+    expect(
+      isWinningTrace({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: SLOPPY_GUESS_B_POINTS,
+        ...SCORE_PARAMS,
+      })
+    ).toBe(false);
+  });
+
+  it('punchline: the exact barn trace FAILS against the loose hide', () => {
+    const score = looseHideVsExactGuessScore();
+    expect(Number.isFinite(score)).toBe(true);
+    expect(score).toBeGreaterThanOrEqual(0.05);
+    expect(score).toBeLessThanOrEqual(0.45);
+    expect(
+      isWinningTrace({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: TIGHT_CONTOUR_POINTS,
+        ...SCORE_PARAMS,
+      })
+    ).toBe(false);
+  });
+
+  it('good hide vs almost-barn guess: the follower WINS', () => {
+    const score = goodHideVsAlmostGuessScore();
+    expect(Number.isFinite(score)).toBe(true);
+    expect(score).toBeGreaterThanOrEqual(0.9);
+    expect(
+      isWinningTrace({
+        hiddenShape: TIGHT_CONTOUR_POINTS,
+        guessShape: ALMOST_BARN_GUESS_POINTS,
+        ...SCORE_PARAMS,
+      })
+    ).toBe(true);
+  });
+
+  it('helpers agree with direct outlineMatchScore computations', () => {
+    expect(looseHideVsSloppyGuessScores().a).toBe(
+      outlineMatchScore({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: SLOPPY_GUESS_A_POINTS,
+        ...SCORE_PARAMS,
+      })
+    );
+    expect(looseHideVsSloppyGuessScores().b).toBe(
+      outlineMatchScore({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: SLOPPY_GUESS_B_POINTS,
+        ...SCORE_PARAMS,
+      })
+    );
+    expect(looseHideVsExactGuessScore()).toBe(
+      outlineMatchScore({
+        hiddenShape: LOOSE_CIRCLE_POINTS,
+        guessShape: TIGHT_CONTOUR_POINTS,
+        ...SCORE_PARAMS,
+      })
+    );
+    expect(goodHideVsAlmostGuessScore()).toBe(
+      outlineMatchScore({
+        hiddenShape: TIGHT_CONTOUR_POINTS,
+        guessShape: ALMOST_BARN_GUESS_POINTS,
+        ...SCORE_PARAMS,
+      })
+    );
   });
 });
 
@@ -152,37 +263,9 @@ describe('resamplePolyline', () => {
       const maxSpacing = Math.max(...spacings);
       const minSpacing = Math.min(...spacings);
       // Measured worst spacing ratios per target: TIGHT at 18 → 1.1446,
-      // TIGHT at 10 → 1.1741 (LOOSE@10 1.1115, FAILING@18 1.1040);
+      // TIGHT at 10 → 1.1741 (ALMOST at 10 → 1.1376, A at 18 → 1.0999);
       // still roughly equalized.
       expect(maxSpacing / minSpacing).toBeLessThan(ratioTolerance);
     }
-  });
-});
-
-describe('demoFailScore', () => {
-  it('is a finite honest fail score in the [0.25, 0.45] band', () => {
-    const score = demoFailScore();
-    expect(Number.isFinite(score)).toBe(true);
-    expect(score).toBeGreaterThanOrEqual(0.25);
-    expect(score).toBeLessThanOrEqual(0.45);
-  });
-
-  it('matches outlineMatchScore over the 320×320 demo space and is not a winning trace', () => {
-    expect(demoFailScore()).toBe(
-      outlineMatchScore({
-        hiddenShape: TIGHT_CONTOUR_POINTS,
-        guessShape: FAILING_LINE_POINTS,
-        imageWidth: DEMO_IMAGE_SIZE,
-        imageHeight: DEMO_IMAGE_SIZE,
-      })
-    );
-    expect(
-      isWinningTrace({
-        hiddenShape: TIGHT_CONTOUR_POINTS,
-        guessShape: FAILING_LINE_POINTS,
-        imageWidth: DEMO_IMAGE_SIZE,
-        imageHeight: DEMO_IMAGE_SIZE,
-      })
-    ).toBe(false);
   });
 });

@@ -244,7 +244,7 @@ export default function HidePicture({
       <>
         {renderPicture()}
         {isShapeMode && !hasShownShapeCue && !isE2EMode() && (
-          <HideShapeDemo imageDimensionStyle={imageDimensionStyle} />
+          <HideShapeDemo imageDimensionStyle={imageDimensionStyle} screenHeight={screenHeight} />
         )}
         {renderModePicker()}
       </>
